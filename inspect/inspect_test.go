@@ -70,6 +70,9 @@ func TestDecodePDFTextBytesRecognizesBOMLessUTF16BE(t *testing.T) {
 	if got, want := decodePDFTextBytes(raw), "Prescrição médica"; got != want {
 		t.Fatalf("decodePDFTextBytes() = %q, want %q", got, want)
 	}
+	if got, want := decodePDFTextBytes([]byte{0x00, 'P'}), "P"; got != want {
+		t.Fatalf("decodePDFTextBytes(single code unit) = %q, want %q", got, want)
+	}
 }
 
 func TestInspectContextCanceled(t *testing.T) {

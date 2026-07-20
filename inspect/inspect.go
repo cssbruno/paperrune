@@ -649,7 +649,7 @@ func decodePDFTextBytes(raw []byte) string {
 }
 
 func looksLikeBOMLessUTF16BE(raw []byte) bool {
-	if len(raw) < 4 || len(raw)%utf16BOMBytes != 0 {
+	if len(raw) < utf16BOMBytes || len(raw)%utf16BOMBytes != 0 {
 		return false
 	}
 	pairs := len(raw) / utf16BOMBytes
