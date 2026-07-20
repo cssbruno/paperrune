@@ -7,6 +7,9 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/goregular"
 )
 
 func TestLongFormHTMLDocumentModel(t *testing.T) {
@@ -60,5 +63,28 @@ func TestWriteDocumentRendersLongFormHTMLDocumentModel(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("PDF output missing long-form content %q", want)
 		}
+	}
+}
+
+func TestDocumentLongFormHTMLModelUsesConfiguredUTF8Font(t *testing.T) {
+	pdf := MustNew()
+	if err := pdf.AddUTF8FontFromBytesError("PlanSans", "", goregular.TTF); err != nil {
+		t.Fatalf("AddUTF8FontFromBytesError() error = %v", err)
+	}
+	if err := pdf.AddUTF8FontFromBytesError("PlanSans", "B", gobold.TTF); err != nil {
+		t.Fatalf("AddUTF8FontFromBytesError(bold) error = %v", err)
+	}
+	pdf.SetFont("PlanSans", "", 12)
+	doc, messages := pdf.LongFormHTMLDocumentModel("", `<h1>Atenção à saúde</h1><p>Informação clínica</p><footer>Cópia médica</footer>`)
+	if len(messages) != 0 {
+		t.Fatalf("messages = %#v, want none", messages)
+	}
+	pdf.WriteDocument(doc)
+	var out bytes.Buffer
+	if err := pdf.Output(&out); err != nil {
+		t.Fatalf("Output() error = %v", err)
+	}
+	if out.Len() == 0 {
+		t.Fatal("Output() produced an empty PDF")
 	}
 }

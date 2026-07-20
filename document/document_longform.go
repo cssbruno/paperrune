@@ -13,8 +13,31 @@ import (
 // LongFormHTMLDocumentModel converts supported long-form HTML into a shared
 // document model with extracted footer configuration.
 func LongFormHTMLDocumentModel(title, htmlStr string) (*layout.LayoutDocument, []string) {
+	return longFormHTMLDocumentModel(MustNew(), title, htmlStr)
+}
+
+// LongFormHTMLDocumentModel converts supported long-form HTML using the
+// receiver's configured fonts and layout defaults. The receiver remains fresh
+// and can render the returned model with WriteDocument.
+func (f *Document) LongFormHTMLDocumentModel(title, htmlStr string) (*layout.LayoutDocument, []string) {
+	if f == nil {
+		return LongFormHTMLDocumentModel(title, htmlStr)
+	}
+	return longFormHTMLDocumentModel(f, title, htmlStr)
+}
+
+func longFormHTMLDocumentModel(pdf *Document, title, htmlStr string) (*layout.LayoutDocument, []string) {
 	bodyHTML, footer := ExtractHTMLFooterBlock(htmlStr)
-	pdf := MustNew()
+	if footer != nil && pdf.fontFamily != "" {
+		for index, block := range footer.Blocks {
+			paragraph, ok := block.(layout.ParagraphBlock)
+			if !ok {
+				continue
+			}
+			paragraph.Style.FontFamily = pdf.fontFamily
+			footer.Blocks[index] = paragraph
+		}
+	}
 	html := pdf.HTMLNew()
 	messages := html.ValidateHTML(bodyHTML)
 	doc := layout.NewLayoutDocument()
