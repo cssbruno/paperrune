@@ -29,15 +29,31 @@ func buildCompactProvenance(fragments []Fragment, lines []PlannedLine) ([]Proven
 		return id
 	}
 	fragmentRefs := make([]ProvenanceID, len(fragments))
-	fragmentsByID := make(map[FragmentID]Fragment, len(fragments))
+	denseFragmentIDs := true
+	var sparseFragmentRefs map[FragmentID]ProvenanceID
 	for index, fragment := range fragments {
 		fragmentRefs[index] = intern(ProvenanceEntry{Node: fragment.Node, Key: fragment.Key, Instance: fragment.Instance, Source: fragment.Source})
-		fragmentsByID[fragment.ID] = fragment
+		if fragment.ID != FragmentID(index+1) {
+			denseFragmentIDs = false
+		}
+	}
+	if !denseFragmentIDs {
+		sparseFragmentRefs = make(map[FragmentID]ProvenanceID, len(fragments))
+		for index, fragment := range fragments {
+			sparseFragmentRefs[fragment.ID] = fragmentRefs[index]
+		}
 	}
 	lineRefs := make([]ProvenanceID, len(lines))
 	for index, line := range lines {
-		fragment := fragmentsByID[line.Fragment]
-		lineRefs[index] = intern(ProvenanceEntry{Node: fragment.Node, Key: fragment.Key, Instance: fragment.Instance, Source: line.Source})
+		var fragmentRef ProvenanceID
+		if denseFragmentIDs {
+			fragmentRef = fragmentRefs[line.Fragment-1]
+		} else {
+			fragmentRef = sparseFragmentRefs[line.Fragment]
+		}
+		fragmentEntry := table[fragmentRef-1]
+		fragmentEntry.Source = line.Source
+		lineRefs[index] = intern(fragmentEntry)
 	}
 	return table, fragmentRefs, lineRefs
 }

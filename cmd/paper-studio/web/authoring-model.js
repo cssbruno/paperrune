@@ -14,6 +14,7 @@
       sourceRevision: payload.source_revision,
       documentTarget: payload.document_target || '',
       templateTargets: Object.freeze((payload.template_targets || []).map(Object.freeze)),
+	  templateChoices: Object.freeze(Object.fromEntries(Object.entries(payload.template_choices || {}).map(([kind, choices]) => [kind, Object.freeze([...choices])]))),
 	  lifecycleTargets: Object.freeze((payload.lifecycle_targets || []).map(Object.freeze)),
       bindingTargets: Object.freeze((payload.binding_targets || []).map(Object.freeze)),
       schemas: Object.freeze((payload.schemas || []).map(schema => Object.freeze({name: schema.name, fields: Object.freeze((schema.fields || []).map(Object.freeze))}))),
@@ -29,23 +30,7 @@
   function readableID(value) { return /^@[A-Za-z_][A-Za-z0-9_-]{0,127}$/.test(String(value || '')); }
 
   function templateChoices(metadata, workspace, kind) {
-    const component = metadata.components.length ? ['component'] : [];
-    const repeat = metadata.schemas.some(schema => schema.fields.some(field => field.kind === 'list')) ? ['repeat'] : [];
-    const loop = workspace.scenario ? ['loop'] : [];
-    const nestedFlow = ['paragraph', 'heading', 'image', 'table', 'row', 'column', 'note-box', 'metadata-grid', 'signature-row', 'qr-verification', 'clause', 'styled-container', ...component, 'section'];
-    switch (kind) {
-    case 'document': return ['document-preset', 'page'];
-    case 'page': return ['header', 'footer'];
-    case 'body': case 'header': case 'footer':
-      return ['paragraph', 'heading', 'list', 'image', 'table', 'canvas', 'row', 'column', 'page-break', 'note-box', 'metadata-grid', 'signature-row', 'qr-verification', 'clause', 'styled-container', ...repeat, ...loop, ...component, 'section'];
-    case 'row': case 'column': return nestedFlow;
-    case 'list': return ['item'];
-    case 'item': return ['text', 'paragraph', ...component];
-    case 'table': case 'table-header': return ['table-row'];
-    case 'table-row': return ['cell'];
-    case 'cell': return ['text', 'paragraph', 'image', 'list'];
-    default: return [];
-    }
+    return [...(metadata.templateChoices[kind] || [])];
   }
 
   function buildPayload(workspace, metadata, draft) {

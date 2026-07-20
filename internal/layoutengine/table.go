@@ -198,10 +198,31 @@ func PlanTable(ctx context.Context, input TablePlanInput, limits TablePlanLimits
 	if err != nil {
 		return LayoutPlan{}, err
 	}
+	pageCapacity := len(resolved.bodyGroups) + 1
+	if uint64(pageCapacity) > uint64(limits.MaxPages) {
+		pageCapacity = int(limits.MaxPages)
+	}
+	fragmentCapacity := len(resolved.cells)
+	if input.Caption != nil {
+		fragmentCapacity++
+	}
+	trackUnits := len(resolved.bodyGroups)
+	if input.HeaderRows != 0 {
+		trackUnits++
+	}
+	trackCapacity := int(input.Rows) + trackUnits*len(resolved.columnWidths)
+	output := LayoutPlanInput{
+		Pages:       make([]PlannedPage, 0, pageCapacity),
+		Fragments:   make([]Fragment, 0, fragmentCapacity),
+		PageRegions: make([]PlannedPageRegion, 0, pageCapacity),
+		GridTracks:  make([]PlannedGridTrack, 0, trackCapacity),
+		Breaks:      make([]BreakDecision, 0, max(0, pageCapacity-1)),
+		Diagnostics: make([]Diagnostic, 0, 1),
+	}
 	planner := tablePaginator{
 		input: input, limits: limits, budget: &budget,
 		cells: resolved.cells, columns: resolved.columnWidths, rows: resolved.rowHeights,
-		groups: resolved.bodyGroups,
+		groups: resolved.bodyGroups, output: output,
 	}
 	return planner.plan()
 }
@@ -822,6 +843,9 @@ type tablePaginator struct {
 	columns []Fixed
 	rows    []Fixed
 	groups  []tableRowGroup
+	// cellRowStarts indexes the row-sorted cell slice so each paginated unit
+	// visits only cells anchored in its closed row range.
+	cellRowStarts []uint32
 
 	output              LayoutPlanInput
 	page                uint32
@@ -839,6 +863,15 @@ type tablePaginator struct {
 }
 
 func (p *tablePaginator) plan() (LayoutPlan, error) {
+	if len(p.cellRowStarts) != len(p.rows)+1 {
+		p.cellRowStarts = make([]uint32, len(p.rows)+1)
+		for _, cell := range p.cells {
+			p.cellRowStarts[cell.Row+1]++
+		}
+		for row := 1; row < len(p.cellRowStarts); row++ {
+			p.cellRowStarts[row] += p.cellRowStarts[row-1]
+		}
+	}
 	var err error
 	p.headerHeight, err = sumFixed(p.rows[:p.input.HeaderRows])
 	if err != nil {
@@ -849,7 +882,7 @@ func (p *tablePaginator) plan() (LayoutPlan, error) {
 	}
 	if len(p.groups) == 0 {
 		p.finishPage()
-		return NewLayoutPlan(p.output)
+		return NewTrustedGeometryPlan(p.output)
 	}
 	for _, group := range p.groups {
 		if err := p.budget.charge(uint64(group.end - group.start)); err != nil {
@@ -896,7 +929,7 @@ func (p *tablePaginator) plan() (LayoutPlan, error) {
 		}
 	}
 	p.finishPage()
-	return NewLayoutPlan(p.output)
+	return NewTrustedGeometryPlan(p.output)
 }
 
 func (p *tablePaginator) startPage() error {
@@ -1041,10 +1074,7 @@ func (p *tablePaginator) placeRowsWithGeometry(start, end uint32, header bool, r
 			Axis: GridTrackRow, Index: row - start, Bounds: bounds})
 	}
 	var first, last FragmentID
-	for _, cell := range p.cells {
-		if cell.Row < start || cell.Row >= end {
-			continue
-		}
+	for _, cell := range p.cells[p.cellRowStarts[start]:p.cellRowStarts[end]] {
 		if err := p.budget.charge(1); err != nil {
 			return 0, 0, err
 		}

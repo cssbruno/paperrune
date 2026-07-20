@@ -300,6 +300,7 @@ var pageProperties = map[string]bool{
 	"size": true, "width": true, "height": true, "margin": true,
 	"margin-top": true, "margin-right": true, "margin-bottom": true, "margin-left": true,
 	"page-numbers": true, "page-number-format": true, "page-total-alias": true,
+	"page-number-align": true, "page-number-position": true, "page-number-hide-first": true, "page-number-start": true,
 }
 var pageRegionProperties = func() map[string]bool {
 	properties := map[string]bool{}
@@ -514,6 +515,38 @@ func (c *compiler) compilePage(node *paperlang.Node) {
 	if property, ok := properties["page-total-alias"]; ok {
 		if value, valid := c.stringProperty(property); valid {
 			c.result.Document.PageTemplate.PageNumbers.TotalPageAlias = value
+		}
+	}
+	if property, ok := properties["page-number-align"]; ok {
+		if value, valid := c.stringProperty(property); valid {
+			switch value {
+			case "left", "center", "right", "inner", "outer":
+				c.result.Document.PageTemplate.PageNumbers.Align = value
+			default:
+				c.add("PAPER_COMPILE_PAGE_NUMBER_ALIGN", "page-number-align is outside the supported placement vocabulary", "use left, center, right, inner, or outer", property.Value.Span)
+			}
+		}
+	}
+	if property, ok := properties["page-number-position"]; ok {
+		if value, valid := c.stringProperty(property); valid {
+			switch value {
+			case "header", "footer":
+				c.result.Document.PageTemplate.PageNumbers.Position = value
+			default:
+				c.add("PAPER_COMPILE_PAGE_NUMBER_POSITION", "page-number-position is outside the supported page shell vocabulary", "use header or footer", property.Value.Span)
+			}
+		}
+	}
+	if property, ok := properties["page-number-hide-first"]; ok {
+		c.result.Document.PageTemplate.PageNumbers.HideFirst, _ = c.boolProperty(property)
+	}
+	if property, ok := properties["page-number-start"]; ok {
+		if value, valid := c.numberProperty(property); valid {
+			if value >= 1 && value <= 1<<20 && math.Trunc(value) == value {
+				c.result.Document.PageTemplate.PageNumbers.Start = int(value)
+			} else {
+				c.add("PAPER_COMPILE_PAGE_NUMBER_START", "page-number-start must be a positive bounded whole number", "use a whole number from 1 through 1048576", property.Value.Span)
+			}
 		}
 	}
 

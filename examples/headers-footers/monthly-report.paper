@@ -37,6 +37,7 @@ document @monthly-report:
     page-numbers: true
     page-number-format: "Monthly report | Page %d of {pages}"
     page-total-alias: "{pages}"
+    page-number-align: "outer"
 
     header @report-header:
       paragraph @report-title:

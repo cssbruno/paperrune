@@ -734,11 +734,15 @@ type PageNumberOptions struct {
 	Enabled        bool   // Whether automatic page numbers are rendered.
 	Format         string // fmt.Sprintf format for page numbers.
 	TotalPageAlias string // Alias replaced with total page count.
+	Align          string // left, center, right, inner, or outer.
+	Position       string // header or footer; empty defaults to footer.
+	HideFirst      bool   // Whether automatic numbering is omitted on page one.
+	Start          int    // Number assigned to the first physical page; zero defaults to one.
 }
 
 // PageNumberText formats the footer page number label when enabled.
 func (pt PageTemplate) PageNumberText(page int) string {
-	if page <= 0 {
+	if page <= 0 || page == 1 && pt.PageNumbers.HideFirst {
 		return ""
 	}
 	format := strings.TrimSpace(pt.PageNumbers.Format)
@@ -751,7 +755,42 @@ func (pt PageTemplate) PageNumberText(page int) string {
 			format += " / " + alias
 		}
 	}
-	return fmt.Sprintf(format, page)
+	start := pt.PageNumbers.Start
+	if start <= 0 {
+		start = 1
+	}
+	return fmt.Sprintf(format, start+page-1)
+}
+
+// PageNumberAlignment returns the PDF-core alignment for one physical page.
+// Inner and outer mirror across odd/right and even/left pages.
+func (pt PageTemplate) PageNumberAlignment(page int) string {
+	switch strings.ToLower(strings.TrimSpace(pt.PageNumbers.Align)) {
+	case "left":
+		return "L"
+	case "right":
+		return "R"
+	case "inner":
+		if page > 0 && page%2 == 0 {
+			return "R"
+		}
+		return "L"
+	case "outer":
+		if page > 0 && page%2 == 0 {
+			return "L"
+		}
+		return "R"
+	default:
+		return "C"
+	}
+}
+
+// PageNumberPosition returns the page shell that owns automatic numbering.
+func (pt PageTemplate) PageNumberPosition() string {
+	if strings.EqualFold(strings.TrimSpace(pt.PageNumbers.Position), "header") {
+		return "header"
+	}
+	return "footer"
 }
 
 // PageTotalAlias returns the alias replaced with the total page count.

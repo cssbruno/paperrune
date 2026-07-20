@@ -31,18 +31,24 @@ func (p LayoutPlan) ValidatePaintReady() error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
-	lineRuns := make([]uint32, len(p.lines))
-	for index, run := range p.glyphRuns {
-		lineRuns[run.Line]++
-		if lineRuns[run.Line] > 1 {
-			return planError(fmt.Sprintf("glyph_runs[%d].line", index), "paint-ready core text permits one run per line")
-		}
-	}
+	return p.validatePaintPayloadsReady()
+}
+
+func (p LayoutPlan) validatePaintPayloadsReady() error {
+	runIndex := 0
 	for index, line := range p.lines {
-		if line.Bounds.Width > 0 && lineRuns[index] != 1 {
+		lineRunCount := 0
+		for runIndex < len(p.glyphRuns) && p.glyphRuns[runIndex].Line == uint32(index) { // #nosec G115 -- plan line count is bounded by the uint32 command model
+			lineRunCount++
+			if lineRunCount > 1 {
+				return planError(fmt.Sprintf("glyph_runs[%d].line", runIndex), "paint-ready core text permits one run per line")
+			}
+			runIndex++
+		}
+		if line.Bounds.Width > 0 && lineRunCount != 1 {
 			return planError(fmt.Sprintf("lines[%d]", index), "positive-width line has no core glyph run")
 		}
-		if line.Bounds.Width == 0 && lineRuns[index] != 0 {
+		if line.Bounds.Width == 0 && lineRunCount != 0 {
 			return planError(fmt.Sprintf("lines[%d]", index), "zero-width line must not paint a core glyph run")
 		}
 	}
@@ -55,6 +61,20 @@ func (p LayoutPlan) ValidatePaintReady() error {
 		}
 	}
 	return nil
+}
+
+// ValidateTrustedCorePaintPlan validates the bounded core replay contract for
+// an immutable plan that already passed construction or transformation
+// validation. Internal production painters use it to avoid rebuilding a
+// detached event recording immediately before replay.
+func ValidateTrustedCorePaintPlan(plan LayoutPlan, limits CorePaintLimits) error {
+	if len(plan.pages) == 0 {
+		return errors.New("layoutengine: trusted core plan requires at least one page")
+	}
+	if err := validateCorePaintLimits(plan, limits); err != nil {
+		return err
+	}
+	return plan.validatePaintPayloadsReady()
 }
 
 // CorePlanPaintSink receives already positioned operations. Implementations

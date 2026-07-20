@@ -106,6 +106,8 @@ profile_workload() {
 profile_workload planner-typed BenchmarkPaperEnginePlannerTyped
 profile_workload painter-typed BenchmarkPaperEnginePainterTyped
 profile_workload end-to-end-typed BenchmarkPaperEngineEndToEndTyped
+profile_workload warm-paper BenchmarkPaperEngineWarmCompiledPaper
+profile_workload end-to-end-html-large-table BenchmarkGenerationHTMLLargeTableCompiled
 
 sh "$(dirname "$0")/check-paper-engine-profile-report.sh" "$out"
 echo "paper engine profiles: $out"

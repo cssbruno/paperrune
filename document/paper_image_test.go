@@ -66,6 +66,91 @@ func TestPaperImagePlansRendersCapturesAndRetainsFigureSemantics(t *testing.T) {
 	}
 }
 
+func TestPaperExplicitBreakPlacesAndRastersImageOnlyOnFollowingPage(t *testing.T) {
+	bitmap := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for y := 0; y < bitmap.Bounds().Dy(); y++ {
+		for x := 0; x < bitmap.Bounds().Dx(); x++ {
+			bitmap.Set(x, y, color.RGBA{R: 255, B: 255, A: 255})
+		}
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, bitmap); err != nil {
+		t.Fatal(err)
+	}
+	source := "document @image-break:\n" +
+		"  language: \"en\"\n" +
+		"  page @sheet:\n" +
+		"    width: 120pt\n" +
+		"    height: 90pt\n" +
+		"    margin: 8pt\n" +
+		"    body @body:\n" +
+		"      paragraph @before:\n" +
+		"        size: 8pt\n" +
+		"        text: \"Before image\"\n" +
+		"      page-break @image-page:\n" +
+		"      image @hero:\n" +
+		"        source: \"data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes()) + "\"\n" +
+		"        width: 60pt\n" +
+		"        height: 30pt\n" +
+		"        fit: \"cover\"\n" +
+		"        alt: \"Magenta page-break evidence\"\n" +
+		"      paragraph @after:\n" +
+		"        size: 8pt\n" +
+		"        text: \"After image\"\n"
+
+	plan, result, err := PlanPaper("image-break.paper", source)
+	if err != nil || !result.OK() || result.Pages != 2 {
+		t.Fatalf("PlanPaper() = %#v, %v", result, err)
+	}
+	projection := plan.plan.Projection()
+	pages := map[layoutengine.NodeKey]uint32{}
+	for _, fragment := range projection.Fragments {
+		pages[fragment.Key] = fragment.Page
+	}
+	if pages["@before"] != 1 || pages["@hero"] != 2 || pages["@after"] != 2 || len(projection.Images) != 1 ||
+		projection.Fragments[projection.Images[0].Fragment-1].Page != 2 || len(projection.Breaks) != 1 ||
+		projection.Breaks[0].Reason != layoutengine.BreakExplicitPageBreak {
+		t.Fatalf("image pages=%#v placements=%#v breaks=%#v", pages, projection.Images, projection.Breaks)
+	}
+
+	rasterRequest := DefaultPaperPlanRasterRequest()
+	rasterRequest.CoreFontProgram = goregular.TTF
+	raster, err := plan.CaptureRasterPages(context.Background(), rasterRequest)
+	if err != nil || len(raster.Pages) != 2 {
+		t.Fatalf("CaptureRasterPages() pages=%d, %v", len(raster.Pages), err)
+	}
+	countMagenta := func(data []byte) int {
+		decoded, decodeErr := png.Decode(bytes.NewReader(data))
+		if decodeErr != nil {
+			t.Fatalf("decode raster PNG: %v", decodeErr)
+		}
+		count := 0
+		bounds := decoded.Bounds()
+		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				r, g, b, _ := decoded.At(x, y).RGBA()
+				if r > 0xd000 && g < 0x3000 && b > 0xd000 {
+					count++
+				}
+			}
+		}
+		return count
+	}
+	if first, second := countMagenta(raster.Pages[0].PNG), countMagenta(raster.Pages[1].PNG); first != 0 || second == 0 {
+		t.Fatalf("magenta pixels on pages 1/2 = %d/%d, want 0/positive", first, second)
+	}
+
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
+	rendered, err := target.WritePaperPlan(plan)
+	if err != nil || !rendered.OK() || target.PageCount() != 2 {
+		t.Fatalf("WritePaperPlan() = %#v, %v; pages=%d", rendered, err, target.PageCount())
+	}
+	var pdf bytes.Buffer
+	if err := target.Output(&pdf); err != nil || !bytes.Contains(pdf.Bytes(), []byte("/Subtype /Image")) {
+		t.Fatalf("PDF image output bytes=%d, %v", pdf.Len(), err)
+	}
+}
+
 func TestPaperImageResolvesPercentageWidthAndIntrinsicHeightInContainingBody(t *testing.T) {
 	source := strings.Replace(paperImageSource, "width: 40pt\n        height: 24pt", "width: 50%\n        height: \"auto\"", 1)
 	plan, result, err := PlanPaper("responsive-image.paper", source)

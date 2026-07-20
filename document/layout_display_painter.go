@@ -71,22 +71,6 @@ type preparedDisplayImage struct {
 	minVersion string
 }
 
-type preparedDisplayCommand struct {
-	kind      layoutengine.DisplayCommandKind
-	run       layoutengine.CoreGlyphRun
-	font      preparedCorePlanFont
-	image     layoutengine.PlannedImage
-	asset     preparedDisplayImage
-	crop      preparedDisplayImageCrop
-	link      layoutengine.PlannedLink
-	path      layoutengine.PlannedPath
-	transform layoutengine.Transform
-	clip      layoutengine.PlannedClip
-	fill      layoutengine.PlannedFill
-	stroke    layoutengine.PlannedStroke
-	semantic  []preparedDisplaySemantic
-}
-
 type preparedDisplaySemantic struct {
 	id               layoutengine.SemanticNodeID
 	role             string
@@ -104,18 +88,14 @@ type preparedDisplayImageCrop struct {
 	imageX, imageY, imageW, imageH float64
 }
 
-type preparedDisplayPage struct {
-	page     layoutengine.PlannedPage
-	commands []preparedDisplayCommand
-}
-
 type preparedDisplayPlanPDF struct {
 	fonts            map[layoutengine.FontResourceID]preparedCorePlanFont
 	fontOrder        []layoutengine.FontResourceID
 	images           map[layoutengine.ImageResourceID]preparedDisplayImage
 	imageOrder       []layoutengine.ImageResourceID
-	pages            []preparedDisplayPage
-	destinations     []layoutengine.PlannedDestination
+	projection       layoutengine.LayoutPlanProjection
+	imageCrops       []preparedDisplayImageCrop
+	semanticLeaves   map[layoutengine.FragmentID]layoutengine.SemanticNodeID
 	documentLanguage string
 }
 
@@ -258,17 +238,81 @@ func (f *pdfDocument) beginPreparedSemantic(path []preparedDisplaySemantic, elem
 	}
 }
 
-func (f *pdfDocument) paintPreparedSemanticContent(path []preparedDisplaySemantic, elements map[layoutengine.SemanticNodeID]*taggedElement, content []byte) {
-	if len(path) == 0 || !f.tagged.enabled {
-		f.outbytes(content)
-		return
+func preparedDisplaySemanticPath(nodes []layoutengine.SemanticNode, leafID layoutengine.SemanticNodeID, destination []preparedDisplaySemantic) []preparedDisplaySemantic {
+	if !leafID.Valid() {
+		return destination
 	}
-	closeSemantic := f.beginPreparedSemantic(path, elements)
-	f.outbytes(content)
-	closeSemantic()
+	leaf := nodes[leafID-1]
+	if leaf.Role == layoutengine.SemanticRoleArtifact {
+		return append(destination, preparedDisplaySemantic{id: leaf.ID, role: "Artifact"})
+	}
+	for id := leafID; id.Valid(); {
+		node := nodes[id-1]
+		if node.Role != layoutengine.SemanticRoleDocument && node.Role != layoutengine.SemanticRoleArtifact {
+			role := typedPDFSemanticRole(node)
+			if role != "" {
+				destination = append(destination, preparedDisplaySemantic{id: node.ID, role: role,
+					alt: node.Attributes.AlternateText, actual: node.Attributes.ActualText,
+					lang: node.Attributes.Language, header: node.Attributes.TableHeader,
+					scope: node.Attributes.TableScope, rowSpan: node.Attributes.TableRowSpan,
+					colSpan: node.Attributes.TableColumnSpan})
+			}
+		}
+		id = node.Parent
+	}
+	for left, right := 0, len(destination)-1; left < right; left, right = left+1, right-1 {
+		destination[left], destination[right] = destination[right], destination[left]
+	}
+	return destination
+}
+
+func plannedDisplayPageContentCapacity(projection layoutengine.LayoutPlanProjection, page layoutengine.PlannedPage) int {
+	const maximum = 8 << 20
+	total := 128
+	add := func(amount int) {
+		if amount <= 0 || total == maximum {
+			return
+		}
+		if amount >= maximum-total {
+			total = maximum
+			return
+		}
+		total += amount
+	}
+	pathCost := func(path layoutengine.PlannedPath) int {
+		return 32 + len(path.Segments)*72
+	}
+	commandEnd := int(uint64(page.Commands.Start) + uint64(page.Commands.Count))
+	for commandIndex := int(page.Commands.Start); commandIndex < commandEnd; commandIndex++ {
+		command := projection.Commands[commandIndex]
+		add(64) // marked-content wrappers and the command newline
+		switch command.Kind {
+		case layoutengine.CommandSaveState, layoutengine.CommandRestoreState:
+			add(4)
+		case layoutengine.CommandTransform:
+			add(128)
+		case layoutengine.CommandClip:
+			clip := projection.Clips[command.Payload]
+			add(pathCost(projection.Paths[clip.Path]) + 16)
+		case layoutengine.CommandFillPath:
+			fill := projection.Fills[command.Payload]
+			add(pathCost(projection.Paths[fill.Path]) + 64)
+		case layoutengine.CommandStrokePath:
+			stroke := projection.Strokes[command.Payload]
+			add(pathCost(projection.Paths[stroke.Path]) + 128 + len(stroke.Dash)*24)
+		case layoutengine.CommandGlyphRun:
+			add(plannedGlyphRunCapacity(projection.GlyphRuns[command.Payload]))
+		case layoutengine.CommandImage:
+			add(256)
+		case layoutengine.CommandLink:
+			add(96)
+		}
+	}
+	return total
 }
 
 func (f *pdfDocument) paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared preparedDisplayPlanPDF, reuseCurrent bool, pageOffset int, preserveAuthoredText bool) error {
+	projection := prepared.projection
 	resources := f.ensureResourceStore()
 	for _, id := range prepared.fontOrder {
 		font := prepared.fonts[id]
@@ -279,100 +323,123 @@ func (f *pdfDocument) paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared pr
 		resources.setImage(image.key, image.info)
 		f.requirePDFVersion(image.minVersion)
 	}
-	destinationLinks := make(map[layoutengine.DestinationID]int, len(prepared.destinations))
-	semanticElements := make(map[layoutengine.SemanticNodeID]*taggedElement)
+	var destinationLinks map[layoutengine.DestinationID]int
+	if len(projection.Destinations) != 0 {
+		destinationLinks = make(map[layoutengine.DestinationID]int, len(projection.Destinations))
+	}
+	var semanticElements map[layoutengine.SemanticNodeID]*taggedElement
+	if f.tagged.enabled && len(projection.SemanticNodes) != 0 {
+		semanticElements = make(map[layoutengine.SemanticNodeID]*taggedElement, len(projection.SemanticNodes))
+	}
 	f.tagged.documentLanguage = prepared.documentLanguage
-	for _, destination := range prepared.destinations {
+	for _, destination := range projection.Destinations {
 		destinationLinks[destination.ID] = f.AddLink()
 	}
-	for pageIndex, page := range prepared.pages {
-		size := Size{Wd: f.PointConvert(page.page.Size.Width.Points()), Ht: f.PointConvert(page.page.Size.Height.Points())}
+	for pageIndex, page := range projection.Pages {
+		size := Size{Wd: f.PointConvert(page.Size.Width.Points()), Ht: f.PointConvert(page.Size.Height.Points())}
 		if !reuseCurrent || pageIndex != 0 {
 			f.AddPageFormat("P", size)
 			if f.err != nil {
 				return f.err
 			}
 		}
+		_ = f.pageContentCommandBuffer(plannedDisplayPageContentCapacity(projection, page))
 		var previousRun layoutengine.CoreGlyphRun
 		previousRunSet := false
-		for _, command := range page.commands {
-			switch command.kind {
+		commandEnd := int(uint64(page.Commands.Start) + uint64(page.Commands.Count))
+		for commandIndex := int(page.Commands.Start); commandIndex < commandEnd; commandIndex++ {
+			command := projection.Commands[commandIndex]
+			var semanticScratch [16]preparedDisplaySemantic
+			semantic := preparedDisplaySemanticPath(projection.SemanticNodes, prepared.semanticLeaves[command.Fragment], semanticScratch[:0])
+			switch command.Kind {
 			case layoutengine.CommandSaveState:
 				f.out("q")
 			case layoutengine.CommandRestoreState:
 				f.out("Q")
 			case layoutengine.CommandTransform:
-				f.paintPlannedTransform(page.page.Size.Height, command.transform)
+				f.paintPlannedTransform(page.Size.Height, projection.Transforms[command.Payload])
 			case layoutengine.CommandClip:
-				f.paintPlannedClip(page.page.Size.Height, command.path, command.clip)
+				clip := projection.Clips[command.Payload]
+				f.paintPlannedClip(page.Size.Height, projection.Paths[clip.Path], clip)
 			case layoutengine.CommandFillPath:
-				f.paintPlannedFill(page.page.Size.Height, command.path, command.fill)
+				fill := projection.Fills[command.Payload]
+				f.paintPlannedFill(page.Size.Height, projection.Paths[fill.Path], fill)
 			case layoutengine.CommandStrokePath:
-				f.paintPlannedStroke(page.page.Size.Height, command.path, command.stroke)
+				stroke := projection.Strokes[command.Payload]
+				f.paintPlannedStroke(page.Size.Height, projection.Paths[stroke.Path], stroke)
 			case layoutengine.CommandGlyphRun:
-				var content []byte
-				run := command.run
+				run := projection.GlyphRuns[command.Payload]
+				font := prepared.fonts[run.Font]
 				if preserveAuthoredText && !run.LeadingSpace && previousRunSet {
 					run.LeadingSpace = previousRun.TrailingSpace
-				}
-				if command.font.resource.EmbeddedUTF8 != nil {
-					if preserveAuthoredText {
-						content = appendPlannedUTF8GlyphRunActualText(nil, command.font.font, page.page.Size.Height, run)
-					} else {
-						content = appendPlannedUTF8GlyphRun(nil, command.font.font, page.page.Size.Height, run)
-					}
-				} else if preserveAuthoredText {
-					content = appendPlannedCoreGlyphRunExactTJ(content, command.font.font, page.page.Size.Height, run)
-				} else {
-					content = appendPlannedCoreGlyphRun(nil, command.font.font, page.page.Size.Height, run)
 				}
 				if run.Opacity != 0 {
 					f.out("q")
 					f.SetAlpha(run.Opacity.Points(), "Normal")
 				}
-				f.paintPreparedSemanticContent(command.semantic, semanticElements, content)
+				closeSemantic := f.beginPreparedSemantic(semantic, semanticElements)
+				content := f.pageContentCommandBuffer(plannedGlyphRunCapacity(run))
+				if font.resource.EmbeddedUTF8 != nil {
+					if preserveAuthoredText {
+						content = appendPlannedUTF8GlyphRunActualText(content, font.font, page.Size.Height, run)
+					} else {
+						content = appendPlannedUTF8GlyphRun(content, font.font, page.Size.Height, run)
+					}
+				} else if preserveAuthoredText {
+					content = appendPlannedCoreGlyphRunExactTJ(content, font.font, page.Size.Height, run)
+				} else {
+					content = appendPlannedCoreGlyphRun(content, font.font, page.Size.Height, run)
+				}
+				f.outbytes(content)
+				closeSemantic()
 				if run.Opacity != 0 {
 					f.out("Q")
 				}
-				previousRun, previousRunSet = command.run, true
+				previousRun, previousRunSet = projection.GlyphRuns[command.Payload], true
 			case layoutengine.CommandImage:
-				closeSemantic := f.beginPreparedSemantic(command.semantic, semanticElements)
-				if command.image.Opacity != 0 {
+				image := projection.Images[command.Payload]
+				asset := prepared.images[image.Resource]
+				crop := prepared.imageCrops[command.Payload]
+				closeSemantic := f.beginPreparedSemantic(semantic, semanticElements)
+				if image.Opacity != 0 {
 					f.out("q")
-					f.SetAlpha(command.image.Opacity.Points(), "Normal")
+					f.SetAlpha(image.Opacity.Points(), "Normal")
 				}
-				if command.crop.enabled {
-					f.ClipRect(command.crop.clipX, command.crop.clipY, command.crop.clipW, command.crop.clipH, false)
-					f.drawImageXObject(command.asset.info.i,
-						command.crop.imageX, command.crop.imageY, command.crop.imageW, command.crop.imageH)
+				if crop.enabled {
+					f.ClipRect(crop.clipX, crop.clipY, crop.clipW, crop.clipH, false)
+					f.drawImageXObject(asset.info.i, crop.imageX, crop.imageY, crop.imageW, crop.imageH)
 					f.ClipEnd()
 				} else {
-					bounds := command.image.Bounds
-					f.drawImageXObject(command.asset.info.i,
+					bounds := image.Bounds
+					f.drawImageXObject(asset.info.i,
 						f.PointConvert(bounds.X.Points()), f.PointConvert(bounds.Y.Points()),
 						f.PointConvert(bounds.Width.Points()), f.PointConvert(bounds.Height.Points()))
 				}
-				if command.image.Opacity != 0 {
+				if image.Opacity != 0 {
 					f.out("Q")
 				}
 				closeSemantic()
 			case layoutengine.CommandLink:
-				closeSemantic := f.beginPreparedSemantic(append(command.semantic, preparedDisplaySemantic{role: "Link"}), semanticElements)
-				bounds := command.link.Bounds
+				link := projection.Links[command.Payload]
+				var smallPath [8]preparedDisplaySemantic
+				linkSemantic := append(smallPath[:0], semantic...)
+				linkSemantic = append(linkSemantic, preparedDisplaySemantic{role: "Link"})
+				closeSemantic := f.beginPreparedSemantic(linkSemantic, semanticElements)
+				bounds := link.Bounds
 				x := f.PointConvert(bounds.X.Points())
 				y := f.PointConvert(bounds.Y.Points())
 				width := f.PointConvert(bounds.Width.Points())
 				height := f.PointConvert(bounds.Height.Points())
-				if command.link.Destination.Valid() {
-					f.newLink(x, y, width, height, destinationLinks[command.link.Destination], "")
+				if link.Destination.Valid() {
+					f.newLink(x, y, width, height, destinationLinks[link.Destination], "")
 				} else {
-					f.newLink(x, y, width, height, 0, command.link.URI)
+					f.newLink(x, y, width, height, 0, link.URI)
 				}
 				closeSemantic()
 			}
 		}
 	}
-	for _, destination := range prepared.destinations {
+	for _, destination := range projection.Destinations {
 		f.setPlannedLink(destinationLinks[destination.ID], f.PointConvert(destination.Point.X.Points()),
 			f.PointConvert(destination.Point.Y.Points()), int(destination.Page)+pageOffset)
 	}
@@ -411,52 +478,34 @@ func (f *pdfDocument) preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx
 		return preparedDisplayPlanPDF{}, fmt.Errorf("document: preflight display plan: %w", err)
 	}
 	projection := plan.ReadOnlyProjection()
-	semanticByFragment := make(map[layoutengine.FragmentID][]preparedDisplaySemantic, len(projection.SemanticFragments))
-	semanticNodes := make(map[layoutengine.SemanticNodeID]layoutengine.SemanticNode, len(projection.SemanticNodes))
+	semanticByFragment := make(map[layoutengine.FragmentID]layoutengine.SemanticNodeID, len(projection.SemanticFragments))
 	documentLanguage := ""
 	for _, node := range projection.SemanticNodes {
-		semanticNodes[node.ID] = node
 		if node.Role == layoutengine.SemanticRoleDocument {
 			documentLanguage = node.Attributes.Language
 		}
 	}
 	for _, association := range projection.SemanticFragments {
-		if semanticNodes[association.Semantic].Role == layoutengine.SemanticRoleArtifact {
-			semanticByFragment[association.Fragment] = []preparedDisplaySemantic{{id: association.Semantic, role: "Artifact"}}
-			continue
-		}
-		var reversed []preparedDisplaySemantic
-		for id := association.Semantic; id.Valid(); {
-			node := semanticNodes[id]
-			if node.Role != layoutengine.SemanticRoleDocument && node.Role != layoutengine.SemanticRoleArtifact {
-				role := typedPDFSemanticRole(node)
-				if role != "" {
-					reversed = append(reversed, preparedDisplaySemantic{id: node.ID, role: role,
-						alt: node.Attributes.AlternateText, actual: node.Attributes.ActualText,
-						lang: node.Attributes.Language, header: node.Attributes.TableHeader,
-						scope: node.Attributes.TableScope, rowSpan: node.Attributes.TableRowSpan,
-						colSpan: node.Attributes.TableColumnSpan})
-				}
-			}
-			id = node.Parent
-		}
-		path := make([]preparedDisplaySemantic, len(reversed))
-		for index := range reversed {
-			path[index] = reversed[len(reversed)-1-index]
-		}
-		semanticByFragment[association.Fragment] = path
+		semanticByFragment[association.Fragment] = association.Semantic
 	}
 	if f.limits.MaxPages > 0 && len(projection.Pages) > f.limits.MaxPages {
 		return preparedDisplayPlanPDF{}, fmt.Errorf("%w: %d > %d", ErrPageLimitExceeded, len(projection.Pages), f.limits.MaxPages)
 	}
 	prepared := preparedDisplayPlanPDF{
-		fonts:            make(map[layoutengine.FontResourceID]preparedCorePlanFont, len(projection.Fonts)),
-		fontOrder:        make([]layoutengine.FontResourceID, 0, len(projection.Fonts)),
-		images:           make(map[layoutengine.ImageResourceID]preparedDisplayImage, len(projection.ImageResources)),
-		imageOrder:       make([]layoutengine.ImageResourceID, 0, len(projection.ImageResources)),
-		pages:            make([]preparedDisplayPage, 0, len(projection.Pages)),
-		destinations:     append([]layoutengine.PlannedDestination(nil), projection.Destinations...),
+		projection:       projection,
+		semanticLeaves:   semanticByFragment,
 		documentLanguage: documentLanguage,
+	}
+	if len(projection.Fonts) != 0 {
+		prepared.fonts = make(map[layoutengine.FontResourceID]preparedCorePlanFont, len(projection.Fonts))
+		prepared.fontOrder = make([]layoutengine.FontResourceID, 0, len(projection.Fonts))
+	}
+	if len(projection.ImageResources) != 0 {
+		prepared.images = make(map[layoutengine.ImageResourceID]preparedDisplayImage, len(projection.ImageResources))
+		prepared.imageOrder = make([]layoutengine.ImageResourceID, 0, len(projection.ImageResources))
+	}
+	if len(projection.Images) != 0 {
+		prepared.imageCrops = make([]preparedDisplayImageCrop, len(projection.Images))
 	}
 	var fontSourceBytes uint64
 	seenFontSources := make(map[layoutengine.CoreFontMetricsDigest]bool, len(projection.Fonts))
@@ -520,39 +569,23 @@ func (f *pdfDocument) preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx
 		if commandEnd > uint64(len(projection.Commands)) {
 			return preparedDisplayPlanPDF{}, errors.New("document: display plan page has invalid command range")
 		}
-		pageOutput := preparedDisplayPage{page: page, commands: make([]preparedDisplayCommand, 0, page.Commands.Count)}
 		for index := uint64(page.Commands.Start); index < commandEnd; index++ {
 			command := projection.Commands[index]
-			preparedCommand := preparedDisplayCommand{kind: command.Kind, semantic: append([]preparedDisplaySemantic(nil), semanticByFragment[command.Fragment]...)}
 			switch command.Kind {
 			case layoutengine.CommandSaveState, layoutengine.CommandRestoreState:
-			case layoutengine.CommandTransform:
-				preparedCommand.transform = projection.Transforms[command.Payload]
-			case layoutengine.CommandClip:
-				preparedCommand.clip = projection.Clips[command.Payload]
-				preparedCommand.path = projection.Paths[preparedCommand.clip.Path]
-			case layoutengine.CommandFillPath:
-				preparedCommand.fill = projection.Fills[command.Payload]
-				preparedCommand.path = projection.Paths[preparedCommand.fill.Path]
-			case layoutengine.CommandStrokePath:
-				preparedCommand.stroke = projection.Strokes[command.Payload]
-				preparedCommand.path = projection.Paths[preparedCommand.stroke.Path]
-			case layoutengine.CommandGlyphRun:
-				preparedCommand.run = projection.GlyphRuns[command.Payload]
-				preparedCommand.font = prepared.fonts[preparedCommand.run.Font]
+			case layoutengine.CommandTransform, layoutengine.CommandClip, layoutengine.CommandFillPath,
+				layoutengine.CommandStrokePath, layoutengine.CommandGlyphRun:
 			case layoutengine.CommandImage:
-				preparedCommand.image = projection.Images[command.Payload]
-				preparedCommand.asset = prepared.images[preparedCommand.image.Resource]
-				crop, cropErr := f.preflightDisplayImageCrop(preparedCommand.image)
+				crop, cropErr := f.preflightDisplayImageCrop(projection.Images[command.Payload])
 				if cropErr != nil {
 					return preparedDisplayPlanPDF{}, cropErr
 				}
-				preparedCommand.crop = crop
+				prepared.imageCrops[command.Payload] = crop
 			case layoutengine.CommandLink:
-				preparedCommand.link = projection.Links[command.Payload]
-				if preparedCommand.link.URI != "" {
-					checked, checkErr := checkedExternalLinkTarget(preparedCommand.link.URI)
-					if checkErr != nil || checked != preparedCommand.link.URI {
+				link := projection.Links[command.Payload]
+				if link.URI != "" {
+					checked, checkErr := checkedExternalLinkTarget(link.URI)
+					if checkErr != nil || checked != link.URI {
 						if checkErr == nil {
 							checkErr = errors.New("target is not canonical")
 						}
@@ -562,9 +595,7 @@ func (f *pdfDocument) preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx
 			default:
 				return preparedDisplayPlanPDF{}, errors.New("document: display plan contains an unsupported command")
 			}
-			pageOutput.commands = append(pageOutput.commands, preparedCommand)
 		}
-		prepared.pages = append(prepared.pages, pageOutput)
 	}
 	return prepared, nil
 }

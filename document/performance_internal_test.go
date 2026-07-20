@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/layout"
 )
 
@@ -59,6 +60,41 @@ func TestContentCommandBufferReuseIsBounded(t *testing.T) {
 	pdf.retainContentCommandBuffer(oversized)
 	if got := cap(pdf.contentScratch); got != retainedCapacity {
 		t.Fatalf("oversized content scratch changed retained capacity to %d, want %d", got, retainedCapacity)
+	}
+}
+
+func TestPageContentCommandBufferWritesIntoCurrentPage(t *testing.T) {
+	pdf := mustNewPDFDocument()
+	pdf.AddPage()
+	before := pdf.pages[pdf.page].String()
+	buffer := pdf.pageContentCommandBuffer(64)
+	buffer = append(buffer, "BT /F1 12 Tf ET"...)
+	pdf.outbytes(buffer)
+	if got, want := pdf.pages[pdf.page].String(), before+"BT /F1 12 Tf ET\n"; got != want {
+		t.Fatalf("page content = %q, want %q", got, want)
+	}
+}
+
+func TestPlannedFixedAndColorFormattingMatchesCanonicalPDFNumbers(t *testing.T) {
+	values := []layoutengine.Fixed{
+		layoutengine.MinFixed, -layoutengine.Fixed(1<<53) - 1,
+		-1_000_000_000, layoutengine.Fixed(-12*layoutengine.FixedScale - 1), layoutengine.Fixed(-layoutengine.FixedScale),
+		-1, 0, 1, layoutengine.Fixed(layoutengine.FixedScale), layoutengine.Fixed(12*layoutengine.FixedScale + 1), 1_000_000_000,
+		layoutengine.Fixed(1<<53) + 1, layoutengine.MaxFixed,
+	}
+	for _, value := range values {
+		got := string(appendPDFFixed(nil, value))
+		want := strconv.FormatFloat(value.Points(), 'f', 10, 64)
+		if got != want {
+			t.Fatalf("fixed %d = %q, want %q", value, got, want)
+		}
+	}
+	for value := 0; value <= 255; value++ {
+		got := string(appendPDFColorComponentSpace(nil, uint8(value)))
+		want := strconv.FormatFloat(float64(value)/255, 'f', 10, 64) + " "
+		if got != want {
+			t.Fatalf("color %d = %q, want %q", value, got, want)
+		}
 	}
 }
 

@@ -5,6 +5,7 @@ package document
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/cssbruno/paperrune/internal/layoutengine"
@@ -51,6 +52,61 @@ func TestPaperPlannerHonorsExplicitBreakWithoutBlankPages(t *testing.T) {
 		decision.Preceding != projection.Fragments[0].ID || decision.Triggering != projection.Fragments[1].ID ||
 		decision.Required != 0 || decision.Available != 0 {
 		t.Fatalf("explicit break decision = %+v", decision)
+	}
+}
+
+func TestPaperPlannerRecordsEachSeparatedExplicitBreak(t *testing.T) {
+	source := "document:\n" +
+		"  page:\n" +
+		"    body:\n" +
+		"      text: \"A\"\n" +
+		"      page-break @second:\n" +
+		"      text: \"B\"\n" +
+		"      page-break @third:\n" +
+		"      text: \"C\"\n"
+	parsed := paperlang.Parse("separated-breaks.paper", source)
+	if !parsed.OK() {
+		t.Fatalf("Parse() diagnostics = %+v", parsed.Diagnostics)
+	}
+	compiled := papercompile.Compile(parsed.AST)
+	if !compiled.OK() {
+		t.Fatalf("Compile() diagnostics = %+v", compiled.Diagnostics)
+	}
+	planner, err := newPaperPlanner(compiled.Page)
+	if err != nil {
+		t.Fatalf("newPaperPlanner() = %v", err)
+	}
+	plan, err := planner.planPaperTextBlocks(compiled.Document)
+	if err != nil {
+		t.Fatalf("planPaperTextBlocks() = %v", err)
+	}
+	projection := plan.Projection()
+	if len(projection.Pages) != 3 || len(projection.Fragments) != 3 || len(projection.Breaks) != 2 {
+		t.Fatalf("plan pages/fragments/breaks = %d/%d/%+v", len(projection.Pages), len(projection.Fragments), projection.Breaks)
+	}
+	for index, decision := range projection.Breaks {
+		if decision.Reason != layoutengine.BreakExplicitPageBreak || decision.FromPage != uint32(index+1) || decision.ToPage != uint32(index+2) {
+			t.Fatalf("break[%d] = %+v", index, decision)
+		}
+	}
+}
+
+func TestPaperPlannerAppliesPageLimitToExplicitBreak(t *testing.T) {
+	parsed := paperlang.Parse("limited-break.paper", "document:\n  page:\n    body:\n      text: \"A\"\n      page-break:\n      text: \"B\"\n")
+	if !parsed.OK() {
+		t.Fatalf("Parse() diagnostics = %+v", parsed.Diagnostics)
+	}
+	compiled := papercompile.Compile(parsed.AST)
+	if !compiled.OK() {
+		t.Fatalf("Compile() diagnostics = %+v", compiled.Diagnostics)
+	}
+	planner, err := newPaperPlanner(compiled.Page)
+	if err != nil {
+		t.Fatalf("newPaperPlanner() = %v", err)
+	}
+	planner.limits.MaxPages = 1
+	if _, err := planner.planPaperTextBlocks(compiled.Document); !errors.Is(err, ErrPageLimitExceeded) {
+		t.Fatalf("planPaperTextBlocks() error = %v, want ErrPageLimitExceeded", err)
 	}
 }
 

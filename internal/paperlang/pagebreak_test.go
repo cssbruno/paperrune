@@ -48,3 +48,16 @@ func TestPageBreakRejectsValuesAndIndentedContent(t *testing.T) {
 		}
 	}
 }
+
+func TestPageBreakRejectsNonBodyFlowNesting(t *testing.T) {
+	parsed := Parse("nested-break.paper", "document:\n  page:\n    body:\n      row:\n        page-break:\n")
+	if parsed.OK() {
+		t.Fatal("page-break inside row unexpectedly parsed without diagnostics")
+	}
+	for _, diagnostic := range parsed.Diagnostics {
+		if diagnostic.Code == "PAPER_INVALID_CHILD" && strings.Contains(diagnostic.Message, "row cannot contain page-break") {
+			return
+		}
+	}
+	t.Fatalf("diagnostics = %+v, want row/page-break hierarchy error", parsed.Diagnostics)
+}

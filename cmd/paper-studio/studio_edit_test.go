@@ -313,6 +313,10 @@ func TestPaperStudioAuthoringMetadataAndJournaledCreateToConnectFlow(t *testing.
 	if metadata.Revision != before.Revision || metadata.SourceRevision != before.SourceRevision || metadata.DocumentTarget != "@report" || len(metadata.Schemas) != 1 || len(metadata.Schemas[0].Fields) != 2 || len(metadata.StressPresets) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
+	bodyChoices := strings.Join(metadata.TemplateChoices[string(paperlang.NodeBody)], ",")
+	if !strings.Contains(bodyChoices, "page-break") || !strings.Contains(bodyChoices, "risk-register") || !strings.Contains(bodyChoices, "faq-block") || strings.Contains(bodyChoices, "styled-container") || strings.Contains(bodyChoices, "executive-summary") {
+		t.Fatalf("curated body template choices = %q", bodyChoices)
+	}
 
 	template := map[string]any{"source_revision": before.SourceRevision, "plan_revision": before.Revision, "operation": "template", "target": "@body", "property": "", "template": "paragraph", "id": "@summary"}
 	created := postStudioJSON(t, handler, "/api/edit", template)
@@ -946,6 +950,10 @@ func TestPaperStudioRoutesMissingAttributesThroughClosedMutations(t *testing.T) 
 	}{
 		{"document title", "@report", "document", "title", `title: "Final"`, map[string]any{"text": "Final"}},
 		{"page numbers", "@sheet", "page", "page-numbers", "page-numbers: true", map[string]any{"bool": true}},
+		{"page number position", "@sheet", "page", "page-number-position", `page-number-position: "header"`, map[string]any{"kind": "header"}},
+		{"page number alignment", "@sheet", "page", "page-number-align", `page-number-align: "outer"`, map[string]any{"kind": "outer"}},
+		{"hide first page number", "@sheet", "page", "page-number-hide-first", "page-number-hide-first: true", map[string]any{"bool": true}},
+		{"page number start", "@sheet", "page", "page-number-start", "page-number-start: 5", map[string]any{"count": 5}},
 		{"canvas default", "@diagram", "canvas-container", "default-horizontal", `default-horizontal: "center-x"`, map[string]any{"kind": "center-x"}},
 		{"canvas alt", "@badge", "canvas", "alt", `alt: "Badge"`, map[string]any{"text": "Badge"}},
 		{"heading level", "@title", "text", "level", "level: 4", map[string]any{"count": 4}},

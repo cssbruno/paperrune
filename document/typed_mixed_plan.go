@@ -42,6 +42,10 @@ func (f *pdfDocument) planTypedMixedBodies(ctx context.Context, doc *layout.Layo
 // all measurement and pagination; this layer only supplies the exact mapping
 // to text/row-column children before rebasing their finalized plans.
 func (f *pdfDocument) planTypedMixedBodiesMapped(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
+	return f.planTypedMixedBodiesMappedMode(ctx, doc, mapping, selectBody, true)
+}
+
+func (f *pdfDocument) planTypedMixedBodiesMappedMode(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, selectBody paperBodySelector, reflowAtomicOverflow bool) (layoutengine.LayoutPlan, error) {
 	blocks, err := typedMixedExpandContainers(doc.Body, "body")
 	if err != nil {
 		return layoutengine.LayoutPlan{}, err
@@ -102,15 +106,21 @@ func (f *pdfDocument) planTypedMixedBodiesMapped(ctx context.Context, doc *layou
 		}
 		if pageBreak, ok := block.(layout.PageBreakBlock); ok && (pageBreak.Before || pageBreak.After) {
 			if len(segments) != 0 && index+1 < len(blocks) {
-				page++
-				if f.limits.MaxPages > 0 && int(page) > f.limits.MaxPages {
-					return layoutengine.LayoutPlan{}, fmt.Errorf("%w: mixed typed flow requires page %d", layoutengine.ErrTablePageLimit, page)
+				// A prior marker or exact-fit block may already have opened an
+				// empty destination page. Reuse it so leading, trailing, and
+				// consecutive explicit boundaries never synthesize blank pages.
+				if pendingReason == "" {
+					page++
+					if f.limits.MaxPages > 0 && int(page) > f.limits.MaxPages {
+						return layoutengine.LayoutPlan{}, fmt.Errorf("%w: mixed typed flow requires page %d", layoutengine.ErrTablePageLimit, page)
+					}
+					body, err = globalBody(page)
+					if err != nil {
+						return layoutengine.LayoutPlan{}, err
+					}
+					cursor = body.Y
 				}
-				body, err = globalBody(page)
-				if err != nil {
-					return layoutengine.LayoutPlan{}, err
-				}
-				cursor, pendingReason = body.Y, layoutengine.BreakExplicitPageBreak
+				pendingReason = layoutengine.BreakExplicitPageBreak
 			}
 			continue
 		}
@@ -153,6 +163,43 @@ func (f *pdfDocument) planTypedMixedBodiesMapped(ctx context.Context, doc *layou
 			return layoutengine.LayoutPlan{}, err
 		}
 		projection := planned.Projection()
+		firstBody, bodyErr := globalBody(startPage)
+		if bodyErr != nil {
+			return layoutengine.LayoutPlan{}, bodyErr
+		}
+		firstBottom, bottomErr := firstBody.Bottom()
+		if bottomErr != nil {
+			return layoutengine.LayoutPlan{}, bottomErr
+		}
+		firstPageOverflow := false
+		for _, fragment := range projection.Fragments {
+			if fragment.Page != 1 || fragment.Region != layoutengine.RegionBody {
+				continue
+			}
+			fragmentBottom, fragmentErr := fragment.BorderBox.Bottom()
+			if fragmentErr != nil {
+				return layoutengine.LayoutPlan{}, fragmentErr
+			}
+			firstPageOverflow = firstPageOverflow || fragmentBottom > firstBottom
+		}
+		_, decoratedContainer := block.(typedMixedDecoratedBlock)
+		_, tableContainer := block.(layout.TableBlock)
+		if reflowAtomicOverflow && firstPageOverflow && startCursor > firstBody.Y && !decoratedContainer && !tableContainer {
+			startPage++
+			if f.limits.MaxPages > 0 && int(startPage) > f.limits.MaxPages {
+				return layoutengine.LayoutPlan{}, fmt.Errorf("%w: mixed typed flow requires page %d", layoutengine.ErrTablePageLimit, startPage)
+			}
+			body, err = globalBody(startPage)
+			if err != nil {
+				return layoutengine.LayoutPlan{}, err
+			}
+			startCursor, pendingReason = body.Y, layoutengine.BreakInsufficientRemainingBodySpace
+			planned, err = f.planPaperTextBlocksMappedBodiesContext(ctx, &child, childMapping, selector)
+			if err != nil {
+				return layoutengine.LayoutPlan{}, err
+			}
+			projection = planned.Projection()
+		}
 		if len(projection.Pages) == 0 {
 			return layoutengine.LayoutPlan{}, fmt.Errorf("document: mixed block %d produced no pages", index)
 		}
@@ -493,7 +540,7 @@ func (f *pdfDocument) planTypedMixedDecoratedBlock(ctx context.Context, doc *lay
 			return layoutengine.NewRect(x, y, width, height)
 		}
 		if typedBlocksContainTable(child.Body) {
-			return f.planTypedMixedBodies(ctx, &child, selector)
+			return f.planTypedMixedBodiesMappedMode(ctx, &child, papercompile.CompileMapping{}, selector, false)
 		}
 		return f.planPaperTextBlocksMappedBodiesContext(ctx, &child, papercompile.CompileMapping{}, selector)
 	}

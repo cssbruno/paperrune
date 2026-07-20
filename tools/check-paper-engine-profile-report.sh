@@ -22,7 +22,7 @@ require_line '# worktree: '
 require_line '# cpu-seconds: '
 require_line '# allocation-iterations: '
 
-for name in planner-typed painter-typed end-to-end-typed; do
+for name in planner-typed painter-typed end-to-end-typed warm-paper end-to-end-html-large-table; do
 	require_line "## $name"
 	require_line "cpu-profile: $name.cpu.pprof"
 	require_line "cpu-summary: $name.cpu.txt"

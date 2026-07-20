@@ -124,7 +124,8 @@ the broad regression boundary, not a replacement for statistical review.
 ## CPU and allocation profiles
 
 Generate bounded CPU and allocation profiles for the representative
-planner-only, retained-plan painter, and typed end-to-end workloads:
+planner-only, retained-plan painter, typed end-to-end, warm compiled Paper,
+and compiled large-HTML-table workloads:
 
 ```sh
 make profile-paper-engine-check

@@ -3,7 +3,11 @@
 
 package document
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/cssbruno/paperrune/internal/layoutengine"
+)
 
 const maxContentScratchCapacity = 64 * 1024
 
@@ -20,6 +24,18 @@ func (f *pdfDocument) retainContentCommandBuffer(buffer []byte) {
 	}
 }
 
+// pageContentCommandBuffer returns appendable capacity owned by the current
+// page. bytes.Buffer explicitly permits appending to AvailableBuffer followed
+// by an immediate Write of that slice; this lets positioned painters build a
+// command directly in its final allocation.
+func (f *pdfDocument) pageContentCommandBuffer(capacity int) []byte {
+	if f.state != documentStatePageOpen || f.page <= 0 || f.page >= len(f.pages) || f.pages[f.page] == nil {
+		return f.contentCommandBuffer(capacity)
+	}
+	f.pages[f.page].Grow(capacity + 1) // include the newline appended by outbytes
+	return f.pages[f.page].AvailableBuffer()
+}
+
 func appendPDFNumber(dst []byte, value float64, precision int) []byte {
 	return strconv.AppendFloat(dst, value, 'f', precision, 64)
 }
@@ -27,6 +43,65 @@ func appendPDFNumber(dst []byte, value float64, precision int) []byte {
 func appendPDFNumberSpace(dst []byte, value float64, precision int) []byte {
 	dst = appendPDFNumber(dst, value, precision)
 	return append(dst, ' ')
+}
+
+// appendPDFFixed emits the exact ten-decimal representation previously
+// produced by strconv.AppendFloat(value.Points(), 'f', 10, 64). FixedScale is
+// 1024, whose reciprocal terminates after ten decimal places, so the decimal
+// can be assembled without floating-point conversion or temporary storage.
+func appendPDFFixed(dst []byte, value layoutengine.Fixed) []byte {
+	const exactFloatIntegerLimit = layoutengine.Fixed(1 << 53)
+	if value < -exactFloatIntegerLimit || value > exactFloatIntegerLimit {
+		return strconv.AppendFloat(dst, value.Points(), 'f', 10, 64)
+	}
+	negative := value < 0
+	magnitude := uint64(value)
+	if negative {
+		magnitude = uint64(-(value + 1)) + 1
+		dst = append(dst, '-')
+	}
+	dst = strconv.AppendUint(dst, magnitude/uint64(layoutengine.FixedScale), 10)
+	dst = append(dst, '.')
+	return append(dst, pdfFixedFractionDigits[magnitude%uint64(layoutengine.FixedScale)][:]...)
+}
+
+func appendPDFFixedSpace(dst []byte, value layoutengine.Fixed) []byte {
+	dst = appendPDFFixed(dst, value)
+	return append(dst, ' ')
+}
+
+var pdfFixedFractionDigits = func() [layoutengine.FixedScale][10]byte {
+	var fractions [layoutengine.FixedScale][10]byte
+	for fixed := range fractions {
+		fraction := uint64(fixed) * 9_765_625
+		for digit, divisor := 0, uint64(1_000_000_000); divisor > 0; digit, divisor = digit+1, divisor/10 {
+			fractions[fixed][digit] = byte('0' + fraction/divisor)
+			fraction %= divisor
+		}
+	}
+	return fractions
+}()
+
+var pdfColorComponents = func() [256]string {
+	var components [256]string
+	for value := range components {
+		components[value] = strconv.FormatFloat(float64(value)/255, 'f', 10, 64)
+	}
+	return components
+}()
+
+func appendPDFColorComponentSpace(dst []byte, value uint8) []byte {
+	dst = append(dst, pdfColorComponents[value]...)
+	return append(dst, ' ')
+}
+
+func plannedGlyphRunCapacity(run layoutengine.CoreGlyphRun) int {
+	const base = 96
+	const perCode = 48
+	if len(run.Codes) > (maxContentScratchCapacity-base)/perCode {
+		return maxContentScratchCapacity
+	}
+	return base + len(run.Codes)*perCode
 }
 
 func appendPDFInt(dst []byte, value int) []byte {

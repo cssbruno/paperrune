@@ -79,6 +79,15 @@ type studioScenarioMatrixCase struct {
 	Preset string `json:"preset"`
 }
 
+func studioPageNumberProperty(property string) bool {
+	switch property {
+	case "page-numbers", "page-number-format", "page-total-alias", "page-number-align", "page-number-position", "page-number-hide-first", "page-number-start":
+		return true
+	default:
+		return false
+	}
+}
+
 type studioEditAuthorization struct {
 	Actor   string                       `json:"actor"`
 	Allowed bool                         `json:"allowed"`
@@ -244,7 +253,7 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 		}
 	case "page":
 		if request.Reset {
-		} else if request.Property == "page-numbers" || request.Property == "page-number-format" || request.Property == "page-total-alias" {
+		} else if studioPageNumberProperty(request.Property) {
 			operation = paperd.MutationSetPageNumbering
 		} else {
 			operation = paperd.MutationSetPageMargin
@@ -790,12 +799,16 @@ func applyStudioSemanticMutation(workspace *paperd.Workspace, guard paperd.Paper
 		})
 	}
 	if request.Operation == "page" {
-		if request.Property == "page-numbers" || request.Property == "page-number-format" || request.Property == "page-total-alias" {
+		if studioPageNumberProperty(request.Property) {
 			boolean := false
 			if request.Bool != nil {
 				boolean = *request.Bool
 			}
-			return workspace.PaperSetPageNumbering(paperd.PaperSetPageNumberingRequest{Guard: guard, Property: paperd.PaperPageNumberingProperty(request.Property), Text: request.Text, Bool: boolean})
+			count := uint32(0)
+			if request.Count != nil {
+				count = *request.Count
+			}
+			return workspace.PaperSetPageNumbering(paperd.PaperSetPageNumberingRequest{Guard: guard, Property: paperd.PaperPageNumberingProperty(request.Property), Text: request.Text, Kind: request.Kind, Bool: boolean, Count: count})
 		}
 		points := 0.0
 		if request.Points != nil {

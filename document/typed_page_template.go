@@ -145,6 +145,19 @@ func (f *pdfDocument) planTypedPageTemplate(ctx context.Context, doc *layout.Lay
 }
 
 func validateTypedPageTemplateContract(template layout.PageTemplate) error {
+	switch strings.ToLower(strings.TrimSpace(template.PageNumbers.Align)) {
+	case "", "left", "center", "right", "inner", "outer":
+	default:
+		return newTypedShadowUnsupported(typedShadowPageTemplate, "page-number alignment is invalid")
+	}
+	switch strings.ToLower(strings.TrimSpace(template.PageNumbers.Position)) {
+	case "", "header", "footer":
+	default:
+		return newTypedShadowUnsupported(typedShadowPageTemplate, "page-number position is invalid")
+	}
+	if template.PageNumbers.Start < 0 {
+		return newTypedShadowUnsupported(typedShadowPageTemplate, "page-number start must be non-negative")
+	}
 	if !finiteNumbers(template.ReserveFooterHeight, template.EvenPageFooterHeight) ||
 		template.ReserveFooterHeight < 0 || template.EvenPageFooterHeight < 0 {
 		return newTypedShadowUnsupported(typedShadowPageTemplate, "footer reserve heights must be finite and non-negative")
@@ -282,11 +295,16 @@ func (f *pdfDocument) planTypedPageShell(ctx context.Context, doc *layout.Layout
 	if text, err := typedPageNumberText(template, page, total); err != nil {
 		return typedPageShell{}, err
 	} else if text != "" {
-		footerBlocks = append(footerBlocks, layout.ParagraphBlock{
+		counter := layout.ParagraphBlock{
 			Segments: []layout.TextSegment{{Text: text}},
-			Style:    layout.TextStyle{FontFamily: "Helvetica", FontSize: 9, LineHeight: 10, Align: "C"},
+			Style:    layout.TextStyle{FontFamily: "Helvetica", FontSize: 9, LineHeight: 10, Align: template.PageNumberAlignment(int(page))},
 			Box:      layout.BoxStyle{KeepTogether: true},
-		})
+		}
+		if template.PageNumberPosition() == "header" {
+			headerBlocks = append(headerBlocks, counter)
+		} else {
+			footerBlocks = append(footerBlocks, counter)
+		}
 	}
 	headerPlan, headerHeight, headerOrigin, err := f.planTypedPageRegion(ctx, doc, headerBlocks, headerBox, "header", layoutengine.RegionHeader, paperMappingForRegion(mapping, layoutengine.RegionHeader), page)
 	if err != nil {
@@ -306,7 +324,11 @@ func typedPageNumberText(template layout.PageTemplate, page, total uint32) (stri
 		return "", nil
 	}
 	if alias := template.PageTotalAlias(); alias != "" {
-		text = strings.ReplaceAll(text, alias, strconv.FormatUint(uint64(total), 10))
+		displayTotal := uint64(total)
+		if template.PageNumbers.Start > 1 {
+			displayTotal += uint64(template.PageNumbers.Start - 1)
+		}
+		text = strings.ReplaceAll(text, alias, strconv.FormatUint(displayTotal, 10))
 	}
 	if strings.Contains(text, "%!") || strings.ContainsRune(text, '\x00') {
 		return "", newTypedShadowUnsupported(typedShadowPageTemplate, "page-number format is invalid")

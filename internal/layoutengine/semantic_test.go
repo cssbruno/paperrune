@@ -106,6 +106,23 @@ func TestReplaceSemanticsPreservesDisplayAndDoesNotMutateOriginal(t *testing.T) 
 	}
 }
 
+func TestReplaceTrustedSemanticsAdoptsValidatedProjection(t *testing.T) {
+	original := semanticTestPlan(t, false)
+	projection := original.ReadOnlyProjection()
+	nodes := append([]SemanticNode(nil), projection.SemanticNodes...)
+	nodes[0].Key, nodes[0].Instance = "@trusted-report", "@trusted-report"
+	replaced, err := ReplaceTrustedSemantics(original, nodes, projection.SemanticFragments, projection.ReadingOrder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := replaced.ReadOnlyProjection().SemanticNodes[0].Key; got != "@trusted-report" {
+		t.Fatalf("trusted semantic root = %q", got)
+	}
+	if got := original.ReadOnlyProjection().SemanticNodes[0].Key; got == "@trusted-report" {
+		t.Fatal("trusted semantic replacement mutated the original plan")
+	}
+}
+
 func TestSemanticValidationRejectsInvalidTreeOwnershipAndReadingOrder(t *testing.T) {
 	valid := semanticTestInput(false)
 	tests := []struct {

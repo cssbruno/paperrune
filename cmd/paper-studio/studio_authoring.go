@@ -15,6 +15,7 @@ import (
 
 	"github.com/cssbruno/paperrune/document"
 	"github.com/cssbruno/paperrune/internal/papercompile"
+	"github.com/cssbruno/paperrune/internal/paperd"
 	"github.com/cssbruno/paperrune/internal/paperedit"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 	"github.com/cssbruno/paperrune/internal/paperscenario"
@@ -59,6 +60,7 @@ type studioAuthoringResponse struct {
 	Scenario         string                    `json:"scenario,omitempty"`
 	DocumentTarget   string                    `json:"document_target,omitempty"`
 	TemplateTargets  []studioAuthoringTarget   `json:"template_targets"`
+	TemplateChoices  map[string][]string       `json:"template_choices"`
 	LifecycleTargets []studioAuthoringTarget   `json:"lifecycle_targets"`
 	BindingTargets   []studioAuthoringTarget   `json:"binding_targets"`
 	Schemas          []studioSchemaChoice      `json:"schemas"`
@@ -323,7 +325,7 @@ func buildStudioAuthoringResponse(snapshot *studioSnapshot, ast paperlang.AST) s
 	response := studioAuthoringResponse{
 		FormatVersion: 1, Revision: snapshot.revision, SourceRevision: studioSourceRevision(snapshot.source),
 		PlanHash: snapshot.plan.Hash(), Scenario: snapshot.scenario, StressPresets: []string{"empty", "typical", "stress"},
-		TemplateTargets: []studioAuthoringTarget{}, LifecycleTargets: []studioAuthoringTarget{}, BindingTargets: []studioAuthoringTarget{}, Schemas: []studioSchemaChoice{}, ObjectTypes: []string{}, SchemaFields: []studioSchemaFieldTarget{}, Scenarios: []string{}, ScenarioValues: []studioScenarioValue{}, Components: []string{},
+		TemplateTargets: []studioAuthoringTarget{}, TemplateChoices: map[string][]string{}, LifecycleTargets: []studioAuthoringTarget{}, BindingTargets: []studioAuthoringTarget{}, Schemas: []studioSchemaChoice{}, ObjectTypes: []string{}, SchemaFields: []studioSchemaFieldTarget{}, Scenarios: []string{}, ScenarioValues: []studioScenarioValue{}, Components: []string{},
 	}
 	hasPage := false
 	var walk func(*paperlang.Node)
@@ -400,7 +402,34 @@ func buildStudioAuthoringResponse(snapshot *studioSnapshot, ast paperlang.AST) s
 	})
 	sort.Strings(response.Components)
 	sort.Strings(response.ObjectTypes)
+	response.TemplateChoices = studioTemplateChoices(response)
 	return response
+}
+
+func studioTemplateChoices(response studioAuthoringResponse) map[string][]string {
+	hasRepeat := false
+	for _, schema := range response.Schemas {
+		for _, field := range schema.Fields {
+			hasRepeat = hasRepeat || field.Kind == "list"
+		}
+	}
+	kinds := map[paperlang.NodeKind]bool{}
+	for _, target := range response.TemplateTargets {
+		kinds[paperlang.NodeKind(target.Kind)] = true
+	}
+	choices := make(map[string][]string, len(kinds))
+	for kind := range kinds {
+		for _, template := range paperd.AuthoringTemplateChoices(kind) {
+			if kind == paperlang.NodeDocument && (template == "import" || template == "schema" || template == "schema-object") ||
+				template == "component" && len(response.Components) == 0 ||
+				template == "repeat" && !hasRepeat ||
+				template == "loop" && response.Scenario == "" {
+				continue
+			}
+			choices[string(kind)] = append(choices[string(kind)], template)
+		}
+	}
+	return choices
 }
 
 func studioNodeLifecycleAllowed(kind paperlang.NodeKind) bool {

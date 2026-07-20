@@ -1,9 +1,17 @@
 const assert = require('node:assert/strict');
 const model = require('../web/authoring-model.js');
 const workspace = {revision:'plan-1', plan_hash:'plan-1', source_revision:'source-1', scenario:''};
+const bodyTemplates = [
+  'paragraph','heading','list','image','table','canvas','row','column','page-break','note-box','metadata-grid','signature-row','qr-verification','clause',
+  'title-block','two-column','image-caption','quote','checklist','disclaimer','divider','cover-block','recipient-block','code-block','status-banner',
+  'numbered-steps','timeline','comparison-table','approval-block','image-grid','invoice-totals','kpi-strip','table-of-contents','risk-register','change-log',
+  'decision-record','pros-cons','faq-block','repeat','component','section',
+];
+const nestedTemplates = bodyTemplates.filter(template => !['list','canvas','page-break','cover-block','image-grid','repeat'].includes(template));
 const payload = {format_version:1, revision:'plan-1', plan_hash:'plan-1', source_revision:'source-1', document_target:'@doc',
   template_targets:[{id:'@body',kind:'body'}], binding_targets:[{id:'@copy',kind:'paragraph'}],
 	lifecycle_targets:[{id:'@copy',kind:'paragraph'}],
+  template_choices:{document:['document-preset','page'],body:bodyTemplates,column:nestedTemplates,list:['item'],item:['text','paragraph','component'],table:['table-row'],'table-row':['cell'],cell:['text','paragraph','image','list']},
   schemas:[{name:'@invoice',fields:[{path:'@invoice.total',kind:'number',required:true},{path:'@invoice.items',kind:'list',required:true}]}],
   object_types:['Address'],
   schema_field_targets:[{id:'@invoice',kind:'schema',schema:'@invoice',path:''}],
@@ -17,7 +25,9 @@ const bootstrapMetadata = model.normalize({...payload, template_targets:[{id:'@d
 assert.equal(model.buildPayload(workspace, bootstrapMetadata, {operation:'template',target:'@doc',template:'page',id:'@sheet'}).template, 'page');
 assert.equal(model.buildPayload(workspace, bootstrapMetadata, {operation:'template',target:'@doc',template:'document-preset',preset:'prescription',id:'@sheet'}).preset, 'prescription');
 assert.equal(model.buildPayload(workspace, metadata, {operation:'template',target:'@body',template:'repeat',path:'@invoice.items',id:'@lines'}).path, '@invoice.items');
-assert.equal(model.buildPayload({...workspace,scenario:'@review'}, metadata, {operation:'template',target:'@body',template:'loop',id:'@copies'}).template, 'loop');
+const scenarioWorkspace = {...workspace,scenario:'@review'};
+const scenarioMetadata = model.normalize({...payload,scenario:'@review',template_choices:{...payload.template_choices,body:[...bodyTemplates,'loop']}}, scenarioWorkspace);
+assert.equal(model.buildPayload(scenarioWorkspace, scenarioMetadata, {operation:'template',target:'@body',template:'loop',id:'@copies'}).template, 'loop');
 assert.deepEqual(model.buildPayload(workspace, metadata, {operation:'import',target:'@doc',importPath:'styles/design.paper'}),
   {source_revision:'source-1',plan_revision:'plan-1',scenario:'',operation:'import',property:'',target:'@doc',import_path:'styles/design.paper'});
 assert.throws(() => model.buildPayload(workspace, bootstrapMetadata, {operation:'template',target:'@doc',template:'section',id:'@bad'}), /compatible/);
@@ -42,12 +52,26 @@ assert.deepEqual(model.buildNodeLifecyclePayload(workspace, metadata, {action:'d
   {source_revision:'source-1',plan_revision:'plan-1',scenario:'',operation:'node',target:'@copy',property:'delete'});
 assert.equal(model.buildPayload(workspace, metadata, {operation:'template',target:'@body',template:'component',component:'@card',id:'@card-1'}).component, '@card');
 assert.equal(model.buildPayload(workspace, metadata, {operation:'template',target:'@body',template:'heading',id:'@heading'}).template, 'heading');
+for (const template of [
+  'title-block','two-column','image-caption','quote','checklist','disclaimer','divider',
+  'cover-block','recipient-block','code-block','status-banner','numbered-steps','timeline','comparison-table',
+  'approval-block','image-grid','invoice-totals','kpi-strip','table-of-contents','risk-register','change-log','decision-record','pros-cons','faq-block',
+]) {
+  assert.equal(model.buildPayload(workspace, metadata, {operation:'template',target:'@body',template,id:`@${template}`}).template, template);
+}
 const nestedMetadata = model.normalize({...payload, template_targets:[
   {id:'@body',kind:'body'},{id:'@tasks',kind:'list'},{id:'@first',kind:'item'},
   {id:'@grid',kind:'table'},{id:'@row',kind:'table-row'},{id:'@cell',kind:'cell'},
 ]}, workspace);
 assert.deepEqual(model.templateChoices(nestedMetadata, workspace, 'list'), ['item']);
 assert.deepEqual(model.templateChoices(nestedMetadata, workspace, 'table-row'), ['cell']);
+assert.equal(model.templateChoices(nestedMetadata, workspace, 'column').includes('title-block'), true);
+assert.equal(model.templateChoices(nestedMetadata, workspace, 'column').includes('two-column'), true);
+assert.equal(model.templateChoices(nestedMetadata, workspace, 'column').includes('checklist'), true);
+assert.equal(model.templateChoices(nestedMetadata, workspace, 'column').includes('timeline'), true);
+assert.equal(model.templateChoices(nestedMetadata, workspace, 'column').includes('numbered-steps'), true);
+assert.equal(model.templateChoices(nestedMetadata, workspace, 'column').includes('image-grid'), false);
+assert.equal(model.templateChoices(nestedMetadata, workspace, 'column').includes('risk-register'), true);
 assert.equal(model.buildPayload(workspace, nestedMetadata, {operation:'template',target:'@tasks',template:'item',id:'@second'}).template, 'item');
 assert.equal(model.buildPayload(workspace, nestedMetadata, {operation:'template',target:'@row',template:'cell',id:'@extra'}).template, 'cell');
 assert.throws(() => model.buildPayload(workspace, nestedMetadata, {operation:'template',target:'@row',template:'canvas',id:'@bad'}), /compatible/);

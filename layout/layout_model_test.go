@@ -168,6 +168,19 @@ func TestSignatureAndPageTemplateContracts(t *testing.T) {
 	if got := pt.PageTotalAlias(); got != "{total}" {
 		t.Fatalf("PageTotalAlias() = %q", got)
 	}
+	mirrored := PageTemplate{PageNumbers: PageNumberOptions{Enabled: true, Format: "Page %d", Align: "outer", Position: "header", HideFirst: true, Start: 5}}
+	if got := mirrored.PageNumberText(1); got != "" {
+		t.Fatalf("hidden first PageNumberText() = %q", got)
+	}
+	if got := mirrored.PageNumberText(2); got != "Page 6" {
+		t.Fatalf("started PageNumberText() = %q", got)
+	}
+	if mirrored.PageNumberAlignment(1) != "R" || mirrored.PageNumberAlignment(2) != "L" {
+		t.Fatalf("outer page alignments = %q/%q", mirrored.PageNumberAlignment(1), mirrored.PageNumberAlignment(2))
+	}
+	if mirrored.PageNumberPosition() != "header" {
+		t.Fatalf("PageNumberPosition() = %q", mirrored.PageNumberPosition())
+	}
 }
 
 func TestTextStyleHelpers(t *testing.T) {

@@ -110,7 +110,7 @@
     if (operation === 'table') {
       return [];
     }
-    if (operation === 'page') return ['margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'page-numbers', 'page-number-format', 'page-total-alias'];
+    if (operation === 'page') return ['margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'page-numbers', 'page-number-position', 'page-number-align', 'page-number-hide-first', 'page-number-start', 'page-number-format', 'page-total-alias'];
     if (operation === 'canvas') return [...canvasItemConstraints, 'width', 'height', 'alt'];
     if (operation === 'canvas-container') return ['width', 'height', 'default-horizontal', 'default-vertical'];
     if (operation === 'region') return boxProperties;
@@ -171,6 +171,10 @@
     if (operation === 'table' && ['colspan', 'rowspan'].includes(property)) return {kind: 'integer', label: 'Cell span', min: 1, max: 1024, field: 'count'};
     if (operation === 'page' && ['margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left'].includes(property)) return {kind: 'length', label: 'Page spacing (pt)', allowAuto: false, allowPercent: false, positive: false, pointsOnly: true};
     if (operation === 'page' && property === 'page-numbers') return {kind: 'boolean', label: 'Page numbers', choices: ['true', 'false']};
+    if (operation === 'page' && property === 'page-number-position') return {kind: 'choice', label: 'Counter region', choices: ['footer', 'header']};
+    if (operation === 'page' && property === 'page-number-align') return {kind: 'choice', label: 'Counter alignment', choices: ['left', 'center', 'right', 'inner', 'outer']};
+    if (operation === 'page' && property === 'page-number-hide-first') return {kind: 'boolean', label: 'Hide on first page', choices: ['false', 'true']};
+    if (operation === 'page' && property === 'page-number-start') return {kind: 'integer', label: 'Starting page number', min: 1, max: 1048576, field: 'count'};
     if (operation === 'page' && property === 'page-number-format') return {kind: 'text', label: 'Page number format', defaultValue: 'Page %d of {pages}'};
     if (operation === 'page' && property === 'page-total-alias') return {kind: 'text', label: 'Total-page alias', defaultValue: '{pages}'};
     if (operation === 'canvas' && canvasItemConstraints.includes(property)) return {kind: 'constraint', label: 'Target anchor'};
@@ -198,6 +202,10 @@
     'keep-together': 'Tries to keep this row on one page.',
     'keep-with-next': 'Tries to keep this row beside the following row.',
     'page-total-alias': 'Placeholder used by the page-number format for the total page count.',
+    'page-number-position': 'Places the automatic counter in the header or footer page shell.',
+    'page-number-align': 'Inner and outer mirror automatically across odd and even pages.',
+    'page-number-hide-first': 'Keeps a cover page unnumbered while later pages retain their physical count.',
+    'page-number-start': 'Number assigned to the first physical page.',
     when: 'Shows this content only when the data expression evaluates to true.',
     decorative: 'Marks an image as visual decoration so alternative text is not required.',
     'default-horizontal': 'Anchor used when a canvas item has no horizontal constraint.',
@@ -327,7 +335,7 @@
     if (property.startsWith('border') || ['background', 'style'].includes(property)) return 'Appearance';
     if (['font', 'size', 'line-height', 'color', 'align', 'bold', 'italic', 'level', 'font-token', 'size-token', 'line-height-token', 'color-token'].includes(property)) return 'Typography';
     if (['width', 'height', 'min-width', 'max-width', 'min-height', 'max-height', 'flex-grow', 'flex-shrink'].includes(property)) return 'Size';
-    if (['orphans', 'widows', 'keep-together', 'keep-with-next', 'split', 'repeat-header', 'page-numbers', 'page-number-format', 'page-total-alias'].includes(property)) return 'Pagination';
+    if (['orphans', 'widows', 'keep-together', 'keep-with-next', 'split', 'repeat-header', 'page-numbers', 'page-number-position', 'page-number-align', 'page-number-hide-first', 'page-number-start', 'page-number-format', 'page-total-alias'].includes(property)) return 'Pagination';
     if (canvasItemConstraints.includes(property) || property.startsWith('default-')) return 'Position';
     return 'General';
   }

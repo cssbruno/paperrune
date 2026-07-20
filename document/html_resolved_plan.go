@@ -89,7 +89,10 @@ func (f *pdfDocument) resolveCompiledHTMLUnifiedSnapshot(ctx context.Context, co
 	base := htmlTextStyle{fontFamily: firstNonEmpty(f.fontFamily, "Helvetica"), fontSize: f.fontSizePt, lineHeight: lineHeight, align: "L"}
 	r, g, b := f.GetTextColor()
 	base.color = CSSColorType{R: r, G: g, B: b, Set: r != 0 || g != 0 || b != 0}
-	resolvedLegacy := make([]htmlTextStyle, len(compiled.tokens))
+	// Legacy text inheritance is needed only for opening-element nodes. Token
+	// streams also contain text and closing tokens, so indexing this scratch by
+	// node avoids reserving a large unused style entry for each of those tokens.
+	resolvedLegacy := make([]htmlTextStyle, len(compiled.nodeIndexes))
 
 	for index, token := range compiled.tokens {
 		if index&255 == 0 {
@@ -111,7 +114,7 @@ func (f *pdfDocument) resolveCompiledHTMLUnifiedSnapshot(ctx context.Context, co
 		if nodeIndex := compiled.tokenNode[index]; nodeIndex >= 0 {
 			if parent := compiled.nodeIndexes[nodeIndex].Parent; parent >= 0 {
 				parentToken := compiled.nodeIndexes[parent].Token
-				inherited = resolvedLegacy[parentToken]
+				inherited = resolvedLegacy[parent]
 				headingDefaults = strings.ToLower(strings.TrimSpace(clone.unifiedResolved[parentToken].decl["display"])) != "flex"
 			}
 		}
@@ -207,7 +210,9 @@ func (f *pdfDocument) resolveCompiledHTMLUnifiedSnapshot(ctx context.Context, co
 			whiteSpace = strings.ToLower(strings.TrimSpace(value))
 			style.preserveWhitespace = whiteSpace == "pre" || whiteSpace == "pre-wrap" || whiteSpace == "break-spaces"
 		}
-		resolvedLegacy[index] = style
+		if nodeIndex := compiled.tokenNode[index]; nodeIndex >= 0 {
+			resolvedLegacy[nodeIndex] = style
+		}
 		box, err := htmlUnifiedResolvedBox(token.Str, index, decl, style.fontSize, headingDefaults, f)
 		if err != nil {
 			return nil, err
@@ -225,7 +230,10 @@ func (f *pdfDocument) resolveCompiledHTMLUnifiedSnapshot(ctx context.Context, co
 			text: textStyle, box: box, destination: htmlUnifiedDestination(token),
 			displayNone:   strings.EqualFold(strings.TrimSpace(decl["display"]), "none"),
 			textTransform: textTransform,
-			decl:          cloneStringMap(decl), preserveWS: style.preserveWhitespace,
+			// Compiled declarations are immutable reusable parse products. The
+			// selector-free snapshot only reads this map, so sharing it avoids a
+			// per-element map allocation without weakening snapshot isolation.
+			decl: decl, preserveWS: style.preserveWhitespace,
 			preserveLines: whiteSpace == "pre" || whiteSpace == "pre-wrap" || whiteSpace == "pre-line" || whiteSpace == "break-spaces",
 			whiteSpace:    whiteSpace,
 		}
@@ -375,11 +383,10 @@ func htmlUnifiedResolvedBox(tag string, token int, decl map[string]string, fontS
 	}
 	if tag == "th" || tag == "td" {
 		cell := layout.TableCell{}
-		boxDecl := htmlUnifiedFilteredDeclarations(decl, htmlUnifiedTableBoxProperties)
-		if len(boxDecl) != 0 {
-			if err := htmlPlanApplyStrictCellStyle(&cell, boxDecl, pdf.PointConvert); err != nil {
-				return layout.BoxStyle{}, htmlPlanUnsupported(tag, token, err.Error())
-			}
+		if applied, err := htmlPlanApplyResolvedCellStyle(&cell, decl, pdf.PointConvert); err != nil {
+			return layout.BoxStyle{}, htmlPlanUnsupported(tag, token, err.Error())
+		} else if !applied {
+			return box, nil
 		}
 		box = cell.Box
 	}

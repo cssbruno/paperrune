@@ -18,10 +18,11 @@ import (
 // core painter intentionally has a one-run-per-line contract; these plans are
 // still fully positioned and simply use the general display-list painter.
 func layoutPlanHasMultipleGlyphRunsPerLine(projection layoutengine.LayoutPlanProjection) bool {
-	counts := make(map[uint32]uint32)
-	for _, run := range projection.GlyphRuns {
-		counts[run.Line]++
-		if counts[run.Line] > 1 {
+	// Valid plans keep glyph runs in line order, so a repeated line must be
+	// adjacent. Avoid allocating a map on every retained-plan write just to
+	// select the painter.
+	for index := 1; index < len(projection.GlyphRuns); index++ {
+		if projection.GlyphRuns[index].Line == projection.GlyphRuns[index-1].Line {
 			return true
 		}
 	}
@@ -36,15 +37,10 @@ type preparedCorePlanFont struct {
 	font     fontDefinition
 }
 
-type preparedCorePlanPage struct {
-	page   layoutengine.PlannedPage
-	events []layoutengine.CorePaintEvent
-}
-
 type preparedCorePlanPDF struct {
-	fonts     map[layoutengine.FontResourceID]preparedCorePlanFont
-	fontOrder []layoutengine.FontResourceID
-	pages     []preparedCorePlanPage
+	fonts      map[layoutengine.FontResourceID]preparedCorePlanFont
+	fontOrder  []layoutengine.FontResourceID
+	projection layoutengine.LayoutPlanProjection
 }
 
 // paintCoreLayoutPlanPDF is the initial production no-layout painter bridge.
@@ -72,10 +68,10 @@ func (f *pdfDocument) paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared prepa
 		font := prepared.fonts[id]
 		f.ensureResourceStore().setFont(font.key, font.font)
 	}
-	for index, plannedPage := range prepared.pages {
+	for index, plannedPage := range prepared.projection.Pages {
 		size := Size{
-			Wd: f.PointConvert(plannedPage.page.Size.Width.Points()),
-			Ht: f.PointConvert(plannedPage.page.Size.Height.Points()),
+			Wd: f.PointConvert(plannedPage.Size.Width.Points()),
+			Ht: f.PointConvert(plannedPage.Size.Height.Points()),
 		}
 		if !reuseCurrent || index != 0 {
 			f.AddPageFormat("P", size)
@@ -85,18 +81,22 @@ func (f *pdfDocument) paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared prepa
 		}
 		var previousRun layoutengine.CoreGlyphRun
 		previousRunSet := false
-		for _, event := range plannedPage.events {
-			font := prepared.fonts[event.Run.Font]
+		commandEnd := int(plannedPage.Commands.Start + plannedPage.Commands.Count)
+		for commandIndex := int(plannedPage.Commands.Start); commandIndex < commandEnd; commandIndex++ {
+			command := prepared.projection.Commands[commandIndex]
+			run := prepared.projection.GlyphRuns[command.Payload]
+			font := prepared.fonts[run.Font]
+			content := f.pageContentCommandBuffer(plannedGlyphRunCapacity(run))
 			if compactNativeRuns {
-				run := event.Run
 				if !run.LeadingSpace && previousRunSet {
 					run.LeadingSpace = previousRun.TrailingSpace
 				}
-				f.outbytes(appendPlannedCoreGlyphRunExactTJ(nil, font.font, plannedPage.page.Size.Height, run))
+				content = appendPlannedCoreGlyphRunExactTJ(content, font.font, plannedPage.Size.Height, run)
 			} else {
-				f.outbytes(appendPlannedCoreGlyphRun(nil, font.font, plannedPage.page.Size.Height, event.Run))
+				content = appendPlannedCoreGlyphRun(content, font.font, plannedPage.Size.Height, run)
 			}
-			previousRun, previousRunSet = event.Run, true
+			f.outbytes(content)
+			previousRun, previousRunSet = prepared.projection.GlyphRuns[command.Payload], true
 		}
 	}
 	return f.err
@@ -129,26 +129,22 @@ func (f *pdfDocument) preflightCoreLayoutPlanPDFContextForTarget(ctx context.Con
 		return preparedCorePlanPDF{}, fmt.Errorf("%w: deferred text aliases are present", errCoreLayoutPlanPaintUnsupported)
 	}
 
-	recording, err := layoutengine.RecordCorePlan(plan)
-	if err != nil {
+	if err := layoutengine.ValidateTrustedCorePaintPlan(plan, layoutengine.DefaultCorePaintLimits()); err != nil {
 		return preparedCorePlanPDF{}, fmt.Errorf("document: preflight core layout plan: %w", err)
 	}
-	events := recording.Events()
-	pageCount := 0
-	for _, event := range events {
-		if event.Kind == layoutengine.PaintPageBegin {
-			pageCount++
-		}
-	}
+	projection := plan.ReadOnlyProjection()
+	pageCount := len(projection.Pages)
 	if f.limits.MaxPages > 0 && pageCount > f.limits.MaxPages {
 		return preparedCorePlanPDF{}, fmt.Errorf("%w: %d > %d", ErrPageLimitExceeded, pageCount, f.limits.MaxPages)
 	}
 
-	resources := plan.ReadOnlyProjection().Fonts
+	resources := projection.Fonts
 	prepared := preparedCorePlanPDF{
-		fonts:     make(map[layoutengine.FontResourceID]preparedCorePlanFont),
-		fontOrder: make([]layoutengine.FontResourceID, 0, len(resources)),
-		pages:     make([]preparedCorePlanPage, 0, pageCount),
+		projection: projection,
+	}
+	if len(resources) != 0 {
+		prepared.fonts = make(map[layoutengine.FontResourceID]preparedCorePlanFont, len(resources))
+		prepared.fontOrder = make([]layoutengine.FontResourceID, 0, len(resources))
 	}
 	for index, resource := range resources {
 		if index&31 == 0 {
@@ -162,40 +158,6 @@ func (f *pdfDocument) preflightCoreLayoutPlanPDFContextForTarget(ctx context.Con
 		}
 		prepared.fonts[resource.ID] = font
 		prepared.fontOrder = append(prepared.fontOrder, resource.ID)
-	}
-	var active *preparedCorePlanPage
-	for index, event := range events {
-		if index&255 == 0 {
-			if err := ctx.Err(); err != nil {
-				return preparedCorePlanPDF{}, err
-			}
-		}
-		switch event.Kind {
-		case layoutengine.PaintPageBegin:
-			prepared.pages = append(prepared.pages, preparedCorePlanPage{page: layoutengine.PlannedPage{
-				Number: event.Page, Size: event.Size,
-			}})
-			active = &prepared.pages[len(prepared.pages)-1]
-		case layoutengine.PaintGlyphRun:
-			if active == nil || active.page.Number != event.Page {
-				return preparedCorePlanPDF{}, errors.New("document: core layout plan recording has a glyph outside a page")
-			}
-			font, ok := prepared.fonts[event.Font.ID]
-			if !ok || font.resource != event.Font {
-				return preparedCorePlanPDF{}, errors.New("document: core layout plan recording references an unprepared font")
-			}
-			active.events = append(active.events, event)
-		case layoutengine.PaintPageEnd:
-			if active == nil || active.page.Number != event.Page {
-				return preparedCorePlanPDF{}, errors.New("document: core layout plan recording has mismatched page boundaries")
-			}
-			active = nil
-		default:
-			return preparedCorePlanPDF{}, errors.New("document: core layout plan recording contains an unsupported event")
-		}
-	}
-	if active != nil {
-		return preparedCorePlanPDF{}, errors.New("document: core layout plan recording ends inside a page")
 	}
 	return prepared, nil
 }
@@ -304,20 +266,20 @@ func coreFontKeyForPlanFace(face layoutengine.CoreFontFace) (string, bool) {
 func appendPlannedCoreGlyphRun(dst []byte, font fontDefinition, pageHeight layoutengine.Fixed, run layoutengine.CoreGlyphRun) []byte {
 	// Emit black for an unset run as well: PDF non-stroking color is persistent
 	// graphics state, so omitting it could leak a preceding themed run's color.
-	dst = appendPDFNumberSpace(dst, float64(run.Color.R)/255, 10)
-	dst = appendPDFNumberSpace(dst, float64(run.Color.G)/255, 10)
-	dst = appendPDFNumberSpace(dst, float64(run.Color.B)/255, 10)
+	dst = appendPDFColorComponentSpace(dst, run.Color.R)
+	dst = appendPDFColorComponentSpace(dst, run.Color.G)
+	dst = appendPDFColorComponentSpace(dst, run.Color.B)
 	dst = append(dst, "rg "...)
 	dst = append(dst, "BT /F"...)
 	dst = append(dst, font.i...)
 	dst = append(dst, ' ')
-	dst = appendPDFNumberSpace(dst, run.FontSize.Points(), 10)
+	dst = appendPDFFixedSpace(dst, run.FontSize)
 	dst = append(dst, "Tf "...)
 	x := run.Origin.X
 	for index, code := range []byte(run.Codes) {
 		dst = append(dst, "1 0 0 1 "...)
-		dst = appendPDFNumberSpace(dst, x.Points(), 10)
-		dst = appendPDFNumberSpace(dst, pageHeight.Points()-run.Origin.Y.Points(), 10)
+		dst = appendPDFFixedSpace(dst, x)
+		dst = appendPDFFixedSpace(dst, pageHeight-run.Origin.Y)
 		dst = append(dst, "Tm ("...)
 		dst = appendEscapedPDFLiteralByte(dst, code)
 		dst = append(dst, ") Tj "...)
@@ -327,20 +289,20 @@ func appendPlannedCoreGlyphRun(dst []byte, font fontDefinition, pageHeight layou
 }
 
 func appendPlannedUTF8GlyphRun(dst []byte, font fontDefinition, pageHeight layoutengine.Fixed, run layoutengine.CoreGlyphRun) []byte {
-	dst = appendPDFNumberSpace(dst, float64(run.Color.R)/255, 10)
-	dst = appendPDFNumberSpace(dst, float64(run.Color.G)/255, 10)
-	dst = appendPDFNumberSpace(dst, float64(run.Color.B)/255, 10)
+	dst = appendPDFColorComponentSpace(dst, run.Color.R)
+	dst = appendPDFColorComponentSpace(dst, run.Color.G)
+	dst = appendPDFColorComponentSpace(dst, run.Color.B)
 	dst = append(dst, "rg BT /F"...)
 	dst = append(dst, font.i...)
 	dst = append(dst, ' ')
-	dst = appendPDFNumberSpace(dst, run.FontSize.Points(), 10)
+	dst = appendPDFFixedSpace(dst, run.FontSize)
 	dst = append(dst, "Tf "...)
 	x := run.Origin.X
 	advanceIndex := 0
 	for _, character := range run.Codes {
 		dst = append(dst, "1 0 0 1 "...)
-		dst = appendPDFNumberSpace(dst, x.Points(), 10)
-		dst = appendPDFNumberSpace(dst, pageHeight.Points()-run.Origin.Y.Points(), 10)
+		dst = appendPDFFixedSpace(dst, x)
+		dst = appendPDFFixedSpace(dst, pageHeight-run.Origin.Y)
 		dst = append(dst, "Tm ("...)
 		dst = appendEscapedUTF16BECodeUnit(dst, character)
 		dst = append(dst, ") Tj "...)
@@ -368,16 +330,16 @@ func appendPlannedCoreGlyphRunCompact(dst []byte, font fontDefinition, pageHeigh
 	if !plannedCoreRunUsesNativeAdvances(font, run) {
 		return appendPlannedCoreGlyphRun(dst, font, pageHeight, run)
 	}
-	dst = appendPDFNumberSpace(dst, float64(run.Color.R)/255, 10)
-	dst = appendPDFNumberSpace(dst, float64(run.Color.G)/255, 10)
-	dst = appendPDFNumberSpace(dst, float64(run.Color.B)/255, 10)
+	dst = appendPDFColorComponentSpace(dst, run.Color.R)
+	dst = appendPDFColorComponentSpace(dst, run.Color.G)
+	dst = appendPDFColorComponentSpace(dst, run.Color.B)
 	dst = append(dst, "rg BT /F"...)
 	dst = append(dst, font.i...)
 	dst = append(dst, ' ')
-	dst = appendPDFNumberSpace(dst, run.FontSize.Points(), 10)
+	dst = appendPDFFixedSpace(dst, run.FontSize)
 	dst = append(dst, "Tf 1 0 0 1 "...)
-	dst = appendPDFNumberSpace(dst, run.Origin.X.Points(), 10)
-	dst = appendPDFNumberSpace(dst, pageHeight.Points()-run.Origin.Y.Points(), 10)
+	dst = appendPDFFixedSpace(dst, run.Origin.X)
+	dst = appendPDFFixedSpace(dst, pageHeight-run.Origin.Y)
 	dst = append(dst, "Tm ("...)
 	for _, code := range []byte(run.Codes) {
 		dst = appendEscapedPDFLiteralByte(dst, code)
@@ -400,16 +362,16 @@ func appendPlannedCoreGlyphRunExactTJ(dst []byte, font fontDefinition, pageHeigh
 		dst = appendEscapedPDFLiteralByte(dst, code)
 	}
 	dst = append(dst, ") >> BDC "...)
-	dst = appendPDFNumberSpace(dst, float64(run.Color.R)/255, 10)
-	dst = appendPDFNumberSpace(dst, float64(run.Color.G)/255, 10)
-	dst = appendPDFNumberSpace(dst, float64(run.Color.B)/255, 10)
+	dst = appendPDFColorComponentSpace(dst, run.Color.R)
+	dst = appendPDFColorComponentSpace(dst, run.Color.G)
+	dst = appendPDFColorComponentSpace(dst, run.Color.B)
 	dst = append(dst, "rg BT /F"...)
 	dst = append(dst, font.i...)
 	dst = append(dst, ' ')
-	dst = appendPDFNumberSpace(dst, run.FontSize.Points(), 10)
+	dst = appendPDFFixedSpace(dst, run.FontSize)
 	dst = append(dst, "Tf 1 0 0 1 "...)
-	dst = appendPDFNumberSpace(dst, run.Origin.X.Points(), 10)
-	dst = appendPDFNumberSpace(dst, pageHeight.Points()-run.Origin.Y.Points(), 10)
+	dst = appendPDFFixedSpace(dst, run.Origin.X)
+	dst = appendPDFFixedSpace(dst, pageHeight-run.Origin.Y)
 	dst = append(dst, "Tm ["...)
 	for index, code := range []byte(run.Codes) {
 		dst = append(dst, '(')

@@ -63,6 +63,25 @@ func TestPaperSetDocumentAndPagePropertiesPublishTypedValues(t *testing.T) {
 	if err != nil || !strings.Contains(result.Revision.Source, `page-number-format: "Page %d of {pages}"`) {
 		t.Fatalf("page numbering = %#v, %v", result, err)
 	}
+
+	for _, test := range []struct {
+		name    string
+		request PaperSetPageNumberingRequest
+		want    string
+	}{
+		{"align", PaperSetPageNumberingRequest{Property: PaperPageNumberAlign, Kind: "outer"}, `page-number-align: "outer"`},
+		{"position", PaperSetPageNumberingRequest{Property: PaperPageNumberPlace, Kind: "header"}, `page-number-position: "header"`},
+		{"hide-first", PaperSetPageNumberingRequest{Property: PaperPageNumberFirst, Bool: true}, "page-number-hide-first: true"},
+		{"start", PaperSetPageNumberingRequest{Property: PaperPageNumberStart, Count: 5}, "page-number-start: 5"},
+	} {
+		workspace = mustWorkspace(t, Limits{})
+		guard, _, _ = mutationGuard(t, workspace, authoringPropertiesFixture, "@sheet", "page-"+test.name, CapabilityEdit)
+		test.request.Guard = guard
+		result, err = workspace.PaperSetPageNumbering(test.request)
+		if err != nil || !strings.Contains(result.Revision.Source, test.want) {
+			t.Fatalf("page %s = %#v, %v", test.name, result, err)
+		}
+	}
 }
 
 func TestPaperSetCanvasAndCanvasItemPropertiesRejectInvalidDimensions(t *testing.T) {

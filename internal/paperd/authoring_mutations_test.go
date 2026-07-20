@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/paperrune/document"
+	"github.com/cssbruno/paperrune/internal/paperlang"
 )
 
 const authoringMutationFixture = `document @report:
@@ -41,7 +42,15 @@ func TestPaperInsertTemplateUsesOneJournalPatchAndPreservesTrivia(t *testing.T) 
 }
 
 func TestPaperInsertTemplatePaletteCoversTypedPrimitivesAndComponents(t *testing.T) {
-	for _, template := range []string{"paragraph", "heading", "list", "row", "column", "page-break", "image", "table", "canvas", "note-box", "metadata-grid", "signature-row", "qr-verification", "clause", "styled-container"} {
+	if choices := strings.Join(AuthoringTemplateChoices(paperlang.NodeBody), ","); !strings.Contains(choices, "page-break") {
+		t.Fatalf("body palette does not support page-break: %q", choices)
+	}
+	for _, kind := range []paperlang.NodeKind{paperlang.NodeHeader, paperlang.NodeFooter, paperlang.NodeRow, paperlang.NodeColumn} {
+		if choices := strings.Join(AuthoringTemplateChoices(kind), ","); strings.Contains(choices, "page-break") {
+			t.Fatalf("%s palette exposes a page break outside the paginated body flow: %q", kind, choices)
+		}
+	}
+	for _, template := range []string{"paragraph", "heading", "list", "row", "column", "page-break", "image", "table", "canvas", "note-box", "metadata-grid", "signature-row", "qr-verification", "clause", "title-block", "two-column", "image-caption", "quote", "checklist", "disclaimer", "divider", "cover-block", "recipient-block", "code-block", "status-banner", "numbered-steps", "timeline", "comparison-table", "approval-block", "image-grid", "invoice-totals", "kpi-strip", "table-of-contents", "risk-register", "change-log", "decision-record", "pros-cons", "faq-block"} {
 		workspace := mustWorkspace(t, Limits{})
 		guard, _, _ := mutationGuard(t, workspace, authoringMutationFixture, "@body", "palette-"+template, CapabilityEdit)
 		result, err := workspace.PaperInsertTemplate(PaperInsertTemplateRequest{Guard: guard, Template: template, ID: "@new-" + template})
@@ -53,6 +62,11 @@ func TestPaperInsertTemplatePaletteCoversTypedPrimitivesAndComponents(t *testing
 		}
 		if plan, planned, planErr := document.PlanPaper("palette.paper", result.Revision.Source); planErr != nil || !planned.OK() || plan.PageCount() == 0 {
 			t.Fatalf("template %s did not render: pages=%d result=%#v err=%v", template, plan.PageCount(), planned, planErr)
+		}
+	}
+	for _, removed := range []string{"styled-container", "contact-block", "executive-summary", "references-list"} {
+		if authoringTemplateAllowed(paperlang.NodeBody, removed) {
+			t.Fatalf("removed template %q remains in the body palette", removed)
 		}
 	}
 
@@ -76,6 +90,52 @@ func TestPaperInsertTemplatePaletteCoversTypedPrimitivesAndComponents(t *testing
 	schemaResult, err := schemaWorkspace.PaperInsertTemplate(PaperInsertTemplateRequest{Guard: schemaGuard, Template: "schema", ID: "@receipt"})
 	if err != nil || !schemaResult.Semantic.AfterCompileOK || !strings.Contains(schemaResult.Revision.Source, "schema receipt:") || !strings.Contains(schemaResult.Revision.Source, "string receipt-value") {
 		t.Fatalf("schema template = %v result=%#v\nsource=%s", err, schemaResult, schemaResult.Revision.Source)
+	}
+}
+
+func TestPaperInsertChecklistUsesQuietOutlinedControls(t *testing.T) {
+	workspace := mustWorkspace(t, Limits{})
+	guard, _, _ := mutationGuard(t, workspace, authoringMutationFixture, "@body", "insert-checklist", CapabilityEdit)
+	result, err := workspace.PaperInsertTemplate(PaperInsertTemplateRequest{Guard: guard, Template: "checklist", ID: "@release-checklist"})
+	if err != nil || !result.Semantic.AfterCompileOK {
+		t.Fatalf("checklist template = %v result=%#v", err, result)
+	}
+	for _, want := range []string{
+		"table @release-checklist:",
+		"width: 5%",
+		"border-width: 1.25pt",
+		"Confirm scope and owner",
+		"Record completion and sign-off",
+	} {
+		if !strings.Contains(result.Revision.Source, want) {
+			t.Fatalf("checklist omitted %q:\n%s", want, result.Revision.Source)
+		}
+	}
+	if strings.Contains(result.Revision.Source, `text: "[ ]"`) {
+		t.Fatalf("checklist retained the bracket placeholder:\n%s", result.Revision.Source)
+	}
+}
+
+func TestPaperInsertPageBreakActivatesOnlyWhenFollowingContentExists(t *testing.T) {
+	workspace := mustWorkspace(t, Limits{})
+	guard, _, _ := mutationGuard(t, workspace, authoringMutationFixture, "@body", "insert-trailing-break", CapabilityEdit)
+	withBreak, err := workspace.PaperInsertTemplate(PaperInsertTemplateRequest{Guard: guard, Template: "page-break", ID: "@next-page"})
+	if err != nil || !withBreak.Semantic.AfterCompileOK {
+		t.Fatalf("insert trailing page-break = %v result=%#v", err, withBreak)
+	}
+	plan, planned, err := document.PlanPaper("trailing-break.paper", withBreak.Revision.Source)
+	if err != nil || !planned.OK() || plan.PageCount() != 1 {
+		t.Fatalf("trailing page-break pages = %d result=%#v err=%v", plan.PageCount(), planned, err)
+	}
+
+	guard, _, _ = mutationGuard(t, workspace, withBreak.Revision.Source, "@body", "insert-after-break", CapabilityEdit)
+	withFollowingContent, err := workspace.PaperInsertTemplate(PaperInsertTemplateRequest{Guard: guard, Template: "paragraph", ID: "@after-break"})
+	if err != nil || !withFollowingContent.Semantic.AfterCompileOK {
+		t.Fatalf("insert content after page-break = %v result=%#v", err, withFollowingContent)
+	}
+	plan, planned, err = document.PlanPaper("active-break.paper", withFollowingContent.Revision.Source)
+	if err != nil || !planned.OK() || plan.PageCount() != 2 {
+		t.Fatalf("active page-break pages = %d result=%#v err=%v\nsource=%s", plan.PageCount(), planned, err, withFollowingContent.Revision.Source)
 	}
 }
 

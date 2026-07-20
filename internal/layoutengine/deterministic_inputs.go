@@ -323,12 +323,22 @@ func (plan LayoutPlan) WithDeterministicInputs(manifest DeterministicInputManife
 	if err != nil || catalog.ID != manifest.ResourceCatalog.ID {
 		return LayoutPlan{}, errors.New("layoutengine: deterministic resource catalog does not match exact plan resources")
 	}
+	if len(plan.pages) == 0 {
+		return LayoutPlan{}, errors.New("layoutengine: deterministic page profile requires at least one exact plan page")
+	}
+	for _, page := range plan.pages {
+		if page.Size.Width != manifest.PageProfile.Width || page.Size.Height != manifest.PageProfile.Height {
+			return LayoutPlan{}, errors.New("layoutengine: deterministic page profile does not match exact plan page dimensions")
+		}
+	}
 	result := plan
 	result.deterministicInputs = cloneDeterministicInputs(manifest)
 	result.hasDeterministicInputs = true
-	if err := result.Validate(); err != nil {
-		return LayoutPlan{}, err
-	}
+	// LayoutPlan storage is private and every constructor/transform validates
+	// before returning. Binding identity evidence only changes the manifest, so
+	// revalidating the complete fragment and display graphs here was duplicate
+	// work. The checks above cover every new cross-field invariant introduced by
+	// the manifest; callers can still invoke Validate explicitly at boundaries.
 	return result, nil
 }
 

@@ -36,6 +36,27 @@ type DisplayListInput struct {
 // resource-free geometry plan. Items must be in page paint order. The function
 // derives command geometry and ownership; it performs no layout or sizing.
 func AttachDisplayList(plan LayoutPlan, input DisplayListInput) (LayoutPlan, error) {
+	return attachDisplayList(plan, input, true, false)
+}
+
+// AttachTrustedDisplayList composes payloads produced from already validated
+// immutable plans and planner-owned primitives. It validates item indexes,
+// page ownership, and paint ordering while avoiding a second validation of the
+// unchanged geometry graph. Callers must validate or construct every resource
+// and payload before calling; ordinary adapter inputs must use AttachDisplayList.
+func AttachTrustedDisplayList(plan LayoutPlan, input DisplayListInput) (LayoutPlan, error) {
+	return attachDisplayList(plan, input, false, false)
+}
+
+// AttachOwnedTrustedDisplayList is AttachTrustedDisplayList with explicit
+// ownership transfer. The caller must not mutate any input slice or nested
+// payload after the call. It is intended for compositors that just built the
+// complete display list from validated immutable planner outputs.
+func AttachOwnedTrustedDisplayList(plan LayoutPlan, input DisplayListInput) (LayoutPlan, error) {
+	return attachDisplayList(plan, input, false, true)
+}
+
+func attachDisplayList(plan LayoutPlan, input DisplayListInput, validateResult, takeOwnership bool) (LayoutPlan, error) {
 	if len(plan.pages) == 0 {
 		return LayoutPlan{}, errors.New("layoutengine: display-list attachment requires a non-empty plan")
 	}
@@ -146,24 +167,40 @@ func AttachDisplayList(plan LayoutPlan, input DisplayListInput) (LayoutPlan, err
 	}
 	result := plan
 	result.pages = pages
-	result.fonts = cloneFontResources(input.Fonts)
-	result.glyphRuns = cloneCoreGlyphRuns(input.GlyphRuns)
-	result.imageResources = cloneSlice(input.ImageResources)
-	result.images = clonePlannedImages(input.Images)
-	result.destinations = cloneSlice(input.Destinations)
-	result.links = cloneSlice(input.Links)
-	result.paths = clonePlannedPaths(input.Paths)
-	result.transforms = cloneSlice(input.Transforms)
-	result.clips = cloneSlice(input.Clips)
-	result.fills = cloneSlice(input.Fills)
-	result.strokes = clonePlannedStrokes(input.Strokes)
+	if takeOwnership {
+		result.fonts = input.Fonts
+		result.glyphRuns = input.GlyphRuns
+		result.imageResources = input.ImageResources
+		result.images = input.Images
+		result.destinations = input.Destinations
+		result.links = input.Links
+		result.paths = input.Paths
+		result.transforms = input.Transforms
+		result.clips = input.Clips
+		result.fills = input.Fills
+		result.strokes = input.Strokes
+	} else {
+		result.fonts = cloneFontResources(input.Fonts)
+		result.glyphRuns = cloneCoreGlyphRuns(input.GlyphRuns)
+		result.imageResources = cloneSlice(input.ImageResources)
+		result.images = clonePlannedImages(input.Images)
+		result.destinations = cloneSlice(input.Destinations)
+		result.links = cloneSlice(input.Links)
+		result.paths = clonePlannedPaths(input.Paths)
+		result.transforms = cloneSlice(input.Transforms)
+		result.clips = cloneSlice(input.Clips)
+		result.fills = cloneSlice(input.Fills)
+		result.strokes = clonePlannedStrokes(input.Strokes)
+	}
 	result.commands = commands
 	if plan.hasDeterministicInputs {
 		result.deterministicInputs = DeterministicInputManifest{}
 		result.hasDeterministicInputs = false
 	}
-	if err := result.Validate(); err != nil {
-		return LayoutPlan{}, err
+	if validateResult {
+		if err := result.Validate(); err != nil {
+			return LayoutPlan{}, err
+		}
 	}
 	if !plan.hasDeterministicInputs {
 		return result, nil

@@ -1,0 +1,52 @@
+document @header-counter-demo:
+  title: "Header page-number demo"
+  language: "en"
+  page @a5:
+    size: "A5"
+    margin: 36pt
+    page-numbers: true
+    page-number-format: "Section page %02d"
+    page-number-position: "header"
+    page-number-align: "right"
+    page-number-start: 5
+
+    header @document-header:
+      paragraph @document-label:
+        size: 8pt
+        bold: true
+        color: "#2C6E7F"
+        text: "PAPERRUNE | HEADER COUNTER"
+
+    footer @document-footer:
+      paragraph @footer-label:
+        size: 8pt
+        align: "center"
+        color: "#64748B"
+        text: "Automatic header placement"
+
+    body @body:
+      heading @first-title:
+        level: 1
+        size: 24pt
+        color: "#163A46"
+        text: "First physical page"
+      paragraph @first-copy:
+        text: "The automatic counter begins at section page 05 and is aligned to the right side of the header."
+
+      page-break @second-page:
+      heading @second-title:
+        level: 1
+        size: 24pt
+        color: "#163A46"
+        text: "Second physical page"
+      paragraph @second-copy:
+        text: "The counter advances to section page 06 without authored footer text or manual aliases."
+
+      page-break @third-page:
+      heading @third-title:
+        level: 1
+        size: 24pt
+        color: "#163A46"
+        text: "Third physical page"
+      paragraph @third-copy:
+        text: "Switch page-number-align to inner or outer to mirror placement across facing pages."

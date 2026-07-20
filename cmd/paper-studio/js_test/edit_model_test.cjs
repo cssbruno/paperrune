@@ -90,6 +90,11 @@ test('document, page, canvas, appearance, and conditions expose typed missing at
   assert.throws(() => model.buildPayload(workspace, document, 'document', 'theme', 'print'), /exact/);
   assert.ok(model.properties(page, 'page').includes('page-numbers'));
   assert.equal(model.buildPayload(workspace, page, 'page', 'page-numbers', 'true').bool, true);
+  assert.equal(model.buildPayload(workspace, page, 'page', 'page-number-position', 'header').kind, 'header');
+  assert.equal(model.buildPayload(workspace, page, 'page', 'page-number-align', 'outer').kind, 'outer');
+  assert.equal(model.buildPayload(workspace, page, 'page', 'page-number-hide-first', 'true').bool, true);
+  assert.equal(model.buildPayload(workspace, page, 'page', 'page-number-start', '5').count, 5);
+  assert.throws(() => model.buildPayload(workspace, page, 'page', 'page-number-align', 'diagonal'), /Choose one of/);
   assert.equal(model.buildPayload(workspace, page, 'page', 'page-number-format', 'Page %d').text, 'Page %d');
   assert.deepEqual(model.properties(canvas, 'canvas-container'), ['width', 'height', 'default-horizontal', 'default-vertical']);
   assert.equal(model.buildPayload(workspace, canvas, 'canvas-container', 'default-horizontal', 'center-x').kind, 'center-x');

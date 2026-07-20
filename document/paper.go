@@ -493,7 +493,7 @@ func planPaperSourceSelection(ctx context.Context, file, source, scenario string
 	}
 	plan := PaperPlan{plan: planned, file: file, title: compiled.Document.Title,
 		language: strings.TrimSpace(compiled.Document.Language), root: root, hash: hash.String(),
-		pages: len(planned.Projection().Pages), revisions: paperViewerRevisions(source, selectionIdentity, selectScenario),
+		pages: len(planned.ReadOnlyProjection().Pages), revisions: paperViewerRevisions(source, selectionIdentity, selectScenario),
 		mapping:      clonePaperCompileMapping(compiled.Mapping),
 		imageSources: imageSources, fontSources: fontSources}
 	result.Pages, result.Hash = plan.PageCount(), plan.Hash()
@@ -594,7 +594,7 @@ func (f *pdfDocument) WritePaperPlan(plan PaperPlan) (PaperRenderResult, error) 
 		return paperStageFailureWithSpan(result, PaperStagePaint, "PAPER_PLAN_INVALID",
 			errors.New("paper plan is empty"), "create the plan with document.PlanPaper", plan.root)
 	}
-	projection := plan.plan.Projection()
+	projection := plan.plan.ReadOnlyProjection()
 	needsDisplayPainter := f.tagged.enabled || len(projection.ImageResources) != 0 || layoutPlanHasMultipleGlyphRunsPerLine(projection)
 	for _, font := range projection.Fonts {
 		if font.EmbeddedUTF8 != nil {

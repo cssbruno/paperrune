@@ -64,13 +64,19 @@ const (
 	PaperPageNumbers      PaperPageNumberingProperty = "page-numbers"
 	PaperPageNumberFormat PaperPageNumberingProperty = "page-number-format"
 	PaperPageTotalAlias   PaperPageNumberingProperty = "page-total-alias"
+	PaperPageNumberAlign  PaperPageNumberingProperty = "page-number-align"
+	PaperPageNumberPlace  PaperPageNumberingProperty = "page-number-position"
+	PaperPageNumberFirst  PaperPageNumberingProperty = "page-number-hide-first"
+	PaperPageNumberStart  PaperPageNumberingProperty = "page-number-start"
 )
 
 type PaperSetPageNumberingRequest struct {
 	Guard    PaperMutationGuard         `json:"guard"`
 	Property PaperPageNumberingProperty `json:"property"`
 	Text     string                     `json:"text,omitempty"`
+	Kind     string                     `json:"kind,omitempty"`
 	Bool     bool                       `json:"bool,omitempty"`
+	Count    uint32                     `json:"count,omitempty"`
 }
 
 func (w *Workspace) PaperSetPageNumbering(request PaperSetPageNumberingRequest) (PaperMutationResult, error) {
@@ -82,18 +88,41 @@ func (w *Workspace) PaperSetPageNumbering(request PaperSetPageNumberingRequest) 
 	if node == nil || node.Kind != paperlang.NodePage {
 		return PaperMutationResult{}, workspaceError("INVALID_PAGE_NUMBERING_TARGET", "page-number controls require an exact page source node", paperedit.ErrInvalidOperation)
 	}
+	allowedKind := func(value string, choices ...string) bool {
+		for _, choice := range choices {
+			if value == choice {
+				return true
+			}
+		}
+		return false
+	}
 	var value paperedit.Value
 	switch request.Property {
-	case PaperPageNumbers:
-		if request.Text != "" {
+	case PaperPageNumbers, PaperPageNumberFirst:
+		if request.Text != "" || request.Kind != "" || request.Count != 0 {
 			return PaperMutationResult{}, workspaceError("INVALID_PAGE_NUMBERING_VALUE", "page-numbers accepts only a boolean value", paperedit.ErrInvalidOperation)
 		}
 		value = paperedit.BoolValue(request.Bool)
 	case PaperPageNumberFormat, PaperPageTotalAlias:
-		if request.Bool || !utf8.ValidString(request.Text) || strings.TrimSpace(request.Text) == "" || len(request.Text) > w.maxMutationPayloadBytes() {
+		if request.Bool || request.Kind != "" || request.Count != 0 || !utf8.ValidString(request.Text) || strings.TrimSpace(request.Text) == "" || len(request.Text) > w.maxMutationPayloadBytes() {
 			return PaperMutationResult{}, workspaceError("INVALID_PAGE_NUMBERING_VALUE", "page-number text must be non-empty bounded valid UTF-8", paperedit.ErrInvalidOperation)
 		}
 		value = paperedit.StringValue(request.Text)
+	case PaperPageNumberAlign:
+		if request.Text != "" || request.Bool || request.Count != 0 || !allowedKind(request.Kind, "left", "center", "right", "inner", "outer") {
+			return PaperMutationResult{}, workspaceError("INVALID_PAGE_NUMBERING_VALUE", "page-number-align accepts left, center, right, inner, or outer", paperedit.ErrInvalidOperation)
+		}
+		value = paperedit.StringValue(request.Kind)
+	case PaperPageNumberPlace:
+		if request.Text != "" || request.Bool || request.Count != 0 || !allowedKind(request.Kind, "header", "footer") {
+			return PaperMutationResult{}, workspaceError("INVALID_PAGE_NUMBERING_VALUE", "page-number-position accepts header or footer", paperedit.ErrInvalidOperation)
+		}
+		value = paperedit.StringValue(request.Kind)
+	case PaperPageNumberStart:
+		if request.Text != "" || request.Kind != "" || request.Bool || request.Count == 0 || request.Count > 1<<20 {
+			return PaperMutationResult{}, workspaceError("INVALID_PAGE_NUMBERING_VALUE", "page-number-start accepts a whole number from 1 through 1048576", paperedit.ErrInvalidOperation)
+		}
+		value = paperedit.NumberValue(float64(request.Count))
 	default:
 		return PaperMutationResult{}, workspaceError("INVALID_PAGE_NUMBERING_PROPERTY", "page-number property is outside the supported editing vocabulary", paperedit.ErrInvalidOperation)
 	}
@@ -314,7 +343,7 @@ func resetPropertyAllowed(kind paperlang.NodeKind, category, property string) bo
 			return allowed("header-cell", "vertical-align", "colspan", "rowspan")
 		}
 	case "page":
-		return kind == paperlang.NodePage && allowed("margin", "margin-top", "margin-right", "margin-bottom", "margin-left", "page-numbers", "page-number-format", "page-total-alias")
+		return kind == paperlang.NodePage && allowed("margin", "margin-top", "margin-right", "margin-bottom", "margin-left", "page-numbers", "page-number-format", "page-total-alias", "page-number-align", "page-number-position", "page-number-hide-first", "page-number-start")
 	case "canvas":
 		return kind == paperlang.NodeAnchor && allowed("left", "right", "center-x", "top", "bottom", "center-y", "width", "height", "alt")
 	case "canvas-container":

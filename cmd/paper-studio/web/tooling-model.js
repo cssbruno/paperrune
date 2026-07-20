@@ -32,9 +32,12 @@
 
   function compatibleTarget(metadata, template, preferred = '') {
     const targets = metadata?.templateTargets || [];
-    const accepts = pageRegionTemplates.has(template)
-      ? item => item.kind === 'page'
-      : item => flowKinds.has(item.kind);
+    const choices = metadata?.templateChoices || {};
+    const hasServerChoices = Object.keys(choices).length > 0;
+    const accepts = item => {
+      if (hasServerChoices) return (choices[item.kind] || []).includes(template);
+      return pageRegionTemplates.has(template) ? item.kind === 'page' : flowKinds.has(item.kind);
+    };
     const selected = targets.find(item => item.id === preferred && accepts(item));
     return selected || targets.find(accepts) || null;
   }

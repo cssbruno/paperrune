@@ -241,7 +241,7 @@ func (f *pdfDocument) PlanLayoutDocumentContext(ctx context.Context, doc *layout
 	if err != nil {
 		return LayoutDocumentPlan{}, fmt.Errorf("document: hash typed document envelope: %w", err)
 	}
-	pages := len(planned.Projection().Pages)
+	pages := len(planned.ReadOnlyProjection().Pages)
 	if pages == 0 {
 		return LayoutDocumentPlan{}, newTypedShadowUnsupported(typedShadowDocumentEnvelope, "typed layout produced no pages")
 	}
@@ -344,7 +344,7 @@ func (f *pdfDocument) WriteLayoutDocumentPlanContext(ctx context.Context, plan L
 	if err := f.validateLayoutDocumentEnvelopeTarget(plan.envelope); err != nil {
 		return 0, layoutDocumentPlanError(err)
 	}
-	projection := plan.plan.Projection()
+	projection := plan.plan.ReadOnlyProjection()
 	withDisplay := len(projection.ImageResources) != 0 || len(projection.Links) != 0 || len(projection.Destinations) != 0 || len(projection.Paths) != 0 || len(projection.Fills) != 0 || len(projection.Strokes) != 0 || len(projection.Clips) != 0 || len(projection.Transforms) != 0 || len(projection.SemanticNodes) != 0
 	withDisplay = withDisplay || layoutPlanHasMultipleGlyphRunsPerLine(projection)
 	for _, font := range projection.Fonts {

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cssbruno/paperrune/internal/layoutengine"
@@ -85,8 +86,8 @@ func (f *pdfDocument) planTypedTableBodiesMapped(ctx context.Context, doc *layou
 	if err != nil {
 		return layoutengine.LayoutPlan{}, err
 	}
-	projection := planned.Projection()
-	nodes := projection.SemanticNodes
+	projection := planned.ReadOnlyProjection()
+	nodes := append([]layoutengine.SemanticNode(nil), projection.SemanticNodes...)
 	for _, mapped := range mapping.Nodes {
 		if mapped.ID == "" {
 			continue
@@ -116,7 +117,7 @@ func (f *pdfDocument) planTypedTableBodiesMapped(ctx context.Context, doc *layou
 		nodes[target-1].Instance = identity.instance
 		nodes[target-1].Source = identity.source
 	}
-	return layoutengine.ReplaceSemantics(planned, nodes, projection.SemanticFragments, projection.ReadingOrder)
+	return layoutengine.ReplaceTrustedSemantics(planned, nodes, projection.SemanticFragments, projection.ReadingOrder)
 }
 
 func (f *pdfDocument) planTypedTableBodies(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
@@ -176,11 +177,12 @@ func (f *pdfDocument) planTypedTableBodies(ctx context.Context, doc *layout.Layo
 		captionSegments = []layout.TextSegment{{Text: strings.TrimSpace(table.Caption)}}
 	}
 	if len(captionSegments) != 0 {
+		captionCell := layout.TableCell{Blocks: []layout.Block{layout.ParagraphBlock{
+			Segments: append([]layout.TextSegment(nil), captionSegments...),
+			Style:    layout.TextStyle{LineHeight: 12, Bold: true},
+		}}}
 		placement := typedTablePlacement{
-			cell: layout.TableCell{Blocks: []layout.Block{layout.ParagraphBlock{
-				Segments: append([]layout.TextSegment(nil), captionSegments...),
-				Style:    layout.TextStyle{LineHeight: 12, Bold: true},
-			}}},
+			cell: &captionCell,
 			path: path + ".caption", row: 0, column: 0, rowSpan: 1,
 			columnSpan: uint32(len(columns)), node: 1, // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 		}
@@ -204,15 +206,16 @@ func (f *pdfDocument) planTypedTableBodies(ctx context.Context, doc *layout.Layo
 	// context. The cache is deliberately local: callers may plan concurrently
 	// with different font configuration without synchronization or aliasing.
 	intrinsicScratch := make(map[layout.TextStyle]*mixedTextFontMetrics)
-	for index, placement := range placements {
+	for index := range placements {
+		placement := &placements[index]
 		minimum, preferred, intrinsicErr := f.measureTypedTableCellIntrinsic(ctx, doc, placement, intrinsicScratch)
 		if intrinsicErr != nil {
 			return layoutengine.LayoutPlan{}, intrinsicErr
 		}
+		identity := typedTableCellIdentity(placement.row, placement.column)
 		engineCells[index] = layoutengine.TableCell{
-			Node: placement.node, Key: layoutengine.NodeKey(fmt.Sprintf("@typed-table-r%d-c%d", placement.row+1, placement.column+1)),
-			Instance: layoutengine.InstanceID(fmt.Sprintf("@typed-table-r%d-c%d", placement.row+1, placement.column+1)),
-			Row:      placement.row, Column: placement.column, RowSpan: placement.rowSpan, ColumnSpan: placement.columnSpan,
+			Node: placement.node, Key: identity, Instance: layoutengine.InstanceID(identity),
+			Row: placement.row, Column: placement.column, RowSpan: placement.rowSpan, ColumnSpan: placement.columnSpan,
 			MinWidth: minimum, PreferredWidth: preferred,
 		}
 	}
@@ -298,8 +301,11 @@ func typedTablePlanWidth(bodyWidth layoutengine.Fixed, columns []layoutengine.Ta
 }
 
 type typedTablePlacement struct {
-	cell       layout.TableCell
+	cell       *layout.TableCell
 	path       string
+	pathStart  int
+	pathEnd    int
+	expanded   []typedTableExpandedBlock
 	row        uint32
 	column     uint32
 	rowSpan    uint32
@@ -312,20 +318,32 @@ func typedTablePlacements(rows []layout.TableRow, columnCount int, headerRows ui
 	if len(rows) == 0 || columnCount == 0 {
 		return nil, typedTableUnsupported(path, "table requires at least one row and column")
 	}
-	occupied := make([][]bool, len(rows))
-	for row := range occupied {
-		occupied[row] = make([]bool, columnCount)
+	maxInt := int(^uint(0) >> 1)
+	if len(rows) > maxInt/columnCount {
+		return nil, typedTableUnsupported(path, "table grid is too large")
 	}
-	placements := make([]typedTablePlacement, 0)
+	slotCount := len(rows) * columnCount
+	occupied := make([]bool, slotCount)
+	placements := make([]typedTablePlacement, 0, slotCount)
+	pathCapacity := 0
+	if len(path) <= maxInt-32 {
+		pathUnit := len(path) + 32
+		if slotCount <= maxInt/pathUnit {
+			pathCapacity = slotCount * pathUnit
+		}
+	}
+	pathBytes := make([]byte, 0, pathCapacity)
 	for rowIndex, row := range rows {
 		column := 0
 		for cellIndex, cell := range row.Cells {
-			for column < columnCount && occupied[rowIndex][column] {
+			for column < columnCount && occupied[rowIndex*columnCount+column] {
 				column++
 			}
-			cellPath := fmt.Sprintf("%s.rows[%d].cells[%d]", path, rowIndex, cellIndex)
+			var pathStart, pathEnd int
+			pathBytes, pathStart, pathEnd = appendTypedTablePlacementPath(pathBytes, path, rowIndex, cellIndex, false)
+			cellPath := func() string { return string(pathBytes[pathStart:pathEnd]) }
 			if column >= columnCount {
-				return nil, typedTableUnsupported(cellPath, "cell starts outside the declared columns")
+				return nil, typedTableUnsupported(cellPath(), "cell starts outside the declared columns")
 			}
 			columnSpan, rowSpan := cell.ColSpan, cell.RowSpan
 			if columnSpan <= 0 {
@@ -335,18 +353,19 @@ func typedTablePlacements(rows []layout.TableRow, columnCount int, headerRows ui
 				rowSpan = 1
 			}
 			if column+columnSpan > columnCount || rowIndex+rowSpan > len(rows) {
-				return nil, typedTableUnsupported(cellPath, "rowspan or colspan extends outside the table")
+				return nil, typedTableUnsupported(cellPath(), "rowspan or colspan extends outside the table")
 			}
 			for r := rowIndex; r < rowIndex+rowSpan; r++ {
 				for c := column; c < column+columnSpan; c++ {
-					if occupied[r][c] {
-						return nil, typedTableUnsupported(cellPath, "rowspan or colspan overlaps another cell")
+					slot := r*columnCount + c
+					if occupied[slot] {
+						return nil, typedTableUnsupported(cellPath(), "rowspan or colspan overlaps another cell")
 					}
-					occupied[r][c] = true
+					occupied[slot] = true
 				}
 			}
 			placements = append(placements, typedTablePlacement{
-				cell: cell, path: cellPath, row: uint32(rowIndex), column: uint32(column),
+				cell: &rows[rowIndex].Cells[cellIndex], pathStart: pathStart, pathEnd: pathEnd, row: uint32(rowIndex), column: uint32(column),
 				rowSpan: uint32(rowSpan), columnSpan: uint32(columnSpan), header: uint32(rowIndex) < headerRows || cell.Header, // #nosec G115 -- fixed-width conversion is bounded by the surrounding parser, planner, or resource invariant
 				node: layoutengine.NodeID(len(placements) + 1), // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 			})
@@ -357,16 +376,24 @@ func typedTablePlacements(rows []layout.TableRow, columnCount int, headerRows ui
 	// a rectangular geometry by materializing those slots as empty cells rather
 	// than rejecting an otherwise unambiguous grid. Rowspan-covered slots are
 	// already marked occupied and are never synthesized.
-	for row := range occupied {
-		for column, used := range occupied[row] {
+	for row := range rows {
+		for column := 0; column < columnCount; column++ {
+			used := occupied[row*columnCount+column]
 			if used {
 				continue
 			}
+			var pathStart, pathEnd int
+			pathBytes, pathStart, pathEnd = appendTypedTablePlacementPath(pathBytes, path, row, column, true)
 			placements = append(placements, typedTablePlacement{
-				cell: layout.TableCell{}, path: fmt.Sprintf("%s.rows[%d].implicit[%d]", path, row, column),
+				cell: nil, pathStart: pathStart, pathEnd: pathEnd,
 				row: uint32(row), column: uint32(column), rowSpan: 1, columnSpan: 1, header: uint32(row) < headerRows,
 			})
 		}
+	}
+	pathStorage := string(pathBytes)
+	for index := range placements {
+		placements[index].path = pathStorage[placements[index].pathStart:placements[index].pathEnd]
+		placements[index].pathStart, placements[index].pathEnd = 0, 0
 	}
 	sort.SliceStable(placements, func(i, j int) bool {
 		if placements[i].row != placements[j].row {
@@ -378,6 +405,47 @@ func typedTablePlacements(rows []layout.TableRow, columnCount int, headerRows ui
 		placements[index].node = layoutengine.NodeID(index + 1) // #nosec G115 -- table cells are bounded by planner limits.
 	}
 	return placements, nil
+}
+
+func (placement typedTablePlacement) cellValue() layout.TableCell {
+	if placement.cell == nil {
+		return layout.TableCell{}
+	}
+	return *placement.cell
+}
+
+func appendTypedTablePlacementPath(result []byte, path string, row, cell int, implicit bool) ([]byte, int, int) {
+	start := len(result)
+	result = append(result, path...)
+	result = append(result, ".rows["...)
+	result = strconv.AppendInt(result, int64(row), 10)
+	if implicit {
+		result = append(result, "].implicit["...)
+	} else {
+		result = append(result, "].cells["...)
+	}
+	result = strconv.AppendInt(result, int64(cell), 10)
+	result = append(result, ']')
+	return result, start, len(result)
+}
+
+func typedTableCellIdentity(row, column uint32) layoutengine.NodeKey {
+	result := make([]byte, 0, 32)
+	result = append(result, "@typed-table-r"...)
+	result = strconv.AppendUint(result, uint64(row+1), 10)
+	result = append(result, "-c"...)
+	result = strconv.AppendUint(result, uint64(column+1), 10)
+	return layoutengine.NodeKey(result)
+}
+
+func typedTableChildIdentity(parent layoutengine.NodeKey, kind string, index int) layoutengine.NodeKey {
+	result := make([]byte, 0, len(parent)+len(kind)+16)
+	result = append(result, parent...)
+	result = append(result, '/')
+	result = append(result, kind...)
+	result = append(result, '-')
+	result = strconv.AppendInt(result, int64(index+1), 10)
+	return layoutengine.NodeKey(result)
 }
 
 func validateTypedTableSurface(table layout.TableBlock, path string) error {
@@ -447,11 +515,11 @@ func typedTableWithInferredColumns(table layout.TableBlock) layout.TableBlock {
 	return table
 }
 
-func (f *pdfDocument) measureTypedTableCellIntrinsic(ctx context.Context, doc *layout.LayoutDocument, placement typedTablePlacement, metricsByStyle map[layout.TextStyle]*mixedTextFontMetrics) (layoutengine.Fixed, layoutengine.Fixed, error) {
+func (f *pdfDocument) measureTypedTableCellIntrinsic(ctx context.Context, doc *layout.LayoutDocument, placement *typedTablePlacement, metricsByStyle map[layout.TextStyle]*mixedTextFontMetrics) (layoutengine.Fixed, layoutengine.Fixed, error) {
 	if err := layoutengine.ChargePlanningWork(ctx, "typed table intrinsic measurement", 1); err != nil {
 		return 0, 0, err
 	}
-	cell := placement.cell
+	cell := placement.cellValue()
 	cell.Box = cell.EffectiveBox()
 	cell.BoxRef = nil
 	if cell.Box.Orphans > 1<<20 || cell.Box.Widows > 1<<20 {
@@ -476,6 +544,7 @@ func (f *pdfDocument) measureTypedTableCellIntrinsic(ctx context.Context, doc *l
 	if err != nil {
 		return 0, 0, err
 	}
+	placement.expanded = blocks
 	for blockIndex, expanded := range blocks {
 		block := expanded.block
 		if err := ctx.Err(); err != nil {
@@ -597,7 +666,7 @@ func typedTableIntrinsicTextWidth(metrics *mixedTextFontMetrics, text string, wo
 }
 
 func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.LayoutDocument, placement typedTablePlacement, width layoutengine.Fixed, tableBackground layout.DocumentColor) (typedTableCellMeasurement, error) {
-	cell := placement.cell
+	cell := placement.cellValue()
 	cell.Box = cell.EffectiveBox()
 	cell.BoxRef = nil
 	if cell.Box.Orphans > 1<<20 || cell.Box.Widows > 1<<20 {
@@ -616,9 +685,9 @@ func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.Lay
 	default:
 		return typedTableCellMeasurement{}, typedTableUnsupported(placement.path+".vertical_align", fmt.Sprintf("%q is unsupported", cell.VerticalAlign))
 	}
-	identity := fmt.Sprintf("@typed-table-r%d-c%d", placement.row+1, placement.column+1)
+	identity := typedTableCellIdentity(placement.row, placement.column)
 	result := typedTableCellMeasurement{
-		node: placement.node, key: layoutengine.NodeKey(identity), instance: layoutengine.InstanceID(identity),
+		node: placement.node, key: identity, instance: layoutengine.InstanceID(identity),
 		row: placement.row, column: placement.column, rowSpan: placement.rowSpan, columnSpan: placement.columnSpan,
 		header: placement.header, vertical: vertical,
 	}
@@ -714,9 +783,13 @@ func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.Lay
 	if err != nil || innerWidth <= 0 {
 		return typedTableCellMeasurement{}, typedTableUnsupported(placement.path+".box", "horizontal margins and padding consume the cell width")
 	}
-	blocks, expandErr := typedTableExpandedCellBlocks(cell.Blocks, cell.EffectiveStyle(), placement.path)
-	if expandErr != nil {
-		return typedTableCellMeasurement{}, expandErr
+	blocks := placement.expanded
+	if blocks == nil {
+		var expandErr error
+		blocks, expandErr = typedTableExpandedCellBlocks(cell.Blocks, cell.EffectiveStyle(), placement.path)
+		if expandErr != nil {
+			return typedTableCellMeasurement{}, expandErr
+		}
 	}
 	if len(blocks) == 0 {
 		result.height, _ = layoutengine.FixedFromPoints(f.UnitToPointConvert(layout.ResolvedLineHeight(cell.EffectiveStyle())))
@@ -1007,10 +1080,22 @@ func typedTableExpandedCellBlocks(blocks []layout.Block, inherited layout.TextSt
 		if depth > maxDepth {
 			return nil, typedTableUnsupported(current, "structured cell nesting exceeds 64 levels")
 		}
-		normalized := layout.NormalizeBlocks(input)
-		result := make([]typedTableExpandedBlock, 0, len(normalized))
-		for index, block := range normalized {
-			blockPath := fmt.Sprintf("%s.blocks[%d]", current, index)
+		result := make([]typedTableExpandedBlock, 0, len(input))
+		normalizedIndex := 0
+		for _, authored := range input {
+			block, present := layout.NormalizeBlock(authored)
+			if !present {
+				continue
+			}
+			index := normalizedIndex
+			normalizedIndex++
+			blockPath := ""
+			getBlockPath := func() string {
+				if blockPath == "" {
+					blockPath = fmt.Sprintf("%s.blocks[%d]", current, index)
+				}
+				return blockPath
+			}
 			switch value := block.(type) {
 			case layout.ParagraphBlock:
 				value.Style = layout.MergedTextStyle(style, value.EffectiveStyle())
@@ -1027,28 +1112,28 @@ func typedTableExpandedCellBlocks(blocks []layout.Block, inherited layout.TextSt
 				}
 			case layout.TableBlock:
 				if depth >= maxDepth {
-					return nil, typedTableUnsupported(blockPath, "nested table depth exceeds 64 levels")
+					return nil, typedTableUnsupported(getBlockPath(), "nested table depth exceeds 64 levels")
 				}
 				result = append(result, typedTableExpandedBlock{block: value, ancestors: append([]typedTableContentAncestor(nil), ancestors...)})
 			case layout.RowColumnBlock:
 				if depth >= maxDepth {
-					return nil, typedTableUnsupported(blockPath, "nested row-column depth exceeds 64 levels")
+					return nil, typedTableUnsupported(getBlockPath(), "nested row-column depth exceeds 64 levels")
 				}
 				result = append(result, typedTableExpandedBlock{block: value, ancestors: append([]typedTableContentAncestor(nil), ancestors...)})
 			case layout.ListBlock:
-				if err := typedTableValidateStructuredBox(value.EffectiveBox(), blockPath); err != nil {
+				if err := typedTableValidateStructuredBox(value.EffectiveBox(), getBlockPath()); err != nil {
 					return nil, err
 				}
 				switch strings.ToLower(strings.TrimSpace(value.MarkerStyle)) {
 				case "", "decimal", "bullet", "disc", "dash":
 				default:
-					return nil, typedTableUnsupported(blockPath+".marker_style", fmt.Sprintf("%q is unsupported", value.MarkerStyle))
+					return nil, typedTableUnsupported(getBlockPath()+".marker_style", fmt.Sprintf("%q is unsupported", value.MarkerStyle))
 				}
 				listStyle := layout.MergedTextStyle(style, value.EffectiveStyle())
-				listIdentity := fmt.Sprintf("%s/list", blockPath)
+				listIdentity := getBlockPath() + "/list"
 				listAncestors := append(append([]typedTableContentAncestor(nil), ancestors...), typedTableContentAncestor{role: layoutengine.SemanticRoleList, identity: listIdentity})
 				for itemIndex, item := range value.Items {
-					itemPath := fmt.Sprintf("%s.items[%d]", blockPath, itemIndex)
+					itemPath := fmt.Sprintf("%s.items[%d]", getBlockPath(), itemIndex)
 					itemAncestors := append(append([]typedTableContentAncestor(nil), listAncestors...), typedTableContentAncestor{role: layoutengine.SemanticRoleListItem, identity: itemPath, actualText: typedTableListItemText(item)})
 					children, err := expand(item.Blocks, listStyle, itemPath, depth+1, itemAncestors)
 					if err != nil {
@@ -1056,7 +1141,7 @@ func typedTableExpandedCellBlocks(blocks []layout.Block, inherited layout.TextSt
 					}
 					marker, markerErr := paperListMarker(value, itemIndex)
 					if markerErr != nil {
-						return nil, typedTableUnsupported(blockPath+".marker_style", markerErr.Error())
+						return nil, typedTableUnsupported(getBlockPath()+".marker_style", markerErr.Error())
 					}
 					marker += " "
 					if len(children) == 0 {
@@ -1076,14 +1161,14 @@ func typedTableExpandedCellBlocks(blocks []layout.Block, inherited layout.TextSt
 					result = append(result, children...)
 				}
 			case layout.NoteBoxBlock:
-				if err := typedTableValidateStructuredBox(value.EffectiveBox(), blockPath); err != nil {
+				if err := typedTableValidateStructuredBox(value.EffectiveBox(), getBlockPath()); err != nil {
 					return nil, err
 				}
 				noteStyle := layout.MergedTextStyle(style, value.EffectiveStyle())
 				if title := strings.TrimSpace(value.Title); title != "" {
 					result = append(result, typedTableExpandedBlock{block: layout.HeadingBlock{Level: 4, Segments: []layout.TextSegment{{Text: title}}, Style: layout.MergedTextStyle(noteStyle, layout.TextStyle{Bold: true})}, ancestors: append([]typedTableContentAncestor(nil), ancestors...)})
 				}
-				children, err := expand(value.Body, noteStyle, blockPath+".body", depth+1, ancestors)
+				children, err := expand(value.Body, noteStyle, getBlockPath()+".body", depth+1, ancestors)
 				if err != nil {
 					return nil, err
 				}
@@ -1091,43 +1176,43 @@ func typedTableExpandedCellBlocks(blocks []layout.Block, inherited layout.TextSt
 			case layout.SectionBlock:
 				if htmlUnifiedVisualBox(value.EffectiveBox()) {
 					if depth >= maxDepth {
-						return nil, typedTableUnsupported(blockPath, "nested decorated block depth exceeds 64 levels")
+						return nil, typedTableUnsupported(getBlockPath(), "nested decorated block depth exceeds 64 levels")
 					}
 					if strings.TrimSpace(value.Title) != "" || len(value.Blocks) != 1 {
-						return nil, typedTableUnsupported(blockPath, "decorated table-cell sections require exactly one child and no synthetic title")
+						return nil, typedTableUnsupported(getBlockPath(), "decorated table-cell sections require exactly one child and no synthetic title")
 					}
 					result = append(result, typedTableExpandedBlock{block: value, ancestors: append([]typedTableContentAncestor(nil), ancestors...)})
 					continue
 				}
-				if err := typedTableValidateStructuredBox(value.EffectiveBox(), blockPath); err != nil {
+				if err := typedTableValidateStructuredBox(value.EffectiveBox(), getBlockPath()); err != nil {
 					return nil, err
 				}
 				if title := strings.TrimSpace(value.Title); title != "" {
 					result = append(result, typedTableExpandedBlock{block: layout.HeadingBlock{Level: 3, Segments: []layout.TextSegment{{Text: title}}, Style: layout.MergedTextStyle(style, layout.TextStyle{Bold: true})}, ancestors: append([]typedTableContentAncestor(nil), ancestors...)})
 				}
-				children, err := expand(value.Blocks, style, blockPath+".body", depth+1, ancestors)
+				children, err := expand(value.Blocks, style, getBlockPath()+".body", depth+1, ancestors)
 				if err != nil {
 					return nil, err
 				}
 				result = append(result, children...)
 			case layout.ClauseBlock:
 				if value.BreakBefore || value.BreakAfter {
-					return nil, typedTableUnsupported(blockPath, "explicit clause breaks are invalid inside an atomic table cell")
+					return nil, typedTableUnsupported(getBlockPath(), "explicit clause breaks are invalid inside an atomic table cell")
 				}
-				if err := typedTableValidateStructuredBox(value.EffectiveBox(), blockPath); err != nil {
+				if err := typedTableValidateStructuredBox(value.EffectiveBox(), getBlockPath()); err != nil {
 					return nil, err
 				}
 				title := strings.TrimSpace(strings.TrimSpace(value.Number) + " " + strings.TrimSpace(value.Title))
 				if title != "" {
 					result = append(result, typedTableExpandedBlock{block: layout.HeadingBlock{Level: 4, Segments: []layout.TextSegment{{Text: title}}, Style: layout.MergedTextStyle(style, layout.TextStyle{Bold: true})}, ancestors: append([]typedTableContentAncestor(nil), ancestors...)})
 				}
-				children, err := expand(value.Blocks, style, blockPath+".body", depth+1, ancestors)
+				children, err := expand(value.Blocks, style, getBlockPath()+".body", depth+1, ancestors)
 				if err != nil {
 					return nil, err
 				}
 				result = append(result, children...)
 			default:
-				return nil, typedTableUnsupported(blockPath, fmt.Sprintf("%s is not valid structured table-cell content", block.DocumentBlockKind()))
+				return nil, typedTableUnsupported(getBlockPath(), fmt.Sprintf("%s is not valid structured table-cell content", block.DocumentBlockKind()))
 			}
 		}
 		return result, nil
@@ -1411,7 +1496,10 @@ func typedTableUnsupported(path, detail string) error {
 }
 
 func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, measurements []typedTableCellMeasurement, language string, collapse bool) (layoutengine.LayoutPlan, error) {
-	projection := base.Projection()
+	projection := base.ReadOnlyProjection()
+	projection.Pages = append([]layoutengine.PlannedPage(nil), projection.Pages...)
+	projection.Breaks = append([]layoutengine.BreakDecision(nil), projection.Breaks...)
+	projection.Diagnostics = cloneTypedTableDiagnostics(projection.Diagnostics)
 	originalFragments := projection.Fragments
 	fragments := make([]layoutengine.Fragment, 0, len(originalFragments)*2)
 	fragmentRemap := make(map[layoutengine.FragmentID]layoutengine.FragmentID, len(originalFragments))
@@ -1421,9 +1509,9 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 			nextContentNode = fragment.Node
 		}
 	}
-	contentNodes := make(map[layoutengine.NodeKey]layoutengine.NodeID)
+	contentNodes := make(map[layoutengine.NodeKey]layoutengine.NodeID, len(measurements)*2)
 	contentNode := func(parent layoutengine.Fragment, index int) (layoutengine.NodeKey, layoutengine.NodeID) {
-		key := layoutengine.NodeKey(fmt.Sprintf("%s/content-%d", parent.Key, index+1))
+		key := typedTableChildIdentity(parent.Key, "content", index)
 		if node := contentNodes[key]; node.Valid() {
 			return key, node
 		}
@@ -1431,8 +1519,9 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 		contentNodes[key] = nextContentNode
 		return key, nextContentNode
 	}
-	byNode := make(map[layoutengine.NodeID]typedTableCellMeasurement, len(measurements))
-	for _, measurement := range measurements {
+	byNode := make(map[layoutengine.NodeID]*typedTableCellMeasurement, len(measurements))
+	for index := range measurements {
+		measurement := &measurements[index]
 		byNode[measurement.node] = measurement
 	}
 	collapsed := map[layoutengine.FragmentID][]typedCollapsedBorder{}
@@ -1443,19 +1532,89 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 			return layoutengine.LayoutPlan{}, err
 		}
 	}
+	decorationSegmentCapacity := 0
+	decorationPathCapacity := 0
+	fillCapacity := 0
+	strokeCapacity := 0
+	displayItemCapacity := 0
+	glyphRunCapacity := 0
+	lineCapacity := 0
+	for _, fragment := range originalFragments {
+		measurement, ok := byNode[fragment.Node]
+		if !ok {
+			continue
+		}
+		if measurement.background.Set {
+			decorationSegmentCapacity += 5
+			decorationPathCapacity++
+			fillCapacity++
+			displayItemCapacity++
+		}
+		if collapse {
+			count := len(collapsed[fragment.ID])
+			decorationPathCapacity += count
+			strokeCapacity += count
+			displayItemCapacity += count
+		} else {
+			for _, border := range measurement.borders {
+				if border.width > 0 {
+					decorationSegmentCapacity += 2
+					decorationPathCapacity++
+					strokeCapacity++
+					displayItemCapacity++
+				}
+			}
+		}
+		for _, content := range measurement.content {
+			switch {
+			case content.nested != nil:
+				plan := content.nested.plan
+				decorationPathCapacity += len(plan.Paths)
+				fillCapacity += len(plan.Fills)
+				strokeCapacity += len(plan.Strokes)
+				displayItemCapacity += len(plan.Commands)
+				glyphRunCapacity += len(plan.GlyphRuns)
+				lineCapacity += len(plan.Lines)
+			case content.image != nil:
+				displayItemCapacity++
+				if content.image.background.Set {
+					decorationSegmentCapacity += 5
+					decorationPathCapacity++
+					fillCapacity++
+					displayItemCapacity++
+				}
+				for _, border := range content.image.borders {
+					if border.width > 0 {
+						decorationSegmentCapacity += 2
+						decorationPathCapacity++
+						strokeCapacity++
+						displayItemCapacity++
+					}
+				}
+			case content.text != nil:
+				plan := content.text.plan
+				decorationPathCapacity += len(plan.Strokes)
+				strokeCapacity += len(plan.Strokes)
+				displayItemCapacity += len(plan.GlyphRuns) + len(plan.Strokes)
+				glyphRunCapacity += len(plan.GlyphRuns)
+				lineCapacity += len(plan.Lines)
+			}
+		}
+	}
+	decorationSegments := make([]layoutengine.PathSegment, 0, decorationSegmentCapacity)
 	fonts := make([]layoutengine.CoreFontResource, 0)
 	fontIndex := make(map[paperCoreFontIdentity]layoutengine.FontResourceID)
-	runs := make([]layoutengine.CoreGlyphRun, 0)
+	runs := make([]layoutengine.CoreGlyphRun, 0, glyphRunCapacity)
 	imageResources := make([]layoutengine.ImageResource, 0)
 	imageIndex := make(map[layoutengine.ImageContentDigest]layoutengine.ImageResourceID)
 	images := make([]layoutengine.PlannedImage, 0)
-	items := make([]layoutengine.DisplayItem, 0)
+	items := make([]layoutengine.DisplayItem, 0, displayItemCapacity)
 	destinations := make([]layoutengine.PlannedDestination, 0)
 	links := make([]layoutengine.PlannedLink, 0)
-	paths := make([]layoutengine.PlannedPath, 0)
-	fills := make([]layoutengine.PlannedFill, 0)
-	strokes := make([]layoutengine.PlannedStroke, 0)
-	lines := make([]layoutengine.PlannedLine, 0)
+	paths := make([]layoutengine.PlannedPath, 0, decorationPathCapacity)
+	fills := make([]layoutengine.PlannedFill, 0, fillCapacity)
+	strokes := make([]layoutengine.PlannedStroke, 0, strokeCapacity)
+	lines := make([]layoutengine.PlannedLine, 0, lineCapacity)
 	nestedSemantics := make([]typedTableNestedSemantics, 0)
 	for pageIndex := range projection.Pages {
 		page := &projection.Pages[pageIndex]
@@ -1519,7 +1678,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 				if len(paths) >= 1<<20 {
 					return layoutengine.LayoutPlan{}, typedTableUnsupported("table.decorations", "graphic resource limit exceeded")
 				}
-				path := typedTableRectPath(fragment.BorderBox)
+				path := typedTableRectPathInto(fragment.BorderBox, &decorationSegments)
 				paths = append(paths, path)
 				fills = append(fills, layoutengine.PlannedFill{Path: uint32(len(paths) - 1), Rule: layoutengine.FillNonZero, Color: measurement.background, Fragment: fragment.ID}) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 				items = append(items, layoutengine.DisplayItem{Kind: layoutengine.CommandFillPath, Payload: uint32(len(fills) - 1)})                                                // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
@@ -1530,7 +1689,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 			} else {
 				for side, border := range measurement.borders {
 					if border.width > 0 {
-						path, pathErr := typedTableBorderPath(fragment.BorderBox, side)
+						path, pathErr := typedTableBorderPathInto(fragment.BorderBox, side, &decorationSegments)
 						if pathErr != nil {
 							return layoutengine.LayoutPlan{}, pathErr
 						}
@@ -1578,7 +1737,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 					if nestedErr != nil {
 						return layoutengine.LayoutPlan{}, nestedErr
 					}
-					prefix := fmt.Sprintf("%s/content-%d/", fragment.Key, contentIndex+1)
+					prefix := string(typedTableChildIdentity(fragment.Key, "content", contentIndex)) + "/"
 					fragmentMap := make(map[layoutengine.FragmentID]layoutengine.FragmentID, len(nested.Fragments))
 					nodeMap := make(map[layoutengine.NodeID]layoutengine.NodeID)
 					for _, childFragment := range nested.Fragments {
@@ -1766,7 +1925,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 					contentFragment.ID = layoutengine.FragmentID(len(fragments) + 1) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 					fragments = append(fragments, contentFragment)
 					if image.background.Set {
-						paths = append(paths, typedTableRectPath(outer))
+						paths = append(paths, typedTableRectPathInto(outer, &decorationSegments))
 						fills = append(fills, layoutengine.PlannedFill{Path: uint32(len(paths) - 1), Rule: layoutengine.FillNonZero, Color: image.background, Fragment: contentFragment.ID}) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 						items = append(items, layoutengine.DisplayItem{Kind: layoutengine.CommandFillPath, Payload: uint32(len(fills) - 1)})                                                 // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 					}
@@ -1790,7 +1949,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 						if border.width <= 0 {
 							continue
 						}
-						path, err := typedTableBorderPath(outer, side)
+						path, err := typedTableBorderPathInto(outer, side, &decorationSegments)
 						if err != nil {
 							return layoutengine.LayoutPlan{}, err
 						}
@@ -1977,7 +2136,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 			remapTypedTableDiagnosticLocation(&projection.Diagnostics[index].Related[related].Location, fragmentRemap)
 		}
 	}
-	geometry, err := layoutengine.NewLayoutPlan(layoutengine.LayoutPlanInput{
+	geometry, err := layoutengine.NewTrustedGeometryPlan(layoutengine.LayoutPlanInput{
 		Pages: projection.Pages, Fragments: fragments, Lines: lines,
 		PageRegions: projection.PageRegions, GridTracks: projection.GridTracks,
 		Breaks: projection.Breaks, Diagnostics: projection.Diagnostics,
@@ -1985,7 +2144,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 	if err != nil {
 		return layoutengine.LayoutPlan{}, err
 	}
-	plan, err := layoutengine.AttachDisplayList(geometry, layoutengine.DisplayListInput{Fonts: fonts, GlyphRuns: runs, ImageResources: imageResources, Images: images, Destinations: destinations, Links: links, Paths: paths, Fills: fills, Strokes: strokes, Items: items})
+	plan, err := layoutengine.AttachOwnedTrustedDisplayList(geometry, layoutengine.DisplayListInput{Fonts: fonts, GlyphRuns: runs, ImageResources: imageResources, Images: images, Destinations: destinations, Links: links, Paths: paths, Fills: fills, Strokes: strokes, Items: items})
 	if err != nil {
 		return layoutengine.LayoutPlan{}, err
 	}
@@ -2002,7 +2161,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 			if !hasLinkMetadata {
 				continue
 			}
-			key := layoutengine.NodeKey(fmt.Sprintf("%s/content-%d", measurement.key, contentIndex+1))
+			key := typedTableChildIdentity(measurement.key, "content", contentIndex)
 			if node := contentNodes[key]; node.Valid() {
 				linkedSegments[node] = append([]layout.TextSegment(nil), content.segments...)
 			}
@@ -2032,6 +2191,19 @@ func remapTypedTableDiagnosticLocation(location *layoutengine.DiagnosticLocation
 	}
 }
 
+func cloneTypedTableDiagnostics(source []layoutengine.Diagnostic) []layoutengine.Diagnostic {
+	if len(source) == 0 {
+		return nil
+	}
+	result := append([]layoutengine.Diagnostic(nil), source...)
+	for index := range result {
+		result[index].Evidence = append([]layoutengine.DiagnosticEvidence(nil), result[index].Evidence...)
+		result[index].Related = append([]layoutengine.DiagnosticReference(nil), result[index].Related...)
+		result[index].Fixes = append([]layoutengine.DiagnosticFix(nil), result[index].Fixes...)
+	}
+	return result
+}
+
 type typedCollapsedBorder struct {
 	path   layoutengine.PlannedPath
 	border typedTableBorder
@@ -2051,7 +2223,7 @@ type typedTableEdgeCandidate struct {
 	border   typedTableBorder
 }
 
-func typedTableCollapsedBorders(ctx context.Context, projection layoutengine.LayoutPlanProjection, measurements map[layoutengine.NodeID]typedTableCellMeasurement) (map[layoutengine.FragmentID][]typedCollapsedBorder, error) {
+func typedTableCollapsedBorders(ctx context.Context, projection layoutengine.LayoutPlanProjection, measurements map[layoutengine.NodeID]*typedTableCellMeasurement) (map[layoutengine.FragmentID][]typedCollapsedBorder, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -2170,12 +2342,30 @@ func typedTableBorderWins(candidate, current typedTableEdgeCandidate) bool {
 }
 
 func typedTableRectPath(box layoutengine.Rect) layoutengine.PlannedPath {
+	segments := make([]layoutengine.PathSegment, 0, 5)
+	return typedTableRectPathInto(box, &segments)
+}
+
+func typedTableRectPathInto(box layoutengine.Rect, segments *[]layoutengine.PathSegment) layoutengine.PlannedPath {
 	right, _ := box.Right()
 	bottom, _ := box.Bottom()
-	return layoutengine.PlannedPath{Bounds: box, Segments: []layoutengine.PathSegment{{Kind: layoutengine.PathMoveTo, Point: layoutengine.Point{X: box.X, Y: box.Y}}, {Kind: layoutengine.PathLineTo, Point: layoutengine.Point{X: right, Y: box.Y}}, {Kind: layoutengine.PathLineTo, Point: layoutengine.Point{X: right, Y: bottom}}, {Kind: layoutengine.PathLineTo, Point: layoutengine.Point{X: box.X, Y: bottom}}, {Kind: layoutengine.PathClose}}}
+	start := len(*segments)
+	*segments = append(*segments,
+		layoutengine.PathSegment{Kind: layoutengine.PathMoveTo, Point: layoutengine.Point{X: box.X, Y: box.Y}},
+		layoutengine.PathSegment{Kind: layoutengine.PathLineTo, Point: layoutengine.Point{X: right, Y: box.Y}},
+		layoutengine.PathSegment{Kind: layoutengine.PathLineTo, Point: layoutengine.Point{X: right, Y: bottom}},
+		layoutengine.PathSegment{Kind: layoutengine.PathLineTo, Point: layoutengine.Point{X: box.X, Y: bottom}},
+		layoutengine.PathSegment{Kind: layoutengine.PathClose},
+	)
+	return layoutengine.PlannedPath{Bounds: box, Segments: (*segments)[start:]}
 }
 
 func typedTableBorderPath(box layoutengine.Rect, side int) (layoutengine.PlannedPath, error) {
+	segments := make([]layoutengine.PathSegment, 0, 2)
+	return typedTableBorderPathInto(box, side, &segments)
+}
+
+func typedTableBorderPathInto(box layoutengine.Rect, side int, segments *[]layoutengine.PathSegment) (layoutengine.PlannedPath, error) {
 	right, err := box.Right()
 	if err != nil {
 		return layoutengine.PlannedPath{}, err
@@ -2205,28 +2395,48 @@ func typedTableBorderPath(box layoutengine.Rect, side int) (layoutengine.Planned
 	if err != nil {
 		return layoutengine.PlannedPath{}, err
 	}
-	return layoutengine.PlannedPath{Bounds: bounds, Segments: []layoutengine.PathSegment{{Kind: layoutengine.PathMoveTo, Point: start}, {Kind: layoutengine.PathLineTo, Point: end}}}, nil
+	segmentStart := len(*segments)
+	*segments = append(*segments,
+		layoutengine.PathSegment{Kind: layoutengine.PathMoveTo, Point: start},
+		layoutengine.PathSegment{Kind: layoutengine.PathLineTo, Point: end},
+	)
+	return layoutengine.PlannedPath{Bounds: bounds, Segments: (*segments)[segmentStart:]}, nil
 }
 
 func attachTypedTableSemantics(plan layoutengine.LayoutPlan, measurements []typedTableCellMeasurement, language string, nestedTables []typedTableNestedSemantics) (layoutengine.LayoutPlan, error) {
-	projection := plan.Projection()
-	nodes := []layoutengine.SemanticNode{
-		{ID: 1, Role: layoutengine.SemanticRoleDocument, Key: "@typed-document", Instance: "@typed-document", Attributes: layoutengine.SemanticAttributes{Language: language}},
-		{ID: 2, Parent: 1, Role: layoutengine.SemanticRoleTable, Key: "@typed-table", Instance: "@typed-table"},
-	}
+	projection := plan.ReadOnlyProjection()
 	maxRow := uint32(0)
+	nodeCapacity := 2
 	for _, cell := range measurements {
-		if cell.caption {
-			continue
-		}
-		if cell.row > maxRow {
+		nodeCapacity += 2
+		if !cell.caption && cell.row > maxRow {
 			maxRow = cell.row
 		}
+		for _, content := range cell.content {
+			nodeCapacity += len(content.ancestors)
+			if content.nested == nil {
+				nodeCapacity++
+			}
+		}
 	}
+	nodeCapacity += int(maxRow) + 1
+	for _, nested := range nestedTables {
+		if count := len(nested.projection.SemanticNodes) - 1; count > 0 {
+			nodeCapacity += count
+		}
+	}
+	nodes := make([]layoutengine.SemanticNode, 0, nodeCapacity)
+	nodes = append(nodes,
+		layoutengine.SemanticNode{ID: 1, Role: layoutengine.SemanticRoleDocument, Key: "@typed-document", Instance: "@typed-document", Attributes: layoutengine.SemanticAttributes{Language: language}},
+		layoutengine.SemanticNode{ID: 2, Parent: 1, Role: layoutengine.SemanticRoleTable, Key: "@typed-table", Instance: "@typed-table"},
+	)
 	rowSemantics := make([]layoutengine.SemanticNodeID, maxRow+1)
 	for row := uint32(0); row <= maxRow; row++ {
 		id := layoutengine.SemanticNodeID(len(nodes) + 1) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
-		identity := layoutengine.NodeKey(fmt.Sprintf("@typed-table-row-%d", row+1))
+		identityBytes := make([]byte, 0, 28)
+		identityBytes = append(identityBytes, "@typed-table-row-"...)
+		identityBytes = strconv.AppendUint(identityBytes, uint64(row+1), 10)
+		identity := layoutengine.NodeKey(identityBytes)
 		nodes = append(nodes, layoutengine.SemanticNode{ID: id, Parent: 2, Role: layoutengine.SemanticRoleRow, Key: identity, Instance: layoutengine.InstanceID(identity)})
 		rowSemantics[row] = id
 	}
@@ -2243,7 +2453,7 @@ func attachTypedTableSemantics(plan layoutengine.LayoutPlan, measurements []type
 					contentParent = existing
 					continue
 				}
-				key := layoutengine.NodeKey(fmt.Sprintf("%s/container-%d", cell.key, len(ancestorNodes)+1))
+				key := typedTableChildIdentity(cell.key, "container", len(ancestorNodes))
 				attributes := layoutengine.SemanticAttributes{}
 				if ancestor.role == layoutengine.SemanticRoleListItem && ancestor.actualText != "" {
 					attributes.ActualText = ancestor.actualText
@@ -2255,13 +2465,13 @@ func attachTypedTableSemantics(plan layoutengine.LayoutPlan, measurements []type
 			}
 			role := content.role
 			if content.nested != nil {
-				nestedParents[fmt.Sprintf("%s/content-%d/", cell.key, contentIndex+1)] = contentParent
+				nestedParents[string(typedTableChildIdentity(cell.key, "content", contentIndex))+"/"] = contentParent
 				continue
 			}
 			if role == "" {
 				role = layoutengine.SemanticRoleParagraph
 			}
-			key := layoutengine.NodeKey(fmt.Sprintf("%s/content-%d", cell.key, contentIndex+1))
+			key := typedTableChildIdentity(cell.key, "content", contentIndex)
 			attributes := layoutengine.SemanticAttributes{HeadingLevel: content.heading}
 			if role == layoutengine.SemanticRoleFigure {
 				attributes.AlternateText = content.alt
@@ -2336,7 +2546,7 @@ func attachTypedTableSemantics(plan layoutengine.LayoutPlan, measurements []type
 	}
 	associations := make([]layoutengine.SemanticFragmentAssociation, 0, len(projection.Fragments))
 	reading := make([]layoutengine.ReadingOccurrence, 0, len(projection.Fragments))
-	pageIndex := make(map[uint32]uint32)
+	pageIndex := make([]uint32, len(projection.Pages))
 	for _, fragment := range projection.Fragments {
 		semantic := semanticByKey[fragment.Key]
 		if !semantic.Valid() {
@@ -2344,9 +2554,10 @@ func attachTypedTableSemantics(plan layoutengine.LayoutPlan, measurements []type
 		}
 		associations = append(associations, layoutengine.SemanticFragmentAssociation{Semantic: semantic, Page: fragment.Page, Fragment: fragment.ID})
 		if nodes[semantic-1].Role != layoutengine.SemanticRoleArtifact {
-			reading = append(reading, layoutengine.ReadingOccurrence{Semantic: semantic, Page: fragment.Page, Fragment: fragment.ID, ReadingIndex: pageIndex[fragment.Page]})
-			pageIndex[fragment.Page]++
+			index := fragment.Page - 1
+			reading = append(reading, layoutengine.ReadingOccurrence{Semantic: semantic, Page: fragment.Page, Fragment: fragment.ID, ReadingIndex: pageIndex[index]})
+			pageIndex[index]++
 		}
 	}
-	return layoutengine.AttachSemantics(plan, nodes, associations, reading)
+	return layoutengine.AttachOwnedSemantics(plan, nodes, associations, reading)
 }

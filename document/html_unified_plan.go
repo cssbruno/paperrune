@@ -610,7 +610,7 @@ func htmlPlanTable(ctx context.Context, compiled *compiledHTML, start, end int, 
 }
 
 func htmlPlanTableRows(ctx context.Context, compiled *compiledHTML, start, end int, lineHeight float64, textBytes *int, state *htmlPlanLoweringState, pointsToUnits func(float64) float64, availableWidth float64, defaults htmlPlanTableCellDefaults) ([]layout.TableRow, []htmlPlanTableColumnHint, error) {
-	rows := make([]layout.TableRow, 0)
+	rows := make([]layout.TableRow, 0, htmlPlanVisibleDirectChildCount(compiled, start, end, "tr"))
 	var hints []htmlPlanTableColumnHint
 	var active []int
 	rangeStart := start + 1
@@ -636,7 +636,10 @@ func htmlPlanTableRows(ctx context.Context, compiled *compiledHTML, start, end i
 			index = rowEnd + 1
 			continue
 		}
-		row := layout.TableRow{KeepTogether: true}
+		row := layout.TableRow{
+			KeepTogether: true,
+			Cells:        make([]layout.TableCell, 0, htmlPlanVisibleDirectChildCount(compiled, index, rowEnd, "td", "th")),
+		}
 		columnIndex := 0
 		for cellIndex := index + 1; cellIndex < rowEnd; {
 			cellToken := compiled.tokens[cellIndex]
@@ -701,7 +704,12 @@ func htmlPlanTableRows(ctx context.Context, compiled *compiledHTML, start, end i
 			if err != nil {
 				return nil, nil, err
 			}
-			cell := layout.TableCell{Header: cellToken.Str == "th", Scope: scope, ColSpan: colspan, RowSpan: rowspan, Blocks: blocks, Style: style}
+			// Build directly in the final row allocation. TableCell is deliberately
+			// rich and large; constructing a local value made one heap object per
+			// cell before append copied it into a repeatedly grown backing array.
+			row.Cells = append(row.Cells, layout.TableCell{})
+			cell := &row.Cells[len(row.Cells)-1]
+			*cell = layout.TableCell{Header: cellToken.Str == "th", Scope: scope, ColSpan: colspan, RowSpan: rowspan, Blocks: blocks, Style: style}
 			cell.Box.KeepTogether = compiled.unifiedResolved[cellIndex].box.KeepTogether
 			switch strings.ToLower(strings.TrimSpace(cellToken.Attr["align"])) {
 			case "", "left":
@@ -752,12 +760,9 @@ func htmlPlanTableRows(ctx context.Context, compiled *compiledHTML, start, end i
 			if hint.hasWidth || hint.hasMin || hint.hasMax {
 				hints = append(hints, hint)
 			}
-			if decl := htmlUnifiedFilteredDeclarations(compiled.unifiedResolved[cellIndex].decl, htmlUnifiedTableBoxProperties); len(decl) != 0 {
-				if err := htmlPlanApplyStrictCellStyle(&cell, decl, pointsToUnits); err != nil {
-					return nil, nil, htmlPlanUnsupported(cellToken.Str, cellIndex, err.Error())
-				}
+			if _, styleErr := htmlPlanApplyResolvedCellStyle(cell, compiled.unifiedResolved[cellIndex].decl, pointsToUnits); styleErr != nil {
+				return nil, nil, htmlPlanUnsupported(cellToken.Str, cellIndex, styleErr.Error())
 			}
-			row.Cells = append(row.Cells, cell)
 			for len(active) < columnIndex+colspan {
 				active = append(active, 0)
 			}
@@ -786,6 +791,34 @@ func htmlPlanTableRows(ctx context.Context, compiled *compiledHTML, start, end i
 		return nil, nil, htmlPlanUnsupported(compiled.tokens[start].Str, start, "empty table sections are unsupported")
 	}
 	return rows, hints, nil
+}
+
+func htmlPlanVisibleDirectChildCount(compiled *compiledHTML, start, end int, tags ...string) int {
+	if compiled == nil || start < 0 || start >= len(compiled.tokenNode) {
+		return 0
+	}
+	parent := compiled.tokenNode[start]
+	if parent < 0 {
+		return 0
+	}
+	count := 0
+	for index := start + 1; index < end; index++ {
+		token := compiled.tokens[index]
+		if token.Cat != 'O' || compiled.unifiedResolved[index].displayNone {
+			continue
+		}
+		node := compiled.tokenNode[index]
+		if node < 0 || compiled.nodeIndexes[node].Parent != parent {
+			continue
+		}
+		for _, tag := range tags {
+			if token.Str == tag {
+				count++
+				break
+			}
+		}
+	}
+	return count
 }
 
 func htmlPlanTableCellBlocks(ctx context.Context, compiled *compiledHTML, start, end int, lineHeight float64, textBytes *int, pointsToUnits func(float64) float64, inherited layout.TextStyle, state *htmlPlanLoweringState, availableWidth float64) ([]layout.Block, error) {
@@ -850,22 +883,48 @@ func htmlPlanApplyStrictCellStyle(cell *layout.TableCell, decl map[string]string
 	if len(decl) == 0 {
 		return errors.New("style has no declarations")
 	}
+	_, err := htmlPlanApplyCellStyle(cell, decl, pointsToUnits, false)
+	return err
+}
+
+// htmlPlanApplyResolvedCellStyle applies the table-decoration subset from an
+// already capability-validated resolved declaration map without materializing
+// a filtered copy for every cell.
+func htmlPlanApplyResolvedCellStyle(cell *layout.TableCell, decl map[string]string, pointsToUnits func(float64) float64) (bool, error) {
+	return htmlPlanApplyCellStyle(cell, decl, pointsToUnits, true)
+}
+
+func htmlPlanApplyCellStyle(cell *layout.TableCell, decl map[string]string, pointsToUnits func(float64) float64, ignoreOther bool) (bool, error) {
+	if len(decl) == 0 {
+		return false, nil
+	}
+	applied := false
 	for name, value := range decl {
-		if !htmlPlanStrictCellStyleProperty(name) || strings.TrimSpace(value) == "" {
-			return fmt.Errorf("style property %q is outside the strict table decoration cohort", name)
+		if !htmlPlanStrictCellStyleProperty(name) {
+			if ignoreOther {
+				continue
+			}
+			return false, fmt.Errorf("style property %q is outside the strict table decoration cohort", name)
 		}
+		if strings.TrimSpace(value) == "" {
+			return false, fmt.Errorf("style property %q is outside the strict table decoration cohort", name)
+		}
+		applied = true
+	}
+	if !applied {
+		return false, nil
 	}
 	if value := decl["background-color"]; value != "" {
 		color, ok := parseCSSColor(value)
 		if !ok {
-			return errors.New("background-color is invalid")
+			return false, errors.New("background-color is invalid")
 		}
 		cell.Box.BackgroundColor = layout.DocumentColor{R: color.R, G: color.G, B: color.B, Set: true}
 	}
 	if value := decl["padding"]; value != "" {
 		length, err := htmlPlanStrictTableLength(value, pointsToUnits)
 		if err != nil {
-			return fmt.Errorf("padding %w", err)
+			return false, fmt.Errorf("padding %w", err)
 		}
 		cell.Box.Padding = layout.Spacing{Top: length, Right: length, Bottom: length, Left: length}
 	}
@@ -876,7 +935,7 @@ func htmlPlanApplyStrictCellStyle(cell *layout.TableCell, decl map[string]string
 		if value := decl[side.name]; value != "" {
 			length, err := htmlPlanStrictTableLength(value, pointsToUnits)
 			if err != nil {
-				return fmt.Errorf("%s %w", side.name, err)
+				return false, fmt.Errorf("%s %w", side.name, err)
 			}
 			*side.target = length
 		}
@@ -884,7 +943,7 @@ func htmlPlanApplyStrictCellStyle(cell *layout.TableCell, decl map[string]string
 	if value := decl["border"]; value != "" {
 		side, err := htmlPlanStrictBorderSide(value, pointsToUnits)
 		if err != nil {
-			return fmt.Errorf("border %w", err)
+			return false, fmt.Errorf("border %w", err)
 		}
 		cell.Box.Border = layout.BorderStyle{Top: side, Right: side, Bottom: side, Left: side}
 	}
@@ -896,27 +955,27 @@ func htmlPlanApplyStrictCellStyle(cell *layout.TableCell, decl map[string]string
 		if value := decl["border-"+entry.name]; value != "" {
 			side, err := htmlPlanStrictBorderSide(value, pointsToUnits)
 			if err != nil {
-				return fmt.Errorf("border-%s %w", entry.name, err)
+				return false, fmt.Errorf("border-%s %w", entry.name, err)
 			}
 			*entry.side = side
 		}
 		if value := decl["border-"+entry.name+"-width"]; value != "" {
 			width, err := htmlPlanStrictTableLength(value, pointsToUnits)
 			if err != nil {
-				return fmt.Errorf("border-%s-width %w", entry.name, err)
+				return false, fmt.Errorf("border-%s-width %w", entry.name, err)
 			}
 			entry.side.Width = width
 		}
 		if value := strings.ToLower(decl["border-"+entry.name+"-style"]); value != "" {
 			if value != "solid" && value != "none" {
-				return fmt.Errorf("border-%s-style supports solid or none", entry.name)
+				return false, fmt.Errorf("border-%s-style supports solid or none", entry.name)
 			}
 			entry.side.Style = value
 		}
 		if value := decl["border-"+entry.name+"-color"]; value != "" {
 			color, ok := parseCSSColor(value)
 			if !ok {
-				return fmt.Errorf("border-%s-color is invalid", entry.name)
+				return false, fmt.Errorf("border-%s-color is invalid", entry.name)
 			}
 			entry.side.Color = layout.DocumentColor{R: color.R, G: color.G, B: color.B, Set: true}
 		}
@@ -932,7 +991,7 @@ func htmlPlanApplyStrictCellStyle(cell *layout.TableCell, decl map[string]string
 				entry.side.Color = layout.DocumentColor{Set: true}
 			}
 		} else if entry.side.Style != "" || entry.side.Color.Set {
-			return fmt.Errorf("border-%s needs a positive width", entry.name)
+			return false, fmt.Errorf("border-%s needs a positive width", entry.name)
 		}
 	}
 	if value := strings.ToLower(decl["text-align"]); value != "" {
@@ -944,7 +1003,7 @@ func htmlPlanApplyStrictCellStyle(cell *layout.TableCell, decl map[string]string
 		case "right":
 			cell.Align = "right"
 		default:
-			return errors.New("text-align supports left, center, or right")
+			return false, errors.New("text-align supports left, center, or right")
 		}
 	}
 	if value := strings.ToLower(decl["vertical-align"]); value != "" {
@@ -952,10 +1011,10 @@ func htmlPlanApplyStrictCellStyle(cell *layout.TableCell, decl map[string]string
 		case "top", "middle", "bottom":
 			cell.VerticalAlign = value
 		default:
-			return errors.New("vertical-align supports top, middle, or bottom")
+			return false, errors.New("vertical-align supports top, middle, or bottom")
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func htmlPlanStrictCellStyleProperty(name string) bool {

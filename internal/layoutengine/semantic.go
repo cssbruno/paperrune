@@ -106,7 +106,20 @@ func AttachSemantics(plan LayoutPlan, nodes []SemanticNode, associations []Seman
 	if len(plan.semanticNodes) != 0 || len(plan.semanticFragments) != 0 || len(plan.readingOrder) != 0 {
 		return LayoutPlan{}, errors.New("layoutengine: plan already has semantic associations")
 	}
-	return replaceSemantics(plan, nodes, associations, occurrences)
+	return replaceSemantics(plan, nodes, associations, occurrences, true)
+}
+
+// AttachOwnedSemantics validates and adopts a freshly built semantic
+// projection. The caller transfers all three slices and must not mutate them
+// after the call. Existing copy-safe attachment remains the default API.
+func AttachOwnedSemantics(plan LayoutPlan, nodes []SemanticNode, associations []SemanticFragmentAssociation, occurrences []ReadingOccurrence) (LayoutPlan, error) {
+	if len(plan.pages) == 0 {
+		return LayoutPlan{}, errors.New("layoutengine: semantic attachment requires a non-empty plan")
+	}
+	if len(plan.semanticNodes) != 0 || len(plan.semanticFragments) != 0 || len(plan.readingOrder) != 0 {
+		return LayoutPlan{}, errors.New("layoutengine: plan already has semantic associations")
+	}
+	return replaceSemantics(plan, nodes, associations, occurrences, false)
 }
 
 // ReplaceSemantics returns the same immutable geometry/display plan with a
@@ -117,21 +130,29 @@ func ReplaceSemantics(plan LayoutPlan, nodes []SemanticNode, associations []Sema
 	if len(plan.pages) == 0 {
 		return LayoutPlan{}, errors.New("layoutengine: semantic replacement requires a non-empty plan")
 	}
-	return replaceSemantics(plan, nodes, associations, occurrences)
+	return replaceSemantics(plan, nodes, associations, occurrences, true)
+}
+
+// ReplaceTrustedSemantics validates and adopts semantic slices prepared by a
+// trusted adapter. Slices may be newly built or zero-copy views of another
+// immutable plan, but the caller must never mutate them after this call.
+func ReplaceTrustedSemantics(plan LayoutPlan, nodes []SemanticNode, associations []SemanticFragmentAssociation, occurrences []ReadingOccurrence) (LayoutPlan, error) {
+	if len(plan.pages) == 0 {
+		return LayoutPlan{}, errors.New("layoutengine: semantic replacement requires a non-empty plan")
+	}
+	return replaceSemantics(plan, nodes, associations, occurrences, false)
 }
 
 // replaceSemantics structurally shares the already validated immutable plan.
 // Geometry, display resources, and compact provenance cannot change here, so
 // rebuilding and revalidating all of them would only create transient copies.
-func replaceSemantics(plan LayoutPlan, nodes []SemanticNode, associations []SemanticFragmentAssociation, occurrences []ReadingOccurrence) (LayoutPlan, error) {
-	nodes = cloneSlice(nodes)
-	associations = cloneSlice(associations)
-	occurrences = cloneSlice(occurrences)
-	fragments := make(map[FragmentID]Fragment, len(plan.fragments))
-	for _, fragment := range plan.fragments {
-		fragments[fragment.ID] = fragment
+func replaceSemantics(plan LayoutPlan, nodes []SemanticNode, associations []SemanticFragmentAssociation, occurrences []ReadingOccurrence, cloneInput bool) (LayoutPlan, error) {
+	if cloneInput {
+		nodes = cloneSlice(nodes)
+		associations = cloneSlice(associations)
+		occurrences = cloneSlice(occurrences)
 	}
-	if err := validateSemantics(nodes, associations, occurrences, plan.pages, fragments, plan.destinations, plan.links); err != nil {
+	if err := validateSemantics(nodes, associations, occurrences, plan.pages, plan.fragments, nil, plan.destinations, plan.links); err != nil {
 		return LayoutPlan{}, err
 	}
 	result := plan
@@ -141,7 +162,41 @@ func replaceSemantics(plan LayoutPlan, nodes []SemanticNode, associations []Sema
 	return result, nil
 }
 
-func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAssociation, occurrences []ReadingOccurrence, pages []PlannedPage, fragments map[FragmentID]Fragment, destinations []PlannedDestination, links []PlannedLink) error {
+type semanticFragmentIndex struct {
+	fragments []Fragment
+	sparse    map[FragmentID]Fragment
+	dense     bool
+}
+
+func newSemanticFragmentIndex(fragments []Fragment, sparse map[FragmentID]Fragment) semanticFragmentIndex {
+	dense := true
+	for index, fragment := range fragments {
+		if fragment.ID != FragmentID(index+1) {
+			dense = false
+			break
+		}
+	}
+	if !dense && sparse == nil {
+		sparse = make(map[FragmentID]Fragment, len(fragments))
+		for _, fragment := range fragments {
+			sparse[fragment.ID] = fragment
+		}
+	}
+	return semanticFragmentIndex{fragments: fragments, sparse: sparse, dense: dense}
+}
+
+func (index semanticFragmentIndex) lookup(id FragmentID) (Fragment, bool) {
+	if index.dense {
+		if !id.Valid() || uint64(id) > uint64(len(index.fragments)) {
+			return Fragment{}, false
+		}
+		return index.fragments[id-1], true
+	}
+	fragment, exists := index.sparse[id]
+	return fragment, exists
+}
+
+func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAssociation, occurrences []ReadingOccurrence, pages []PlannedPage, fragments []Fragment, fragmentIDs map[FragmentID]Fragment, destinations []PlannedDestination, links []PlannedLink) error {
 	if len(nodes) == 0 {
 		if len(associations) != 0 || len(occurrences) != 0 {
 			return planError("semantic_fragments", "associations exist without a semantic tree")
@@ -165,7 +220,7 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 	identities := make(map[struct {
 		key      NodeKey
 		instance InstanceID
-	}]SemanticNodeID, len(nodes))
+	}]struct{}, len(nodes))
 	for index, node := range nodes {
 		if node.ID != SemanticNodeID(index+1) {
 			return planIndexedError("semantic_nodes", index, ".id", "semantic IDs are not consecutive and one-based")
@@ -192,7 +247,7 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 		if _, duplicate := identities[identity]; duplicate {
 			return planIndexedError("semantic_nodes", index, "", "duplicates a semantic key and instance")
 		}
-		identities[identity] = node.ID
+		identities[identity] = struct{}{}
 		if !node.Parent.Valid() {
 			roots++
 		} else if uint64(node.Parent) > uint64(len(nodes)) || node.Parent == node.ID {
@@ -237,30 +292,51 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 	if err := validateFormSemantics(nodes); err != nil {
 		return err
 	}
-	owned := make(map[FragmentID]SemanticNodeID, len(associations))
+	fragmentIndex := newSemanticFragmentIndex(fragments, fragmentIDs)
+	var ownedDense []SemanticNodeID
+	var ownedSparse map[FragmentID]SemanticNodeID
+	if fragmentIndex.dense {
+		ownedDense = make([]SemanticNodeID, len(fragments))
+	} else {
+		ownedSparse = make(map[FragmentID]SemanticNodeID, len(associations))
+	}
 	for index, association := range associations {
 		if !association.Semantic.Valid() || uint64(association.Semantic) > uint64(len(nodes)) {
 			return planIndexedError("semantic_fragments", index, ".semantic", "references a missing semantic node")
 		}
-		fragment, exists := fragments[association.Fragment]
+		fragment, exists := fragmentIndex.lookup(association.Fragment)
 		if !exists {
 			return planIndexedError("semantic_fragments", index, ".fragment", "references a missing fragment")
 		}
 		if association.Page == 0 || uint64(association.Page) > uint64(len(pages)) || fragment.Page != association.Page {
 			return planIndexedError("semantic_fragments", index, ".page", "does not match the fragment page")
 		}
-		if _, duplicate := owned[association.Fragment]; duplicate {
+		var duplicate bool
+		if fragmentIndex.dense {
+			ownedIndex := int(association.Fragment - 1)
+			duplicate = ownedDense[ownedIndex].Valid()
+			ownedDense[ownedIndex] = association.Semantic
+		} else {
+			_, duplicate = ownedSparse[association.Fragment]
+			ownedSparse[association.Fragment] = association.Semantic
+		}
+		if duplicate {
 			return planIndexedError("semantic_fragments", index, ".fragment", "has duplicate semantic ownership")
 		}
 		node := nodes[association.Semantic-1]
 		if node.Key != fragment.Key || node.Instance != fragment.Instance || node.Source != fragment.Source {
 			return planIndexedError("semantic_fragments", index, "", "semantic provenance does not match the owned fragment")
 		}
-		owned[association.Fragment] = association.Semantic
 	}
-	for fragment := range fragments {
-		if !owned[fragment].Valid() {
-			return planError("semantic_fragments", fmt.Sprintf("fragment %d has no semantic owner", fragment))
+	for index, fragment := range fragments {
+		var owner SemanticNodeID
+		if fragmentIndex.dense {
+			owner = ownedDense[index]
+		} else {
+			owner = ownedSparse[fragment.ID]
+		}
+		if !owner.Valid() {
+			return planError("semantic_fragments", fmt.Sprintf("fragment %d has no semantic owner", fragment.ID))
 		}
 	}
 	linkDestinationsByFragment := make(map[FragmentID]map[DestinationID]struct{}, len(links))
@@ -279,8 +355,14 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 			continue
 		}
 		matched := false
-		for fragment, semantic := range owned {
-			_, ownsTarget := linkDestinationsByFragment[fragment][node.Attributes.LinkDestination]
+		for index, fragment := range fragments {
+			var semantic SemanticNodeID
+			if fragmentIndex.dense {
+				semantic = ownedDense[index]
+			} else {
+				semantic = ownedSparse[fragment.ID]
+			}
+			_, ownsTarget := linkDestinationsByFragment[fragment.ID][node.Attributes.LinkDestination]
 			if semantic == node.ID && ownsTarget {
 				matched = true
 				break
@@ -290,20 +372,31 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 			return planError(fmt.Sprintf("semantic_nodes[%d].attributes.link_destination", node.ID-1), "does not match an owned planned link")
 		}
 	}
-	read := make(map[FragmentID]bool, len(occurrences))
+	var readDense []bool
+	var readSparse map[FragmentID]bool
+	if fragmentIndex.dense {
+		readDense = make([]bool, len(fragments))
+	} else {
+		readSparse = make(map[FragmentID]bool, len(occurrences))
+	}
 	var previousPage, nextIndex uint32
 	for index, occurrence := range occurrences {
 		if !occurrence.Semantic.Valid() || uint64(occurrence.Semantic) > uint64(len(nodes)) {
 			return planIndexedError("reading_order", index, ".semantic", "references a missing semantic node")
 		}
-		fragment, exists := fragments[occurrence.Fragment]
+		fragment, exists := fragmentIndex.lookup(occurrence.Fragment)
 		if !exists {
 			return planIndexedError("reading_order", index, ".fragment", "references a missing fragment")
 		}
 		if occurrence.Page == 0 || uint64(occurrence.Page) > uint64(len(pages)) || fragment.Page != occurrence.Page {
 			return planIndexedError("reading_order", index, ".page", "does not match the fragment page")
 		}
-		owner := owned[occurrence.Fragment]
+		var owner SemanticNodeID
+		if fragmentIndex.dense {
+			owner = ownedDense[occurrence.Fragment-1]
+		} else {
+			owner = ownedSparse[occurrence.Fragment]
+		}
 		if !owner.Valid() || owner != occurrence.Semantic {
 			return planIndexedError("reading_order", index, "", "does not match the fragment semantic owner")
 		}
@@ -311,7 +404,15 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 		if node.Role == SemanticRoleArtifact {
 			return planIndexedError("reading_order", index, "", "artifact fragments must not appear in reading order")
 		}
-		if read[occurrence.Fragment] {
+		alreadyRead := false
+		if fragmentIndex.dense {
+			alreadyRead = readDense[occurrence.Fragment-1]
+			readDense[occurrence.Fragment-1] = true
+		} else {
+			alreadyRead = readSparse[occurrence.Fragment]
+			readSparse[occurrence.Fragment] = true
+		}
+		if alreadyRead {
 			return planIndexedError("reading_order", index, ".fragment", "appears more than once in reading order")
 		}
 		if occurrence.Page < previousPage {
@@ -324,11 +425,19 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 			return planIndexedError("reading_order", index, ".reading_index", "is not consecutive within the page")
 		}
 		nextIndex++
-		read[occurrence.Fragment] = true
 	}
-	for fragment, semantic := range owned {
-		if nodes[semantic-1].Role != SemanticRoleArtifact && !read[fragment] {
-			return planError("reading_order", fmt.Sprintf("non-artifact fragment %d is missing", fragment))
+	for index, fragment := range fragments {
+		var semantic SemanticNodeID
+		var wasRead bool
+		if fragmentIndex.dense {
+			semantic = ownedDense[index]
+			wasRead = readDense[index]
+		} else {
+			semantic = ownedSparse[fragment.ID]
+			wasRead = readSparse[fragment.ID]
+		}
+		if nodes[semantic-1].Role != SemanticRoleArtifact && !wasRead {
+			return planError("reading_order", fmt.Sprintf("non-artifact fragment %d is missing", fragment.ID))
 		}
 	}
 	return nil

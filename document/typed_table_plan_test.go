@@ -279,6 +279,21 @@ func TestTypedMixedParagraphTableParagraphFlowsThroughVariablePageShells(t *test
 	if len(projection.Breaks) == 0 {
 		t.Fatal("mixed typed flow has no causal pagination decisions")
 	}
+	footerTop := map[uint32]layoutengine.Fixed{}
+	for _, region := range projection.PageRegions {
+		if region.Region == layoutengine.RegionFooter && (footerTop[region.Page] == 0 || region.Bounds.Y < footerTop[region.Page]) {
+			footerTop[region.Page] = region.Bounds.Y
+		}
+	}
+	for _, fragment := range projection.Fragments {
+		if fragment.Region != layoutengine.RegionBody || footerTop[fragment.Page] == 0 {
+			continue
+		}
+		bottom, err := fragment.BorderBox.Bottom()
+		if err != nil || bottom > footerTop[fragment.Page] {
+			t.Fatalf("body fragment overlaps footer: fragment=%+v footer_top=%v err=%v", fragment, footerTop[fragment.Page], err)
+		}
+	}
 	for _, decision := range projection.Breaks {
 		if !decision.Preceding.Valid() || !decision.Triggering.Valid() || decision.FromPage >= decision.ToPage {
 			t.Fatalf("mixed break = %#v", decision)
@@ -298,6 +313,46 @@ func TestTypedMixedParagraphTableParagraphFlowsThroughVariablePageShells(t *test
 	var pdf bytes.Buffer
 	if err := target.OutputWithOptions(&pdf, OutputOptions{Deterministic: true}); err != nil || pdf.Len() == 0 {
 		t.Fatalf("mixed PDF = %d, %v", pdf.Len(), err)
+	}
+}
+
+func TestTypedMixedConsecutiveExplicitBreaksCollapseWithoutBlankPage(t *testing.T) {
+	plan := func(breakCount int) LayoutDocumentPlan {
+		t.Helper()
+		planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 120}), WithNoCompression())
+		planner.SetMargins(10, 10, 10)
+		body := []layout.Block{pageShellParagraph("BEFORE"), typedTableTestBlock(true)}
+		for range breakCount {
+			body = append(body, layout.PageBreakBlock{After: true})
+		}
+		body = append(body, pageShellParagraph("AFTER"))
+		document := &layout.LayoutDocument{
+			PageTemplate: layout.PageTemplate{
+				Header: &layout.HeaderBlock{Blocks: []layout.Block{pageShellParagraph("HEADER")}},
+				Footer: &layout.FooterBlock{Blocks: []layout.Block{pageShellParagraph("FOOTER")}},
+			},
+			Body: body,
+		}
+		planned, err := planner.PlanLayoutDocument(document)
+		if err != nil {
+			t.Fatalf("PlanLayoutDocument(%d breaks) = %v", breakCount, err)
+		}
+		return planned
+	}
+
+	one := plan(1)
+	duplicate := plan(2)
+	if duplicate.PageCount() != one.PageCount() {
+		t.Fatalf("page counts with one/two breaks = %d/%d, duplicate marker created a blank page", one.PageCount(), duplicate.PageCount())
+	}
+	oneBreaks, duplicateBreaks := one.plan.Projection().Breaks, duplicate.plan.Projection().Breaks
+	if len(duplicateBreaks) != len(oneBreaks) {
+		t.Fatalf("break ledgers with one/two markers = %+v / %+v", oneBreaks, duplicateBreaks)
+	}
+	for index, decision := range duplicateBreaks {
+		if decision.FromPage+1 != decision.ToPage || !decision.Preceding.Valid() || !decision.Triggering.Valid() {
+			t.Fatalf("duplicate break[%d] = %+v", index, decision)
+		}
 	}
 }
 
@@ -793,16 +848,18 @@ func TestTypedTableIntrinsicMeasurementReusesScratchDocumentByResolvedStyle(t *t
 	placement := func(column uint32, text string) typedTablePlacement {
 		return typedTablePlacement{row: 0, column: column, rowSpan: 1, columnSpan: 1,
 			path: fmt.Sprintf("body[0].rows[0].cells[%d]", column),
-			cell: layout.TableCell{Blocks: []layout.Block{layout.ParagraphBlock{
+			cell: &layout.TableCell{Blocks: []layout.Block{layout.ParagraphBlock{
 				Segments: []layout.TextSegment{{Text: text}}, Style: style,
 			}}}}
 	}
 	cache := make(map[layout.TextStyle]*mixedTextFontMetrics)
-	firstMin, firstPreferred, err := planner.measureTypedTableCellIntrinsic(t.Context(), doc, placement(0, "same style one"), cache)
+	firstPlacement := placement(0, "same style one")
+	firstMin, firstPreferred, err := planner.measureTypedTableCellIntrinsic(t.Context(), doc, &firstPlacement, cache)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondMin, secondPreferred, err := planner.measureTypedTableCellIntrinsic(t.Context(), doc, placement(1, "same style two"), cache)
+	secondPlacement := placement(1, "same style two")
+	secondMin, secondPreferred, err := planner.measureTypedTableCellIntrinsic(t.Context(), doc, &secondPlacement, cache)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -818,9 +875,9 @@ func TestTypedTableIntrinsicMeasurementSupportsEmbeddedUTF8Font(t *testing.T) {
 	}
 	style := layout.TextStyle{FontFamily: "PlanSans", FontSize: 9, LineHeight: 12}
 	placement := typedTablePlacement{row: 0, column: 0, rowSpan: 1, columnSpan: 1, path: "body[0].rows[0].cells[0]",
-		cell: layout.TableCell{Blocks: []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "João, ação e café"}}, Style: style}}}}
+		cell: &layout.TableCell{Blocks: []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "João, ação e café"}}, Style: style}}}}
 	cache := make(map[layout.TextStyle]*mixedTextFontMetrics)
-	minimum, preferred, err := planner.measureTypedTableCellIntrinsic(t.Context(), &layout.LayoutDocument{}, placement, cache)
+	minimum, preferred, err := planner.measureTypedTableCellIntrinsic(t.Context(), &layout.LayoutDocument{}, &placement, cache)
 	if err != nil || minimum <= 0 || preferred < minimum || len(cache) != 1 || cache[style].resource.EmbeddedUTF8 == nil {
 		t.Fatalf("embedded intrinsic metrics = %v/%v, cache=%#v, err=%v", minimum, preferred, cache, err)
 	}

@@ -24,6 +24,10 @@ func TestCompileLowersPaperASTToLayoutDocumentAndMapping(t *testing.T) {
 		"    page-numbers: true\n" +
 		"    page-number-format: \"Page %d of {pages}\"\n" +
 		"    page-total-alias: \"{pages}\"\n" +
+		"    page-number-align: \"outer\"\n" +
+		"    page-number-position: \"header\"\n" +
+		"    page-number-hide-first: true\n" +
+		"    page-number-start: 5\n" +
 		"    body @content:\n" +
 		"      heading @title:\n" +
 		"        level: 2\n" +
@@ -61,7 +65,7 @@ func TestCompileLowersPaperASTToLayoutDocumentAndMapping(t *testing.T) {
 	if got := result.Document.PageTemplate.Margins; got != (layout.Spacing{Top: margin12, Right: margin12, Bottom: margin12, Left: margin18}) {
 		t.Fatalf("margins = %#v", got)
 	}
-	if got := result.Document.PageTemplate.PageNumbers; got != (layout.PageNumberOptions{Enabled: true, Format: "Page %d of {pages}", TotalPageAlias: "{pages}"}) {
+	if got := result.Document.PageTemplate.PageNumbers; got != (layout.PageNumberOptions{Enabled: true, Format: "Page %d of {pages}", TotalPageAlias: "{pages}", Align: "outer", Position: "header", HideFirst: true, Start: 5}) {
 		t.Fatalf("page numbers = %#v", got)
 	}
 	if len(result.Document.Body) != 3 {
@@ -107,6 +111,21 @@ func TestCompileRejectsMalformedPageNumberFormats(t *testing.T) {
 		compiled := Compile(parsed.AST)
 		if !parsed.OK() || compiled.OK() || !hasCompileDiagnostic(compiled.Diagnostics, "PAPER_COMPILE_PAGE_NUMBER_FORMAT") {
 			t.Fatalf("format %q diagnostics = %#v/%#v", format, parsed.Diagnostics, compiled.Diagnostics)
+		}
+	}
+}
+
+func TestCompileRejectsInvalidPageNumberPlacement(t *testing.T) {
+	for property, value := range map[string]string{
+		"page-number-align":    `"diagonal"`,
+		"page-number-position": `"margin"`,
+		"page-number-start":    `0`,
+	} {
+		source := "document:\n  page:\n    " + property + ": " + value + "\n    body:\n      text: \"x\"\n"
+		parsed := paperlang.Parse("page-number-placement.paper", source)
+		compiled := Compile(parsed.AST)
+		if !parsed.OK() || compiled.OK() {
+			t.Fatalf("%s=%s diagnostics = %#v/%#v", property, value, parsed.Diagnostics, compiled.Diagnostics)
 		}
 	}
 }

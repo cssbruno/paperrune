@@ -44,6 +44,26 @@ func TestLayoutPlanCopiesInputAndReturnedProjection(t *testing.T) {
 	}
 }
 
+func TestNewTrustedGeometryPlanAdoptsValidatedGeometryOnly(t *testing.T) {
+	input := testPlanInput()
+	input.Commands = nil
+	for index := range input.Pages {
+		input.Pages[index].Commands = IndexRange{}
+	}
+	plan, err := NewTrustedGeometryPlan(input)
+	if err != nil {
+		t.Fatalf("NewTrustedGeometryPlan() = %v", err)
+	}
+	if err := plan.Validate(); err != nil {
+		t.Fatalf("trusted geometry plan Validate() = %v", err)
+	}
+
+	input.Commands = []DisplayCommand{{Kind: CommandSaveState}}
+	if _, err := NewTrustedGeometryPlan(input); err == nil {
+		t.Fatal("trusted geometry constructor accepted display state")
+	}
+}
+
 func TestLayoutPlanProjectionAndHashAreDeterministic(t *testing.T) {
 	first, err := NewLayoutPlan(testPlanInput())
 	if err != nil {

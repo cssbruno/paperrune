@@ -153,7 +153,10 @@ func (w *Workspace) PaperInsertTemplate(request PaperInsertTemplateRequest) (Pap
 			{Kind: paperlang.NodeHeading, ID: "@" + base + "-heading", Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("Section heading")}}},
 			{Kind: paperlang.NodeParagraph, ID: "@" + base + "-body", Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("New content")}}},
 		}}
-	case "image", "table", "canvas", "note-box", "metadata-grid", "signature-row", "qr-verification", "clause", "styled-container":
+	case "image", "table", "canvas", "note-box", "metadata-grid", "signature-row", "qr-verification", "clause",
+		"title-block", "two-column", "image-caption", "quote", "checklist", "disclaimer", "divider",
+		"cover-block", "recipient-block", "code-block", "status-banner", "numbered-steps", "timeline", "comparison-table", "approval-block", "image-grid", "invoice-totals",
+		"kpi-strip", "table-of-contents", "risk-register", "change-log", "decision-record", "pros-cons", "faq-block":
 		if parent.Kind == paperlang.NodeDocument || parent.Kind == paperlang.NodePage {
 			return PaperMutationResult{}, workspaceError("INVALID_TEMPLATE_PARENT", "flow templates require a region, body, row, or column", paperedit.ErrInvalidOperation)
 		}
@@ -195,36 +198,57 @@ func (w *Workspace) PaperInsertTemplate(request PaperInsertTemplateRequest) (Pap
 // template level. Keeping this closed prevents Studio from offering mutations
 // that can only fail during compilation.
 func authoringTemplateAllowed(parent paperlang.NodeKind, template string) bool {
-	allowed := func(templates ...string) bool {
-		for _, candidate := range templates {
-			if template == candidate {
-				return true
-			}
+	for _, candidate := range AuthoringTemplateChoices(parent) {
+		if template == candidate {
+			return true
 		}
-		return false
 	}
+	return false
+}
+
+// AuthoringTemplateChoices returns the closed built-in palette accepted by a
+// source parent. Callers receive a copy so the backend remains the single
+// immutable owner of insertion compatibility.
+func AuthoringTemplateChoices(parent paperlang.NodeKind) []string {
+	var choices []string
 	switch parent {
 	case paperlang.NodeDocument:
-		return allowed("import", "schema", "schema-object", "page", "document-preset")
+		choices = []string{"import", "schema", "schema-object", "page", "document-preset"}
 	case paperlang.NodePage:
-		return allowed("header", "footer")
+		choices = []string{"header", "footer"}
 	case paperlang.NodeBody, paperlang.NodeHeader, paperlang.NodeFooter:
-		return allowed("paragraph", "heading", "list", "row", "column", "page-break", "component", "section", "image", "table", "canvas", "note-box", "metadata-grid", "signature-row", "qr-verification", "clause", "styled-container", "repeat", "loop")
+		choices = []string{
+			"paragraph", "heading", "list", "row", "column",
+		}
+		if parent == paperlang.NodeBody {
+			choices = append(choices, "page-break")
+		}
+		choices = append(choices,
+			"component", "section", "image", "table", "canvas",
+			"note-box", "metadata-grid", "signature-row", "qr-verification", "clause", "title-block", "two-column", "image-caption",
+			"quote", "checklist", "disclaimer", "divider", "cover-block", "recipient-block", "code-block", "status-banner", "numbered-steps",
+			"timeline", "comparison-table", "approval-block", "image-grid", "invoice-totals", "kpi-strip", "table-of-contents",
+			"risk-register", "change-log", "decision-record", "pros-cons", "faq-block", "repeat", "loop",
+		)
 	case paperlang.NodeRow, paperlang.NodeColumn:
-		return allowed("paragraph", "heading", "row", "column", "component", "section", "image", "table", "note-box", "metadata-grid", "signature-row", "qr-verification", "clause", "styled-container")
+		choices = []string{
+			"paragraph", "heading", "row", "column", "component", "section", "image", "table", "note-box", "metadata-grid", "signature-row",
+			"qr-verification", "clause", "title-block", "two-column", "image-caption", "quote", "checklist", "disclaimer", "divider",
+			"recipient-block", "code-block", "status-banner", "numbered-steps", "timeline", "comparison-table", "approval-block", "invoice-totals",
+			"kpi-strip", "table-of-contents", "risk-register", "change-log", "decision-record", "pros-cons", "faq-block",
+		}
 	case paperlang.NodeList:
-		return template == "item"
+		choices = []string{"item"}
 	case paperlang.NodeItem:
-		return allowed("text", "paragraph", "component")
+		choices = []string{"text", "paragraph", "component"}
 	case paperlang.NodeTable, paperlang.NodeTableHeader:
-		return template == "table-row"
+		choices = []string{"table-row"}
 	case paperlang.NodeTableRow:
-		return template == "cell"
+		choices = []string{"cell"}
 	case paperlang.NodeTableCell:
-		return allowed("text", "paragraph", "image", "list")
-	default:
-		return false
+		choices = []string{"text", "paragraph", "image", "list"}
 	}
+	return append([]string(nil), choices...)
 }
 
 func authoringRepeaterTemplate(ast paperlang.AST, template, id, sourcePath string) (paperedit.NodeSpec, error) {
@@ -280,63 +304,341 @@ func authoringRepeaterTemplate(ast paperlang.AST, template, id, sourcePath strin
 	}, Children: []paperedit.NodeSpec{paragraph}}, nil
 }
 
-const authoringPixelDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+const authoringPlaceholderDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAC0CAIAAABqhmJGAAAACXBIWXMAAAABAAAAAQBPJcTWAAACs0lEQVR4nO3aLUooUQCGYQVXIUaL2rTaBIsLuHsQ7CJYxRXcPdwFWASbVZvcYhTXYbH7g845rz5PHjhfeTkMM6vbJ+crb7m5OH3zGWB5a6MHAJ8nYAgTMIQJGMIEDGEChjABQ5iAIUzAECZgCBMwhAkYwgQMYQKGMAFDmIAhTMAQJmAIEzCECRjCBAxhAoYwAUOYgCFMwBAmYAgTMIQJGMIEDGEChjABQ5iAIUzAECZgCBMwhAkYwgQMYQKGMAFDmIAhTMAQNiDgv7d3yx+6mOP9vdET+EXcwBAmYAgTMIQJGMIEDGECnsjB2eXoCbzLzcXp6AmvBAxhAoYwAUOYgCFMwBAmYAgTMIQJGMIEDGEChjABQ5iAJzLPH7ZUCBjCBAxhAoYwAUOYgCFMwBAmYAgTMIQJGMIEDGEChjABT+Tf1fXoCT/Kn6PD0RO+nYAhTMAQJmAIEzCECRjCBAxhAoYwAU/kN3y35GsJGMIEDGEChjABQ5iAIUzAECZgCBMwhAkYwgQ8kfuH/6MnTGd3Z2v0hKkJGMIEDGEChjABQ5iAIUzAECZgCBPwRHzz5KMEDGEChjABQ5iAIUzAECZgCBMwhAkYwgQMYQKGMAFDmIAhTMAQJmAIEzCECRjCBAxhAwI+3t9b/lD4kdzAECZgCBMwhAkYwgQMYQKGMAFDmIAhTMAQJmAIEzCECRjCBAxhAoYwAUOYgCFMwBAmYAgTMIQNCPjx6Xn5Q+ELbW6sj57wyg0MYQKGMAFD2ICA53l/gDo3MIQJGMIEDGEChjABQ5iAIUzAECZgCBMwhAkYwgQMYQKGMAFDmIAhTMAQJmAIEzCECRjCBAxhAoYwAUOYgCFMwBAmYAgTMIQJGMIEDGEChjABQ5iAIUzAECZgCBMwhAkYwgQMYQKGMAFDmIAhTMAQ9gLP9hj5jXcS6AAAAABJRU5ErkJggg=="
+
+const authoringQRPlaceholderDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANIAAADSCAIAAACw+wkVAAAACXBIWXMAAAABAAAAAQBPJcTWAAAD0ElEQVR4nO3dMY7dRACAYVhxB4qcgSZtRBtxHI7AETgOSovSpuEMKTjEriigQApZbL/x+8dvvq9+K3nXf8bz7PHk2+fn52/gvr6rD4AVyY6A7AjIjoDsCMiOgOwIyI6A7AjIjoDsCGzK7vsffzr7OG705++/1YdwJ49xLox2BGRHQHYEFs3uh59/+d/P/PHra58ZNcdaZ1b6b4tmR0t2BGRHQHYEZEdgQHb3+S42/935GVzlXBjtCMiOgOwIyI6A7Agsmt3rz1u3WPNZ6iiLZkfrxOw+Pz0d+Kk3Ly/Dj4TZzsW5o93bd+93ff7Txw8nHQlTnQsXWQKyIyA7ArIjIDsCsiMgOwKyI7BQdsfWxHr2eoaFsmMeshtmy04DX7p9LcwVyY6A7AjIjoDsCJybnfVz85jqXJyYnXXC85jtXLjIEpAdAdkRWCg7T1fnsVB2zEN2BGRHYEB29tmcx1XOhdGOgOwIyI6A7IZZc53wMbIjIDsCsiMgOwKyI7ApO2s35vEY58JoR0B2BGRHQHYEZEdAdgRkR0B2BGRHQHYEZEdgoezO26n92K7Fo2xZ1TzqjbJRT4QXyo55yI6A7Ajszm7UPOb1GcneuchjrEJbh9GOgOwIyI6A7AjIjoDsCMiOgOwGsNfTXrIjIDsCsiOwOzvzGG5ntCOwUHYrr1KZ7XdfKDvmITsCsiMgOwKyIyA7ArIjILsBtr/nNtv9s4rsCMiOgOwIyG46Z+wfdd6uUMdmq7IjsFx2x8YSqwzHWi47ZjBpdu5vPbZJs+OxyY6A7AjIjoDsCMiOgOwIyI6A7AjIbjorPP+VHQHZEZAdAdkRkB2B5bJb4Xvi/JbLjhnIjoDsCMiOgOwIyI6A7AjIjn/c891k2RGQHQHZEZAdAdkRkN0A9qfaS3YENmV3bFfbezLeXIvRjoDsLqy6Ct1+bZEdAdkRkB0B2Z3O/4TxJdkRWCi7M773uV94zELZMY8B2d3nX/z8T0rYzmhHQHYEZEdAdgRkR0B2F3bdu4ayI3Bidp+fng781JuXl+FHwmzOHe3evnu/6/OfPn446UiYykIX2evOhB7PQtkxD9kRkB0B2Z3usdcJHyM7ArIjIDsCsiMgOwKyW9Sxt3f/dvt3c9kRkB0B2RFYNLu9M5vts5n2fd6rrLI5Nzvr5/hPJ2ZnnTBfs+hFlpbsCMiOgOwIyI6A7AjIjsCA7OyzyV5GOwKyG+wqT0VbsiMgOwKyI7Bodt7Ub/8Ci2ZHS3YEZEdgU3buRTGW0Y6A7AjIjoDsCMiOgOwIyI6A7AjIjoDsCMiOwF/vhqJM2D7eAgAAAABJRU5ErkJggg=="
+
+const (
+	authoringInk          = "#163A46"
+	authoringAccent       = "#2C6E7F"
+	authoringAccentStrong = "#1F5967"
+	authoringAccentSoft   = "#EAF4F7"
+	authoringText         = "#334155"
+	authoringMuted        = "#64748B"
+	authoringBorder       = "#D5E2E6"
+	authoringSurface      = "#F7FAFB"
+	authoringSuccess      = "#177245"
+	authoringSuccessSoft  = "#E8F7EF"
+	authoringWarning      = "#9A6700"
+	authoringWarningSoft  = "#FFF4CF"
+	authoringDanger       = "#A53A3A"
+	authoringDangerSoft   = "#FCEBEC"
+)
 
 func authoringFlowTemplate(template, id string) (paperedit.NodeSpec, error) {
 	base := strings.TrimPrefix(id, "@")
 	childID := func(suffix string) string { return "@" + base + "-" + suffix }
-	text := func(kind paperlang.NodeKind, suffix, value string) paperedit.NodeSpec {
-		return paperedit.NodeSpec{Kind: kind, ID: childID(suffix), Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue(value)}}}
+	mergeProperties := func(baseProperties, overrides []paperedit.PropertySpec) []paperedit.PropertySpec {
+		merged := append([]paperedit.PropertySpec(nil), baseProperties...)
+		for _, override := range overrides {
+			replaced := false
+			for index := range merged {
+				if merged[index].Name == override.Name {
+					merged[index] = override
+					replaced = true
+					break
+				}
+			}
+			if !replaced {
+				merged = append(merged, override)
+			}
+		}
+		return merged
 	}
 	cell := func(suffix, value string, header bool) paperedit.NodeSpec {
-		properties := []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue(value)}, {Name: "padding", Value: paperedit.UnitValue(6, "pt")}, {Name: "border-width", Value: paperedit.UnitValue(0.5, "pt")}, {Name: "border-color", Value: paperedit.StringValue("#CBD5E1")}}
+		properties := []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue(value)}, {Name: "size", Value: paperedit.UnitValue(8.5, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(11, "pt")}, {Name: "padding", Value: paperedit.UnitValue(6, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringText)}, {Name: "border-width", Value: paperedit.UnitValue(0.5, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringBorder)}}
 		if header {
-			properties = append(properties, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue("#E8F1F5")})
+			properties = mergeProperties(properties, []paperedit.PropertySpec{
+				paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)},
+				paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")},
+				paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentStrong)},
+			})
 		}
 		return paperedit.NodeSpec{Kind: paperlang.NodeTableCell, ID: childID(suffix), Properties: properties}
+	}
+	plainCell := func(suffix, value string, properties ...paperedit.PropertySpec) paperedit.NodeSpec {
+		baseProperties := []paperedit.PropertySpec{
+			{Name: "text", Value: paperedit.StringValue(value)},
+			{Name: "size", Value: paperedit.UnitValue(9, "pt")},
+			{Name: "line-height", Value: paperedit.UnitValue(12, "pt")},
+		}
+		return paperedit.NodeSpec{Kind: paperlang.NodeTableCell, ID: childID(suffix), Properties: mergeProperties(baseProperties, properties)}
+	}
+	dataCell := func(suffix, value string, properties ...paperedit.PropertySpec) paperedit.NodeSpec {
+		baseProperties := []paperedit.PropertySpec{
+			{Name: "text", Value: paperedit.StringValue(value)},
+			{Name: "size", Value: paperedit.UnitValue(9, "pt")},
+			{Name: "line-height", Value: paperedit.UnitValue(12, "pt")},
+			{Name: "padding", Value: paperedit.UnitValue(6, "pt")},
+			{Name: "color", Value: paperedit.StringValue(authoringText)},
+			{Name: "border-width", Value: paperedit.UnitValue(0.5, "pt")},
+			{Name: "border-color", Value: paperedit.StringValue(authoringBorder)},
+		}
+		return paperedit.NodeSpec{Kind: paperlang.NodeTableCell, ID: childID(suffix), Properties: mergeProperties(baseProperties, properties)}
+	}
+	column := func(suffix string, width float64) paperedit.NodeSpec {
+		return paperedit.NodeSpec{Kind: paperlang.NodeTableColumn, ID: childID(suffix), Properties: []paperedit.PropertySpec{{Name: "width", Value: paperedit.UnitValue(width, "%")}}}
 	}
 	switch template {
 	case "image":
 		return paperedit.NodeSpec{Kind: paperlang.NodeImage, ID: id, Properties: []paperedit.PropertySpec{
-			{Name: "source", Value: paperedit.StringValue(authoringPixelDataURI)}, {Name: "width", Value: paperedit.UnitValue(140, "pt")}, {Name: "height", Value: paperedit.UnitValue(84, "pt")}, {Name: "fit", Value: paperedit.StringValue("contain")}, {Name: "alt", Value: paperedit.StringValue("Replace with a descriptive image")},
+			{Name: "source", Value: paperedit.StringValue(authoringPlaceholderDataURI)}, {Name: "width", Value: paperedit.UnitValue(160, "pt")}, {Name: "height", Value: paperedit.UnitValue(90, "pt")}, {Name: "fit", Value: paperedit.StringValue("cover")}, {Name: "alt", Value: paperedit.StringValue("Replace with a descriptive image")},
 		}}, nil
-	case "table", "metadata-grid", "signature-row":
+	case "table", "metadata-grid", "signature-row", "timeline", "comparison-table", "approval-block", "invoice-totals", "checklist", "numbered-steps", "kpi-strip", "table-of-contents", "risk-register", "change-log", "pros-cons":
 		rows := []paperedit.NodeSpec{}
+		columns := []paperedit.NodeSpec{}
 		switch template {
 		case "table":
+			columns = []paperedit.NodeSpec{column("item-column", 36), column("details-column", 64)}
 			rows = []paperedit.NodeSpec{
-				{Kind: paperlang.NodeTableHeader, ID: childID("head"), Children: []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("head-row"), Children: []paperedit.NodeSpec{cell("head-one", "Item", true), cell("head-two", "Details", true)}}}},
-				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{cell("one-a", "First item", false), cell("one-b", "Add details", false)}},
-				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{cell("two-a", "Second item", false), cell("two-b", "Add details", false)}},
+				{Kind: paperlang.NodeTableHeader, ID: childID("head"), Children: []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("head-row"), Children: []paperedit.NodeSpec{cell("head-one", "DELIVERABLE", true), cell("head-two", "STATUS", true)}}}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{dataCell("one-a", "Clinic onboarding", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}), dataCell("one-b", "Ready for review")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{dataCell("two-a", "Data migration", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}), dataCell("two-b", "Blocked by vendor")}},
 			}
 		case "metadata-grid":
+			columns = []paperedit.NodeSpec{column("label-column", 30), column("value-column", 70)}
 			rows = []paperedit.NodeSpec{
-				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{cell("label-one", "REFERENCE", true), cell("value-one", "DOC-0001", false)}},
-				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{cell("label-two", "ISSUED", true), cell("value-two", "Add date and owner", false)}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{dataCell("label-one", "REFERENCE", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(7.5, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}), dataCell("value-one", "OPS-042", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)})}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{dataCell("label-two", "ISSUED", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(7.5, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}), dataCell("value-two", "20 Jul 2026 | Marina Costa")}},
 			}
 		case "signature-row":
-			rows = []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("row"), Children: []paperedit.NodeSpec{cell("signer", "____________________________\nAuthorized signature", false), cell("date", "____________________________\nDate", false)}}}
+			columns = []paperedit.NodeSpec{column("signature-column", 62), column("date-column", 38)}
+			rows = []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("row"), Children: []paperedit.NodeSpec{
+				plainCell("signer", "Marina Costa | Program lead", paperedit.PropertySpec{Name: "padding-top", Value: paperedit.UnitValue(12, "pt")}, paperedit.PropertySpec{Name: "padding-right", Value: paperedit.UnitValue(16, "pt")}, paperedit.PropertySpec{Name: "border-top-width", Value: paperedit.UnitValue(0.75, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringMuted)}),
+				plainCell("date", "20 Jul 2026", paperedit.PropertySpec{Name: "padding-top", Value: paperedit.UnitValue(12, "pt")}, paperedit.PropertySpec{Name: "padding-left", Value: paperedit.UnitValue(16, "pt")}, paperedit.PropertySpec{Name: "border-top-width", Value: paperedit.UnitValue(0.75, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringMuted)}),
+			}}}
+		case "timeline":
+			columns = []paperedit.NodeSpec{column("date-column", 24), column("milestone-column", 76)}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableHeader, ID: childID("head"), Children: []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("head-row"), Children: []paperedit.NodeSpec{cell("head-date", "DATE", true), cell("head-event", "MILESTONE", true)}}}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{dataCell("date-one", "05 Aug 2026", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}), dataCell("event-one", "Requirements approved", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)})}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{dataCell("date-two", "19 Aug 2026", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}), dataCell("event-two", "Pilot begins")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-three"), Children: []paperedit.NodeSpec{dataCell("date-three", "02 Sep 2026", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}), dataCell("event-three", "Go-live review", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)})}},
+			}
+		case "comparison-table":
+			columns = []paperedit.NodeSpec{column("feature-column", 36), column("option-a-column", 32), column("option-b-column", 32)}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableHeader, ID: childID("head"), Children: []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("head-row"), Children: []paperedit.NodeSpec{cell("head-feature", "FEATURE", true), cell("head-option-a", "MANUAL", true), cell("head-option-b", "AUTOMATED", true)}}}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{dataCell("feature-one", "Turnaround", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}), dataCell("option-a-one", "2 business days"), dataCell("option-b-one", "Under 4 hours")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{dataCell("feature-two", "Audit trail", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}), dataCell("option-a-two", "Spreadsheet"), dataCell("option-b-two", "Versioned log")}},
+			}
+		case "approval-block":
+			columns = []paperedit.NodeSpec{column("label-column", 30), column("value-column", 70)}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableRow, ID: childID("review-row"), Children: []paperedit.NodeSpec{dataCell("review-label", "REVIEWED", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}), dataCell("review-value", "Rafael Lima | Quality | 18 Jul 2026")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("approval-row"), Children: []paperedit.NodeSpec{dataCell("approval-label", "APPROVED", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringSuccess)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSuccessSoft)}), dataCell("approval-value", "Marina Costa | Director | 20 Jul 2026", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)})}},
+			}
+		case "invoice-totals":
+			columns = []paperedit.NodeSpec{column("label-column", 72), column("amount-column", 28)}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableRow, ID: childID("subtotal-row"), Children: []paperedit.NodeSpec{dataCell("subtotal-label", "Subtotal", paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}), dataCell("subtotal-value", "$2,480.00", paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("right")})}},
+				{Kind: paperlang.NodeTableRow, ID: childID("tax-row"), Children: []paperedit.NodeSpec{dataCell("tax-label", "Tax", paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}), dataCell("tax-value", "$124.00", paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("right")})}},
+				{Kind: paperlang.NodeTableRow, ID: childID("total-row"), Children: []paperedit.NodeSpec{dataCell("total-label", "TOTAL", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentStrong)}), dataCell("total-value", "$2,604.00", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("right")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentStrong)})}},
+			}
+		case "checklist":
+			columns = []paperedit.NodeSpec{column("check-column", 5), column("task-column", 95)}
+			checkCell := func(suffix string) paperedit.NodeSpec {
+				return plainCell(suffix, " ",
+					paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(1, "pt")},
+					paperedit.PropertySpec{Name: "line-height", Value: paperedit.UnitValue(1, "pt")},
+					paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(7, "pt")},
+					paperedit.PropertySpec{Name: "border-width", Value: paperedit.UnitValue(1.25, "pt")},
+					paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)},
+					paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue("#FFFFFF")},
+				)
+			}
+			taskCell := func(suffix, task string) paperedit.NodeSpec {
+				return plainCell(suffix, task,
+					paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(9, "pt")},
+					paperedit.PropertySpec{Name: "line-height", Value: paperedit.UnitValue(12, "pt")},
+					paperedit.PropertySpec{Name: "padding-top", Value: paperedit.UnitValue(6, "pt")},
+					paperedit.PropertySpec{Name: "padding-right", Value: paperedit.UnitValue(8, "pt")},
+					paperedit.PropertySpec{Name: "padding-bottom", Value: paperedit.UnitValue(6, "pt")},
+					paperedit.PropertySpec{Name: "padding-left", Value: paperedit.UnitValue(12, "pt")},
+					paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringText)},
+					paperedit.PropertySpec{Name: "border-bottom-width", Value: paperedit.UnitValue(0.5, "pt")},
+					paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringBorder)},
+				)
+			}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{checkCell("check-one"), taskCell("task-one", "Confirm scope and owner")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{checkCell("check-two"), taskCell("task-two", "Review supporting details")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-three"), Children: []paperedit.NodeSpec{checkCell("check-three"), taskCell("task-three", "Record completion and sign-off")}},
+			}
+		case "numbered-steps":
+			columns = []paperedit.NodeSpec{column("number-column", 9), column("step-column", 91)}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Properties: []paperedit.PropertySpec{{Name: "keep-with-next", Value: paperedit.BoolValue(true)}}, Children: []paperedit.NodeSpec{dataCell("number-one", "1", paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentStrong)}), dataCell("step-one", "Validate source records.", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)})}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Properties: []paperedit.PropertySpec{{Name: "keep-with-next", Value: paperedit.BoolValue(true)}}, Children: []paperedit.NodeSpec{dataCell("number-two", "2", paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccent)}), dataCell("step-two", "Review flagged exceptions.")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-three"), Children: []paperedit.NodeSpec{dataCell("number-three", "3", paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue("#4F8794")}), dataCell("step-three", "Publish the signed report.")}},
+			}
+		case "kpi-strip":
+			columns = []paperedit.NodeSpec{column("metric-one-column", 34), column("metric-two-column", 33), column("metric-three-column", 33)}
+			rows = []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("row"), Children: []paperedit.NodeSpec{
+				dataCell("metric-one", "128\nCASES", paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(11, "pt")}, paperedit.PropertySpec{Name: "line-height", Value: paperedit.UnitValue(13, "pt")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(9, "pt")}),
+				dataCell("metric-two", "96%\nON TIME", paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(11, "pt")}, paperedit.PropertySpec{Name: "line-height", Value: paperedit.UnitValue(13, "pt")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccent)}, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(9, "pt")}),
+				dataCell("metric-three", "2.4 d\nREVIEW", paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(11, "pt")}, paperedit.PropertySpec{Name: "line-height", Value: paperedit.UnitValue(13, "pt")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue("#4F8794")}, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(9, "pt")}),
+			}}}
+		case "table-of-contents":
+			columns = []paperedit.NodeSpec{column("section-column", 88), column("page-column", 12)}
+			sectionCell := func(suffix, value string, bold bool) paperedit.NodeSpec {
+				properties := []paperedit.PropertySpec{{Name: "padding", Value: paperedit.UnitValue(7, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringText)}, {Name: "border-bottom-width", Value: paperedit.UnitValue(0.5, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringBorder)}}
+				if bold {
+					properties = append(properties, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)})
+				}
+				return plainCell(suffix, value, properties...)
+			}
+			pageCell := func(suffix, value string) paperedit.NodeSpec {
+				return plainCell(suffix, value, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(7, "pt")}, paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("right")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccent)}, paperedit.PropertySpec{Name: "border-bottom-width", Value: paperedit.UnitValue(0.5, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringBorder)})
+			}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{sectionCell("section-one", "1. Introduction", true), pageCell("page-one", "1")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{sectionCell("section-two", "2. Findings", false), pageCell("page-two", "3")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-three"), Children: []paperedit.NodeSpec{sectionCell("section-three", "3. Recommendations", false), pageCell("page-three", "7")}},
+			}
+		case "risk-register":
+			columns = []paperedit.NodeSpec{column("risk-column", 36), column("impact-column", 14), column("owner-column", 20), column("action-column", 30)}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableHeader, ID: childID("head"), Children: []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("head-row"), Children: []paperedit.NodeSpec{cell("head-risk", "RISK", true), cell("head-impact", "IMPACT", true), cell("head-owner", "OWNER", true), cell("head-action", "MITIGATION", true)}}}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{dataCell("risk-one", "Vendor data delay", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}), dataCell("impact-one", "HIGH", paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringDanger)}), dataCell("owner-one", "Integration", paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}), dataCell("action-one", "Escalate by 24 Jul")}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{dataCell("risk-two", "Low reviewer capacity", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}), dataCell("impact-two", "MEDIUM", paperedit.PropertySpec{Name: "align", Value: paperedit.StringValue("center")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringWarning)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringWarningSoft)}), dataCell("owner-two", "Quality", paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}), dataCell("action-two", "Add backup reviewer")}},
+			}
+		case "change-log":
+			columns = []paperedit.NodeSpec{column("version-column", 16), column("date-column", 20), column("author-column", 20), column("change-column", 44)}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableHeader, ID: childID("head"), Children: []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("head-row"), Children: []paperedit.NodeSpec{cell("head-version", "VERSION", true), cell("head-date", "DATE", true), cell("head-author", "AUTHOR", true), cell("head-change", "CHANGE", true)}}}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{dataCell("version-one", "1.0", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}), dataCell("date-one", "2026-07-12"), dataCell("author-one", "M. Costa"), dataCell("change-one", "Baseline approved", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)})}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{dataCell("version-two", "1.1", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}), dataCell("date-two", "2026-07-18"), dataCell("author-two", "R. Lima"), dataCell("change-two", "Risk controls updated")}},
+			}
+		case "pros-cons":
+			columns = []paperedit.NodeSpec{column("advantages-column", 50), column("tradeoffs-column", 50)}
+			rows = []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableHeader, ID: childID("head"), Children: []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("head-row"), Children: []paperedit.NodeSpec{dataCell("head-pros", "ADVANTAGES", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSuccess)}), dataCell("head-cons", "TRADE-OFFS", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringDanger)})}}}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-one"), Children: []paperedit.NodeSpec{dataCell("pro-one", "+ Faster review", paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringSuccess)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSuccessSoft)}), dataCell("con-one", "- Setup effort", paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringDanger)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringDangerSoft)})}},
+				{Kind: paperlang.NodeTableRow, ID: childID("row-two"), Children: []paperedit.NodeSpec{dataCell("pro-two", "+ Consistent audit trail", paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringSuccess)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSuccessSoft)}), dataCell("con-two", "- Training required", paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringDanger)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringDangerSoft)})}},
+			}
 		}
-		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue("rows")}}, Children: rows}, nil
+		split := "avoid"
+		if template == "table" || template == "numbered-steps" {
+			split = "rows"
+		}
+		children := append(columns, rows...)
+		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue(split)}}, Children: children}, nil
 	case "canvas":
 		return paperedit.NodeSpec{Kind: paperlang.NodeCanvas, ID: id, Properties: []paperedit.PropertySpec{{Name: "width", Value: paperedit.UnitValue(160, "pt")}, {Name: "height", Value: paperedit.UnitValue(100, "pt")}}, Children: []paperedit.NodeSpec{
 			{Kind: paperlang.NodeAnchor, ID: childID("panel"), Properties: []paperedit.PropertySpec{{Name: "width", Value: paperedit.UnitValue(120, "pt")}, {Name: "height", Value: paperedit.UnitValue(64, "pt")}, {Name: "left", Value: paperedit.StringValue("canvas.left + 12pt")}, {Name: "top", Value: paperedit.StringValue("canvas.top + 12pt")}, {Name: "background", Value: paperedit.StringValue("#DCEAF7")}, {Name: "alt", Value: paperedit.StringValue("Positioned design panel")}}},
 		}}, nil
-	case "note-box", "styled-container":
-		label := "NOTE\nAdd important supporting information here."
-		if template == "styled-container" {
-			label = "Styled content\nUse the inspector to adjust color, border, spacing, and typography."
-		}
-		return paperedit.NodeSpec{Kind: paperlang.NodeParagraph, ID: id, Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue(label)}, {Name: "padding", Value: paperedit.UnitValue(12, "pt")}, {Name: "background", Value: paperedit.StringValue("#F1F5F9")}, {Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, {Name: "border-color", Value: paperedit.StringValue("#2C6E7F")}}}, nil
+	case "note-box":
+		return paperedit.NodeSpec{Kind: paperlang.NodeParagraph, ID: id, Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("DECISION NOTE | Pilot release is limited to two clinics until error rates stay below 2%.")}, {Name: "bold", Value: paperedit.BoolValue(true)}, {Name: "size", Value: paperedit.UnitValue(9, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(13, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringInk)}, {Name: "padding", Value: paperedit.UnitValue(10, "pt")}, {Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}, {Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringAccent)}}}, nil
 	case "qr-verification":
-		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Children: []paperedit.NodeSpec{
+		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue("avoid")}}, Children: []paperedit.NodeSpec{
+			column("qr-column", 18),
+			column("verification-column", 82),
 			{Kind: paperlang.NodeTableRow, ID: childID("row"), Children: []paperedit.NodeSpec{
-				{Kind: paperlang.NodeTableCell, ID: childID("qr"), Children: []paperedit.NodeSpec{{Kind: paperlang.NodeImage, ID: childID("image"), Properties: []paperedit.PropertySpec{{Name: "source", Value: paperedit.StringValue(authoringPixelDataURI)}, {Name: "width", Value: paperedit.UnitValue(56, "pt")}, {Name: "height", Value: paperedit.UnitValue(56, "pt")}, {Name: "alt", Value: paperedit.StringValue("Replace with verification QR code")}}}}},
-				cell("copy", "VERIFY THIS DOCUMENT\nReplace the image with a generated QR resource and add the verification URL.", false),
+				{Kind: paperlang.NodeTableCell, ID: childID("qr"), Properties: []paperedit.PropertySpec{{Name: "padding", Value: paperedit.UnitValue(8, "pt")}, {Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}, {Name: "border-width", Value: paperedit.UnitValue(0.5, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringBorder)}}, Children: []paperedit.NodeSpec{{Kind: paperlang.NodeImage, ID: childID("image"), Properties: []paperedit.PropertySpec{{Name: "source", Value: paperedit.StringValue(authoringQRPlaceholderDataURI)}, {Name: "width", Value: paperedit.UnitValue(56, "pt")}, {Name: "height", Value: paperedit.UnitValue(56, "pt")}, {Name: "fit", Value: paperedit.StringValue("contain")}, {Name: "alt", Value: paperedit.StringValue("Replace with verification QR code")}}}}},
+				{Kind: paperlang.NodeTableCell, ID: childID("copy"), Properties: []paperedit.PropertySpec{{Name: "padding", Value: paperedit.UnitValue(10, "pt")}, {Name: "background", Value: paperedit.StringValue(authoringSurface)}, {Name: "border-width", Value: paperedit.UnitValue(0.5, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringBorder)}}, Children: []paperedit.NodeSpec{
+					{Kind: paperlang.NodeParagraph, ID: childID("verification-title"), Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("VALIDATE RECORD")}, {Name: "bold", Value: paperedit.BoolValue(true)}, {Name: "size", Value: paperedit.UnitValue(9, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringInk)}}},
+					{Kind: paperlang.NodeParagraph, ID: childID("verification-copy"), Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("Scan to confirm report OPS-042 and its approval status.")}, {Name: "size", Value: paperedit.UnitValue(8, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(11, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringMuted)}}},
+				}},
 			}},
 		}}, nil
 	case "clause":
-		return paperedit.NodeSpec{Kind: paperlang.NodeColumn, ID: id, Properties: []paperedit.PropertySpec{{Name: "gap", Value: paperedit.UnitValue(4, "pt")}}, Children: []paperedit.NodeSpec{text(paperlang.NodeHeading, "title", "1. Clause title"), text(paperlang.NodeParagraph, "copy", "Write the complete clause in clear, reviewable language.")}}, nil
+		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue("avoid")}}, Children: []paperedit.NodeSpec{
+			{Kind: paperlang.NodeTableRow, ID: childID("label-row"), Children: []paperedit.NodeSpec{plainCell("label", "CLAUSE 1", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(8, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(6, "pt")})}},
+			{Kind: paperlang.NodeTableRow, ID: childID("title-row"), Children: []paperedit.NodeSpec{plainCell("title", "Data retention", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(11, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringInk)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(7, "pt")})}},
+			{Kind: paperlang.NodeTableRow, ID: childID("copy-row"), Children: []paperedit.NodeSpec{plainCell("copy", "Signed reports are retained for five years; access is limited to authorized reviewers.", paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(8, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringText)}, paperedit.PropertySpec{Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)})}},
+		}}, nil
+	case "title-block":
+		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue("avoid")}}, Children: []paperedit.NodeSpec{
+			{Kind: paperlang.NodeTableRow, ID: childID("eyebrow-row"), Children: []paperedit.NodeSpec{plainCell("eyebrow", "OPERATIONS | Q2 2026", paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(7.5, "pt")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccent)}, paperedit.PropertySpec{Name: "padding-bottom", Value: paperedit.UnitValue(3, "pt")})}},
+			{Kind: paperlang.NodeTableRow, ID: childID("title-row"), Children: []paperedit.NodeSpec{plainCell("title", "Quarterly operations brief", paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(20, "pt")}, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringInk)})}},
+			{Kind: paperlang.NodeTableRow, ID: childID("subtitle-row"), Children: []paperedit.NodeSpec{plainCell("subtitle", "Service performance, delivery risks, and actions.", paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(9.5, "pt")}, paperedit.PropertySpec{Name: "line-height", Value: paperedit.UnitValue(13, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringMuted)}, paperedit.PropertySpec{Name: "padding-bottom", Value: paperedit.UnitValue(8, "pt")}, paperedit.PropertySpec{Name: "border-bottom-width", Value: paperedit.UnitValue(1.5, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)})}},
+		}}, nil
+	case "two-column":
+		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue("avoid")}}, Children: []paperedit.NodeSpec{
+			column("left-column", 50),
+			column("right-column", 50),
+			{Kind: paperlang.NodeTableHeader, ID: childID("head"), Children: []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("head-row"), Children: []paperedit.NodeSpec{cell("left-heading", "CURRENT STATE", true), cell("right-heading", "NEXT ACTION", true)}}}},
+			{Kind: paperlang.NodeTableRow, ID: childID("body-row"), Children: []paperedit.NodeSpec{dataCell("left-copy", "18 records await review.", paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}), dataCell("right-copy", "Assign two backup reviewers by Friday.")}},
+		}}, nil
+	case "image-caption":
+		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue("avoid")}}, Children: []paperedit.NodeSpec{
+			column("image-column", 42),
+			column("caption-column", 58),
+			{Kind: paperlang.NodeTableRow, ID: childID("row"), Children: []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableCell, ID: childID("image-cell"), Properties: []paperedit.PropertySpec{{Name: "padding", Value: paperedit.UnitValue(8, "pt")}, {Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}, {Name: "border-width", Value: paperedit.UnitValue(0.5, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringBorder)}}, Children: []paperedit.NodeSpec{
+					{Kind: paperlang.NodeImage, ID: childID("image"), Properties: []paperedit.PropertySpec{{Name: "source", Value: paperedit.StringValue(authoringPlaceholderDataURI)}, {Name: "width", Value: paperedit.UnitValue(180, "pt")}, {Name: "height", Value: paperedit.UnitValue(108, "pt")}, {Name: "fit", Value: paperedit.StringValue("cover")}, {Name: "alt", Value: paperedit.StringValue("Replace with a descriptive image")}}},
+				}},
+				{Kind: paperlang.NodeTableCell, ID: childID("caption-cell"), Properties: []paperedit.PropertySpec{{Name: "padding", Value: paperedit.UnitValue(12, "pt")}, {Name: "background", Value: paperedit.StringValue(authoringSurface)}, {Name: "border-width", Value: paperedit.UnitValue(0.5, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringBorder)}}, Children: []paperedit.NodeSpec{
+					{Kind: paperlang.NodeParagraph, ID: childID("figure-label"), Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("FIGURE 1")}, {Name: "size", Value: paperedit.UnitValue(8, "pt")}, {Name: "bold", Value: paperedit.BoolValue(true)}, {Name: "color", Value: paperedit.StringValue(authoringAccent)}}},
+					{Kind: paperlang.NodeParagraph, ID: childID("caption"), Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("Pilot team reviewing the first clinic data import.")}, {Name: "size", Value: paperedit.UnitValue(9, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(12, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringText)}}},
+					{Kind: paperlang.NodeParagraph, ID: childID("source"), Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("Program office | 18 Jul 2026")}, {Name: "size", Value: paperedit.UnitValue(7.5, "pt")}, {Name: "italic", Value: paperedit.BoolValue(true)}, {Name: "color", Value: paperedit.StringValue(authoringMuted)}}},
+				}},
+			}},
+		}}, nil
+	case "quote":
+		return paperedit.NodeSpec{Kind: paperlang.NodeParagraph, ID: id, Properties: []paperedit.PropertySpec{
+			{Name: "text", Value: paperedit.StringValue("\"A clear audit trail turns review into a decision, not a search.\"\n- Quality review principle")}, {Name: "italic", Value: paperedit.BoolValue(true)}, {Name: "size", Value: paperedit.UnitValue(10, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(14, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringInk)}, {Name: "padding", Value: paperedit.UnitValue(11, "pt")}, {Name: "background", Value: paperedit.StringValue(authoringSurface)}, {Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringAccent)},
+		}}, nil
+	case "disclaimer":
+		return paperedit.NodeSpec{Kind: paperlang.NodeParagraph, ID: id, Properties: []paperedit.PropertySpec{
+			{Name: "text", Value: paperedit.StringValue("INTERNAL DRAFT | Forecast values are provisional until finance review is complete.")}, {Name: "size", Value: paperedit.UnitValue(7.5, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(11, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringMuted)}, {Name: "padding", Value: paperedit.UnitValue(8, "pt")}, {Name: "background", Value: paperedit.StringValue(authoringWarningSoft)}, {Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringWarning)},
+		}}, nil
+	case "divider":
+		return paperedit.NodeSpec{Kind: paperlang.NodeParagraph, ID: id, Properties: []paperedit.PropertySpec{
+			{Name: "text", Value: paperedit.StringValue(" ")}, {Name: "size", Value: paperedit.UnitValue(1, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(5, "pt")}, {Name: "border-bottom-width", Value: paperedit.UnitValue(1, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringAccent)},
+		}}, nil
+	case "cover-block":
+		return paperedit.NodeSpec{Kind: paperlang.NodeColumn, ID: id, Properties: []paperedit.PropertySpec{{Name: "gap", Value: paperedit.UnitValue(8, "pt")}}, Children: []paperedit.NodeSpec{
+			{Kind: paperlang.NodeParagraph, ID: childID("eyebrow"), Properties: []paperedit.PropertySpec{{Name: "size", Value: paperedit.UnitValue(7.5, "pt")}, {Name: "bold", Value: paperedit.BoolValue(true)}, {Name: "align", Value: paperedit.StringValue("center")}, {Name: "color", Value: paperedit.StringValue(authoringAccent)}, {Name: "text", Value: paperedit.StringValue("PROGRAM BRIEF | JUL 2026")}}},
+			{Kind: paperlang.NodeHeading, ID: childID("title"), Properties: []paperedit.PropertySpec{{Name: "level", Value: paperedit.NumberValue(1)}, {Name: "size", Value: paperedit.UnitValue(24, "pt")}, {Name: "align", Value: paperedit.StringValue("center")}, {Name: "color", Value: paperedit.StringValue(authoringInk)}, {Name: "text", Value: paperedit.StringValue("Community health access plan")}}},
+			{Kind: paperlang.NodeParagraph, ID: childID("subtitle"), Properties: []paperedit.PropertySpec{{Name: "size", Value: paperedit.UnitValue(10, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(14, "pt")}, {Name: "align", Value: paperedit.StringValue("center")}, {Name: "color", Value: paperedit.StringValue(authoringText)}, {Name: "text", Value: paperedit.StringValue("Implementation brief | Northeast region")}}},
+			{Kind: paperlang.NodeParagraph, ID: childID("metadata"), Properties: []paperedit.PropertySpec{{Name: "size", Value: paperedit.UnitValue(8, "pt")}, {Name: "align", Value: paperedit.StringValue("center")}, {Name: "color", Value: paperedit.StringValue(authoringMuted)}, {Name: "text", Value: paperedit.StringValue("Program office | 20 Jul 2026")}}},
+		}}, nil
+	case "recipient-block":
+		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue("avoid")}}, Children: []paperedit.NodeSpec{
+			{Kind: paperlang.NodeTableRow, ID: childID("label-row"), Children: []paperedit.NodeSpec{plainCell("label", "DELIVER TO", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(8, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccent)}, paperedit.PropertySpec{Name: "padding-bottom", Value: paperedit.UnitValue(5, "pt")})}},
+			{Kind: paperlang.NodeTableRow, ID: childID("name-row"), Children: []paperedit.NodeSpec{plainCell("name", "Dr. Helena Moura", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(11, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringInk)}, paperedit.PropertySpec{Name: "padding-left", Value: paperedit.UnitValue(10, "pt")}, paperedit.PropertySpec{Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)})}},
+			{Kind: paperlang.NodeTableRow, ID: childID("organization-row"), Children: []paperedit.NodeSpec{plainCell("organization", "Regional Health Coordination", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringText)}, paperedit.PropertySpec{Name: "padding-left", Value: paperedit.UnitValue(10, "pt")}, paperedit.PropertySpec{Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)})}},
+			{Kind: paperlang.NodeTableRow, ID: childID("address-row"), Children: []paperedit.NodeSpec{plainCell("address", "Rua do Sol, 184\nFortaleza - CE, 60160-120\nBrazil", paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(8, "pt")}, paperedit.PropertySpec{Name: "line-height", Value: paperedit.UnitValue(11, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringMuted)}, paperedit.PropertySpec{Name: "padding-left", Value: paperedit.UnitValue(10, "pt")}, paperedit.PropertySpec{Name: "padding-bottom", Value: paperedit.UnitValue(6, "pt")}, paperedit.PropertySpec{Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)})}},
+		}}, nil
+	case "code-block":
+		return paperedit.NodeSpec{Kind: paperlang.NodeParagraph, ID: id, Properties: []paperedit.PropertySpec{
+			{Name: "text", Value: paperedit.StringValue("func example() {\n    // Replace with code or preformatted text.\n}")}, {Name: "font", Value: paperedit.StringValue("Courier")}, {Name: "size", Value: paperedit.UnitValue(9, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(13, "pt")}, {Name: "color", Value: paperedit.StringValue("#E6F0F2")}, {Name: "padding", Value: paperedit.UnitValue(12, "pt")}, {Name: "background", Value: paperedit.StringValue("#102D36")}, {Name: "border-left-width", Value: paperedit.UnitValue(4, "pt")}, {Name: "border-color", Value: paperedit.StringValue("#5FB2C0")},
+		}}, nil
+	case "status-banner":
+		return paperedit.NodeSpec{Kind: paperlang.NodeParagraph, ID: id, Properties: []paperedit.PropertySpec{
+			{Name: "text", Value: paperedit.StringValue("APPROVED | Ready for release")}, {Name: "bold", Value: paperedit.BoolValue(true)}, {Name: "size", Value: paperedit.UnitValue(10, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringSuccess)}, {Name: "padding", Value: paperedit.UnitValue(9, "pt")}, {Name: "background", Value: paperedit.StringValue(authoringSuccessSoft)}, {Name: "border-left-width", Value: paperedit.UnitValue(4, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringSuccess)},
+		}}, nil
+	case "image-grid":
+		image := func(suffix string) paperedit.NodeSpec {
+			return paperedit.NodeSpec{Kind: paperlang.NodeImage, ID: childID(suffix), Properties: []paperedit.PropertySpec{{Name: "source", Value: paperedit.StringValue(authoringPlaceholderDataURI)}, {Name: "width", Value: paperedit.UnitValue(1, "fr")}, {Name: "height", Value: paperedit.UnitValue(108, "pt")}, {Name: "fit", Value: paperedit.StringValue("cover")}, {Name: "alt", Value: paperedit.StringValue("Replace with a descriptive image")}}}
+		}
+		return paperedit.NodeSpec{Kind: paperlang.NodeRow, ID: id, Properties: []paperedit.PropertySpec{{Name: "gap", Value: paperedit.UnitValue(12, "pt")}}, Children: []paperedit.NodeSpec{
+			image("image-one"), image("image-two"),
+		}}, nil
+	case "decision-record":
+		section := func(suffix, label, value string) []paperedit.NodeSpec {
+			return []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableRow, ID: childID(suffix + "-label-row"), Children: []paperedit.NodeSpec{plainCell(suffix+"-label", label, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(8, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentSoft)}, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(7, "pt")}, paperedit.PropertySpec{Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)})}},
+				{Kind: paperlang.NodeTableRow, ID: childID(suffix + "-copy-row"), Children: []paperedit.NodeSpec{plainCell(suffix+"-copy", value, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(9, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringText)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)})}},
+			}
+		}
+		rows := []paperedit.NodeSpec{{Kind: paperlang.NodeTableRow, ID: childID("title-row"), Children: []paperedit.NodeSpec{plainCell("title", "Decision record", paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "size", Value: paperedit.UnitValue(14, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringInk)}, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(9, "pt")})}}}
+		rows = append(rows, section("context", "CONTEXT", "Describe the problem, constraints, and relevant evidence.")...)
+		rows = append(rows, section("decision", "DECISION", "State the chosen direction and why it was selected.")...)
+		rows = append(rows, section("consequences", "CONSEQUENCES", "Record expected benefits, costs, and follow-up work.")...)
+		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue("avoid")}}, Children: rows}, nil
+	case "faq-block":
+		question := func(suffix, question, answer string) []paperedit.NodeSpec {
+			return []paperedit.NodeSpec{
+				{Kind: paperlang.NodeTableRow, ID: childID(suffix + "-question-row"), Children: []paperedit.NodeSpec{plainCell(suffix+"-question", question, paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentStrong)}, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(8, "pt")})}},
+				{Kind: paperlang.NodeTableRow, ID: childID(suffix + "-answer-row"), Children: []paperedit.NodeSpec{plainCell(suffix+"-answer", answer, paperedit.PropertySpec{Name: "padding", Value: paperedit.UnitValue(9, "pt")}, paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue(authoringText)}, paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringSurface)}, paperedit.PropertySpec{Name: "border-left-width", Value: paperedit.UnitValue(3, "pt")}, paperedit.PropertySpec{Name: "border-color", Value: paperedit.StringValue(authoringAccent)})}},
+			}
+		}
+		rows := question("one", "Q1 | What is the first common question?", "Provide a direct, concise answer with the essential details.")
+		rows = append(rows, question("two", "Q2 | What else should readers know?", "Add the second answer or remove this pair when unnecessary.")...)
+		return paperedit.NodeSpec{Kind: paperlang.NodeTable, ID: id, Properties: []paperedit.PropertySpec{{Name: "split", Value: paperedit.StringValue("avoid")}}, Children: rows}, nil
 	default:
 		return paperedit.NodeSpec{}, workspaceError("INVALID_TEMPLATE", "unknown flow template", ErrInvalidQuery)
 	}

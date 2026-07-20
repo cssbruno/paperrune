@@ -38,7 +38,7 @@ type PlannedLink struct {
 	Source      SourceSpan    `json:"source"`
 }
 
-func validatePlannedLinks(pages []PlannedPage, fragments map[FragmentID]Fragment, destinations []PlannedDestination, links []PlannedLink) error {
+func validatePlannedLinks(pages []PlannedPage, fragments semanticFragmentIndex, destinations []PlannedDestination, links []PlannedLink) error {
 	for index, destination := range destinations {
 		path := fmt.Sprintf("destinations[%d]", index)
 		if destination.ID != DestinationID(index+1) {
@@ -56,7 +56,7 @@ func validatePlannedLinks(pages []PlannedPage, fragments map[FragmentID]Fragment
 			return planError(path+".point", "lies outside the destination page")
 		}
 		if destination.Fragment.Valid() {
-			fragment, exists := fragments[destination.Fragment]
+			fragment, exists := fragments.lookup(destination.Fragment)
 			if !exists || fragment.Page != destination.Page {
 				return planError(path+".fragment", "references a missing or cross-page fragment")
 			}
@@ -70,7 +70,7 @@ func validatePlannedLinks(pages []PlannedPage, fragments map[FragmentID]Fragment
 	}
 	for index, link := range links {
 		path := fmt.Sprintf("links[%d]", index)
-		fragment, exists := fragments[link.Fragment]
+		fragment, exists := fragments.lookup(link.Fragment)
 		if !exists {
 			return planError(path+".fragment", "references a missing fragment")
 		}
