@@ -61,6 +61,17 @@ func TestInspectGeneratedPDF(t *testing.T) {
 	}
 }
 
+func TestDecodePDFTextBytesRecognizesBOMLessUTF16BE(t *testing.T) {
+	raw := []byte{
+		0x00, 'P', 0x00, 'r', 0x00, 'e', 0x00, 's', 0x00, 'c', 0x00, 'r', 0x00, 'i',
+		0x00, 0xe7, 0x00, 0xe3, 0x00, 'o', 0x00, ' ', 0x00, 'm', 0x00, 0xe9, 0x00, 'd',
+		0x00, 'i', 0x00, 'c', 0x00, 'a',
+	}
+	if got, want := decodePDFTextBytes(raw), "Prescrição médica"; got != want {
+		t.Fatalf("decodePDFTextBytes() = %q, want %q", got, want)
+	}
+}
+
 func TestInspectContextCanceled(t *testing.T) {
 	pdfBytes := inspectTestPDF(t)
 	ctx, cancel := context.WithCancel(context.Background())

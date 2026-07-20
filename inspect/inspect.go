@@ -635,11 +635,10 @@ func readPDFHexString(data []byte, pos int) ([]byte, int) {
 
 func decodePDFTextBytes(raw []byte) string {
 	if len(raw) >= utf16BOMBytes && raw[0] == 0xfe && raw[1] == 0xff {
-		u16 := make([]uint16, 0, (len(raw)-utf16BOMBytes)/utf16BOMBytes)
-		for i := utf16BOMBytes; i+1 < len(raw); i += utf16BOMBytes {
-			u16 = append(u16, uint16(raw[i])<<8|uint16(raw[i+1]))
-		}
-		return string(utf16.Decode(u16))
+		return decodeUTF16BE(raw[utf16BOMBytes:])
+	}
+	if looksLikeBOMLessUTF16BE(raw) {
+		return decodeUTF16BE(raw)
 	}
 
 	text, err := charmap.Windows1252.NewDecoder().String(string(raw))
@@ -647,4 +646,30 @@ func decodePDFTextBytes(raw []byte) string {
 		return string(raw)
 	}
 	return text
+}
+
+func looksLikeBOMLessUTF16BE(raw []byte) bool {
+	if len(raw) < 4 || len(raw)%utf16BOMBytes != 0 {
+		return false
+	}
+	pairs := len(raw) / utf16BOMBytes
+	highZeros := 0
+	lowZeros := 0
+	for index := 0; index < len(raw); index += utf16BOMBytes {
+		if raw[index] == 0 {
+			highZeros++
+		}
+		if raw[index+1] == 0 {
+			lowZeros++
+		}
+	}
+	return highZeros*2 >= pairs && highZeros > lowZeros*2
+}
+
+func decodeUTF16BE(raw []byte) string {
+	u16 := make([]uint16, 0, len(raw)/utf16BOMBytes)
+	for index := 0; index+1 < len(raw); index += utf16BOMBytes {
+		u16 = append(u16, uint16(raw[index])<<8|uint16(raw[index+1]))
+	}
+	return string(utf16.Decode(u16))
 }
