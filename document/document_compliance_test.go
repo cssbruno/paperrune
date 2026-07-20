@@ -13,7 +13,7 @@ import (
 )
 
 func TestSetXmpMetadataReferencedFromCatalog(t *testing.T) {
-	pdf := document.MustNew(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
 	pdf.SetCompression(false)
 	pdf.SetXmpMetadata([]byte(`<x:xmpmeta xmlns:x="adobe:ns:meta/">custom</x:xmpmeta>`))
 	pdf.AddPage()
@@ -37,7 +37,7 @@ func TestSetXmpMetadataReferencedFromCatalog(t *testing.T) {
 }
 
 func TestComplianceMetadataGeneratesPDFA4AndPDFUA2Identifiers(t *testing.T) {
-	pdf := document.MustNew(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
 	pdf.SetCompression(false)
 	pdf.SetTitle("Compliance metadata", false)
 	pdf.SetSubject("Generated standards metadata", false)
@@ -86,7 +86,7 @@ func TestComplianceMetadataGeneratesPDFA4AndPDFUA2Identifiers(t *testing.T) {
 }
 
 func TestPDFUA2TaggedPDFStructureTreeAndMarkedContent(t *testing.T) {
-	pdf := document.MustNew(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{
 		PDFUA2: true,
@@ -143,12 +143,12 @@ func TestPDFUA2TaggedPDFStructureTreeAndMarkedContent(t *testing.T) {
 }
 
 func TestPDFUA2HTMLUsesSemanticRolesAndImageAlt(t *testing.T) {
-	pdf := document.MustNew(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged HTML"})
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNew()
+	html := pdf.HTMLNewForTest()
 	html.AllowLocalImages = true
 	html.Write(6, `<h2>HTML heading</h2><p>HTML paragraph</p><img src="`+example.ImageFile("logo.png")+`" alt="HTML logo" width="12">`)
 
@@ -173,12 +173,12 @@ func TestPDFUA2HTMLUsesSemanticRolesAndImageAlt(t *testing.T) {
 }
 
 func TestPDFUA2HTMLListsAndTablesUseStructureRoles(t *testing.T) {
-	pdf := document.MustNew(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged HTML table"})
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNew()
+	html := pdf.HTMLNewForTest()
 	html.Write(6, `<ul><li>One</li><li>Two</li></ul><table><caption>Totals</caption><tr><th>Name</th></tr><tr><td>Alpha</td></tr></table>`)
 
 	var output bytes.Buffer
@@ -211,12 +211,12 @@ func TestPDFUA2HTMLListsAndTablesUseStructureRoles(t *testing.T) {
 }
 
 func TestPDFUA2HTMLTableCellsUseStructureAttributes(t *testing.T) {
-	pdf := document.MustNew(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged HTML table attributes"})
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNew()
+	html := pdf.HTMLNewForTest()
 	html.Write(6, `<table><tr><th rowspan="2">Group</th><td colspan="2">Alpha</td></tr><tr><td>Beta</td><td>Gamma</td></tr></table>`)
 
 	var output bytes.Buffer
@@ -235,12 +235,12 @@ func TestPDFUA2HTMLTableCellsUseStructureAttributes(t *testing.T) {
 }
 
 func TestPDFUA2HTMLTableCellNestedListsUseListStructure(t *testing.T) {
-	pdf := document.MustNew(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged nested table list"})
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNew()
+	html := pdf.HTMLNewForTest()
 	html.Write(6, `<table><tr><td><ul><li>Outer<ul><li>Inner</li></ul></li></ul></td></tr></table>`)
 
 	var output bytes.Buffer
@@ -267,12 +267,12 @@ func TestPDFUA2HTMLTableCellNestedListsUseListStructure(t *testing.T) {
 }
 
 func TestPDFUA2HTMLTableCellNestedTableUsesTableStructure(t *testing.T) {
-	pdf := document.MustNew(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged nested table"})
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNew()
+	html := pdf.HTMLNewForTest()
 	html.Write(6, `<table><tr><td>Outer<table><tr><td>Inner</td></tr></table></td><td>Sibling</td></tr></table>`)
 
 	var output bytes.Buffer
@@ -301,12 +301,12 @@ func TestPDFUA2HTMLTableCellNestedTableUsesTableStructure(t *testing.T) {
 }
 
 func TestPDFUA2HTMLTableCellMixedBlocksUseParagraphStructure(t *testing.T) {
-	pdf := document.MustNew(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged mixed table cell blocks"})
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNew()
+	html := pdf.HTMLNewForTest()
 	html.Write(6, `<table><tr><td><p>First paragraph</p><div>Second block</div></td></tr></table>`)
 
 	var output bytes.Buffer
@@ -330,12 +330,12 @@ func TestPDFUA2HTMLTableCellMixedBlocksUseParagraphStructure(t *testing.T) {
 }
 
 func TestPDFUA2LinkedInlineSVGTextSharesLinkStructureWithAnnotation(t *testing.T) {
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged SVG link"})
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNew()
+	html := pdf.HTMLNewForTest()
 	html.Write(6, `<a href="https://example.test/svg"><svg role="presentation" width="48" height="24" viewBox="0 0 48 24"><rect x="1" y="1" width="46" height="22" fill="#00ff00" stroke="#000" stroke-width="1"/><text x="24" y="16" text-anchor="middle" font-size="10" fill="#000000">Inline SVG</text></svg></a>`)
 
 	var output bytes.Buffer
@@ -361,7 +361,7 @@ func TestPDFUA2LinkedInlineSVGTextSharesLinkStructureWithAnnotation(t *testing.T
 
 func TestPDFUA2ImageRequiresAltTextOrArtifact(t *testing.T) {
 	render := func(options document.ImageOptions) error {
-		pdf := document.MustNew()
+		pdf := document.MustNewTestPDFDocument()
 		pdf.SetCompression(false)
 		pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Title: "Tagged image"})
 		pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
@@ -386,7 +386,7 @@ func TestPDFUA2ImageRequiresAltTextOrArtifact(t *testing.T) {
 }
 
 func TestPDFUA2DirectDrawingAndRawContentCanBeArtifacts(t *testing.T) {
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Title: "Artifacts"})
 	pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
@@ -414,7 +414,7 @@ func TestPDFUA2DirectDrawingAndRawContentCanBeArtifacts(t *testing.T) {
 }
 
 func TestPDFUA2TemplatesAndImportedPagesAreArtifacts(t *testing.T) {
-	source := document.MustNew()
+	source := document.MustNewTestPDFDocument()
 	source.SetCompression(false)
 	source.AddPage()
 	source.SetFont("Helvetica", "", 12)
@@ -424,7 +424,7 @@ func TestPDFUA2TemplatesAndImportedPagesAreArtifacts(t *testing.T) {
 		t.Fatalf("source Output() error = %v", err)
 	}
 
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Title: "Artifacts"})
 	pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
@@ -456,7 +456,7 @@ func TestPDFUA2TemplatesAndImportedPagesAreArtifacts(t *testing.T) {
 }
 
 func TestPDFUA2RejectsUntaggedRawWrites(t *testing.T) {
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Title: "Raw"})
 	pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
@@ -476,7 +476,7 @@ func TestPDFUA2RejectsUntaggedRawWrites(t *testing.T) {
 }
 
 func TestPDFUA2RejectsUnclosedStructure(t *testing.T) {
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Title: "Unclosed"})
 	pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
@@ -496,7 +496,7 @@ func TestPDFUA2RejectsUnclosedStructure(t *testing.T) {
 }
 
 func TestComplianceMetadataPDFARejectsJavaScript(t *testing.T) {
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFA: document.PDFAMode4})
 	if err := pdf.SetOutputIntent([]byte("test-icc-profile"), "sRGB IEC61966-2.1"); err != nil {
@@ -516,7 +516,7 @@ func TestComplianceMetadataPDFARejectsJavaScript(t *testing.T) {
 }
 
 func TestComplianceMetadataPDFARejectsEncryption(t *testing.T) {
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFA: document.PDFAMode4})
 	if err := pdf.SetOutputIntent([]byte("test-icc-profile"), "sRGB IEC61966-2.1"); err != nil {
@@ -541,7 +541,7 @@ func TestComplianceMetadataPDFARejectsEncryption(t *testing.T) {
 }
 
 func TestComplianceMetadataPDFARejectsCoreFonts(t *testing.T) {
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFA: document.PDFAMode4})
 	if err := pdf.SetOutputIntent([]byte("test-icc-profile"), "sRGB IEC61966-2.1"); err != nil {
@@ -563,7 +563,7 @@ func TestComplianceMetadataPDFARejectsCoreFonts(t *testing.T) {
 
 func TestComplianceMetadataPDFA4RejectsAttachmentsUnless4fOr4e(t *testing.T) {
 	render := func(mode document.PDFAMode) error {
-		pdf := document.MustNew()
+		pdf := document.MustNewTestPDFDocument()
 		pdf.SetCompression(false)
 		pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFA: mode})
 		if err := pdf.SetOutputIntent([]byte("test-icc-profile"), "sRGB IEC61966-2.1"); err != nil {
@@ -587,7 +587,7 @@ func TestComplianceMetadataPDFA4RejectsAttachmentsUnless4fOr4e(t *testing.T) {
 }
 
 func TestComplianceMetadataPDFARequiresOutputIntent(t *testing.T) {
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFA: document.PDFAMode4})
 	pdf.AddPage()
@@ -619,7 +619,7 @@ func TestComplianceValidationReportTracksFailuresSeparately(t *testing.T) {
 		t.Fatal("Failed() = false, want true after default error issue")
 	}
 
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.AddPage()
 	var output bytes.Buffer
 	if err := pdf.Output(&output); err != nil {

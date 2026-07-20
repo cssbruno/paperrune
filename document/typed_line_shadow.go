@@ -25,11 +25,11 @@ type typedLineShadowResult struct {
 // geometry; it is not byte-level parity with the legacy PDF writer's decimal
 // operator quantization. This bridge does not paint or participate in
 // WriteDocument.
-func (f *Document) planTypedParagraphLineShadow(doc *layout.LayoutDocument) (typedLineShadowResult, error) {
+func (f *pdfDocument) planTypedParagraphLineShadow(doc *layout.LayoutDocument) (typedLineShadowResult, error) {
 	return f.planTypedParagraphLineShadowContext(context.Background(), doc)
 }
 
-func (f *Document) planTypedParagraphLineShadowContext(ctx context.Context, doc *layout.LayoutDocument) (typedLineShadowResult, error) {
+func (f *pdfDocument) planTypedParagraphLineShadowContext(ctx context.Context, doc *layout.LayoutDocument) (typedLineShadowResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

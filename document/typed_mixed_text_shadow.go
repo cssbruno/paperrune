@@ -17,7 +17,7 @@ import (
 // source-stable line shadow: metric-changing core-font runs and decorations.
 // Color-only runs remain on the historical exact wrapping path because their
 // advances are already checked by restylePaperMeasurement.
-func typedParagraphNeedsMixedCoreShadow(paragraph layout.ParagraphBlock, f *Document) bool {
+func typedParagraphNeedsMixedCoreShadow(paragraph layout.ParagraphBlock, f *pdfDocument) bool {
 	if f == nil || paragraph.StyleRef != nil || len(paragraph.Segments) == 0 {
 		return false
 	}
@@ -91,7 +91,7 @@ type mixedCoreText struct {
 	lines   []mixedCoreLine
 }
 
-func (f *Document) planTypedParagraphMixedCoreShadowContext(ctx context.Context, doc *layout.LayoutDocument, paragraph layout.ParagraphBlock) (typedLineShadowResult, error) {
+func (f *pdfDocument) planTypedParagraphMixedCoreShadowContext(ctx context.Context, doc *layout.LayoutDocument, paragraph layout.ParagraphBlock) (typedLineShadowResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -379,7 +379,7 @@ func (f *Document) planTypedParagraphMixedCoreShadowContext(ctx context.Context,
 	return typedLineShadowResult{Plan: plan, Text: resultText.text}, nil
 }
 
-func (f *Document) mixedCoreFontMetrics(style layout.TextStyle) (*mixedCoreFontMetrics, error) {
+func (f *pdfDocument) mixedCoreFontMetrics(style layout.TextStyle) (*mixedCoreFontMetrics, error) {
 	scratch := f.acquireTypedMeasurementScratch()
 	defer f.releaseTypedMeasurementScratch(scratch)
 	applyPlannerTextStyle(scratch, style)
@@ -426,8 +426,7 @@ func (f *Document) mixedCoreFontMetrics(style layout.TextStyle) (*mixedCoreFontM
 }
 
 func appendMixedCoreDecorations(
-	f *Document,
-	metric *mixedCoreFontMetrics,
+	f *pdfDocument, metric *mixedCoreFontMetrics,
 	runOriginX, runStartCursor, runEndCursor layoutengine.Fixed,
 	line layoutengine.PlannedLine,
 	paths *[]layoutengine.PlannedPath,
@@ -439,8 +438,7 @@ func appendMixedCoreDecorations(
 }
 
 func appendMixedTextDecorations(
-	f *Document,
-	style layout.TextStyle,
+	f *pdfDocument, style layout.TextStyle,
 	fontSizePt float64,
 	up, ut int,
 	runOriginX, runStartCursor, runEndCursor layoutengine.Fixed,

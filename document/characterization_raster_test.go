@@ -52,7 +52,7 @@ func TestCharacterizationRasterPagesArePinnedBoundedAndFailureAtomic(t *testing.
 		t.Fatalf("typed raster baseline drift: got %s", got)
 	}
 
-	html, err := RunHTMLCharacterization(t.Context())
+	html, err := runHTMLCharacterization(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestCharacterizationRasterPagesArePinnedBoundedAndFailureAtomic(t *testing.
 	}
 
 	fixture := typedCharacterizationFixtures()[0]
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression())
 	plan, err := planner.PlanLayoutDocument(fixture.doc)
 	if err != nil {
 		t.Fatal(err)

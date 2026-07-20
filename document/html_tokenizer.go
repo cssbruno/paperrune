@@ -11,7 +11,7 @@ import (
 
 // HTMLSegmentType identifies one token from a supported HTML fragment: literal
 // text, an opening tag, or a closing tag.
-type HTMLSegmentType struct {
+type htmlSegmentType struct {
 	// Cat identifies the token category: 'T' for text, 'O' for opening tags,
 	// or 'C' for closing tags.
 	Cat byte
@@ -23,33 +23,28 @@ type HTMLSegmentType struct {
 }
 
 // HTMLTokenize returns a list of supported HTML tags and literal text elements.
-func HTMLTokenize(htmlStr string) []HTMLSegmentType {
-	tokens, _ := HTMLTokenizeContext(context.Background(), htmlStr)
+func htmlTokenize(htmlStr string, attrCaches ...map[string]map[string]string) []htmlSegmentType {
+	tokens, _ := htmlTokenizeContext(context.Background(), htmlStr, attrCaches...)
 	return tokens
 }
 
 // HTMLTokenizeContext returns HTML tokens and checks ctx during tokenization.
-func HTMLTokenizeContext(ctx context.Context, htmlStr string) ([]HTMLSegmentType, error) {
+func htmlTokenizeContext(ctx context.Context, htmlStr string, attrCaches ...map[string]map[string]string) ([]htmlSegmentType, error) {
 	if len(htmlStr) > htmlDefaultMaxHTMLBytes {
-		return nil, ErrHTMLLimitExceeded
+		return nil, errHTMLLimitExceeded
 	}
-	return htmlTokenizeContext(ctx, htmlStr, nil)
-}
-
-func htmlTokenize(htmlStr string, attrCache map[string]map[string]string) []HTMLSegmentType {
-	tokens, _ := htmlTokenizeContext(context.Background(), htmlStr, attrCache)
-	return tokens
-}
-
-func htmlTokenizeContext(ctx context.Context, htmlStr string, attrCache map[string]map[string]string) ([]HTMLSegmentType, error) {
+	var attrCache map[string]map[string]string
+	if len(attrCaches) != 0 {
+		attrCache = attrCaches[0]
+	}
 	capacity := strings.Count(htmlStr, "<") + 1
 	if capacity > htmlMaxTokenCount {
 		capacity = htmlMaxTokenCount
 	}
-	list := make([]HTMLSegmentType, 0, capacity)
-	appendToken := func(token HTMLSegmentType) error {
+	list := make([]htmlSegmentType, 0, capacity)
+	appendToken := func(token htmlSegmentType) error {
 		if len(list) >= htmlMaxTokenCount {
-			return ErrHTMLLimitExceeded
+			return errHTMLLimitExceeded
 		}
 		list = append(list, token)
 		return nil
@@ -65,14 +60,14 @@ func htmlTokenizeContext(ctx context.Context, htmlStr string, attrCache map[stri
 		tagStart := strings.IndexByte(htmlStr, '<')
 		if tagStart < 0 {
 			if htmlStr != "" {
-				if err := appendToken(HTMLSegmentType{Cat: 'T', Str: htmlUnescapeString(htmlStr)}); err != nil {
+				if err := appendToken(htmlSegmentType{Cat: 'T', Str: htmlUnescapeString(htmlStr)}); err != nil {
 					return nil, err
 				}
 			}
 			break
 		}
 		if tagStart > 0 {
-			if err := appendToken(HTMLSegmentType{Cat: 'T', Str: htmlUnescapeString(htmlStr[:tagStart])}); err != nil {
+			if err := appendToken(htmlSegmentType{Cat: 'T', Str: htmlUnescapeString(htmlStr[:tagStart])}); err != nil {
 				return nil, err
 			}
 			htmlStr = htmlStr[tagStart:]
@@ -88,7 +83,7 @@ func htmlTokenizeContext(ctx context.Context, htmlStr string, attrCache map[stri
 		}
 		tagEnd := htmlTagEnd(htmlStr)
 		if tagEnd < 0 {
-			if err := appendToken(HTMLSegmentType{Cat: 'T', Str: htmlUnescapeString(htmlStr)}); err != nil {
+			if err := appendToken(htmlSegmentType{Cat: 'T', Str: htmlUnescapeString(htmlStr)}); err != nil {
 				return nil, err
 			}
 			break
@@ -103,16 +98,16 @@ func htmlTokenizeContext(ctx context.Context, htmlStr string, attrCache map[stri
 			continue
 		}
 		if closeTag {
-			if err := appendToken(HTMLSegmentType{Cat: 'C', Str: name}); err != nil {
+			if err := appendToken(htmlSegmentType{Cat: 'C', Str: name}); err != nil {
 				return nil, err
 			}
 			continue
 		}
-		if err := appendToken(HTMLSegmentType{Cat: 'O', Str: name, Attr: attrs}); err != nil {
+		if err := appendToken(htmlSegmentType{Cat: 'O', Str: name, Attr: attrs}); err != nil {
 			return nil, err
 		}
 		if selfClosing {
-			if err := appendToken(HTMLSegmentType{Cat: 'C', Str: name}); err != nil {
+			if err := appendToken(htmlSegmentType{Cat: 'C', Str: name}); err != nil {
 				return nil, err
 			}
 		}

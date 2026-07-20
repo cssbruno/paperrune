@@ -16,28 +16,28 @@ import (
 // HTMLCharacterizationInventory is the deterministic Stage 0 description of
 // the public HTML surface and its currently recognized rendering vocabulary.
 // Recognition is deliberately distinct from browser parity.
-type HTMLCharacterizationInventory struct {
+type htmlCharacterizationInventory struct {
 	SchemaVersion           uint16                        `json:"schema_version"`
 	EntryPoints             []string                      `json:"entry_points"`
 	RecognizedTags          []string                      `json:"recognized_tags"`
 	RecognizedCSSProperties []string                      `json:"recognized_css_properties"`
-	CSSValueFamilies        []HTMLCSSValueFamily          `json:"css_value_families"`
-	Cursor                  HTMLCursorContract            `json:"cursor"`
+	CSSValueFamilies        []htmlCSSValueFamily          `json:"css_value_families"`
+	Cursor                  htmlCursorContract            `json:"cursor"`
 	BehaviorClasses         []string                      `json:"behavior_classes"`
-	Fixtures                []HTMLCharacterizationFixture `json:"fixtures"`
+	Fixtures                []htmlCharacterizationFixture `json:"fixtures"`
 }
 
-type HTMLCSSValueFamily struct {
+type htmlCSSValueFamily struct {
 	Property string   `json:"property"`
 	Values   []string `json:"values"`
 }
-type HTMLCursorContract struct {
+type htmlCursorContract struct {
 	Entry      string `json:"entry"`
 	Exit       string `json:"exit"`
 	Pagination string `json:"pagination"`
 	Failure    string `json:"failure"`
 }
-type HTMLCharacterizationFixture struct {
+type htmlCharacterizationFixture struct {
 	Name           string `json:"name"`
 	Cohort         string `json:"cohort"`
 	Classification string `json:"classification"`
@@ -45,21 +45,21 @@ type HTMLCharacterizationFixture struct {
 }
 
 // HTMLCharacterization returns a detached, sorted inventory projection.
-func HTMLCharacterization() HTMLCharacterizationInventory {
+func htmlCharacterization() htmlCharacterizationInventory {
 	tags := sortedHTMLCharacterizationKeys(htmlSupportedTags)
 	properties := sortedHTMLCharacterizationKeys(htmlSupportedCSSProperties)
-	return HTMLCharacterizationInventory{SchemaVersion: 1,
-		EntryPoints:    sortedHTMLCharacterizationStrings([]string{"CompileHTML", "CompileHTMLContext", "CompileHTMLTemplate", "CompileHTMLTemplateContext", "HTMLCharacterization", "HTMLCharacterizationJSON", "HTMLTokenize", "HTMLTokenizeContext", "RenderHTMLTemplate", "RunHTMLCharacterization", "(*CompiledHTML).DebugDump", "(*CompiledHTML).RecoveryIssues", "(*CompiledHTML).Stats", "(*CompiledHTML).Tokens", "(*Document).HTMLNew", "(*Document).PlanCompiledHTML", "(*Document).PlanCompiledHTMLContext", "(*HTML).ValidateHTML", "(*HTML).Write", "(*HTML).WriteCompiled", "(*HTML).WriteContext", "(*HTML).WriteTemplate", "(*HTML).WriteTemplateContext"}),
+	return htmlCharacterizationInventory{SchemaVersion: 1,
+		EntryPoints:    []string{},
 		RecognizedTags: tags, RecognizedCSSProperties: properties,
-		CSSValueFamilies: []HTMLCSSValueFamily{{"border-collapse", []string{"collapse", "separate"}}, {"break", []string{"always", "auto", "avoid", "page"}}, {"display", []string{"block", "flex", "inline", "inline-block", "inline-flex"}}, {"flex-direction", []string{"column", "column-reverse", "row", "row-reverse"}}, {"object-fit", []string{"contain", "cover", "fill"}}, {"text-align", []string{"center", "justify", "left", "right"}}, {"vertical-align", []string{"bottom", "middle", "top"}}, {"white-space", []string{"break-spaces", "normal", "nowrap", "pre", "pre-line", "pre-wrap"}}},
-		Cursor:           HTMLCursorContract{Entry: "uses the document's current page and XY position", Exit: "leaves XY after the final rendered content", Pagination: "may append bounded pages and continues in the active body region", Failure: "compile, validation, and unified planning failures leave the current PDF unchanged"},
+		CSSValueFamilies: []htmlCSSValueFamily{{"border-collapse", []string{"collapse", "separate"}}, {"break", []string{"always", "auto", "avoid", "page"}}, {"display", []string{"block", "flex", "inline", "inline-block", "inline-flex"}}, {"flex-direction", []string{"column", "column-reverse", "row", "row-reverse"}}, {"object-fit", []string{"contain", "cover", "fill"}}, {"text-align", []string{"center", "justify", "left", "right"}}, {"vertical-align", []string{"bottom", "middle", "top"}}, {"white-space", []string{"break-spaces", "normal", "nowrap", "pre", "pre-line", "pre-wrap"}}},
+		Cursor:           htmlCursorContract{Entry: "uses the document's current page and XY position", Exit: "leaves XY after the final rendered content", Pagination: "may append bounded pages and continues in the active body region", Failure: "compile, validation, and unified planning failures leave the current PDF unchanged"},
 		BehaviorClasses:  []string{"recognized-rendered", "recognized-ignored-metadata", "diagnostic-unsupported", "malformed-recovered", "rejected-by-policy", "strict-unified-plannable"},
 		Fixtures:         htmlCharacterizationFixtures()}
 }
 
-func HTMLCharacterizationJSON() ([]byte, error) { return json.Marshal(HTMLCharacterization()) }
+func htmlCharacterizationJSON() ([]byte, error) { return json.Marshal(htmlCharacterization()) }
 
-type HTMLFixtureResult struct {
+type htmlFixtureResult struct {
 	Name         string                          `json:"name"`
 	Outcome      string                          `json:"outcome"`
 	Pages        int                             `json:"pages"`
@@ -69,102 +69,102 @@ type HTMLFixtureResult struct {
 	Raster       *CharacterizationRasterEvidence `json:"raster,omitempty"`
 }
 
-type HTMLCharacterizationProjection struct {
+type htmlCharacterizationProjection struct {
 	SchemaVersion uint16              `json:"schema_version"`
-	Fixtures      []HTMLFixtureResult `json:"fixtures"`
+	Fixtures      []htmlFixtureResult `json:"fixtures"`
 }
 
-func (projection HTMLCharacterizationProjection) CanonicalJSON() ([]byte, error) {
+func (projection htmlCharacterizationProjection) CanonicalJSON() ([]byte, error) {
 	return json.Marshal(projection)
 }
 
 // RunHTMLCharacterization executes every bounded Stage 0 HTML fixture and
 // records deterministic PDF evidence for every renderable outcome. Policy,
 // unsupported, and recovered-but-unrenderable outcomes remain explicit.
-func RunHTMLCharacterization(ctx context.Context) (HTMLCharacterizationProjection, error) {
+func runHTMLCharacterization(ctx context.Context) (htmlCharacterizationProjection, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	projection := HTMLCharacterizationProjection{SchemaVersion: 2,
-		Fixtures: make([]HTMLFixtureResult, 0, len(htmlCharacterizationFixtures()))}
+	projection := htmlCharacterizationProjection{SchemaVersion: 2,
+		Fixtures: make([]htmlFixtureResult, 0, len(htmlCharacterizationFixtures()))}
 	var totalPDFBytes uint64
 	rasterBudget := characterizationRasterBudget{}
 	for _, fixture := range htmlCharacterizationFixtures() {
 		if err := ctx.Err(); err != nil {
-			return HTMLCharacterizationProjection{}, err
+			return htmlCharacterizationProjection{}, err
 		}
-		compiled, err := CompileHTMLContext(ctx, fixture.Source)
+		compiled, err := compileHTMLContext(ctx, fixture.Source)
 		if err != nil {
-			return HTMLCharacterizationProjection{}, err
+			return htmlCharacterizationProjection{}, err
 		}
-		entry := HTMLFixtureResult{Name: fixture.Name, RasterStatus: "not-applicable"}
+		entry := htmlFixtureResult{Name: fixture.Name, RasterStatus: "not-applicable"}
 		var output []byte
 		var rasterPlan LayoutDocumentPlan
 		hasRasterPlan := false
 		switch fixture.Classification {
 		case "malformed-recovered":
 			if len(compiled.recovery) == 0 {
-				return HTMLCharacterizationProjection{}, errors.New("document: HTML characterization expected recovery evidence")
+				return htmlCharacterizationProjection{}, errors.New("document: HTML characterization expected recovery evidence")
 			}
 			entry.Outcome = "recovered"
 		case "diagnostic-unsupported":
 			pdf := newHTMLCharacterizationDocument(true)
-			html := pdf.HTMLNew()
-			if len(html.ValidateHTML(fixture.Source)) == 0 {
-				return HTMLCharacterizationProjection{}, errors.New("document: HTML characterization expected unsupported diagnostic")
+			html := pdf.htmlNew()
+			if len(html.validateHTML(fixture.Source)) == 0 {
+				return htmlCharacterizationProjection{}, errors.New("document: HTML characterization expected unsupported diagnostic")
 			}
 			entry.Outcome = "unsupported"
 		case "rejected-by-policy":
 			pdf := newHTMLCharacterizationDocument(true)
-			html := pdf.HTMLNew()
+			html := pdf.htmlNew()
 			if err := html.WriteContext(ctx, 10, fixture.Source); err == nil {
-				return HTMLCharacterizationProjection{}, errors.New("document: HTML characterization expected policy rejection")
+				return htmlCharacterizationProjection{}, errors.New("document: HTML characterization expected policy rejection")
 			}
 			entry.Outcome = "rejected-by-policy"
 		case "strict-unified-plannable":
 			planner := newHTMLCharacterizationDocument(false)
-			plan, err := planner.PlanCompiledHTMLContext(ctx, 10, compiled)
+			plan, err := planner.planCompiledHTMLContext(ctx, 10, compiled)
 			if err != nil {
-				return HTMLCharacterizationProjection{}, err
+				return htmlCharacterizationProjection{}, err
 			}
 			target := newHTMLCharacterizationDocument(false)
 			if _, err := target.WriteLayoutDocumentPlanContext(ctx, plan); err != nil {
-				return HTMLCharacterizationProjection{}, err
+				return htmlCharacterizationProjection{}, err
 			}
 			output, err = htmlCharacterizationOutput(target)
 			if err != nil {
-				return HTMLCharacterizationProjection{}, err
+				return htmlCharacterizationProjection{}, err
 			}
 			entry.Outcome, entry.Pages = "planned", plan.PageCount()
 			entry.ReadingRoles = characterizationReadingRoles(plan.plan)
 			rasterPlan, hasRasterPlan = plan, true
 		default:
 			pdf := newHTMLCharacterizationDocument(true)
-			html := pdf.HTMLNew()
+			html := pdf.htmlNew()
 			if err := html.WriteContext(ctx, 10, fixture.Source); err != nil {
-				return HTMLCharacterizationProjection{}, err
+				return htmlCharacterizationProjection{}, err
 			}
 			output, err = htmlCharacterizationOutput(pdf)
 			if err != nil {
-				return HTMLCharacterizationProjection{}, err
+				return htmlCharacterizationProjection{}, err
 			}
 			entry.Outcome, entry.Pages = "rendered", pdf.PageCount()
 		}
 		if len(output) != 0 {
 			totalPDFBytes += uint64(len(output))
 			if totalPDFBytes > 128<<20 {
-				return HTMLCharacterizationProjection{}, ErrHTMLLimitExceeded
+				return htmlCharacterizationProjection{}, errHTMLLimitExceeded
 			}
 			evidence, err := characterizationPDFOutputEvidence(output, entry.Pages)
 			if err != nil {
-				return HTMLCharacterizationProjection{}, err
+				return htmlCharacterizationProjection{}, err
 			}
 			entry.PDF = &evidence
 		}
 		if hasRasterPlan {
 			raster, rasterStatus, rasterErr := captureCharacterizationRaster(ctx, fixture.Name, rasterPlan, &rasterBudget)
 			if rasterErr != nil {
-				return HTMLCharacterizationProjection{}, rasterErr
+				return htmlCharacterizationProjection{}, rasterErr
 			}
 			entry.Raster, entry.RasterStatus = raster, rasterStatus
 		}
@@ -173,8 +173,8 @@ func RunHTMLCharacterization(ctx context.Context) (HTMLCharacterizationProjectio
 	return projection, nil
 }
 
-func newHTMLCharacterizationDocument(addPage bool) *Document {
-	pdf := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
+func newHTMLCharacterizationDocument(addPage bool) *pdfDocument {
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
 	pdf.SetMargins(18, 18, 18)
 	pdf.SetAutoPageBreak(true, 18)
 	if addPage {
@@ -184,7 +184,7 @@ func newHTMLCharacterizationDocument(addPage bool) *Document {
 	return pdf
 }
 
-func htmlCharacterizationOutput(pdf *Document) ([]byte, error) {
+func htmlCharacterizationOutput(pdf *pdfDocument) ([]byte, error) {
 	var output bytes.Buffer
 	err := pdf.OutputWithOptions(&output, OutputOptions{Deterministic: true})
 	return output.Bytes(), err
@@ -220,8 +220,8 @@ func sortedHTMLCharacterizationStrings(values []string) []string {
 	return out
 }
 
-func htmlCharacterizationFixtures() []HTMLCharacterizationFixture {
-	return []HTMLCharacterizationFixture{
+func htmlCharacterizationFixtures() []htmlCharacterizationFixture {
+	return []htmlCharacterizationFixture{
 		{"text-lists-nested", "text_lists", "recognized-rendered", `<article><h2>Title</h2><p>Hello <strong>world</strong><br>next</p><ul><li>One</li></ul><dl><dt>Term</dt><dd>Definition</dd></dl></article>`},
 		{"mixed-flex", "mixed_nested", "recognized-rendered", `<div style="display:flex;gap:2pt"><section><p>A</p></section><div><p>B</p></div></div>`},
 		{"table-spans", "tables", "recognized-rendered", `<table><caption>Grid</caption><thead><tr><th colspan="2">Head</th></tr></thead><tbody><tr><td rowspan="2">A</td><td>B</td></tr><tr><td>C</td></tr></tbody><tfoot><tr><td colspan="2">Foot</td></tr></tfoot></table>`},

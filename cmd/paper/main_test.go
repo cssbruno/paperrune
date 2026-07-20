@@ -270,6 +270,25 @@ func TestRunRenderWritesDeterministicPDFAtomically(t *testing.T) {
 	}
 }
 
+func TestRunRenderExportsPaperToStandaloneHTML(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "report.html")
+	code, stdout, stderr := invoke([]string{"render", "--format", "html", "--json", "-o", output, "-"}, validSource)
+	if code != exitOK || stderr != "" || !strings.Contains(stdout, `"ok":true`) || !strings.Contains(stdout, `"format":"html"`) {
+		t.Fatalf("HTML render = %d, %q, %q", code, stdout, stderr)
+	}
+	payload, err := os.ReadFile(output)
+	if err != nil || !bytes.HasPrefix(payload, []byte("<!doctype html>")) ||
+		!bytes.Contains(payload, []byte(`data-format="display-plan-preview"`)) ||
+		!bytes.Contains(payload, []byte("<text ")) || bytes.Contains(payload, []byte("<?xml")) {
+		t.Fatalf("Paper HTML output = %d bytes, %v\n%s", len(payload), err, payload)
+	}
+
+	code, _, stderr = invoke([]string{"render", "--format", "browser", "-"}, validSource)
+	if code != exitFailure || !strings.Contains(stderr, "--format must be pdf or html") {
+		t.Fatalf("invalid format = %d, %q", code, stderr)
+	}
+}
+
 func TestOperationalCommandsUseExplicitAssetCatalog(t *testing.T) {
 	manifest, root := writeAssetFixture(t)
 	dir := t.TempDir()

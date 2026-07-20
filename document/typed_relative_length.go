@@ -24,7 +24,7 @@ func typedContainerPercent(reference layoutengine.Fixed, percent uint32) (layout
 	return layoutengine.Fixed(product.Int64()), nil
 }
 
-func (f *Document) typedContainerPercentUnits(reference float64, percent uint32) (float64, error) {
+func (f *pdfDocument) typedContainerPercentUnits(reference float64, percent uint32) (float64, error) {
 	fixed, err := layoutengine.FixedFromPoints(f.UnitToPointConvert(reference))
 	if err != nil {
 		return 0, err

@@ -120,7 +120,7 @@ func (p *protectType) setProtection(privFlag byte, userPassStr, ownerPassStr str
 // half-implement AES document encryption. Use SetLegacyProtection only for the
 // legacy RC4 compatibility handler, or use external PDF security tooling when
 // AES-based document encryption is required.
-func (f *Document) SetAESProtection(actionFlag byte, userPassStr, ownerPassStr string) error {
+func (f *pdfDocument) SetAESProtection(actionFlag byte, userPassStr, ownerPassStr string) error {
 	_ = actionFlag
 	_ = userPassStr
 	_ = ownerPassStr
@@ -155,7 +155,7 @@ func (f *Document) SetAESProtection(actionFlag byte, userPassStr, ownerPassStr s
 // full access to the document regardless of the actionFlag value. An empty
 // string for this argument is replaced with a random value, effectively
 // preventing owner-level access without the generated password.
-func (f *Document) SetLegacyProtection(actionFlag byte, userPassStr, ownerPassStr string) error {
+func (f *pdfDocument) SetLegacyProtection(actionFlag byte, userPassStr, ownerPassStr string) error {
 	if f.err != nil {
 		return f.err
 	}

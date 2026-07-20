@@ -12,7 +12,7 @@ import (
 )
 
 func TestExtractHTMLFooterBlock(t *testing.T) {
-	body, footer := ExtractHTMLFooterBlock(`<section><p>Body</p></section><footer>Page footer</footer>`)
+	body, footer := extractHTMLFooterBlock(`<section><p>Body</p></section><footer>Page footer</footer>`)
 	if footer == nil {
 		t.Fatal("footer = nil, want layout.FooterBlock")
 	}
@@ -36,7 +36,7 @@ func TestExtractHTMLFooterBlock(t *testing.T) {
 
 func TestExtractHTMLFooterBlockNoFooter(t *testing.T) {
 	html := `<p>Body only</p>`
-	body, footer := ExtractHTMLFooterBlock(html)
+	body, footer := extractHTMLFooterBlock(html)
 	if footer != nil {
 		t.Fatalf("footer = %#v, want nil", footer)
 	}
@@ -62,7 +62,7 @@ func TestExtractHTMLFooterBlockWithFooterMarkers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, footer := ExtractHTMLFooterBlock(tt.html)
+			body, footer := extractHTMLFooterBlock(tt.html)
 			if footer == nil {
 				t.Fatal("footer = nil, want layout.FooterBlock")
 			}
@@ -77,8 +77,8 @@ func TestExtractHTMLFooterBlockWithFooterMarkers(t *testing.T) {
 }
 
 func TestWriteDocumentRendersExtractedHTMLFooterBlock(t *testing.T) {
-	_, footer := ExtractHTMLFooterBlock(`<p>Body</p><footer>Extracted footer</footer>`)
-	pdf := MustNew()
+	_, footer := extractHTMLFooterBlock(`<p>Body</p><footer>Extracted footer</footer>`)
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "Document body"}}}}

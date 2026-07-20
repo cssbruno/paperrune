@@ -60,6 +60,20 @@ func TestApplyCommitsTypedOperationsAtomicallyBackToFront(t *testing.T) {
 	}
 }
 
+func TestApplyDeletesOneExactProperty(t *testing.T) {
+	source := editableFixture()
+	result, err := Apply(Transaction{
+		File: "invoice.paper", Source: source, ExpectedRevision: SourceRevision(source),
+		Operations: []Operation{DeleteProperty{Target: "@doc", Name: "language"}},
+	})
+	if err != nil {
+		t.Fatalf("Apply(delete property) = %v, diagnostics %+v", err, result.Diagnostics)
+	}
+	if !result.Applied || strings.Contains(result.Source, "language:") || len(result.Diff.Patches) != 1 {
+		t.Fatalf("deleted property result = %+v\n%s", result, result.Source)
+	}
+}
+
 func TestApplyInsertsTypedNodeAtReadableID(t *testing.T) {
 	source := editableFixture()
 	text := StringValue("Inserted title")

@@ -38,7 +38,7 @@ func TestPlanAndWritePaperExpandsComponentsWithInstanceProvenance(t *testing.T) 
 	if err != nil || !strings.Contains(string(fallback.JSON()), `"instance":"@second/@content/`) {
 		t.Fatalf("fallback query = %s, %v", fallback.JSON(), err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	painted, err := target.WritePaperPlan(plan)
 	if err != nil || painted.Pages != 1 {
 		t.Fatalf("WritePaperPlan() = %#v, %v", painted, err)
@@ -65,7 +65,7 @@ func TestPlanPaperScenarioRendersTypedPropsAndQualifiedLayoutSlot(t *testing.T) 
 	if err != nil || !strings.Contains(string(query.JSON()), `"key":"@short"`) || !strings.Contains(string(query.JSON()), `"instance":"@one/@body/@short"`) || strings.Contains(string(query.JSON()), `"key":"@long"`) {
 		t.Fatalf("typed scenario query = %s, %v", query.JSON(), err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WritePaperPlan(plan); err != nil {
 		t.Fatal(err)
 	}

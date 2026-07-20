@@ -165,7 +165,7 @@ func paperApplySingleChildWrapperBox(candidate layout.Block, wrapper layout.BoxS
 	}
 }
 
-func (f *Document) paperMeasureBox(box layout.BoxStyle, path string) (paperMeasuredBox, error) {
+func (f *pdfDocument) paperMeasureBox(box layout.BoxStyle, path string) (paperMeasuredBox, error) {
 	toFixed := func(value float64, field string) (layoutengine.Fixed, error) {
 		fixed, err := fixedFromDocumentUnits(f, value)
 		if err != nil || fixed < 0 {

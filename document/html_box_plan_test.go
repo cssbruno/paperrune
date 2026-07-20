@@ -21,12 +21,12 @@ const htmlUnifiedBoxFixture = `<p style="margin:2pt 3pt 4pt 5pt;padding:6pt 7pt 
 	`border-bottom:3pt solid #0000ff;border-left:4pt solid #010203;break-inside:avoid">Box</p>`
 
 func TestHTMLUnifiedBoxModelExactPlanRasterPDFAndCursor(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedBoxFixture)
+	compiled, err := compileHTML(htmlUnifiedBoxFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestHTMLUnifiedBoxModelExactPlanRasterPDFAndCursor(t *testing.T) {
 		t.Fatalf("box raster drift: %s", got)
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
 	target.SetMargins(20, 20, 20)
 	if pages, writeErr := target.WriteLayoutDocumentPlan(plan); writeErr != nil || pages != 1 {
 		t.Fatalf("write pages=%d err=%v", pages, writeErr)
@@ -71,7 +71,7 @@ func TestHTMLUnifiedBoxModelExactPlanRasterPDFAndCursor(t *testing.T) {
 
 	live := newHTMLFrameTestDocument(t, 160)
 	live.SetXY(16, 42)
-	html := live.HTMLNew()
+	html := live.htmlNew()
 	if err := html.WriteContext(context.Background(), 12, htmlUnifiedBoxFixture); err != nil || live.GetY() <= 42 {
 		t.Fatalf("live cursor=%.4f err=%v", live.GetY(), err)
 	}
@@ -81,12 +81,12 @@ const htmlUnifiedRoundedShadowFixture = `<p style="margin:4pt;padding:5pt;backgr
 	`border:2pt solid #28445f;border-radius:7pt;box-shadow:3pt 4pt 0 2pt #6c7884">Rounded shadow</p>`
 
 func TestHTMLUnifiedRoundedShadowExactPlanSVGDirectRasterPDFAndSemantics(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedRoundedShadowFixture)
+	compiled, err := compileHTML(htmlUnifiedRoundedShadowFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestHTMLUnifiedRoundedShadowExactPlanSVGDirectRasterPDFAndSemantics(t *test
 		t.Fatalf("direct raster=%+v status=%q err=%v", raster, status, err)
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
 	target.SetMargins(20, 20, 20)
 	if pages, writeErr := target.WriteLayoutDocumentPlan(plan); writeErr != nil || pages != 1 {
 		t.Fatalf("write pages=%d err=%v", pages, writeErr)
@@ -139,14 +139,14 @@ func TestHTMLUnifiedRoundedShadowExactPlanSVGDirectRasterPDFAndSemantics(t *test
 
 	live := newHTMLFrameTestDocument(t, 160)
 	live.SetXY(16, 42)
-	html := live.HTMLNew()
+	html := live.htmlNew()
 	if err := html.WriteContext(context.Background(), 12, htmlUnifiedRoundedShadowFixture); err != nil || live.GetY() <= 42 {
 		t.Fatalf("live cursor=%.4f err=%v", live.GetY(), err)
 	}
 }
 
 func TestHTMLUnifiedDecoratedStructuralWrapperLowersAtomically(t *testing.T) {
-	compiled, err := CompileHTML(`<section style="margin:2pt;padding:3pt;background-color:#eeeeee;border:1pt solid #222222"><h2>Title</h2></section>`)
+	compiled, err := compileHTML(`<section style="margin:2pt;padding:3pt;background-color:#eeeeee;border:1pt solid #222222"><h2>Title</h2></section>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestHTMLUnifiedDecoratedStructuralWrapperLowersAtomically(t *testing.T) {
 	if !ok || len(section.Blocks) != 1 || !section.Box.BackgroundColor.Set {
 		t.Fatalf("section=%#v", model.Body[0])
 	}
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.PageCount() != 1 || len(plan.plan.Projection().Fragments) != 1 {
 		t.Fatalf("plan pages=%d err=%v projection=%+v", plan.PageCount(), err, plan.plan.Projection())
 	}
@@ -174,12 +174,12 @@ func TestHTMLUnifiedDecoratedStructuralWrapperLowersAtomically(t *testing.T) {
 
 func TestHTMLUnifiedStructuralBoxAutoIntrinsicAndBoundedHeight(t *testing.T) {
 	planHeight := func(source string) (float64, error) {
-		compiled, err := CompileHTML(source)
+		compiled, err := compileHTML(source)
 		if err != nil {
 			return 0, err
 		}
 		planner := htmlUnifiedFlexTestPlanner()
-		plan, err := planner.PlanCompiledHTML(12, compiled)
+		plan, err := planner.planCompiledHTML(12, compiled)
 		if err != nil {
 			return 0, err
 		}
@@ -250,24 +250,24 @@ func TestHTMLUnifiedBoxModelRejectsUnrepresentableCSSAtomically(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := CompileHTML(`<p style="` + test.style + `">Box</p>`)
+			compiled, err := compileHTML(`<p style="` + test.style + `">Box</p>`)
 			if err != nil {
 				t.Fatal(err)
 			}
 			planner := htmlUnifiedFlexTestPlanner()
-			plan, err := planner.PlanCompiledHTML(12, compiled)
-			if !errors.Is(err, ErrHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
+			plan, err := planner.planCompiledHTML(12, compiled)
+			if !errors.Is(err, errHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
 				t.Fatalf("plan=%#v pages=%d err=%v want %q", plan, planner.PageCount(), err, test.diagnostic)
 			}
 		})
 	}
 
-	compiled, err := CompileHTML(`<div style="padding:2pt;background-color:#fff"><p>A</p><p>B</p></div>`)
+	compiled, err := compileHTML(`<div style="padding:2pt;background-color:#fff"><p>A</p><p>B</p></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || plan.PageCount() != 1 {
 		t.Fatalf("multi-child wrapper plan=%#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
@@ -287,13 +287,13 @@ func TestHTMLUnifiedRoundedShadowRejectsUnsupportedFormsAtomically(t *testing.T)
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := CompileHTML(`<p style="` + test.style + `">Box</p>`)
+			compiled, err := compileHTML(`<p style="` + test.style + `">Box</p>`)
 			if err != nil {
 				t.Fatal(err)
 			}
 			planner := htmlUnifiedFlexTestPlanner()
-			plan, err := planner.PlanCompiledHTML(12, compiled)
-			if !errors.Is(err, ErrHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
+			plan, err := planner.planCompiledHTML(12, compiled)
+			if !errors.Is(err, errHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
 				t.Fatalf("plan=%#v pages=%d err=%v want %q", plan, planner.PageCount(), err, test.diagnostic)
 			}
 		})
@@ -301,12 +301,12 @@ func TestHTMLUnifiedRoundedShadowRejectsUnsupportedFormsAtomically(t *testing.T)
 }
 
 func TestHTMLUnifiedBoxModelPercentSizingBoxSizingAndOverflow(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedSizedBoxFixture)
+	compiled, err := compileHTML(htmlUnifiedSizedBoxFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +343,7 @@ func TestHTMLUnifiedBoxModelPercentSizingBoxSizingAndOverflow(t *testing.T) {
 	}
 	live := newHTMLFrameTestDocument(t, 160)
 	live.SetXY(16, 42)
-	html := live.HTMLNew()
+	html := live.htmlNew()
 	if err := html.WriteContext(context.Background(), 12, htmlUnifiedSizedBoxFixture); err != nil || live.GetY() < 89.2 || live.GetY() > 89.202 || live.PageCount() != 1 {
 		t.Fatalf("sized box live cursor=%.4f pages=%d err=%v", live.GetY(), live.PageCount(), err)
 	}
@@ -354,14 +354,14 @@ const htmlUnifiedSizedBoxFixture = `<p style="margin:5%;padding:5%;border:1pt so
 	`box-sizing:border-box;overflow:hidden;background-color:#ddeeff">Box</p>`
 
 func TestHTMLUnifiedBoxModelCancellationConcurrentReuseAndAtomicLimits(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedSizedBoxFixture)
+	compiled, err := compileHTML(htmlUnifiedSizedBoxFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(canceled, 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(canceled, 12, compiled)
 	if !errors.Is(err, context.Canceled) || plan.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("canceled box plan hash=%q pages=%d err=%v", plan.Hash(), planner.PageCount(), err)
 	}
@@ -374,7 +374,7 @@ func TestHTMLUnifiedBoxModelCancellationConcurrentReuseAndAtomicLimits(t *testin
 	for index := 0; index < workers; index++ {
 		go func(index int) {
 			defer group.Done()
-			candidate, candidateErr := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+			candidate, candidateErr := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 			hashes[index], errs[index] = candidate.Hash(), candidateErr
 		}(index)
 	}
@@ -385,24 +385,24 @@ func TestHTMLUnifiedBoxModelCancellationConcurrentReuseAndAtomicLimits(t *testin
 		}
 	}
 
-	tooWide, err := CompileHTML(`<p style="width:100%;margin:10%;padding:1pt">overflow</p>`)
+	tooWide, err := compileHTML(`<p style="width:100%;margin:10%;padding:1pt">overflow</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner = htmlUnifiedFlexTestPlanner()
-	plan, err = planner.PlanCompiledHTML(12, tooWide)
-	if !errors.Is(err, ErrHTMLPlanUnsupported) || !strings.Contains(err.Error(), "exceeds its containing block") || plan.Hash() != "" || planner.PageCount() != 0 {
+	plan, err = planner.planCompiledHTML(12, tooWide)
+	if !errors.Is(err, errHTMLPlanUnsupported) || !strings.Contains(err.Error(), "exceeds its containing block") || plan.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("over-limit box plan hash=%q pages=%d err=%v", plan.Hash(), planner.PageCount(), err)
 	}
 }
 
 func TestHTMLUnifiedNestedAndMultiChildDecoratedBoxes(t *testing.T) {
-	compiled, err := CompileHTML(`<section style="width:60%;padding:2%;background-color:#eeeeee">` +
+	compiled, err := compileHTML(`<section style="width:60%;padding:2%;background-color:#eeeeee">` +
 		`<div style="padding:3%;border:1pt solid #222222;background-color:#dddddd"><p>A</p></div><p>B</p></section>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,28 +417,28 @@ func TestHTMLUnifiedNestedAndMultiChildDecoratedBoxes(t *testing.T) {
 }
 
 func BenchmarkHTMLUnifiedBoxModelPlanning(b *testing.B) {
-	compiled, err := CompileHTML(htmlUnifiedSizedBoxFixture)
+	compiled, err := compileHTML(htmlUnifiedSizedBoxFixture)
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for index := 0; index < b.N; index++ {
-		if _, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled); err != nil {
+		if _, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
 func BenchmarkHTMLUnifiedRoundedShadowPlanning(b *testing.B) {
-	compiled, err := CompileHTML(htmlUnifiedRoundedShadowFixture)
+	compiled, err := compileHTML(htmlUnifiedRoundedShadowFixture)
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for index := 0; index < b.N; index++ {
-		if _, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled); err != nil {
+		if _, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled); err != nil {
 			b.Fatal(err)
 		}
 	}

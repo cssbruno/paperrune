@@ -35,7 +35,7 @@ func TestTypedTableStructuredCellListsSectionsClausesNotesAndImages(t *testing.T
 		Body:            []layout.TableRow{{KeepTogether: true, Cells: []layout.TableCell{cell}}},
 		Style:           layout.TableStyle{KeepRows: true},
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 260}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 260}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(10, 10, 10)
 	doc := &layout.LayoutDocument{Language: "en-US", PageTemplate: layout.PageTemplate{Margins: layout.Spacing{Left: 10, Top: 10, Right: 10, Bottom: 10}}, Body: []layout.Block{table}}
 	plan, err := planner.PlanLayoutDocument(doc)
@@ -73,7 +73,7 @@ func TestTypedTableStructuredCellListsSectionsClausesNotesAndImages(t *testing.T
 	if err != nil || !bytes.Contains(capture.SVG(), []byte("data:image/png;base64,")) || !bytes.Contains(capture.SVG(), []byte(`font-family="helvetica_bold"`)) {
 		t.Fatalf("structured display capture = %v\n%s", err, capture.SVG())
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if pages, err := target.WriteLayoutDocumentPlan(plan); err != nil || pages != plan.PageCount() {
 		t.Fatalf("structured table replay = pages %d, %v", pages, err)
 	}
@@ -125,7 +125,7 @@ func TestTypedTableRepeatedHeaderRetainsRichImageResourceAndSemantics(t *testing
 			layout.ListBlock{Items: []layout.ListItem{{Blocks: []layout.Block{text("body")}}}},
 		}}}})
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(10, 10, 10)
 	plan, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Language: "en-US", Body: []layout.Block{table}})
 	if err != nil || plan.PageCount() < 2 || planner.PageCount() != 0 {

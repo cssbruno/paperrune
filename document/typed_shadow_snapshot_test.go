@@ -20,7 +20,7 @@ type typedShadowSnapshot struct {
 	errorText    string
 }
 
-func typedShadowSnapshotOf(pdf *Document) typedShadowSnapshot {
+func typedShadowSnapshotOf(pdf *pdfDocument) typedShadowSnapshot {
 	left, top, right, bottom := pdf.GetMargins()
 	errorText := ""
 	if pdf.err != nil {

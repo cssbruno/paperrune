@@ -7,14 +7,14 @@ import "strconv"
 
 const maxContentScratchCapacity = 64 * 1024
 
-func (f *Document) contentCommandBuffer(capacity int) []byte {
+func (f *pdfDocument) contentCommandBuffer(capacity int) []byte {
 	if capacity <= cap(f.contentScratch) {
 		return f.contentScratch[:0]
 	}
 	return make([]byte, 0, capacity)
 }
 
-func (f *Document) retainContentCommandBuffer(buffer []byte) {
+func (f *pdfDocument) retainContentCommandBuffer(buffer []byte) {
 	if buffer != nil && cap(buffer) <= maxContentScratchCapacity {
 		f.contentScratch = buffer[:0]
 	}
@@ -94,48 +94,48 @@ func appendPDFFontSelect(dst []byte, fontID string, size float64) []byte {
 	return append(dst, " Tf ET"...)
 }
 
-func (f *Document) outPDFFontSelect() {
+func (f *pdfDocument) outPDFFontSelect() {
 	buf := make([]byte, 0, len(f.currentFont.i)+20)
 	buf = appendPDFFontSelect(buf, f.currentFont.i, f.fontSizePt)
 	f.outbytes(buf)
 }
 
-func (f *Document) outPDFLineWidth(width float64) {
+func (f *pdfDocument) outPDFLineWidth(width float64) {
 	var scratch [32]byte
 	buf := appendPDFNumber(scratch[:0], width, 2)
 	buf = append(buf, " w"...)
 	f.outbytes(buf)
 }
 
-func (f *Document) outPDFIntOperator(value int, operator byte) {
+func (f *pdfDocument) outPDFIntOperator(value int, operator byte) {
 	var scratch [24]byte
 	buf := appendPDFInt(scratch[:0], value)
 	buf = append(buf, ' ', operator)
 	f.outbytes(buf)
 }
 
-func (f *Document) outPDFObjHeader(n int) {
+func (f *pdfDocument) outPDFObjHeader(n int) {
 	var scratch [32]byte
 	buf := appendPDFInt(scratch[:0], n)
 	buf = append(buf, " 0 obj"...)
 	f.outbytes(buf)
 }
 
-func (f *Document) outPDFXrefRange(count int) {
+func (f *pdfDocument) outPDFXrefRange(count int) {
 	var scratch [32]byte
 	buf := append(scratch[:0], '0', ' ')
 	buf = appendPDFInt(buf, count)
 	f.outbytes(buf)
 }
 
-func (f *Document) outPDFXrefOffset(offset int) {
+func (f *pdfDocument) outPDFXrefOffset(offset int) {
 	var scratch [32]byte
 	buf := appendPDFPaddedInt(scratch[:0], offset, 10)
 	buf = append(buf, " 00000 n "...)
 	f.outbytes(buf)
 }
 
-func (f *Document) outPDFIntLine(value int) {
+func (f *pdfDocument) outPDFIntLine(value int) {
 	var scratch [24]byte
 	f.outbytes(appendPDFInt(scratch[:0], value))
 }

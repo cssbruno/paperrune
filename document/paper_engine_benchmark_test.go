@@ -80,13 +80,13 @@ func BenchmarkPaperEngineEndToEndTyped(b *testing.B) {
 // adaptation, unified planning, painting, and deterministic serialization. HTML
 // tokenization is excluded because the fixture is a reusable CompiledHTML.
 func BenchmarkPaperEngineEndToEndCompiledHTML(b *testing.B) {
-	compiled, err := CompileHTML(paperEngineBenchmarkHTMLFixture())
+	compiled, err := compileHTML(paperEngineBenchmarkHTMLFixture())
 	if err != nil {
 		b.Fatal(err)
 	}
 	benchmarkPaperEngineEndToEnd(b, func() ([]byte, int, error) {
 		planner := paperEngineBenchmarkDocument()
-		plan, err := planner.PlanCompiledHTML(12, compiled)
+		plan, err := planner.planCompiledHTML(12, compiled)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -237,8 +237,8 @@ func paperEngineBenchmarkTypedPlan(tb testing.TB) LayoutDocumentPlan {
 	return plan
 }
 
-func paperEngineBenchmarkDocument() *Document {
-	return MustNew(
+func paperEngineBenchmarkDocument() *pdfDocument {
+	return mustNewPDFDocument(
 		WithUnit(UnitPoint),
 		WithCustomPageSize(Size{Wd: 220, Ht: 300}),
 		WithNoCompression(),
@@ -246,11 +246,11 @@ func paperEngineBenchmarkDocument() *Document {
 	)
 }
 
-func paperEngineBenchmarkTableDocument(columns int) *Document {
+func paperEngineBenchmarkTableDocument(columns int) *pdfDocument {
 	if columns <= 16 {
 		return paperEngineBenchmarkDocument()
 	}
-	return MustNew(
+	return mustNewPDFDocument(
 		WithUnit(UnitPoint),
 		WithCustomPageSize(Size{Wd: 640, Ht: 300}),
 		WithNoCompression(),
@@ -258,7 +258,7 @@ func paperEngineBenchmarkTableDocument(columns int) *Document {
 	)
 }
 
-func paperEngineBenchmarkOutput(pdf *Document) ([]byte, error) {
+func paperEngineBenchmarkOutput(pdf *pdfDocument) ([]byte, error) {
 	var output bytes.Buffer
 	err := pdf.OutputWithOptions(&output, OutputOptions{Deterministic: true})
 	return output.Bytes(), err
@@ -382,18 +382,18 @@ func TestPaperEngineBenchmarkFixturesAreDeterministic(t *testing.T) {
 		t.Fatalf("typed plans differ: (%s, %d) != (%s, %d)", typedPlan.Hash(), typedPlan.PageCount(), secondTypedPlan.Hash(), secondTypedPlan.PageCount())
 	}
 
-	compiled, err := CompileHTML(paperEngineBenchmarkHTMLFixture())
+	compiled, err := compileHTML(paperEngineBenchmarkHTMLFixture())
 	if err != nil {
 		t.Fatal(err)
 	}
-	htmlPlan, err := paperEngineBenchmarkDocument().PlanCompiledHTML(12, compiled)
+	htmlPlan, err := paperEngineBenchmarkDocument().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if htmlPlan.PageCount() == 0 || htmlPlan.Hash() == "" {
 		t.Fatalf("HTML plan is empty: hash %q pages %d", htmlPlan.Hash(), htmlPlan.PageCount())
 	}
-	secondHTMLPlan, err := paperEngineBenchmarkDocument().PlanCompiledHTML(12, compiled)
+	secondHTMLPlan, err := paperEngineBenchmarkDocument().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}

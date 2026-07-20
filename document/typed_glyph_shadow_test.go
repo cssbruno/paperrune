@@ -66,7 +66,7 @@ func TestTypedCoreFontResourceCanonicalFacesAndDigests(t *testing.T) {
 }
 
 func TestTypedParagraphLineShadowLowersExactGlyphCommands(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 72, Ht: 50}))
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 72, Ht: 50}))
 	pdf.SetMargins(10, 10, 10)
 	pdf.SetAutoPageBreak(true, 10)
 	pdf.SetFont("Courier", "", 10)
@@ -136,8 +136,8 @@ func TestTypedParagraphLineShadowLowersExactGlyphCommands(t *testing.T) {
 }
 
 func TestTypedParagraphGlyphShadowRejectsDeferredAliasesAndNegativeSpacing(t *testing.T) {
-	makeDocument := func() (*Document, *layout.LayoutDocument) {
-		pdf := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}))
+	makeDocument := func() (*pdfDocument, *layout.LayoutDocument) {
+		pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}))
 		pdf.SetMargins(10, 10, 10)
 		pdf.SetAutoPageBreak(true, 10)
 		pdf.SetFont("Courier", "", 10)

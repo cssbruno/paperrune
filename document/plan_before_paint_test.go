@@ -23,7 +23,7 @@ type planBeforePaintSnapshot struct {
 	pages      [][]byte
 }
 
-func snapshotPlanBeforePaint(pdf *Document) planBeforePaintSnapshot {
+func snapshotPlanBeforePaint(pdf *pdfDocument) planBeforePaintSnapshot {
 	snapshot := planBeforePaintSnapshot{
 		page: pdf.PageNo(), pageCount: pdf.PageCount(), x: pdf.GetX(), y: pdf.GetY(),
 		fontFamily: pdf.fontFamily, fontStyle: pdf.fontStyle, fontSize: pdf.fontSizePt,
@@ -38,7 +38,7 @@ func snapshotPlanBeforePaint(pdf *Document) planBeforePaintSnapshot {
 	return snapshot
 }
 
-func assertPlanBeforePaintUnchanged(t *testing.T, pdf *Document, before planBeforePaintSnapshot) {
+func assertPlanBeforePaintUnchanged(t *testing.T, pdf *pdfDocument, before planBeforePaintSnapshot) {
 	t.Helper()
 	after := snapshotPlanBeforePaint(pdf)
 	if before.page != after.page || before.pageCount != after.pageCount || before.x != after.x || before.y != after.y ||
@@ -57,11 +57,11 @@ func TestResourcePlanningDoesNotMutateOutputDocument(t *testing.T) {
 	const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 	cases := []struct {
 		name string
-		plan func(*Document) error
+		plan func(*pdfDocument) error
 	}{
 		{
 			name: "typed-font-measurement",
-			plan: func(pdf *Document) error {
+			plan: func(pdf *pdfDocument) error {
 				_, err := pdf.PlanLayoutDocument(&layout.LayoutDocument{
 					Language: "en-US",
 					Body: []layout.Block{layout.ParagraphBlock{
@@ -74,23 +74,23 @@ func TestResourcePlanningDoesNotMutateOutputDocument(t *testing.T) {
 		},
 		{
 			name: "html-image-measurement",
-			plan: func(pdf *Document) error {
-				compiled, err := CompileHTML(`<img src="data:image/png;base64,` + pixel + `" width="18" height="12" alt="Raster mark">`)
+			plan: func(pdf *pdfDocument) error {
+				compiled, err := compileHTML(`<img src="data:image/png;base64,` + pixel + `" width="18" height="12" alt="Raster mark">`)
 				if err != nil {
 					return err
 				}
-				_, err = pdf.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+				_, err = pdf.planCompiledHTMLContext(context.Background(), 12, compiled)
 				return err
 			},
 		},
 		{
 			name: "html-svg-measurement",
-			plan: func(pdf *Document) error {
-				compiled, err := CompileHTML(`<svg width="18" height="12" aria-label="Vector mark"><rect width="18" height="12" fill="#408020" stroke="none"/></svg>`)
+			plan: func(pdf *pdfDocument) error {
+				compiled, err := compileHTML(`<svg width="18" height="12" aria-label="Vector mark"><rect width="18" height="12" fill="#408020" stroke="none"/></svg>`)
 				if err != nil {
 					return err
 				}
-				_, err = pdf.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+				_, err = pdf.planCompiledHTMLContext(context.Background(), 12, compiled)
 				return err
 			},
 		},
@@ -98,7 +98,7 @@ func TestResourcePlanningDoesNotMutateOutputDocument(t *testing.T) {
 
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			pdf := MustNew(
+			pdf := mustNewPDFDocument(
 				WithUnit(UnitPoint),
 				WithCustomPageSize(Size{Wd: 220, Ht: 180}),
 				WithNoCompression(),

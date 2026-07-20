@@ -56,7 +56,7 @@ func TestTypedPlanBuildsDetachedCumulativeBoundedImageCatalog(t *testing.T) {
 		layout.ImageBlock{Data: first, Format: "png", Width: 10, Height: 10},
 		layout.ImageBlock{Data: second, Format: "png", Width: 10, Height: 10},
 	}}
-	planner := MustNew(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: int64(limit)}))
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: int64(limit)}))
 	if plan, err := planner.PlanLayoutDocumentContext(context.Background(), doc); err == nil || plan.PageCount() != 0 || !strings.Contains(err.Error(), "cumulative planned image source bytes exceed limit") {
 		t.Fatalf("cumulative catalog plan pages=%d err=%v", plan.PageCount(), err)
 	}

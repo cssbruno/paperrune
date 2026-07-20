@@ -53,11 +53,11 @@ func sameRGBColor(clr pdfColor, r, g, b int) bool {
 // rectangles and cell borders). It is expressed in RGB components (0-255).
 // The method can be called before the first page is created. The value is
 // retained from page to page.
-func (f *Document) SetDrawColor(r, g, b int) {
+func (f *pdfDocument) SetDrawColor(r, g, b int) {
 	f.setDrawColor(r, g, b)
 }
 
-func (f *Document) setDrawColor(r, g, b int) {
+func (f *pdfDocument) setDrawColor(r, g, b int) {
 	if !sameRGBColor(f.color.draw, r, g, b) {
 		f.color.draw = rgbColorValue(r, g, b, "G", "RG")
 	}
@@ -69,7 +69,7 @@ func (f *Document) setDrawColor(r, g, b int) {
 // GetDrawColor returns the most recently set draw color as RGB components
 // (0-255). This will not be the current value if a draw color of some other type
 // (for example, spot) has been more recently set.
-func (f *Document) GetDrawColor() (int, int, int) {
+func (f *pdfDocument) GetDrawColor() (int, int, int) {
 	return f.color.draw.ir, f.color.draw.ig, f.color.draw.ib
 }
 
@@ -77,11 +77,11 @@ func (f *Document) GetDrawColor() (int, int, int) {
 // rectangles and cell backgrounds). It is expressed in RGB components (0-255).
 // The method can be called before the first page is created and the
 // value is retained from page to page.
-func (f *Document) SetFillColor(r, g, b int) {
+func (f *pdfDocument) SetFillColor(r, g, b int) {
 	f.setFillColor(r, g, b)
 }
 
-func (f *Document) setFillColor(r, g, b int) {
+func (f *pdfDocument) setFillColor(r, g, b int) {
 	if !sameRGBColor(f.color.fill, r, g, b) {
 		f.color.fill = rgbColorValue(r, g, b, "g", "rg")
 	}
@@ -94,18 +94,18 @@ func (f *Document) setFillColor(r, g, b int) {
 // GetFillColor returns the most recently set fill color as RGB components
 // (0-255). This will not be the current value if a fill color of some other type
 // (for example, spot) has been more recently set.
-func (f *Document) GetFillColor() (int, int, int) {
+func (f *pdfDocument) GetFillColor() (int, int, int) {
 	return f.color.fill.ir, f.color.fill.ig, f.color.fill.ib
 }
 
 // SetTextColor defines the color used for text. It is expressed in RGB
 // components (0-255). The method can be called before the first page is
 // created. The value is retained from page to page.
-func (f *Document) SetTextColor(r, g, b int) {
+func (f *pdfDocument) SetTextColor(r, g, b int) {
 	f.setTextColor(r, g, b)
 }
 
-func (f *Document) setTextColor(r, g, b int) {
+func (f *pdfDocument) setTextColor(r, g, b int) {
 	if !sameRGBColor(f.color.text, r, g, b) {
 		f.color.text = rgbColorValue(r, g, b, "g", "rg")
 	}
@@ -115,6 +115,6 @@ func (f *Document) setTextColor(r, g, b int) {
 // GetTextColor returns the most recently set text color as RGB components
 // (0-255). This will not be the current value if a text color of some other type
 // (for example, spot) has been more recently set.
-func (f *Document) GetTextColor() (int, int, int) {
+func (f *pdfDocument) GetTextColor() (int, int, int) {
 	return f.color.text.ir, f.color.text.ig, f.color.text.ib
 }

@@ -13,7 +13,7 @@ const svgMaxPatternTiles = 4096
 // SVGWrite renders the SVG image described by sb. The scale value converts SVG
 // coordinates to the unit of measure specified in New(). The current position,
 // as set with SetXY(), is used as the image origin.
-func (f *Document) SVGWrite(sb *SVG, scale float64) {
+func (f *pdfDocument) SVGWrite(sb *SVG, scale float64) {
 	f.svgWriteWithOptions(sb, scale, svgWriteOptions{})
 }
 
@@ -21,7 +21,7 @@ type svgWriteOptions struct {
 	TextRole string
 }
 
-func (f *Document) svgWriteWithOptions(sb *SVG, scale float64, options svgWriteOptions) {
+func (f *pdfDocument) svgWriteWithOptions(sb *SVG, scale float64, options svgWriteOptions) {
 	originX, originY := f.GetXY()
 	drawR, drawG, drawB := f.GetDrawColor()
 	fillR, fillG, fillB := f.GetFillColor()
@@ -94,7 +94,7 @@ func (f *Document) svgWriteWithOptions(sb *SVG, scale float64, options svgWriteO
 	}
 }
 
-func (f *Document) svgWriteElement(originX, originY, scale float64, element *SVGElement, options svgWriteOptions) {
+func (f *pdfDocument) svgWriteElement(originX, originY, scale float64, element *SVGElement, options svgWriteOptions) {
 	switch element.Kind {
 	case "path":
 		f.svgWritePath(originX, originY, scale, element.Path)
@@ -105,7 +105,7 @@ func (f *Document) svgWriteElement(originX, originY, scale float64, element *SVG
 	}
 }
 
-func (f *Document) svgWritePath(originX, originY, scale float64, path SVGPath) {
+func (f *pdfDocument) svgWritePath(originX, originY, scale float64, path SVGPath) {
 	if clipped := f.svgClipStart(originX, originY, scale, path.Style); clipped {
 		defer f.svgClipEnd()
 	}
@@ -132,7 +132,7 @@ func (f *Document) svgWritePath(originX, originY, scale float64, path SVGPath) {
 	}
 }
 
-func (f *Document) svgWriteImage(originX, originY, scale float64, image SVGImage) {
+func (f *pdfDocument) svgWriteImage(originX, originY, scale float64, image SVGImage) {
 	if len(image.Data) == 0 || image.ImageType == "" || image.Wd <= 0 || image.Ht <= 0 || image.Style.Hidden {
 		return
 	}
@@ -164,7 +164,7 @@ func (f *Document) svgWriteImage(originX, originY, scale float64, image SVGImage
 		"")
 }
 
-func (f *Document) svgEmitPath(originX, originY, scale float64, segments []SVGSegment) {
+func (f *pdfDocument) svgEmitPath(originX, originY, scale float64, segments []SVGSegment) {
 	var x, y, newX, newY float64
 	var cx0, cy0, cx1, cy1 float64
 	var seg SVGSegment
@@ -265,7 +265,7 @@ func svgPathPaint(style SVGStyle, segs []SVGSegment) (stroke, fill bool) {
 	return open, !open
 }
 
-func (f *Document) svgClipStart(originX, originY, scale float64, style SVGStyle) bool {
+func (f *pdfDocument) svgClipStart(originX, originY, scale float64, style SVGStyle) bool {
 	if len(style.ClipPath) == 0 {
 		return false
 	}
@@ -279,7 +279,7 @@ func (f *Document) svgClipStart(originX, originY, scale float64, style SVGStyle)
 	return true
 }
 
-func (f *Document) svgClipEnd() {
+func (f *pdfDocument) svgClipEnd() {
 	f.out("Q")
 }
 
@@ -408,7 +408,7 @@ func svgPatternTile(pattern SVGPattern, minX, minY, maxX, maxY float64) (x, y, w
 	return minX + pattern.X*bboxWd, minY + pattern.Y*bboxHt, pattern.Wd * bboxWd, pattern.Ht * bboxHt
 }
 
-func (f *Document) svgWritePatternFill(originX, originY, scale float64, path SVGPath) {
+func (f *pdfDocument) svgWritePatternFill(originX, originY, scale float64, path SVGPath) {
 	minX, minY, maxX, maxY, ok := svgPathCachedBounds(path)
 	if !ok || maxX <= minX || maxY <= minY {
 		return
@@ -475,7 +475,7 @@ func (f *Document) svgWritePatternFill(originX, originY, scale float64, path SVG
 	f.out("Q")
 }
 
-func (f *Document) svgPatternTileTemplate(pattern SVGPattern, tileWd, tileHt, scale float64) TemplateView {
+func (f *pdfDocument) svgPatternTileTemplate(pattern SVGPattern, tileWd, tileHt, scale float64) TemplateView {
 	if len(pattern.Elements) == 0 || tileWd <= 0 || tileHt <= 0 || f.err != nil {
 		return nil
 	}
@@ -490,7 +490,7 @@ func (f *Document) svgPatternTileTemplate(pattern SVGPattern, tileWd, tileHt, sc
 	})
 }
 
-func (f *Document) svgWriteGradientFill(originX, originY, scale float64, path SVGPath) {
+func (f *pdfDocument) svgWriteGradientFill(originX, originY, scale float64, path SVGPath) {
 	minX, minY, maxX, maxY, ok := svgPathCachedBounds(path)
 	if !ok || maxX <= minX || maxY <= minY {
 		return
@@ -537,7 +537,7 @@ func (f *Document) svgWriteGradientFill(originX, originY, scale float64, path SV
 	f.out("Q")
 }
 
-func (f *Document) svgApplyPathStyle(path SVGPath, scale float64) string {
+func (f *pdfDocument) svgApplyPathStyle(path SVGPath, scale float64) string {
 	style := path.Style
 	if style.Hidden {
 		return ""
@@ -602,7 +602,7 @@ func (f *Document) svgApplyPathStyle(path SVGPath, scale float64) string {
 	}
 }
 
-func (f *Document) svgWriteText(originX, originY, scale float64, text *SVGText, options svgWriteOptions) {
+func (f *pdfDocument) svgWriteText(originX, originY, scale float64, text *SVGText, options svgWriteOptions) {
 	if text.Text == "" || text.Style.Hidden || text.Style.Fill.None {
 		return
 	}
@@ -638,7 +638,7 @@ func (f *Document) svgWriteText(originX, originY, scale float64, text *SVGText, 
 	f.Text(x, y, text.Text)
 }
 
-func (f *Document) svgTextWidth(text *SVGText) float64 {
+func (f *pdfDocument) svgTextWidth(text *SVGText) float64 {
 	cache := &text.widthCache
 	if cache.ok && cache.font == f.currentFont.i && cache.fontSize == f.fontSize && cache.text == text.Text {
 		return cache.width

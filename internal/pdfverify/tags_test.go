@@ -15,15 +15,21 @@ func taggedFinalPDF(t *testing.T) []byte {
 	t.Helper()
 	pdf := document.MustNew(document.WithUnit(document.UnitPoint), document.WithDeterministicOutput())
 	pdf.EnableTaggedPDF()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	pdf.BeginStructure("Sect")
-	pdf.SetNextTextRole("H1")
-	pdf.Cell(0, 12, "Heading")
-	pdf.Ln(14)
-	pdf.SetNextTextRole("P")
-	pdf.Cell(0, 12, "Paragraph")
-	pdf.EndStructure()
+	source := "document @tags:\n" +
+		"  language: \"en\"\n" +
+		"  page @sheet:\n" +
+		"    width: 300pt\n" +
+		"    height: 200pt\n" +
+		"    margin: 20pt\n" +
+		"    body @body:\n" +
+		"      heading @heading:\n" +
+		"        level: 1\n" +
+		"        text: \"Heading\"\n" +
+		"      paragraph @paragraph:\n" +
+		"        text: \"Paragraph\"\n"
+	if result, err := pdf.WritePaper("tags.paper", source); err != nil || !result.OK() {
+		t.Fatalf("WritePaper() = %#v, %v", result, err)
+	}
 	var output bytes.Buffer
 	if err := pdf.OutputWithOptions(&output, document.OutputOptions{Deterministic: true}); err != nil {
 		t.Fatal(err)
@@ -41,10 +47,10 @@ func TestInspectTagsReadsFinalBytesAndValidatesHierarchy(t *testing.T) {
 	for index, node := range report.Nodes {
 		roles[index], depths[index] = node.Role, node.Depth
 	}
-	if got, want := roles, []string{"Document", "Sect", "H1", "P"}; !equalStrings(got, want) {
+	if got, want := roles, []string{"Document", "H1", "P"}; !equalStrings(got, want) {
 		t.Fatalf("roles = %v, want %v", got, want)
 	}
-	if got, want := depths, []uint16{0, 1, 2, 2}; !equalDepths(got, want) {
+	if got, want := depths, []uint16{0, 1, 1}; !equalDepths(got, want) {
 		t.Fatalf("depths = %v, want %v", got, want)
 	}
 }
@@ -57,7 +63,10 @@ func TestInspectTagsReportsAbsentOrDamagedFinalTagEvidence(t *testing.T) {
 	}
 
 	plain := document.MustNew(document.WithDeterministicOutput())
-	plain.AddPage()
+	source := "document @plain:\n  page @sheet:\n    body @body:\n      paragraph @copy:\n        text: \"Plain document\"\n"
+	if rendered, err := plain.WritePaper("plain.paper", source); err != nil || !rendered.OK() {
+		t.Fatalf("WritePaper() = %#v, %v", rendered, err)
+	}
 	var output bytes.Buffer
 	if err := plain.OutputWithOptions(&output, document.OutputOptions{Deterministic: true}); err != nil {
 		t.Fatal(err)

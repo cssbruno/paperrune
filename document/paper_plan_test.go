@@ -70,8 +70,8 @@ func TestPlanPaperIsReadOnlyReusableAndPreservesSourceIdentity(t *testing.T) {
 	if err != nil || !bytes.Contains(pixelHit.JSON(), []byte(`"Key":"@intro"`)) {
 		t.Fatalf("HitTestPixel() = %s, %v", pixelHit.JSON(), err)
 	}
-	first, _ := NewDocument(WithUnit(UnitPoint), WithDeterministicOutput())
-	second, _ := NewDocument(WithUnit(UnitPoint), WithDeterministicOutput())
+	first, _ := newPDFDocument(WithUnit(UnitPoint), WithDeterministicOutput())
+	second, _ := newPDFDocument(WithUnit(UnitPoint), WithDeterministicOutput())
 	firstResult, firstErr := first.WritePaperPlan(plan)
 	secondResult, secondErr := second.WritePaperPlan(plan)
 	if firstErr != nil || secondErr != nil || firstResult.Pages != 1 || secondResult.Pages != 1 {
@@ -94,7 +94,7 @@ func TestPlanPaperFailureReturnsNoUsablePlan(t *testing.T) {
 	if err == nil || plan.Hash() != "" || result.Pages != 0 || result.Hash != "" || len(result.Diagnostics) == 0 {
 		t.Fatalf("PlanPaper(invalid) = %#v, %#v, %v", plan, result, err)
 	}
-	target, _ := NewDocument(WithUnit(UnitPoint))
+	target, _ := newPDFDocument(WithUnit(UnitPoint))
 	if painted, paintErr := target.WritePaperPlan(plan); paintErr == nil || painted.Pages != 0 || target.PageCount() != 0 {
 		t.Fatalf("WritePaperPlan(zero) = %#v, %v, pages=%d", painted, paintErr, target.PageCount())
 	}
@@ -106,7 +106,7 @@ func TestWritePaperPlanTaggedOutputUsesSemanticDisplayPainter(t *testing.T) {
 	if err != nil || !result.OK() {
 		t.Fatalf("PlanPaper() = %#v, %v", result, err)
 	}
-	pdf := MustNew(WithUnit(UnitPoint), WithDeterministicOutput())
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithDeterministicOutput())
 	pdf.EnableTaggedPDF()
 	pdf.SetCompression(false)
 	if rendered, err := pdf.WritePaperPlan(plan); err != nil || rendered.Pages != 1 {

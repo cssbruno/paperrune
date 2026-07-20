@@ -20,7 +20,7 @@ func TestHTMLUnifiedFlexLowersExactFactorsBasisAndConstraints(t *testing.T) {
 	source := `<div style="display:flex;gap:10pt">` +
 		`<p style="flex:1 1 40pt;min-width:25pt;max-width:60pt">Grow</p>` +
 		`<p style="flex-grow:2;flex-shrink:3;flex-basis:50%">Percent</p></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,15 +66,15 @@ func TestHTMLUnifiedFlexGrowAndShrinkFreezeAtMinMax(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := CompileHTML(test.source)
+			compiled, err := compileHTML(test.source)
 			if err != nil {
 				t.Fatal(err)
 			}
-			first, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			first, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			if err != nil {
 				t.Fatal(err)
 			}
-			second, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			second, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			if err != nil || first.Hash() == "" || first.Hash() != second.Hash() {
 				t.Fatalf("deterministic plans = %q / %q, %v", first.Hash(), second.Hash(), err)
 			}
@@ -94,11 +94,11 @@ func TestHTMLUnifiedFlexGrowAndShrinkFreezeAtMinMax(t *testing.T) {
 func TestHTMLUnifiedFlexWrappedFixedAndPercentageBasesGrowPerLine(t *testing.T) {
 	source := `<div style="display:flex;flex-wrap:wrap;height:40pt;gap:5pt 10pt;align-content:flex-start">` +
 		`<p style="flex:1 1 60pt">A</p><p style="flex:1 1 50%">B</p><p style="flex:1 1 60pt">C</p></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,12 +126,12 @@ func TestHTMLUnifiedFlexReverseMainKeepsReadingOrderAndRenders(t *testing.T) {
 	requireDarwinRasterBaseline(t)
 	source := `<div style="display:flex;flex-direction:row-reverse;gap:10pt">` +
 		`<p style="flex:0 0 40pt">First</p><h2 style="flex:0 0 40pt">Second</h2></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestHTMLUnifiedFlexReverseMainKeepsReadingOrderAndRenders(t *testing.T) {
 	renderPDF := func() ([]byte, float64) {
 		pdf := newHTMLFrameTestDocument(t, 160)
 		pdf.SetXY(16, 42)
-		html := pdf.HTMLNew()
+		html := pdf.htmlNew()
 		if err := html.WriteContext(context.Background(), 12, source); err != nil {
 			t.Fatal(err)
 		}
@@ -215,23 +215,23 @@ func TestTypedRowColumnReverseMainHasCausalGeometryAndStableSemantics(t *testing
 }
 
 func TestHTMLUnifiedFlexExtendedCohortCancelsAtomicallyAndRejectsRemainder(t *testing.T) {
-	compiled, err := CompileHTML(`<div style="display:flex"><p style="flex:1 1 20pt">A</p></div>`)
+	compiled, err := compileHTML(`<div style="display:flex"><p style="flex:1 1 20pt">A</p></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(ctx, 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(ctx, 12, compiled)
 	if !errors.Is(err, context.Canceled) || plan.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("canceled flex plan = %#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
-	unsupported, err := CompileHTML(`<div style="display:flex"><p style="flex:1.1234567 1 20pt">A</p></div>`)
+	unsupported, err := compileHTML(`<div style="display:flex"><p style="flex:1.1234567 1 20pt">A</p></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err = planner.PlanCompiledHTMLContext(context.Background(), 12, unsupported)
-	if !errors.Is(err, ErrHTMLPlanUnsupported) || !strings.Contains(err.Error(), `flex shorthand "1.1234567 1 20pt" is unsupported`) || plan.Hash() != "" || planner.PageCount() != 0 {
+	plan, err = planner.planCompiledHTMLContext(context.Background(), 12, unsupported)
+	if !errors.Is(err, errHTMLPlanUnsupported) || !strings.Contains(err.Error(), `flex shorthand "1.1234567 1 20pt" is unsupported`) || plan.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("unsupported flex plan = %#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
 }
@@ -240,7 +240,7 @@ func TestHTMLUnifiedFlexIntrinsicFractionalPercentageBoundsAndPrecedence(t *test
 	source := `<div style="display:flex;height:30pt;gap:10pt;align-items:center">` +
 		`<p style="flex:1.5 1 auto;max-width:40%;min-height:50%">Alpha</p>` +
 		`<p style="flex:9 9 90pt;flex-grow:.5;flex-shrink:1.25;flex-basis:10%;min-width:20%;max-width:60%;height:12pt">Beta</p></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,11 +261,11 @@ func TestHTMLUnifiedFlexIntrinsicFractionalPercentageBoundsAndPrecedence(t *test
 	if second.BasisKind != layout.RowColumnFlexBasisPercent || second.BasisPercent != 10_000_000 || second.GrowFactor != 500_000 || second.ShrinkFactor != 1_250_000 || second.MinPercent != 20_000_000 || second.MaxPercent != 60_000_000 {
 		t.Fatalf("longhand precedence/percentage second track = %+v", second)
 	}
-	first, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	first, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondPlan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	secondPlan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil || first.Hash() == "" || first.Hash() != secondPlan.Hash() {
 		t.Fatalf("deterministic intrinsic plan = %q/%q err=%v", first.Hash(), secondPlan.Hash(), err)
 	}
@@ -288,12 +288,12 @@ func TestHTMLUnifiedFlexIntrinsicFractionalPercentageBoundsAndPrecedence(t *test
 
 func TestHTMLUnifiedFlexStructuredTableItemPlanRasterPDFSemanticsAndCursor(t *testing.T) {
 	source := `<div style="display:flex;gap:10pt;align-items:flex-start"><section style="flex:0 0 120pt"><table><tbody><tr><th>Code</th><td>OK</td></tr></tbody></table></section><p style="flex:1 1 0">Summary</p></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestHTMLUnifiedFlexStructuredTableItemPlanRasterPDFSemanticsAndCursor(t *te
 	render := func() ([]byte, float64) {
 		pdf := newHTMLFrameTestDocument(t, 160)
 		pdf.SetXY(16, 42)
-		html := pdf.HTMLNew()
+		html := pdf.htmlNew()
 		if err := html.WriteContext(context.Background(), 12, source); err != nil {
 			t.Fatal(err)
 		}
@@ -343,16 +343,16 @@ func TestHTMLUnifiedFlexStructuredTableItemPlanRasterPDFSemanticsAndCursor(t *te
 func TestHTMLUnifiedFlexWrappedContentBasisIsDeterministicAndKeepsSourceOrder(t *testing.T) {
 	source := `<div style="display:flex;flex-wrap:wrap;height:60pt;gap:4pt 10pt;align-content:flex-start">` +
 		`<p style="flex:0 1 auto;max-width:45%">Alpha alpha</p><p style="flex:0 1 auto;max-width:45%">Beta beta</p><p style="flex:0 1 auto;max-width:45%">Gamma gamma</p></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	first, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	first, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	second, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil || first.Hash() != second.Hash() {
 		t.Fatalf("wrapped content deterministic plan = %q/%q err=%v", first.Hash(), second.Hash(), err)
 	}
@@ -368,7 +368,7 @@ func TestHTMLUnifiedFlexWrappedContentBasisIsDeterministicAndKeepsSourceOrder(t 
 }
 
 func TestHTMLUnifiedFlexIntrinsicCompiledConcurrentReuse(t *testing.T) {
-	compiled, err := CompileHTML(`<div style="display:flex;height:32pt;gap:5pt"><p style="flex:.75 1 auto;min-width:15%">Alpha beta</p><p style="flex:1.25 1 auto;max-width:65%">Gamma</p></div>`)
+	compiled, err := compileHTML(`<div style="display:flex;height:32pt;gap:5pt"><p style="flex:.75 1 auto;min-width:15%">Alpha beta</p><p style="flex:1.25 1 auto;max-width:65%">Gamma</p></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +380,7 @@ func TestHTMLUnifiedFlexIntrinsicCompiledConcurrentReuse(t *testing.T) {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			plan, planErr := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			plan, planErr := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			if planErr != nil {
 				errs <- planErr
 				return
@@ -406,14 +406,14 @@ func TestHTMLUnifiedFlexIntrinsicCompiledConcurrentReuse(t *testing.T) {
 }
 
 func BenchmarkHTMLUnifiedFlexIntrinsicFractionalPlan(b *testing.B) {
-	compiled, err := CompileHTML(`<div style="display:flex;height:40pt;gap:4pt"><p style="flex:.5 1 auto;min-width:10%">Alpha beta</p><p style="flex:1.5 1 auto;max-width:70%">Gamma delta</p></div>`)
+	compiled, err := compileHTML(`<div style="display:flex;height:40pt;gap:4pt"><p style="flex:.5 1 auto;min-width:10%">Alpha beta</p><p style="flex:1.5 1 auto;max-width:70%">Gamma delta</p></div>`)
 	if err != nil {
 		b.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		if _, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
+		if _, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
 			b.Fatal(err)
 		}
 	}

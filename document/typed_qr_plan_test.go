@@ -27,7 +27,7 @@ func TestLayoutDocumentPlanLowersQRToExactImageTextLinkSemanticsAndPDF(t *testin
 			}},
 		},
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	plan, err := planner.PlanLayoutDocument(doc)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestLayoutDocumentPlanLowersQRToExactImageTextLinkSemanticsAndPDF(t *testin
 		t.Fatalf("QR raster capture = pages %d, %v", len(raster.Pages), err)
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	pages, err := target.WriteLayoutDocumentPlan(plan)
 	if err != nil || pages != plan.PageCount() {
 		t.Fatalf("WriteLayoutDocumentPlan(QR) = pages %d, %v", pages, err)
@@ -81,7 +81,7 @@ func TestLayoutDocumentPlanLowersQRToExactImageTextLinkSemanticsAndPDF(t *testin
 		t.Fatalf("QR PDF lacks image or exact URI annotation")
 	}
 
-	again, err := MustNew(WithUnit(UnitPoint)).PlanLayoutDocument(doc)
+	again, err := mustNewPDFDocument(WithUnit(UnitPoint)).PlanLayoutDocument(doc)
 	if err != nil || again.Hash() != plan.Hash() {
 		t.Fatalf("deterministic QR plan = %q, %v; want %q", again.Hash(), err, plan.Hash())
 	}
@@ -91,7 +91,7 @@ func TestLayoutDocumentPlanQRIsDetachedAndReusableAcrossConcurrentWriters(t *tes
 	model := &layout.LayoutDocument{Body: []layout.Block{layout.QRVerificationBlock{QR: layout.QRBlock{
 		URL: "https://example.test/original", Label: "Original", Size: 24, Align: "right",
 	}}}}
-	plan, err := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput()).PlanLayoutDocument(model)
+	plan, err := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput()).PlanLayoutDocument(model)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestLayoutDocumentPlanQRIsDetachedAndReusableAcrossConcurrentWriters(t *tes
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+			target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 			if _, writeErr := target.WriteLayoutDocumentPlan(plan); writeErr != nil {
 				errs <- writeErr
 				return
@@ -131,7 +131,7 @@ func TestLayoutDocumentPlanAppendsStandaloneQRAfterBodyAndSignature(t *testing.T
 		Signature: &layout.SignatureBlock{Rows: []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Name: "Signer"}}}}},
 		QR:        &layout.QRBlock{Value: "opaque-verification-value", Label: "Check", Size: 24},
 	}
-	plan, err := MustNew(WithUnit(UnitPoint)).PlanLayoutDocument(doc)
+	plan, err := mustNewPDFDocument(WithUnit(UnitPoint)).PlanLayoutDocument(doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestLayoutDocumentPlanRejectsInvalidQRAtomicallyAndHonorsCancellation(t *te
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			planner := MustNew(WithUnit(UnitPoint))
+			planner := mustNewPDFDocument(WithUnit(UnitPoint))
 			plan, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{layout.QRVerificationBlock{QR: test.qr}}})
 			if err == nil || !strings.Contains(err.Error(), test.want) || plan.Hash() != "" || planner.PageCount() != 0 {
 				t.Fatalf("invalid QR = plan %q pages %d, %v; want %q", plan.Hash(), planner.PageCount(), err, test.want)
@@ -240,7 +240,7 @@ func TestLayoutDocumentPlanRejectsInvalidQRAtomicallyAndHonorsCancellation(t *te
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	planner := MustNew(WithUnit(UnitPoint))
+	planner := mustNewPDFDocument(WithUnit(UnitPoint))
 	plan, err := planner.PlanLayoutDocumentContext(ctx, &layout.LayoutDocument{Body: []layout.Block{
 		layout.QRVerificationBlock{QR: layout.QRBlock{Value: "cancelled"}},
 	}})

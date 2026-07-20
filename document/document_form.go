@@ -42,7 +42,7 @@ type FormAnswer struct {
 
 // FormDocumentHTML returns the canonical supported-HTML representation of a
 // form document.
-func FormDocumentHTML(form FormDocument) string {
+func formDocumentHTML(form FormDocument) string {
 	out := newFormHTMLWriter(estimateFormHTMLSize(form))
 	if strings.TrimSpace(form.Title) != "" {
 		out.elementText("h1", form.Title)
@@ -55,10 +55,10 @@ func FormDocumentHTML(form FormDocument) string {
 
 // ValidateFormDocumentHTML validates the canonical form HTML against the
 // supported HTML subset.
-func ValidateFormDocumentHTML(form FormDocument) []string {
-	pdf := MustNew()
-	html := pdf.HTMLNew()
-	return html.ValidateHTML(FormDocumentHTML(form))
+func validateFormDocumentHTML(form FormDocument) []string {
+	pdf := mustNewPDFDocument()
+	html := pdf.htmlNew()
+	return html.validateHTML(formDocumentHTML(form))
 }
 
 // FormDocumentBlocks converts a form into shared document blocks.

@@ -18,7 +18,7 @@ type htmlTableType struct {
 	captionStart     int
 	captionEnd       int
 	captionAttrs     map[string]string
-	captionTokens    []HTMLSegmentType
+	captionTokens    []htmlSegmentType
 	captionText      string
 	captionPreserved string
 	rows             []htmlTableRow
@@ -35,7 +35,7 @@ type htmlTableRow struct {
 
 type htmlTableCell struct {
 	attrs         map[string]string
-	tokens        []HTMLSegmentType
+	tokens        []htmlSegmentType
 	text          string
 	textPreserved string
 	tag           string
@@ -50,7 +50,7 @@ type htmlTableCell struct {
 
 const htmlMaxTableColumns = 1024
 
-func parseHTMLTable(tokens []HTMLSegmentType, start int) (htmlTableType, int) {
+func parseHTMLTable(tokens []htmlSegmentType, start int) (htmlTableType, int) {
 	if start < 0 || start >= len(tokens) || tokens[start].Cat != 'O' || tokens[start].Str != "table" {
 		return htmlTableType{}, start
 	}
@@ -135,7 +135,7 @@ func htmlTableRowsWithFooterLast(rows []htmlTableRow) []htmlTableRow {
 	return ordered
 }
 
-func htmlCollectCellTokens(tokens []HTMLSegmentType, start int) ([]HTMLSegmentType, int) {
+func htmlCollectCellTokens(tokens []htmlSegmentType, start int) ([]htmlSegmentType, int) {
 	tableDepth := 0
 	for i := start; i < len(tokens); i++ {
 		if tokens[i].Cat == 'O' && tokens[i].Str == "table" {
@@ -153,7 +153,7 @@ func htmlCollectCellTokens(tokens []HTMLSegmentType, start int) ([]HTMLSegmentTy
 	return tokens[start:], len(tokens) - 1
 }
 
-func htmlCollectCaptionTokens(tokens []HTMLSegmentType, start int) ([]HTMLSegmentType, int) {
+func htmlCollectCaptionTokens(tokens []htmlSegmentType, start int) ([]htmlSegmentType, int) {
 	depth := 0
 	for i := start; i < len(tokens); i++ {
 		if tokens[i].Cat == 'O' && tokens[i].Str == "table" {
@@ -171,7 +171,7 @@ func htmlCollectCaptionTokens(tokens []HTMLSegmentType, start int) ([]HTMLSegmen
 	return tokens[start:], len(tokens) - 1
 }
 
-func htmlTableRowCellCount(tokens []HTMLSegmentType, start int) int {
+func htmlTableRowCellCount(tokens []htmlSegmentType, start int) int {
 	count, depth := 0, 0
 	for i := start; i < len(tokens); i++ {
 		if tokens[i].Cat == 'O' && tokens[i].Str == "table" {
@@ -192,7 +192,7 @@ func htmlTableRowCellCount(tokens []HTMLSegmentType, start int) int {
 	return count
 }
 
-func htmlTableRowCount(tokens []HTMLSegmentType, start int) int {
+func htmlTableRowCount(tokens []htmlSegmentType, start int) int {
 	count, depth := 0, 0
 	for i := start; i < len(tokens); i++ {
 		if tokens[i].Cat == 'O' && tokens[i].Str == "table" {

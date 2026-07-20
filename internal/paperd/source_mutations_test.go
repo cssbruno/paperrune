@@ -28,6 +28,19 @@ const bindingMutationFixture = `document @report:
         text: "Amount"
 `
 
+const cellBindingMutationFixture = `document @report:
+  schema invoice:
+    string item
+  page @sheet:
+    body @body:
+      table @ledger:
+        table-column:
+          width: 100%
+        table-row:
+          cell @bound-cell:
+            text: "Item"
+`
+
 func mutationGuard(t *testing.T, workspace *Workspace, source, target, key string, mode CapabilityMode) (PaperMutationGuard, PaperCreateResult, PaperOpenSnapshot) {
 	t.Helper()
 	created, err := workspace.PaperCreate(PaperCreateRequest{File: "mutation.paper", Source: source})
@@ -141,6 +154,32 @@ func TestPaperSetBindingCompilesBeforePublishing(t *testing.T) {
 		t.Fatal("invalid binding published a candidate revision")
 	}
 	_ = created
+}
+
+func TestPaperSetBindingSupportsDirectTableCells(t *testing.T) {
+	workspace := mustWorkspace(t, Limits{})
+	guard, _, _ := mutationGuard(t, workspace, cellBindingMutationFixture, "@bound-cell", "cell-binding", CapabilityEdit)
+	result, err := workspace.PaperSetBinding(PaperSetBindingRequest{Guard: guard, Path: "item"})
+	if err != nil || !strings.Contains(result.Revision.Source, `bind: "item"`) {
+		t.Fatalf("cell binding = %#v, %v", result, err)
+	}
+}
+
+func TestPaperSetBindingReplacesStaleFormattingMetadata(t *testing.T) {
+	workspace := mustWorkspace(t, Limits{})
+	guard, _, _ := mutationGuard(t, workspace, bindingResetFixture, "@amount", "binding-replace", CapabilityEdit)
+	result, err := workspace.PaperSetBinding(PaperSetBindingRequest{Guard: guard, Path: "total"})
+	if err != nil {
+		t.Fatalf("PaperSetBinding(replace) error = %v", err)
+	}
+	if !strings.Contains(result.Revision.Source, `bind: "total"`) {
+		t.Fatalf("replacement lost binding:\n%s", result.Revision.Source)
+	}
+	for _, property := range []string{"bind-required:", "format:", "format-locale:", "format-currency:", "format-min-fraction:", "format-max-fraction:"} {
+		if strings.Contains(result.Revision.Source, property) {
+			t.Fatalf("replacement retained stale %s in:\n%s", property, result.Revision.Source)
+		}
+	}
 }
 
 func TestPaperSourceMutationsEnforceModeRevocationAndAmbiguity(t *testing.T) {

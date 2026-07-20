@@ -28,7 +28,7 @@ import (
 
 const benchmarkWorkerCount40 = 40
 
-type benchmarkPDFOutput func(*document.Document, *bytes.Buffer) error
+type benchmarkPDFOutput func(*document.TestPDFDocument, *bytes.Buffer) error
 
 type benchmarkTableRow struct {
 	label string
@@ -46,21 +46,21 @@ func benchmarkTableRows(count int, valueScale float64) []benchmarkTableRow {
 	return rows
 }
 
-func benchmarkGeneratedPDF(b *testing.B, build func(*document.Document)) {
+func benchmarkGeneratedPDF(b *testing.B, build func(*document.TestPDFDocument)) {
 	b.Helper()
-	benchmarkGeneratedPDFOutput(b, build, func(pdf *document.Document, output *bytes.Buffer) error {
+	benchmarkGeneratedPDFOutput(b, build, func(pdf *document.TestPDFDocument, output *bytes.Buffer) error {
 		return pdf.Output(output)
 	})
 }
 
-func benchmarkGeneratedSignedPDF(b *testing.B, build func(*document.Document), options sign.Options) {
+func benchmarkGeneratedSignedPDF(b *testing.B, build func(*document.TestPDFDocument), options sign.Options) {
 	b.Helper()
-	benchmarkGeneratedPDFOutput(b, build, func(pdf *document.Document, output *bytes.Buffer) error {
+	benchmarkGeneratedPDFOutput(b, build, func(pdf *document.TestPDFDocument, output *bytes.Buffer) error {
 		return pdf.OutputSigned(output, options)
 	})
 }
 
-func benchmarkGeneratedPDFOutput(b *testing.B, build func(*document.Document), outputPDF benchmarkPDFOutput) {
+func benchmarkGeneratedPDFOutput(b *testing.B, build func(*document.TestPDFDocument), outputPDF benchmarkPDFOutput) {
 	b.Helper()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -68,7 +68,7 @@ func benchmarkGeneratedPDFOutput(b *testing.B, build func(*document.Document), o
 	var totalBytes int64
 
 	for i := 0; i < b.N; i++ {
-		pdf := document.MustNew()
+		pdf := document.MustNewTestPDFDocument()
 		pdf.SetCompression(false)
 		build(pdf)
 
@@ -86,31 +86,31 @@ func benchmarkGeneratedPDFOutput(b *testing.B, build func(*document.Document), o
 	reportBenchmarkThroughput(b, totalBytes, elapsed)
 }
 
-func benchmarkGeneratedPDFConcurrent(b *testing.B, workers int, build func(*document.Document)) {
+func benchmarkGeneratedPDFConcurrent(b *testing.B, workers int, build func(*document.TestPDFDocument)) {
 	b.Helper()
-	benchmarkGeneratedPDFOutputConcurrent(b, workers, build, func(pdf *document.Document, output *bytes.Buffer) error {
+	benchmarkGeneratedPDFOutputConcurrent(b, workers, build, func(pdf *document.TestPDFDocument, output *bytes.Buffer) error {
 		return pdf.Output(output)
 	})
 }
 
-func benchmarkGeneratedPDFConcurrent40(b *testing.B, build func(*document.Document)) {
+func benchmarkGeneratedPDFConcurrent40(b *testing.B, build func(*document.TestPDFDocument)) {
 	b.Helper()
 	benchmarkGeneratedPDFConcurrent(b, benchmarkWorkerCount40, build)
 }
 
-func benchmarkGeneratedSignedPDFConcurrent(b *testing.B, workers int, build func(*document.Document), options sign.Options) {
+func benchmarkGeneratedSignedPDFConcurrent(b *testing.B, workers int, build func(*document.TestPDFDocument), options sign.Options) {
 	b.Helper()
-	benchmarkGeneratedPDFOutputConcurrent(b, workers, build, func(pdf *document.Document, output *bytes.Buffer) error {
+	benchmarkGeneratedPDFOutputConcurrent(b, workers, build, func(pdf *document.TestPDFDocument, output *bytes.Buffer) error {
 		return pdf.OutputSigned(output, options)
 	})
 }
 
-func benchmarkGeneratedSignedPDFConcurrent40(b *testing.B, build func(*document.Document), options sign.Options) {
+func benchmarkGeneratedSignedPDFConcurrent40(b *testing.B, build func(*document.TestPDFDocument), options sign.Options) {
 	b.Helper()
 	benchmarkGeneratedSignedPDFConcurrent(b, benchmarkWorkerCount40, build, options)
 }
 
-func benchmarkGeneratedPDFOutputConcurrent(b *testing.B, workers int, build func(*document.Document), outputPDF benchmarkPDFOutput) {
+func benchmarkGeneratedPDFOutputConcurrent(b *testing.B, workers int, build func(*document.TestPDFDocument), outputPDF benchmarkPDFOutput) {
 	b.Helper()
 	b.ReportAllocs()
 	if workers < 1 {
@@ -139,7 +139,7 @@ func benchmarkGeneratedPDFOutputConcurrent(b *testing.B, workers int, build func
 		go func() {
 			defer wg.Done()
 			for range jobs {
-				pdf := document.MustNew()
+				pdf := document.MustNewTestPDFDocument()
 				pdf.SetCompression(false)
 				build(pdf)
 
@@ -231,8 +231,8 @@ func BenchmarkGenerationTextConcurrent40(b *testing.B) {
 	benchmarkGeneratedPDFConcurrent40(b, benchmarkGenerationTextBuilder())
 }
 
-func benchmarkGenerationTextBuilder() func(*document.Document) {
-	return func(pdf *document.Document) {
+func benchmarkGenerationTextBuilder() func(*document.TestPDFDocument) {
+	return func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Arial", "", 10)
 		for row := 0; row < 180; row++ {
@@ -249,7 +249,7 @@ func BenchmarkGenerationLongText(b *testing.B) {
 		b.Fatalf("ReadFile() error = %v", err)
 	}
 
-	build := func(pdf *document.Document) {
+	build := func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Times", "", 11)
 		pdf.MultiCell(0, 5, string(text), "", "J", false)
@@ -263,7 +263,7 @@ func BenchmarkGenerationLongTextConcurrent40(b *testing.B) {
 		b.Fatalf("ReadFile() error = %v", err)
 	}
 
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Times", "", 11)
 		pdf.MultiCell(0, 5, string(text), "", "J", false)
@@ -283,11 +283,11 @@ func BenchmarkGenerationHTMLText(b *testing.B) {
 	}
 	htmlStr += htmlBuilder.String()
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.Write(lineHeight, htmlStr)
 	})
 }
@@ -304,16 +304,16 @@ func BenchmarkGenerationHTMLTextCompiled(b *testing.B) {
 			`<span class="note">styled text</span>.</p>`, i)
 	}
 	htmlStr += htmlBuilder.String()
-	compiled, err := document.CompileHTML(htmlStr)
+	compiled, err := document.CompileHTMLForTest(htmlStr)
 	if err != nil {
 		b.Fatalf("CompileHTML() error = %v", err)
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.WriteCompiled(lineHeight, compiled)
 	})
 }
@@ -321,33 +321,33 @@ func BenchmarkGenerationHTMLTextCompiled(b *testing.B) {
 func BenchmarkGenerationHTMLTemplateDynamicValues(b *testing.B) {
 	templateHTML := benchmarkHTMLTemplateDynamicValues()
 	var seq int64
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		n := atomic.AddInt64(&seq, 1)
-		fragment, err := document.RenderHTMLTemplate(templateHTML, benchmarkHTMLTemplateValues(n))
+		fragment, err := document.RenderHTMLTemplateForTest(templateHTML, benchmarkHTMLTemplateValues(n))
 		if err != nil {
 			b.Fatalf("RenderHTMLTemplate() error = %v", err)
 		}
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.Write(lineHeight, fragment)
 	})
 }
 
 func BenchmarkGenerationHTMLCompiledTemplateDynamicValues(b *testing.B) {
 	templateHTML := benchmarkHTMLTemplateDynamicValues()
-	compiled, err := document.CompileHTMLTemplate(templateHTML)
+	compiled, err := document.CompileHTMLTemplateForTest(templateHTML)
 	if err != nil {
 		b.Fatalf("CompileHTMLTemplate() error = %v", err)
 	}
 	var seq int64
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		n := atomic.AddInt64(&seq, 1)
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.WriteTemplate(lineHeight, compiled, benchmarkHTMLTemplateValues(n))
 	})
 }
@@ -366,11 +366,11 @@ func BenchmarkGenerationHTMLTable(b *testing.B) {
 		`<thead><tr><th width="22%">Code</th><th>Description</th><th width="18%">Value</th></tr></thead>` +
 		`<tbody>` + rows.String() + `</tbody></table>`
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 9)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.Write(lineHeight, htmlStr)
 	})
 }
@@ -388,16 +388,16 @@ func BenchmarkGenerationHTMLTableCompiled(b *testing.B) {
 		`<table border="1" cellpadding="3" width="100%">` +
 		`<thead><tr><th width="22%">Code</th><th>Description</th><th width="18%">Value</th></tr></thead>` +
 		`<tbody>` + rows.String() + `</tbody></table>`
-	compiled, err := document.CompileHTML(htmlStr)
+	compiled, err := document.CompileHTMLForTest(htmlStr)
 	if err != nil {
 		b.Fatalf("CompileHTML() error = %v", err)
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 9)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.WriteCompiled(lineHeight, compiled)
 	})
 }
@@ -410,11 +410,11 @@ func BenchmarkGenerationHTMLDataPNG(b *testing.B) {
 		fmt.Fprintf(&body, `<p>PNG block %02d</p><img src="%s" width="24" height="24"/>`, i, pngDataURI)
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.Write(lineHeight, body.String())
 	})
 }
@@ -426,16 +426,16 @@ func BenchmarkGenerationHTMLDataPNGCompiled(b *testing.B) {
 	for i := 0; i < 24; i++ {
 		fmt.Fprintf(&body, `<p>PNG block %02d</p><img src="%s" width="24" height="24"/>`, i, pngDataURI)
 	}
-	compiled, err := document.CompileHTML(body.String())
+	compiled, err := document.CompileHTMLForTest(body.String())
 	if err != nil {
 		b.Fatalf("CompileHTML() error = %v", err)
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.WriteCompiled(lineHeight, compiled)
 	})
 }
@@ -452,11 +452,11 @@ func BenchmarkGenerationHTMLInlineSVG(b *testing.B) {
 		fmt.Fprintf(&body, `<p>SVG block %02d</p>%s`, i, svgFragment)
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.Write(lineHeight, body.String())
 	})
 }
@@ -472,16 +472,16 @@ func BenchmarkGenerationHTMLInlineSVGCompiled(b *testing.B) {
 	for i := 0; i < 20; i++ {
 		fmt.Fprintf(&body, `<p>SVG block %02d</p>%s`, i, svgFragment)
 	}
-	compiled, err := document.CompileHTML(body.String())
+	compiled, err := document.CompileHTMLForTest(body.String())
 	if err != nil {
 		b.Fatalf("CompileHTML() error = %v", err)
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.WriteCompiled(lineHeight, compiled)
 	})
 }
@@ -516,11 +516,11 @@ func BenchmarkGenerationHTMLMixedDocument(b *testing.B) {
 		`<p style="break-before: page">Second page paragraph with <em>emphasis</em> and <u>decoration</u>.</p>` +
 		svgFragment
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.Write(lineHeight, htmlStr)
 	})
 }
@@ -554,16 +554,16 @@ func BenchmarkGenerationHTMLMixedDocumentCompiled(b *testing.B) {
 		`<tbody>` + rows.String() + `</tbody></table>` +
 		`<p style="break-before: page">Second page paragraph with <em>emphasis</em> and <u>decoration</u>.</p>` +
 		svgFragment
-	compiled, err := document.CompileHTML(htmlStr)
+	compiled, err := document.CompileHTMLForTest(htmlStr)
 	if err != nil {
 		b.Fatalf("CompileHTML() error = %v", err)
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.WriteCompiled(lineHeight, compiled)
 	})
 }
@@ -705,7 +705,7 @@ func benchmarkGenerationBaselineNoCompliance(b *testing.B, imageCache *document.
 	benchmarkGeneratedPDF(b, benchmarkGenerationBaselineNoComplianceBuilder(b, imageCache, true))
 }
 
-func benchmarkGenerationBaselineNoComplianceBuilder(b *testing.B, imageCache *document.ImageCache, includeImages bool) func(*document.Document) {
+func benchmarkGenerationBaselineNoComplianceBuilder(b *testing.B, imageCache *document.ImageCache, includeImages bool) func(*document.TestPDFDocument) {
 	const svgFragment = `<svg width="128" height="40" viewBox="0 0 128 40">` +
 		`<rect x="1" y="1" width="126" height="38" fill="#f6f8fa" stroke="#40516b"/>` +
 		`<path d="M10 28 L28 12 L46 24 L64 10 L82 22 L100 14 L118 30" fill="none" stroke="#18715f" stroke-width="3"/>` +
@@ -732,7 +732,7 @@ func benchmarkGenerationBaselineNoComplianceBuilder(b *testing.B, imageCache *do
 		}
 	}
 
-	return func(pdf *document.Document) {
+	return func(pdf *document.TestPDFDocument) {
 		pdf.SetTitle("Baseline no-compliance benchmark", false)
 		pdf.SetSubject("PDF generation without PDF/A, PDF/UA, Arlington, or XMP metadata", false)
 		pdf.SetAuthor("PaperRune benchmark", false)
@@ -780,11 +780,11 @@ func benchmarkGenerationBaselineNoComplianceBuilder(b *testing.B, imageCache *do
 	}
 }
 
-func benchmarkGenerationPDFA4FComplianceBuilder(b *testing.B) func(*document.Document) {
+func benchmarkGenerationPDFA4FComplianceBuilder(b *testing.B) func(*document.TestPDFDocument) {
 	cache := benchmarkComplianceFontCache(b)
 	icc := []byte("benchmark sRGB ICC placeholder for generation-only benchmark")
 
-	return func(pdf *document.Document) {
+	return func(pdf *document.TestPDFDocument) {
 		pdf.SetComplianceMetadata(document.ComplianceMetadata{
 			PDFA:       document.PDFAMode4F,
 			Lang:       "en-US",
@@ -815,14 +815,14 @@ func benchmarkGenerationPDFA4FComplianceBuilder(b *testing.B) func(*document.Doc
 	}
 }
 
-func benchmarkGenerationPDFUA2ArlingtonCompiledHTMLBuilder(b *testing.B) func(*document.Document) {
+func benchmarkGenerationPDFUA2ArlingtonCompiledHTMLBuilder(b *testing.B) func(*document.TestPDFDocument) {
 	cache := benchmarkComplianceFontCache(b)
-	compiled, err := document.CompileHTML(benchmarkTaggedHTML())
+	compiled, err := document.CompileHTMLForTest(benchmarkTaggedHTML())
 	if err != nil {
 		b.Fatalf("CompileHTML() error = %v", err)
 	}
 
-	return func(pdf *document.Document) {
+	return func(pdf *document.TestPDFDocument) {
 		pdf.SetTitle("PDF/UA-2 Arlington compiled HTML benchmark", false)
 		pdf.SetComplianceMetadata(document.ComplianceMetadata{
 			PDFUA2:     true,
@@ -838,31 +838,31 @@ func benchmarkGenerationPDFUA2ArlingtonCompiledHTMLBuilder(b *testing.B) func(*d
 		pdf.SetFont("DejaVu", "", 10)
 		pdf.SetNextTextRole("H1")
 		pdf.CellFormat(0, 7, "PDF/UA-2 tagged HTML benchmark", "", 1, "L", false, 0, "")
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.WriteCompiled(5, compiled)
 	}
 }
 
-func benchmarkGenerationCompiledHTMLBuilder(b *testing.B, htmlStr string) func(*document.Document) {
-	compiled, err := document.CompileHTML(htmlStr)
+func benchmarkGenerationCompiledHTMLBuilder(b *testing.B, htmlStr string) func(*document.TestPDFDocument) {
+	compiled, err := document.CompileHTMLForTest(htmlStr)
 	if err != nil {
 		b.Fatalf("CompileHTML() error = %v", err)
 	}
-	return func(pdf *document.Document) {
+	return func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 9)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.WriteCompiled(lineHeight, compiled)
 	}
 }
 
-func benchmarkGenerationHTMLBuilder(htmlStr string) func(*document.Document) {
-	return func(pdf *document.Document) {
+func benchmarkGenerationHTMLBuilder(htmlStr string) func(*document.TestPDFDocument) {
+	return func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 9)
 		_, lineHeight := pdf.GetFontSize()
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.Write(lineHeight, htmlStr)
 	}
 }
@@ -887,8 +887,8 @@ func benchmarkHTMLTemplateDynamicValues() string {
 	</table>`
 }
 
-func benchmarkHTMLTemplateValues(n int64) document.HTMLTemplateValues {
-	return document.HTMLTemplateValues{
+func benchmarkHTMLTemplateValues(n int64) document.HTMLTemplateValuesForTest {
+	return document.HTMLTemplateValuesForTest{
 		"title":     fmt.Sprintf("Invoice %06d", n),
 		"customer":  fmt.Sprintf("Customer Account %03d", n%997),
 		"link":      fmt.Sprintf("https://example.com/invoices/%06d", n),
@@ -908,15 +908,15 @@ func benchmarkHTMLTemplateValues(n int64) document.HTMLTemplateValues {
 	}
 }
 
-func benchmarkGenerationPDFA4FPDFUA2ArlingtonXMPBuilder(b *testing.B) func(*document.Document) {
+func benchmarkGenerationPDFA4FPDFUA2ArlingtonXMPBuilder(b *testing.B) func(*document.TestPDFDocument) {
 	cache := benchmarkComplianceFontCache(b)
-	compiled, err := document.CompileHTML(benchmarkTaggedHTML())
+	compiled, err := document.CompileHTMLForTest(benchmarkTaggedHTML())
 	if err != nil {
 		b.Fatalf("CompileHTML() error = %v", err)
 	}
 	icc := []byte("benchmark sRGB ICC placeholder for generation-only benchmark")
 
-	return func(pdf *document.Document) {
+	return func(pdf *document.TestPDFDocument) {
 		pdf.SetTitle("Signed PDF/A-4f PDF/UA-2 Arlington XMP benchmark", false)
 		pdf.SetComplianceMetadata(document.ComplianceMetadata{
 			PDFA:       document.PDFAMode4F,
@@ -944,7 +944,7 @@ func benchmarkGenerationPDFA4FPDFUA2ArlingtonXMPBuilder(b *testing.B) func(*docu
 		pdf.SetFont("DejaVu", "", 10)
 		pdf.SetNextTextRole("H1")
 		pdf.CellFormat(0, 7, "Signed compliance benchmark", "", 1, "L", false, 0, "")
-		html := pdf.HTMLNew()
+		html := pdf.HTMLNewForTest()
 		html.WriteCompiled(5, compiled)
 	}
 }
@@ -1112,7 +1112,7 @@ func BenchmarkGenerationUTF8Text(b *testing.B) {
 		b.Fatalf("ReadFile() error = %v", err)
 	}
 
-	build := func(pdf *document.Document) {
+	build := func(pdf *document.TestPDFDocument) {
 		pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
 		pdf.AddPage()
 		pdf.SetFont("DejaVu", "", 11)
@@ -1127,7 +1127,7 @@ func BenchmarkGenerationUTF8TextConcurrent40(b *testing.B) {
 		b.Fatalf("ReadFile() error = %v", err)
 	}
 
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
 		pdf.AddPage()
 		pdf.SetFont("DejaVu", "", 11)
@@ -1149,7 +1149,7 @@ func BenchmarkGenerationUTF8TextCachedFont(b *testing.B) {
 		b.Fatalf("AddUTF8FontFromBytes() error = %v", err)
 	}
 
-	build := func(pdf *document.Document) {
+	build := func(pdf *document.TestPDFDocument) {
 		pdf.AddUTF8FontFromCache("DejaVu", "", cache)
 		pdf.AddPage()
 		pdf.SetFont("DejaVu", "", 11)
@@ -1172,7 +1172,7 @@ func BenchmarkGenerationUTF8TextCachedFontConcurrent40(b *testing.B) {
 		b.Fatalf("AddUTF8FontFromBytes() error = %v", err)
 	}
 
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddUTF8FontFromCache("DejaVu", "", cache)
 		pdf.AddPage()
 		pdf.SetFont("DejaVu", "", 11)
@@ -1193,7 +1193,7 @@ func BenchmarkGenerationTextCompressionLevel(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				pdf := document.MustNew()
+				pdf := document.MustNewTestPDFDocument()
 				pdf.SetCompressionLevel(tc.level)
 				pdf.AddPage()
 				pdf.SetFont("Arial", "", 10)
@@ -1225,7 +1225,7 @@ func BenchmarkGenerationTextCompressionLevelConcurrent40(b *testing.B) {
 		{name: "BestCompression", level: zlib.BestCompression},
 	} {
 		b.Run(tc.name, func(b *testing.B) {
-			benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+			benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 				pdf.SetCompressionLevel(tc.level)
 				pdf.AddPage()
 				pdf.SetFont("Arial", "", 10)
@@ -1241,7 +1241,7 @@ func BenchmarkGenerationTextCompressionLevelConcurrent40(b *testing.B) {
 
 func BenchmarkGenerationImages(b *testing.B) {
 	images := benchmarkImageFiles(b)
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Arial", "", 10)
 		for i, image := range images {
@@ -1256,7 +1256,7 @@ func BenchmarkGenerationImages(b *testing.B) {
 
 func BenchmarkGenerationImagesConcurrent40(b *testing.B) {
 	images := benchmarkImageFiles(b)
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Arial", "", 10)
 		for i, image := range images {
@@ -1278,7 +1278,7 @@ func BenchmarkGenerationImagesCached(b *testing.B) {
 		}
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Arial", "", 10)
 		for i, image := range images {
@@ -1299,7 +1299,7 @@ func BenchmarkGenerationImagesCachedConcurrent40(b *testing.B) {
 		}
 	}
 
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetFont("Arial", "", 10)
 		for i, image := range images {
@@ -1342,7 +1342,7 @@ func BenchmarkGenerationSVG(b *testing.B) {
 		b.Fatalf("SVGParse() error = %v", err)
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetDrawColor(60, 90, 140)
 		pdf.SetLineWidth(0.4)
@@ -1363,7 +1363,7 @@ func BenchmarkGenerationSVGConcurrent40(b *testing.B) {
 		b.Fatalf("SVGParse() error = %v", err)
 	}
 
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		pdf.AddPage()
 		pdf.SetDrawColor(60, 90, 140)
 		pdf.SetLineWidth(0.4)
@@ -1375,7 +1375,7 @@ func BenchmarkGenerationSVGConcurrent40(b *testing.B) {
 }
 
 func BenchmarkGenerationTemplates(b *testing.B) {
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		template := pdf.CreateTemplate(func(tpl *document.Tpl) {
 			tpl.ImageOptions(example.ImageFile("logo.png"), 6, 6, 28, 0, false, document.ImageOptions{}, 0, "")
 			tpl.SetFont("Arial", "B", 14)
@@ -1396,7 +1396,7 @@ func BenchmarkGenerationTemplates(b *testing.B) {
 }
 
 func BenchmarkGenerationTemplatesConcurrent40(b *testing.B) {
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		template := pdf.CreateTemplate(func(tpl *document.Tpl) {
 			tpl.ImageOptions(example.ImageFile("logo.png"), 6, 6, 28, 0, false, document.ImageOptions{}, 0, "")
 			tpl.SetFont("Arial", "B", 14)
@@ -1418,7 +1418,7 @@ func BenchmarkGenerationTemplatesConcurrent40(b *testing.B) {
 
 func BenchmarkGenerationImportedPDFPages(b *testing.B) {
 	source := func() []byte {
-		pdf := document.MustNew(document.WithUnit(document.UnitPoint))
+		pdf := document.MustNewTestPDFDocument(document.WithUnit(document.UnitPoint))
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 16)
 		pdf.Text(72, 96, "Imported benchmark page")
@@ -1430,7 +1430,7 @@ func BenchmarkGenerationImportedPDFPages(b *testing.B) {
 		return out.Bytes()
 	}()
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		imported := pdf.ImportPageStream(bytes.NewReader(source), 1, "MediaBox")
 		pdf.AddPage()
 		for row := 0; row < 4; row++ {
@@ -1443,7 +1443,7 @@ func BenchmarkGenerationImportedPDFPages(b *testing.B) {
 
 func BenchmarkGenerationImportedPDFPagesConcurrent40(b *testing.B) {
 	source := func() []byte {
-		pdf := document.MustNew(document.WithUnit(document.UnitPoint))
+		pdf := document.MustNewTestPDFDocument(document.WithUnit(document.UnitPoint))
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 16)
 		pdf.Text(72, 96, "Imported benchmark page")
@@ -1455,7 +1455,7 @@ func BenchmarkGenerationImportedPDFPagesConcurrent40(b *testing.B) {
 		return out.Bytes()
 	}()
 
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		imported := pdf.ImportPageStream(bytes.NewReader(source), 1, "MediaBox")
 		pdf.AddPage()
 		for row := 0; row < 4; row++ {
@@ -1467,7 +1467,7 @@ func BenchmarkGenerationImportedPDFPagesConcurrent40(b *testing.B) {
 }
 
 func BenchmarkGenerationProtection(b *testing.B) {
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		if err := pdf.SetLegacyProtection(document.CnProtectPrint, "reader", "owner"); err != nil {
 			b.Fatal(err)
 		}
@@ -1480,7 +1480,7 @@ func BenchmarkGenerationProtection(b *testing.B) {
 }
 
 func BenchmarkGenerationProtectionConcurrent40(b *testing.B) {
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		if err := pdf.SetLegacyProtection(document.CnProtectPrint, "reader", "owner"); err != nil {
 			b.Fatal(err)
 		}
@@ -1502,7 +1502,7 @@ func BenchmarkGenerationAttachments(b *testing.B) {
 		b.Fatalf("ReadFile(LICENSE) error = %v", err)
 	}
 
-	benchmarkGeneratedPDF(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
 		attachments := []document.Attachment{
 			{Content: grid, Filename: "grid.go", Description: "Grid example source"},
 			{Content: license, Filename: "LICENSE", Description: "License text"},
@@ -1530,7 +1530,7 @@ func BenchmarkGenerationAttachmentsConcurrent40(b *testing.B) {
 		b.Fatalf("ReadFile(LICENSE) error = %v", err)
 	}
 
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.Document) {
+	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
 		attachments := []document.Attachment{
 			{Content: grid, Filename: "grid.go", Description: "Grid example source"},
 			{Content: license, Filename: "LICENSE", Description: "License text"},

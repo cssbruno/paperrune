@@ -10,7 +10,7 @@ import (
 
 // Line draws a line between points (x1, y1) and (x2, y2) using the current
 // draw color, line width, and cap style.
-func (f *Document) Line(x1, y1, x2, y2 float64) {
+func (f *pdfDocument) Line(x1, y1, x2, y2 float64) {
 	buf := f.contentCommandBuffer(64)
 	buf = appendPDFLine(buf, x1*f.k, (f.h-y1)*f.k, x2*f.k, (f.h-y2)*f.k, 2, false)
 	f.outTaggedContent(buf, taggedContentOptions{Artifact: true})
@@ -44,7 +44,7 @@ func fillDrawOp(styleStr string) (opStr string) {
 // filled. An empty string will be replaced with "D". Drawing uses the current
 // draw color and line width centered on the rectangle's perimeter. Filling
 // uses the current fill color.
-func (f *Document) Rect(x, y, w, h float64, styleStr string) {
+func (f *pdfDocument) Rect(x, y, w, h float64, styleStr string) {
 	buf := f.contentCommandBuffer(64)
 	buf = appendPDFRectPaint(buf, x*f.k, (f.h-y)*f.k, w*f.k, -h*f.k, fillDrawOp(styleStr), false)
 	f.outTaggedContent(buf, taggedContentOptions{Artifact: true})
@@ -62,7 +62,7 @@ func (f *Document) Rect(x, y, w, h float64, styleStr string) {
 // upper right corner, "3" to round the lower right corner, and "4" to round
 // the lower-left corner. A zero radius means a square corner. The RoundedRect
 // example demonstrates this method.
-func (f *Document) RoundedRect(x, y, w, h, r float64, corners string, stylestr string) {
+func (f *pdfDocument) RoundedRect(x, y, w, h, r float64, corners string, stylestr string) {
 	var rTL, rTR, rBR, rBL float64
 	if strings.Contains(corners, "1") {
 		rTL = r
@@ -83,7 +83,7 @@ func (f *Document) RoundedRect(x, y, w, h, r float64, corners string, stylestr s
 // radius for each corner. A zero radius means a square corner. See
 // RoundedRect() for more details. This method is demonstrated in the
 // RoundedRect() example.
-func (f *Document) RoundedRectExt(x, y, w, h, rTL, rTR, rBR, rBL float64, stylestr string) {
+func (f *pdfDocument) RoundedRectExt(x, y, w, h, rTL, rTR, rBR, rBL float64, stylestr string) {
 	f.BeginArtifact()
 	f.roundedRectPath(x, y, w, h, rTL, rTR, rBR, rBL)
 	f.out(fillDrawOp(stylestr))
@@ -96,7 +96,7 @@ func (f *Document) RoundedRectExt(x, y, w, h, rTL, rTR, rBR, rBL float64, styles
 // outlined and filled. An empty string will be replaced with "D". Drawing uses
 // the current draw color and line width centered on the circle's perimeter.
 // Filling uses the current fill color.
-func (f *Document) Circle(x, y, r float64, styleStr string) {
+func (f *pdfDocument) Circle(x, y, r float64, styleStr string) {
 	f.Ellipse(x, y, r, r, 0, styleStr)
 }
 
@@ -112,7 +112,7 @@ func (f *Document) Circle(x, y, r float64, styleStr string) {
 // Filling uses the current fill color.
 //
 // The Circle() example demonstrates this method.
-func (f *Document) Ellipse(x, y, rx, ry, degRotate float64, styleStr string) {
+func (f *pdfDocument) Ellipse(x, y, rx, ry, degRotate float64, styleStr string) {
 	f.BeginArtifact()
 	f.arc(x, y, rx, ry, degRotate, 0, 360, styleStr, false)
 	f.EndArtifact()
@@ -127,7 +127,7 @@ func (f *Document) Ellipse(x, y, rx, ry, degRotate float64, styleStr string) {
 // outlined and filled. An empty string will be replaced with "D". Drawing uses
 // the current draw color and line width centered on the polygon's perimeter.
 // Filling uses the current fill color.
-func (f *Document) Polygon(points []Point, styleStr string) {
+func (f *pdfDocument) Polygon(points []Point, styleStr string) {
 	if len(points) > 2 {
 		f.BeginArtifact()
 		for j, pt := range points {
@@ -162,7 +162,7 @@ func (f *Document) Polygon(points []Point, styleStr string) {
 // outlined and filled. An empty string will be replaced with "D". Drawing uses
 // the current draw color and line width centered on the path's perimeter.
 // Filling uses the current fill color.
-func (f *Document) Beziergon(points []Point, styleStr string) {
+func (f *pdfDocument) Beziergon(points []Point, styleStr string) {
 	if len(points) < 4 {
 		return
 	}
@@ -181,7 +181,7 @@ func (f *Document) Beziergon(points []Point, styleStr string) {
 }
 
 // point outputs the current point.
-func (f *Document) point(x, y float64) {
+func (f *pdfDocument) point(x, y float64) {
 	buf := make([]byte, 0, 32)
 	buf = appendPDFNumberSpace(buf, x*f.k, 2)
 	buf = appendPDFNumberSpace(buf, (f.h-y)*f.k, 2)
@@ -190,7 +190,7 @@ func (f *Document) point(x, y float64) {
 }
 
 // curve outputs a single cubic Bézier curve segment from the current point.
-func (f *Document) curve(cx0, cy0, cx1, cy1, x, y float64) {
+func (f *pdfDocument) curve(cx0, cy0, cx1, cy1, x, y float64) {
 	buf := make([]byte, 0, 96)
 	buf = appendPDFCubicCurve(buf, cx0*f.k, (f.h-cy0)*f.k, cx1*f.k, (f.h-cy1)*f.k, x*f.k, (f.h-y)*f.k)
 	f.outbytes(buf)
@@ -209,7 +209,7 @@ func (f *Document) curve(cx0, cy0, cx1, cy1, x, y float64) {
 // path. Filling uses the current fill color.
 //
 // The Circle() example demonstrates this method.
-func (f *Document) Curve(x0, y0, cx, cy, x1, y1 float64, styleStr string) {
+func (f *pdfDocument) Curve(x0, y0, cx, cy, x1, y1 float64, styleStr string) {
 	f.BeginArtifact()
 	f.point(x0, y0)
 	buf := make([]byte, 0, 72)
@@ -238,7 +238,7 @@ func (f *Document) Curve(x0, y0, cx, cy, x1, y1 float64, styleStr string) {
 // The arguments use the standard start point, control points, end point order.
 //
 // The Circle() example demonstrates this method.
-func (f *Document) CurveBezierCubic(x0, y0, cx0, cy0, cx1, cy1, x1, y1 float64, styleStr string) {
+func (f *pdfDocument) CurveBezierCubic(x0, y0, cx0, cy0, cx1, cy1, x1, y1 float64, styleStr string) {
 	f.BeginArtifact()
 	f.point(x0, y0)
 	buf := make([]byte, 0, 104)
@@ -263,7 +263,7 @@ func (f *Document) CurveBezierCubic(x0, y0, cx0, cy0, cx1, cy1, x1, y1 float64, 
 // path. Filling uses the current fill color.
 //
 // The Circle() example demonstrates this method.
-func (f *Document) Arc(x, y, rx, ry, degRotate, degStart, degEnd float64, styleStr string) {
+func (f *pdfDocument) Arc(x, y, rx, ry, degRotate, degStart, degEnd float64, styleStr string) {
 	f.BeginArtifact()
 	f.arc(x, y, rx, ry, degRotate, degStart, degEnd, styleStr, false)
 	f.EndArtifact()
@@ -277,7 +277,7 @@ func (f *Document) Arc(x, y, rx, ry, degRotate, degStart, degEnd float64, styleS
 // LineTo(), CurveTo(), CurveBezierCubicTo(), ArcTo(), and ClosePath(), then
 // draw or fill it with DrawPath(). Path drawing routines produce proper PDF
 // line joins at angles instead of overlaying separate line segments.
-func (f *Document) MoveTo(x, y float64) {
+func (f *pdfDocument) MoveTo(x, y float64) {
 	f.beginPathArtifact()
 	f.point(x, y)
 	f.x, f.y = x, y
@@ -288,7 +288,7 @@ func (f *Document) MoveTo(x, y float64) {
 // the path; it does not actually draw the line on the page.
 //
 // The MoveTo() example demonstrates this method.
-func (f *Document) LineTo(x, y float64) {
+func (f *pdfDocument) LineTo(x, y float64) {
 	buf := make([]byte, 0, 32)
 	buf = appendPDFNumberSpace(buf, x*f.k, 2)
 	buf = appendPDFNumberSpace(buf, (f.h-y)*f.k, 2)
@@ -305,7 +305,7 @@ func (f *Document) LineTo(x, y float64) {
 // the end point and the control point.
 //
 // The MoveTo() example demonstrates this method.
-func (f *Document) CurveTo(cx, cy, x, y float64) {
+func (f *pdfDocument) CurveTo(cx, cy, x, y float64) {
 	buf := make([]byte, 0, 64)
 	buf = appendPDFNumberSpace(buf, cx*f.k, 5)
 	buf = appendPDFNumberSpace(buf, (f.h-cy)*f.k, 5)
@@ -325,7 +325,7 @@ func (f *Document) CurveTo(cx, cy, x, y float64) {
 // control point (cx1, cy1).
 //
 // The MoveTo() example demonstrates this method.
-func (f *Document) CurveBezierCubicTo(cx0, cy0, cx1, cy1, x, y float64) {
+func (f *pdfDocument) CurveBezierCubicTo(cx0, cy0, cx1, cy1, x, y float64) {
 	f.curve(cx0, cy0, cx1, cy1, x, y)
 	f.x, f.y = x, y
 }
@@ -335,7 +335,7 @@ func (f *Document) CurveBezierCubicTo(cx0, cy0, cx1, cy1, x, y float64) {
 // join nicely.
 //
 // The MoveTo() example demonstrates this method.
-func (f *Document) ClosePath() {
+func (f *pdfDocument) ClosePath() {
 	f.out("h")
 }
 
@@ -356,7 +356,7 @@ func (f *Document) ClosePath() {
 // the path. Filling uses the current fill color.
 //
 // The MoveTo() example demonstrates this method.
-func (f *Document) DrawPath(styleStr string) {
+func (f *pdfDocument) DrawPath(styleStr string) {
 	f.out(fillDrawOp(styleStr))
 	f.endPathArtifact()
 }
@@ -376,11 +376,11 @@ func (f *Document) DrawPath(styleStr string) {
 // path. Filling uses the current fill color.
 //
 // The MoveTo() example demonstrates this method.
-func (f *Document) ArcTo(x, y, rx, ry, degRotate, degStart, degEnd float64) {
+func (f *pdfDocument) ArcTo(x, y, rx, ry, degRotate, degStart, degEnd float64) {
 	f.arc(x, y, rx, ry, degRotate, degStart, degEnd, "", true)
 }
 
-func (f *Document) arc(x, y, rx, ry, degRotate, degStart, degEnd float64, styleStr string, path bool) {
+func (f *pdfDocument) arc(x, y, rx, ry, degRotate, degStart, degEnd float64, styleStr string, path bool) {
 	x *= f.k
 	y = (f.h - y) * f.k
 	rx *= f.k

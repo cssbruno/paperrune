@@ -12,7 +12,7 @@ import (
 	"sync"
 )
 
-func (f *Document) replaceAliases() {
+func (f *pdfDocument) replaceAliases() {
 	if len(f.aliasMap) == 0 {
 		return
 	}
@@ -33,7 +33,7 @@ func (f *Document) replaceAliases() {
 	}
 }
 
-func (f *Document) compiledAliasPairs() []aliasReplacementBytes {
+func (f *pdfDocument) compiledAliasPairs() []aliasReplacementBytes {
 	if !f.aliasPairsDirty && f.aliasPairs != nil {
 		return f.aliasPairs
 	}
@@ -72,7 +72,7 @@ func (f *Document) compiledAliasPairs() []aliasReplacementBytes {
 	return f.aliasPairs
 }
 
-func (f *Document) compiledAliasNeedles() [][]byte {
+func (f *pdfDocument) compiledAliasNeedles() [][]byte {
 	if !f.aliasNeedlesDirty && f.aliasNeedles != nil {
 		return f.aliasNeedles
 	}
@@ -105,7 +105,7 @@ func (f *Document) compiledAliasNeedles() [][]byte {
 	return needles
 }
 
-func (f *Document) markAliasPageString(s string) {
+func (f *pdfDocument) markAliasPageString(s string) {
 	if s == "" || (len(f.aliasMap) == 0 && f.aliasNbPagesStr == "") {
 		return
 	}
@@ -118,7 +118,7 @@ func (f *Document) markAliasPageString(s string) {
 	}
 }
 
-func (f *Document) markAliasPageBytes(data []byte) {
+func (f *pdfDocument) markAliasPageBytes(data []byte) {
 	if len(data) == 0 || (len(f.aliasMap) == 0 && f.aliasNbPagesStr == "") {
 		return
 	}
@@ -130,14 +130,14 @@ func (f *Document) markAliasPageBytes(data []byte) {
 	}
 }
 
-func (f *Document) markAliasPageConservative() {
+func (f *pdfDocument) markAliasPageConservative() {
 	if len(f.aliasMap) == 0 && f.aliasNbPagesStr == "" {
 		return
 	}
 	f.markCurrentPageAliasCandidate()
 }
 
-func (f *Document) markCurrentPageAliasCandidate() {
+func (f *pdfDocument) markCurrentPageAliasCandidate() {
 	if f.page <= 0 {
 		return
 	}
@@ -147,7 +147,7 @@ func (f *Document) markCurrentPageAliasCandidate() {
 	f.aliasPages[f.page] = true
 }
 
-func (f *Document) markPagesContainingAlias(alias string) {
+func (f *pdfDocument) markPagesContainingAlias(alias string) {
 	if alias == "" || f.page <= 0 {
 		return
 	}
@@ -208,14 +208,14 @@ func replaceAliasBytes(data []byte, pairs []aliasReplacementBytes) []byte {
 	return out
 }
 
-func (f *Document) pageObjectNumber(page int) int {
+func (f *pdfDocument) pageObjectNumber(page int) int {
 	if page > 0 && page < len(f.pageObjectNumbers) {
 		return f.pageObjectNumbers[page]
 	}
 	return 0
 }
 
-func (f *Document) pageHeightPt(page int) float64 {
+func (f *pdfDocument) pageHeightPt(page int) float64 {
 	if pageSize, ok := f.pageSizes[page]; ok {
 		return pageSize.Ht
 	}
@@ -225,11 +225,11 @@ func (f *Document) pageHeightPt(page int) float64 {
 	return f.defPageSize.Wd * f.k
 }
 
-func (f *Document) putpages() {
+func (f *pdfDocument) putpages() {
 	f.putpagesContext(context.Background())
 }
 
-func (f *Document) putpagesContext(ctx context.Context) {
+func (f *pdfDocument) putpagesContext(ctx context.Context) {
 	var wPt, hPt float64
 	var pageSize Size
 	var ok bool
@@ -357,11 +357,11 @@ func (f *Document) putpagesContext(ctx context.Context) {
 	f.endPDFObject()
 }
 
-func (f *Document) pageStreamBytes(page int, pageStreams *pageStreamCompressor) ([]byte, bool) {
+func (f *pdfDocument) pageStreamBytes(page int, pageStreams *pageStreamCompressor) ([]byte, bool) {
 	return f.pageStreamBytesContext(context.Background(), page, pageStreams)
 }
 
-func (f *Document) pageStreamBytesContext(ctx context.Context, page int, pageStreams *pageStreamCompressor) ([]byte, bool) {
+func (f *pdfDocument) pageStreamBytesContext(ctx context.Context, page int, pageStreams *pageStreamCompressor) ([]byte, bool) {
 	if err := outputCanceledError(ctx); err != nil {
 		f.SetError(err)
 		return nil, false
@@ -388,11 +388,11 @@ func (f *Document) pageStreamBytesContext(ctx context.Context, page int, pageStr
 	return data, compressed
 }
 
-func (f *Document) startPageStreamCompressor(nb int) *pageStreamCompressor {
+func (f *pdfDocument) startPageStreamCompressor(nb int) *pageStreamCompressor {
 	return f.startPageStreamCompressorContext(context.Background(), nb)
 }
 
-func (f *Document) startPageStreamCompressorContext(ctx context.Context, nb int) *pageStreamCompressor {
+func (f *pdfDocument) startPageStreamCompressorContext(ctx context.Context, nb int) *pageStreamCompressor {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -531,7 +531,7 @@ func (c *pageStreamCompressor) pageContext(ctx context.Context, page int) (pageS
 	}
 }
 
-func (f *Document) putLinkAnnotation(pl pageLink, pagesObjectNumbers []int, pageHeights []float64) {
+func (f *pdfDocument) putLinkAnnotation(pl pageLink, pagesObjectNumbers []int, pageHeights []float64) {
 	f.newPDFDictObject()
 	f.outf("/Type /Annot /Subtype /Link /Rect [%.2f %.2f %.2f %.2f] /Border [0 0 0] /F 4", pl.x, pl.y, pl.x+pl.wd, pl.y-pl.ht)
 	if pl.structParent >= 0 {

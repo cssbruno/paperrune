@@ -138,7 +138,7 @@ type outputRequest struct {
 // OutputAndClose sends the PDF document to the writer specified by w. This
 // method will close both f and w, even if an error is detected and no document
 // is produced.
-func (f *Document) OutputAndClose(w io.WriteCloser) error {
+func (f *pdfDocument) OutputAndClose(w io.WriteCloser) error {
 	if isNilWriter(w) {
 		f.SetError(ErrNilWriter)
 		return f.err
@@ -155,70 +155,70 @@ func (f *Document) OutputAndClose(w io.WriteCloser) error {
 // written file, even if an error is detected and no document is produced.
 //
 // Most examples demonstrate the use of this method.
-func (f *Document) OutputFileAndClose(fileStr string) error {
+func (f *pdfDocument) OutputFileAndClose(fileStr string) error {
 	return f.coordinateFileOutput(context.Background(), fileStr, f.documentOutputRequest(OutputOptions{}, false), !f.outputPolicy.DisableSync)
 }
 
 // OutputFileAndCloseNoSync creates or truncates fileStr without fsyncing the
 // temporary file before rename. It is intended for high-throughput batch
 // generation where the caller accepts weaker crash-durability guarantees.
-func (f *Document) OutputFileAndCloseNoSync(fileStr string) error {
+func (f *pdfDocument) OutputFileAndCloseNoSync(fileStr string) error {
 	return f.coordinateFileOutput(context.Background(), fileStr, f.documentOutputRequest(OutputOptions{}, false), false)
 }
 
 // OutputFile creates or truncates fileStr and writes the PDF document to it.
-func (f *Document) OutputFile(fileStr string) error {
+func (f *pdfDocument) OutputFile(fileStr string) error {
 	return f.OutputFileContext(context.Background(), fileStr)
 }
 
 // OutputFileAndCloseWithOptions creates or truncates fileStr using explicit
 // file output options. A zero-value OutputOptions keeps the durable default.
-func (f *Document) OutputFileAndCloseWithOptions(fileStr string, options OutputOptions) error {
+func (f *pdfDocument) OutputFileAndCloseWithOptions(fileStr string, options OutputOptions) error {
 	return f.OutputFileWithOptions(fileStr, options)
 }
 
 // OutputFileWithOptions creates or truncates fileStr using output-wide options.
-func (f *Document) OutputFileWithOptions(fileStr string, options OutputOptions) error {
+func (f *pdfDocument) OutputFileWithOptions(fileStr string, options OutputOptions) error {
 	return f.OutputFileWithOptionsContext(context.Background(), fileStr, options)
 }
 
 // OutputFileWithOptionsContext creates or truncates fileStr using output-wide
 // options and context cancellation.
-func (f *Document) OutputFileWithOptionsContext(ctx context.Context, fileStr string, options OutputOptions) error {
+func (f *pdfDocument) OutputFileWithOptionsContext(ctx context.Context, fileStr string, options OutputOptions) error {
 	return f.coordinateFileOutput(ctx, fileStr, f.documentOutputRequest(options, false), f.syncOutputForOptions(options))
 }
 
 // OutputFileStream creates or truncates fileStr and streams final PDF
 // serialization directly to the temporary file used for atomic output.
-func (f *Document) OutputFileStream(fileStr string) error {
+func (f *pdfDocument) OutputFileStream(fileStr string) error {
 	return f.OutputFileStreamContext(context.Background(), fileStr)
 }
 
 // OutputFileStreamContext creates or truncates fileStr and streams final PDF
 // serialization directly to the temporary file used for atomic output.
-func (f *Document) OutputFileStreamContext(ctx context.Context, fileStr string) error {
+func (f *pdfDocument) OutputFileStreamContext(ctx context.Context, fileStr string) error {
 	return f.coordinateFileOutput(ctx, fileStr, f.documentOutputRequest(OutputOptions{}, true), !f.outputPolicy.DisableSync)
 }
 
 // OutputFileStreamWithOptions creates or truncates fileStr and streams final
 // PDF serialization using output-wide options.
-func (f *Document) OutputFileStreamWithOptions(fileStr string, options OutputOptions) error {
+func (f *pdfDocument) OutputFileStreamWithOptions(fileStr string, options OutputOptions) error {
 	return f.OutputFileStreamWithOptionsContext(context.Background(), fileStr, options)
 }
 
 // OutputFileStreamWithOptionsContext creates or truncates fileStr and streams
 // final PDF serialization using output-wide options and context cancellation.
-func (f *Document) OutputFileStreamWithOptionsContext(ctx context.Context, fileStr string, options OutputOptions) error {
+func (f *pdfDocument) OutputFileStreamWithOptionsContext(ctx context.Context, fileStr string, options OutputOptions) error {
 	return f.coordinateFileOutput(ctx, fileStr, f.documentOutputRequest(options, true), f.syncOutputForOptions(options))
 }
 
 // OutputFileContext creates or truncates fileStr and stops before writing if
 // ctx is canceled. The atomic output path removes the temporary file on error.
-func (f *Document) OutputFileContext(ctx context.Context, fileStr string) error {
+func (f *pdfDocument) OutputFileContext(ctx context.Context, fileStr string) error {
 	return f.coordinateFileOutput(ctx, fileStr, f.documentOutputRequest(OutputOptions{}, false), !f.outputPolicy.DisableSync)
 }
 
-func (f *Document) documentOutputRequest(options OutputOptions, forceStream bool) outputRequest {
+func (f *pdfDocument) documentOutputRequest(options OutputOptions, forceStream bool) outputRequest {
 	return outputRequest{
 		options: options,
 		write: func(ctx context.Context, w io.Writer) error {
@@ -230,7 +230,7 @@ func (f *Document) documentOutputRequest(options OutputOptions, forceStream bool
 	}
 }
 
-func (f *Document) coordinateFileOutput(ctx context.Context, fileStr string, request outputRequest, syncOutput bool) error {
+func (f *pdfDocument) coordinateFileOutput(ctx context.Context, fileStr string, request outputRequest, syncOutput bool) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -295,12 +295,12 @@ func outputFileMode(fileStr string) os.FileMode {
 // be written if an error has occurred in the document generation process. w
 // remains open after this function returns. After returning, f is in a closed
 // state and its methods should not be called.
-func (f *Document) Output(w io.Writer) error {
+func (f *pdfDocument) Output(w io.Writer) error {
 	return f.OutputContext(context.Background(), w)
 }
 
 // OutputWithOptions sends the PDF document to w using output-wide options.
-func (f *Document) OutputWithOptions(w io.Writer, options OutputOptions) error {
+func (f *pdfDocument) OutputWithOptions(w io.Writer, options OutputOptions) error {
 	return f.OutputWithOptionsContext(context.Background(), w, options)
 }
 
@@ -308,7 +308,7 @@ func (f *Document) OutputWithOptions(w io.Writer, options OutputOptions) error {
 // options and context cancellation. Output options are applied to the document;
 // if output fails before the document closes, the previous output settings are
 // restored while the output error remains latched.
-func (f *Document) OutputWithOptionsContext(ctx context.Context, w io.Writer, options OutputOptions) error {
+func (f *pdfDocument) OutputWithOptionsContext(ctx context.Context, w io.Writer, options OutputOptions) error {
 	return f.coordinateOutput(ctx, w, f.documentOutputRequest(options, false))
 }
 
@@ -318,26 +318,26 @@ func (f *Document) OutputWithOptionsContext(ctx context.Context, w io.Writer, op
 // Unlike Output, this method does not retain the final PDF buffer for repeated
 // output. Use it for very large unsigned PDFs where lower peak memory is more
 // important than writing the same Document instance more than once.
-func (f *Document) OutputStream(w io.Writer) error {
+func (f *pdfDocument) OutputStream(w io.Writer) error {
 	return f.OutputStreamContext(context.Background(), w)
 }
 
 // OutputStreamWithOptions streams final PDF serialization to w using
 // output-wide options.
-func (f *Document) OutputStreamWithOptions(w io.Writer, options OutputOptions) error {
+func (f *pdfDocument) OutputStreamWithOptions(w io.Writer, options OutputOptions) error {
 	return f.OutputStreamWithOptionsContext(context.Background(), w, options)
 }
 
 // OutputStreamWithOptionsContext streams final PDF serialization to w using
 // output-wide options and context cancellation.
-func (f *Document) OutputStreamWithOptionsContext(ctx context.Context, w io.Writer, options OutputOptions) error {
+func (f *pdfDocument) OutputStreamWithOptionsContext(ctx context.Context, w io.Writer, options OutputOptions) error {
 	return f.coordinateOutput(ctx, w, f.documentOutputRequest(options, true))
 }
 
 // coordinateOutput is the one path for public option-bearing output methods.
 // Writer and file variants supply only their destination; unsigned and signed
 // variants supply only their final serialization callback.
-func (f *Document) coordinateOutput(ctx context.Context, w io.Writer, request outputRequest) error {
+func (f *pdfDocument) coordinateOutput(ctx context.Context, w io.Writer, request outputRequest) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -346,7 +346,7 @@ func (f *Document) coordinateOutput(ctx context.Context, w io.Writer, request ou
 	})
 }
 
-func (f *Document) withOutputOptions(options OutputOptions, output func() error) error {
+func (f *pdfDocument) withOutputOptions(options OutputOptions, output func() error) error {
 	snapshot := f.outputSettingsSnapshot()
 	if err := f.applyOutputOptions(options); err != nil {
 		f.restoreOutputSettings(snapshot)
@@ -362,11 +362,11 @@ func (f *Document) withOutputOptions(options OutputOptions, output func() error)
 // OutputContext sends the PDF document to w and checks ctx before document
 // closing and before the final writer call. Cancellation during arbitrary writer
 // implementations still depends on the writer honoring the context.
-func (f *Document) OutputContext(ctx context.Context, w io.Writer) error {
+func (f *pdfDocument) OutputContext(ctx context.Context, w io.Writer) error {
 	return f.writeBufferedOutputContext(ctx, w)
 }
 
-func (f *Document) writeBufferedOutputContext(ctx context.Context, w io.Writer) error {
+func (f *pdfDocument) writeBufferedOutputContext(ctx context.Context, w io.Writer) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -416,11 +416,11 @@ func (f *Document) writeBufferedOutputContext(ctx context.Context, w io.Writer) 
 // repeatable because it retains the final PDF buffer, while OutputStreamContext
 // trades repeatability for lower peak memory. Signed output still buffers
 // because PDF signing needs the complete byte range.
-func (f *Document) OutputStreamContext(ctx context.Context, w io.Writer) error {
+func (f *pdfDocument) OutputStreamContext(ctx context.Context, w io.Writer) error {
 	return f.writeStreamOutputContext(ctx, w)
 }
 
-func (f *Document) writeStreamOutputContext(ctx context.Context, w io.Writer) error {
+func (f *pdfDocument) writeStreamOutputContext(ctx context.Context, w io.Writer) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -469,7 +469,7 @@ func (f *Document) writeStreamOutputContext(ctx context.Context, w io.Writer) er
 	return nil
 }
 
-func (f *Document) applyOutputOptions(options OutputOptions) error {
+func (f *pdfDocument) applyOutputOptions(options OutputOptions) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -522,7 +522,7 @@ type outputSettingsSnapshot struct {
 	modDate                        time.Time
 }
 
-func (f *Document) outputSettingsSnapshot() outputSettingsSnapshot {
+func (f *pdfDocument) outputSettingsSnapshot() outputSettingsSnapshot {
 	return outputSettingsSnapshot{
 		compress:                       f.compress,
 		compressLevel:                  f.compressLevel,
@@ -538,7 +538,7 @@ func (f *Document) outputSettingsSnapshot() outputSettingsSnapshot {
 	}
 }
 
-func (f *Document) restoreOutputSettings(snapshot outputSettingsSnapshot) {
+func (f *pdfDocument) restoreOutputSettings(snapshot outputSettingsSnapshot) {
 	f.compress = snapshot.compress
 	f.compressLevel = snapshot.compressLevel
 	f.pageCompressionWorkers = snapshot.pageCompressionWorkers
@@ -552,11 +552,11 @@ func (f *Document) restoreOutputSettings(snapshot outputSettingsSnapshot) {
 	f.modDate = snapshot.modDate
 }
 
-func (f *Document) syncOutputForOptions(options OutputOptions) bool {
+func (f *pdfDocument) syncOutputForOptions(options OutputOptions) bool {
 	return !f.outputPolicy.DisableSync && !options.DisableSync
 }
 
-func (f *Document) streamFinalForOptions(options OutputOptions) bool {
+func (f *pdfDocument) streamFinalForOptions(options OutputOptions) bool {
 	return f.outputPolicy.StreamFinal || options.StreamFinal
 }
 
@@ -574,7 +574,7 @@ func isNilWriter(w io.Writer) bool {
 }
 
 // out adds a line to the document.
-func (f *Document) out(s string) {
+func (f *pdfDocument) out(s string) {
 	if f.state == documentStatePageOpen {
 		f.markAliasPageString(s)
 		_, _ = f.pages[f.page].WriteString(s)
@@ -586,7 +586,7 @@ func (f *Document) out(s string) {
 }
 
 // outbuf adds a buffered line to the document.
-func (f *Document) outbuf(r io.Reader) error {
+func (f *pdfDocument) outbuf(r io.Reader) error {
 	if r == nil {
 		err := errors.New("pdf raw reader is nil")
 		f.SetError(err)
@@ -609,7 +609,7 @@ func (f *Document) outbuf(r io.Reader) error {
 	return nil
 }
 
-func (f *Document) outbytes(b []byte) {
+func (f *pdfDocument) outbytes(b []byte) {
 	if f.state == documentStatePageOpen {
 		f.markAliasPageBytes(b)
 		_, _ = f.pages[f.page].Write(b)
@@ -620,7 +620,7 @@ func (f *Document) outbytes(b []byte) {
 	}
 }
 
-func (f *Document) writeRawBytes(b []byte) {
+func (f *pdfDocument) writeRawBytes(b []byte) {
 	if f.state == documentStatePageOpen {
 		f.markAliasPageBytes(b)
 		_, _ = f.pages[f.page].Write(b)
@@ -629,7 +629,7 @@ func (f *Document) writeRawBytes(b []byte) {
 	}
 }
 
-func (f *Document) writeRawByte(b byte) {
+func (f *pdfDocument) writeRawByte(b byte) {
 	if f.state == documentStatePageOpen {
 		_ = f.pages[f.page].WriteByte(b)
 	} else {
@@ -637,14 +637,14 @@ func (f *Document) writeRawByte(b byte) {
 	}
 }
 
-func (f *Document) finalOutputOffset() int {
+func (f *pdfDocument) finalOutputOffset() int {
 	if f.outputSink != nil {
 		return f.outputSink.Len()
 	}
 	return f.buffer.Len()
 }
 
-func (f *Document) writeFinalString(s string) {
+func (f *pdfDocument) writeFinalString(s string) {
 	if f.outputSink != nil {
 		if err := f.outputSink.WriteString(s); err != nil {
 			f.SetError(err)
@@ -657,7 +657,7 @@ func (f *Document) writeFinalString(s string) {
 	}
 }
 
-func (f *Document) writeFinalBytes(b []byte) {
+func (f *pdfDocument) writeFinalBytes(b []byte) {
 	if f.outputSink != nil {
 		if _, err := f.outputSink.Write(b); err != nil {
 			f.SetError(err)
@@ -670,7 +670,7 @@ func (f *Document) writeFinalBytes(b []byte) {
 	}
 }
 
-func (f *Document) writeFinalByte(b byte) {
+func (f *pdfDocument) writeFinalByte(b byte) {
 	if f.outputSink != nil {
 		if err := f.outputSink.WriteByte(b); err != nil {
 			f.SetError(err)
@@ -683,7 +683,7 @@ func (f *Document) writeFinalByte(b byte) {
 	}
 }
 
-func (f *Document) readFinalFrom(r io.Reader) (int64, error) {
+func (f *pdfDocument) readFinalFrom(r io.Reader) (int64, error) {
 	if f.outputSink != nil {
 		return f.outputSink.ReadFrom(r)
 	}
@@ -697,13 +697,13 @@ func (f *Document) readFinalFrom(r io.Reader) (int64, error) {
 // low-level function that is not required for normal PDF construction. An
 // understanding of the PDF specification is needed to use this method
 // correctly.
-func (f *Document) RawWriteStr(str string) {
+func (f *pdfDocument) RawWriteStr(str string) {
 	_ = f.RawWriteStrError(str)
 }
 
 // RawWriteStrError writes a string directly to the PDF generation buffer and
 // returns any tagged-PDF restriction error.
-func (f *Document) RawWriteStrError(str string) error {
+func (f *pdfDocument) RawWriteStrError(str string) error {
 	if err := f.requireSecurityFeature("raw PDF writes", f.securityPolicy.AllowRawWrites); err != nil {
 		return err
 	}
@@ -717,13 +717,13 @@ func (f *Document) RawWriteStrError(str string) error {
 
 // RawWriteArtifactStr writes raw PDF content marked as an artifact when tagged
 // PDF output is enabled.
-func (f *Document) RawWriteArtifactStr(str string) {
+func (f *pdfDocument) RawWriteArtifactStr(str string) {
 	_ = f.RawWriteArtifactStrError(str)
 }
 
 // RawWriteArtifactStrError writes raw PDF content marked as an artifact when
 // tagged PDF output is enabled and returns any latched document error.
-func (f *Document) RawWriteArtifactStrError(str string) error {
+func (f *pdfDocument) RawWriteArtifactStrError(str string) error {
 	if err := f.requireSecurityFeature("raw PDF writes", f.securityPolicy.AllowRawWrites); err != nil {
 		return err
 	}
@@ -735,13 +735,13 @@ func (f *Document) RawWriteArtifactStrError(str string) error {
 // generation buffer. This is a low-level function that is not required for
 // normal PDF construction. An understanding of the PDF specification is needed
 // to use this method correctly.
-func (f *Document) RawWriteBuf(r io.Reader) {
+func (f *pdfDocument) RawWriteBuf(r io.Reader) {
 	_ = f.RawWriteBufError(r)
 }
 
 // RawWriteBufError writes the contents of the specified reader directly to the
 // PDF generation buffer and returns any reader error.
-func (f *Document) RawWriteBufError(r io.Reader) error {
+func (f *pdfDocument) RawWriteBufError(r io.Reader) error {
 	if err := f.requireSecurityFeature("raw PDF writes", f.securityPolicy.AllowRawWrites); err != nil {
 		return err
 	}
@@ -754,13 +754,13 @@ func (f *Document) RawWriteBufError(r io.Reader) error {
 
 // RawWriteArtifactBuf writes raw PDF content marked as an artifact when tagged
 // PDF output is enabled.
-func (f *Document) RawWriteArtifactBuf(r io.Reader) {
+func (f *pdfDocument) RawWriteArtifactBuf(r io.Reader) {
 	_ = f.RawWriteArtifactBufError(r)
 }
 
 // RawWriteArtifactBufError writes raw PDF content marked as an artifact when
 // tagged PDF output is enabled and returns any reader error.
-func (f *Document) RawWriteArtifactBufError(r io.Reader) error {
+func (f *pdfDocument) RawWriteArtifactBufError(r io.Reader) error {
 	if err := f.requireSecurityFeature("raw PDF writes", f.securityPolicy.AllowRawWrites); err != nil {
 		return err
 	}
@@ -778,6 +778,6 @@ func (f *Document) RawWriteArtifactBufError(r io.Reader) error {
 }
 
 // outf adds a formatted line to the document.
-func (f *Document) outf(fmtStr string, args ...any) {
+func (f *pdfDocument) outf(fmtStr string, args ...any) {
 	f.out(sprintf(fmtStr, args...))
 }

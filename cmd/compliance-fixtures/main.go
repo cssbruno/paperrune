@@ -12,9 +12,12 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/base64"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"math/big"
@@ -159,25 +162,99 @@ func generatePDFUAArlingtonFoundation(path, root, fontPath, boldFontPath string)
 		Lang:       "en-US",
 		Identifier: "urn:uuid:paperrune-pdfua2-arlington-foundation",
 	})
-	pdf.AddPage()
-	pdf.SetFont("DejaVu", "", 12)
-	pdf.SetNextTextRole("H1")
-	pdf.CellFormat(0, 8, "PDF/UA-2 tagged structure fixture", "", 1, "L", false, 0, "")
-	pdf.SetNextTextRole("P")
-	pdf.MultiCell(0, 6, "This file exercises PaperRune tagged PDF output, XMP metadata, catalog markers, parent tree entries, marked content IDs, links, images, lists, tables, and artifacts.", "", "L", false)
-	pdf.SetNextTextRole("Link")
-	pdf.CellFormat(0, 7, "External reference link", "", 1, "L", false, 0, "https://example.com/paperrune")
-	pdf.ImageOptions(filepath.Join(root, "assets", "static", "image", "logo.png"), 10, pdf.GetY()+2, 24, 0, false, document.ImageOptions{
-		ImageType: "png",
-		AltText:   "PaperRune logo",
-	}, 0, "")
-	pdf.Ln(18)
-	// PDF/UA requires every rendering font to be embedded. The dedicated HTML
-	// compliance tests exercise the unified HTML structure lowering; this
-	// external-validator fixture stays on direct semantic structures so the
-	// complete tagged document uses the embedded DejaVu resources.
-	writeDirectTaggedComplianceStructures(pdf)
-	pdf.Line(10, pdf.GetY()+4, 80, pdf.GetY()+4)
+	logo, err := complianceLogoDataURI(root)
+	if err != nil {
+		return err
+	}
+	catalog, err := compliancePaperFontCatalog(fontPath, boldFontPath)
+	if err != nil {
+		return err
+	}
+	source := fmt.Sprintf(`document @pdfua:
+  language: "en-US"
+  style @base:
+    font: "Compliance Sans"
+    size: 12pt
+    line-height: 16pt
+  style @heading-style:
+    style: "@base"
+    size: 20pt
+    line-height: 26pt
+  page @sheet:
+    width: 595pt
+    height: 842pt
+    margin: 36pt
+    body @body:
+      heading @heading:
+        level: 1
+        style: "@heading-style"
+        text: "PDF/UA-2 tagged structure fixture"
+      paragraph @description:
+        style: "@base"
+        text: "This file exercises PaperRune tagged PDF output, XMP metadata, catalog markers, parent tree entries, marked content IDs, images, lists, tables, and artifacts."
+      image @logo:
+        source: %q
+        width: 68pt
+        height: "auto"
+        alt: "PaperRune logo"
+      list @features:
+        style: "@base"
+        marker: "dash"
+        item @feature-one:
+          text: "Signed list label"
+        item @feature-two:
+          text: "Second semantic item"
+      table @status-table:
+        table-column @name-column:
+          width: 34%%
+        table-column @status-column:
+          width: 22%%
+        table-column @detail-column:
+          width: 44%%
+        table-header @status-header:
+          table-row @status-header-row:
+            cell @name-heading-cell:
+              paragraph:
+                style: "@base"
+                text: "Name"
+            cell @status-heading-cell:
+              paragraph:
+                style: "@base"
+                text: "Status"
+            cell @detail-heading-cell:
+              paragraph:
+                style: "@base"
+                text: "Detail"
+        table-row @structure-row:
+          cell @structure-name-cell:
+            paragraph:
+              style: "@base"
+              text: "Structure tree"
+          cell @structure-status-cell:
+            paragraph:
+              style: "@base"
+              text: "Generated"
+          cell @structure-detail-cell:
+            paragraph:
+              style: "@base"
+              text: "Tagged table"
+        table-row @parent-row:
+          cell @parent-name-cell:
+            paragraph:
+              style: "@base"
+              text: "Parent tree"
+          cell @parent-status-cell:
+            paragraph:
+              style: "@base"
+              text: "OK"
+          cell @parent-detail-cell:
+            paragraph:
+              style: "@base"
+              text: "Accessible body"
+`, logo)
+	if rendered, err := pdf.WritePaperWithAssets("pdfua.paper", source, catalog); err != nil || !rendered.OK() {
+		return fmt.Errorf("render PDF/UA Paper source: %w (%+v)", err, rendered.Diagnostics)
+	}
 	return pdf.OutputFileAndClose(path)
 }
 
@@ -201,9 +278,27 @@ func generatePDFAFoundation(path, fontPath, boldFontPath string, icc []byte, mod
 			Content:     []byte("Attachment used to exercise PDF/A-4f generation."),
 		}})
 	}
-	pdf.AddPage()
-	pdf.SetFont("DejaVu", "", 12)
-	pdf.MultiCell(0, 6, "This file exercises PaperRune PDF/A-4 metadata, catalog output intent, and embedded UTF-8 font generation.", "", "L", false)
+	catalog, err := compliancePaperFontCatalog(fontPath, boldFontPath)
+	if err != nil {
+		return err
+	}
+	source := "document @pdfa:\n" +
+		"  language: \"en-US\"\n" +
+		"  page @sheet:\n" +
+		"    width: 595pt\n" +
+		"    height: 842pt\n" +
+		"    margin: 36pt\n" +
+		"    body @body:\n" +
+		"      heading @title:\n" +
+		"        level: 1\n" +
+		"        font: \"Compliance Sans\"\n" +
+		"        text: \"PDF/A-4 metadata foundation\"\n" +
+		"      paragraph @copy:\n" +
+		"        font: \"Compliance Sans\"\n" +
+		"        text: \"This file exercises PaperRune PDF/A-4 metadata, catalog output intent, and embedded UTF-8 font generation.\"\n"
+	if rendered, err := pdf.WritePaperWithAssets("pdfa.paper", source, catalog); err != nil || !rendered.OK() {
+		return fmt.Errorf("render PDF/A Paper source: %w", err)
+	}
 	return pdf.OutputFileAndClose(path)
 }
 
@@ -230,25 +325,28 @@ func generateSignedComplianceFoundation(path, root, fontPath, boldFontPath strin
 		AFRelationship: "Data",
 		Content:        []byte("Attachment used to exercise signed PDF/A-4f compliance generation."),
 	}})
-	pdf.AddPage()
-	pdf.SetFont("DejaVu", "", 12)
-	pdf.SetNextTextRole("H1")
-	pdf.CellFormat(0, 8, "Signed compliance fixture", "", 1, "L", false, 0, "")
-	pdf.SetNextTextRole("P")
-	pdf.MultiCell(0, 6, "This signed fixture exercises PDF/A-4f metadata, PDF/UA-2 tagged content, Arlington model checks, XMP metadata, attachments, output intents, and detached CMS signing.", "", "L", false)
-	pdf.SetNextTextRole("Link")
-	pdf.CellFormat(0, 7, "Signed fixture reference link", "", 1, "L", false, 0, "https://example.com/paperrune/signed")
-	pdf.ImageOptions(filepath.Join(root, "assets", "static", "image", "logo.png"), 10, pdf.GetY()+2, 20, 0, false, document.ImageOptions{
-		ImageType: "png",
-		AltText:   "PaperRune logo",
-	}, 0, "")
-	pdf.Ln(16)
-	// The unsigned PDF/UA fixture covers the unified HTML lowering path. Keep
-	// this combined PDF/A + PDF/UA route entirely on the embedded DejaVu
-	// resource because PDF/A rejects retained core-font resources and the
-	// unified HTML adapter intentionally accepts only canonical core metrics.
-	writeDirectTaggedComplianceStructures(pdf)
-	pdf.Line(10, pdf.GetY()+4, 80, pdf.GetY()+4)
+	_ = root
+	catalog, err := compliancePaperFontCatalog(fontPath, boldFontPath)
+	if err != nil {
+		return err
+	}
+	source := "document @signed:\n" +
+		"  language: \"en-US\"\n" +
+		"  page @sheet:\n" +
+		"    width: 595pt\n" +
+		"    height: 842pt\n" +
+		"    margin: 36pt\n" +
+		"    body @body:\n" +
+		"      heading @title:\n" +
+		"        level: 1\n" +
+		"        font: \"Compliance Sans\"\n" +
+		"        text: \"Signed compliance fixture\"\n" +
+		"      paragraph @copy:\n" +
+		"        font: \"Compliance Sans\"\n" +
+		"        text: \"This signed fixture exercises PDF/A-4f metadata, PDF/UA-2 tagged content, Arlington model checks, XMP metadata, attachments, output intents, and detached CMS signing.\"\n"
+	if rendered, err := pdf.WritePaperWithAssets("signed.paper", source, catalog); err != nil || !rendered.OK() {
+		return fmt.Errorf("render signed compliance Paper source: %w", err)
+	}
 
 	cert, signer, err := complianceSigner()
 	if err != nil {
@@ -265,77 +363,6 @@ func generateSignedComplianceFoundation(path, root, fontPath, boldFontPath strin
 		SigningTime:     time.Unix(1_704_067_200, 0).UTC(),
 		SignatureSize:   64 << 10,
 	})
-}
-
-func writeDirectTaggedComplianceStructures(pdf *document.Document) {
-	writeDirectTaggedList(pdf, []string{"Signed list label", "Second semantic item"})
-
-	pdf.BeginStructure("Table")
-	pdf.SetNextTextRole("Caption")
-	pdf.CellFormat(0, 6, "Tagged table caption", "", 1, "L", false, 0, "")
-
-	pdf.BeginStructure("TR")
-	pdf.BeginTableCellStructure("TH", document.TableCellStructureOptions{Scope: "Column"})
-	pdf.SetNextTextRole("P")
-	pdf.CellFormat(70, 6, "Name", "", 0, "L", false, 0, "")
-	pdf.EndStructure()
-	pdf.BeginTableCellStructure("TH", document.TableCellStructureOptions{Scope: "Column"})
-	pdf.SetNextTextRole("P")
-	pdf.CellFormat(0, 6, "Status", "", 1, "L", false, 0, "")
-	pdf.EndStructure()
-	pdf.BeginTableCellStructure("TH", document.TableCellStructureOptions{Scope: "Column"})
-	pdf.SetNextTextRole("P")
-	pdf.CellFormat(0, 6, "Detail", "", 1, "L", false, 0, "")
-	pdf.EndStructure()
-	pdf.EndStructure()
-
-	pdf.BeginStructure("TR")
-	pdf.BeginTableCellStructure("TH", document.TableCellStructureOptions{Scope: "Row", RowSpan: 2})
-	pdf.SetNextTextRole("P")
-	pdf.CellFormat(70, 6, "Structure tree", "", 0, "L", false, 0, "")
-	pdf.EndStructure()
-	pdf.BeginTableCellStructure("TD", document.TableCellStructureOptions{ColSpan: 2})
-	pdf.SetNextTextRole("P")
-	pdf.CellFormat(0, 6, "Generated", "", 1, "L", false, 0, "")
-	writeDirectTaggedList(pdf, []string{"Nested table-cell list", "Accessible body"})
-	pdf.BeginStructure("Table")
-	pdf.SetNextTextRole("Caption")
-	pdf.CellFormat(0, 6, "Nested table caption", "", 1, "L", false, 0, "")
-	pdf.BeginStructure("TR")
-	pdf.BeginTableCellStructure("TD", document.TableCellStructureOptions{})
-	pdf.SetNextTextRole("P")
-	pdf.CellFormat(0, 6, "Nested table cell", "", 1, "L", false, 0, "")
-	writeDirectTaggedList(pdf, []string{"Nested item"})
-	pdf.EndStructure()
-	pdf.EndStructure()
-	pdf.EndStructure()
-	pdf.EndStructure()
-	pdf.EndStructure()
-
-	pdf.BeginStructure("TR")
-	pdf.BeginTableCellStructure("TD", document.TableCellStructureOptions{})
-	pdf.SetNextTextRole("P")
-	pdf.CellFormat(70, 6, "Parent tree", "", 0, "L", false, 0, "")
-	pdf.EndStructure()
-	pdf.BeginTableCellStructure("TD", document.TableCellStructureOptions{})
-	pdf.SetNextTextRole("P")
-	pdf.CellFormat(0, 6, "OK", "", 1, "L", false, 0, "")
-	pdf.EndStructure()
-	pdf.EndStructure()
-	pdf.EndStructure()
-}
-
-func writeDirectTaggedList(pdf *document.Document, items []string) {
-	pdf.BeginStructure("L")
-	for _, item := range items {
-		pdf.BeginStructure("LI")
-		pdf.SetNextTextRole("Lbl")
-		pdf.CellFormat(8, 6, "•", "", 0, "L", false, 0, "")
-		pdf.SetNextTextRole("LBody")
-		pdf.CellFormat(0, 6, item, "", 1, "L", false, 0, "")
-		pdf.EndStructure()
-	}
-	pdf.EndStructure()
 }
 
 func complianceSigner() (*x509.Certificate, crypto.Signer, error) {
@@ -363,13 +390,36 @@ func complianceSigner() (*x509.Certificate, crypto.Signer, error) {
 	return cert, key, nil
 }
 
-func baseDocument(fontPath, boldFontPath string) *document.Document {
-	pdf := document.MustNew(document.WithDeterministicOutput())
-	pdf.SetCompression(false)
-	pdf.SetCatalogSort(true)
-	pdf.AddUTF8Font("DejaVu", "", fontPath)
-	pdf.AddUTF8Font("DejaVu", "B", boldFontPath)
-	return pdf
+func baseDocument(_, _ string) *document.Document {
+	return document.MustNew(document.WithDeterministicOutput(), document.WithNoCompression())
+}
+
+func complianceLogoDataURI(root string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, "assets", "static", "image", "logo.png"))
+	if err != nil {
+		return "", fmt.Errorf("read compliance logo: %w", err)
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(data), nil
+}
+
+func compliancePaperFontCatalog(fontPath, boldFontPath string) (document.PaperAssetCatalog, error) {
+	// Paper manifests deliberately cap each immutable resource at 512 KiB. The
+	// compact checked-in TrueType fixture covers this ASCII compliance content.
+	compact := filepath.Join(filepath.Dir(fontPath), "calligra.ttf")
+	fontPath, boldFontPath = compact, compact
+	resources := make([]document.PaperAssetResource, 0, 2)
+	for _, item := range []struct {
+		name, path, style string
+		weight            uint16
+	}{{"body-font", fontPath, "normal", 400}, {"body-font-bold", boldFontPath, "normal", 700}} {
+		data, err := os.ReadFile(item.path)
+		if err != nil {
+			return document.PaperAssetCatalog{}, fmt.Errorf("read compliance font: %w", err)
+		}
+		digest := sha256.Sum256(data)
+		resources = append(resources, document.PaperAssetResource{Name: item.name, MediaType: "font/ttf", Digest: hex.EncodeToString(digest[:]), Data: data, Family: "Compliance Sans", Style: item.style, Weight: item.weight, License: "fixture"})
+	}
+	return document.NewPaperAssetCatalog(resources)
 }
 
 func exitErr(err error) {

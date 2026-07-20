@@ -27,7 +27,7 @@ func TestWriteDocumentDefaultsToExactPlanAndReportsBoundedRoute(t *testing.T) {
 		},
 	}
 	var observed []typedRouteObservation
-	direct := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput(), WithHooks(Hooks{
+	direct := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput(), WithHooks(Hooks{
 		OnLayoutEngineRoute: func(entryPoint, engine, reason string) {
 			observed = append(observed, typedRouteObservation{entryPoint, engine, reason})
 		},
@@ -40,12 +40,12 @@ func TestWriteDocumentDefaultsToExactPlanAndReportsBoundedRoute(t *testing.T) {
 		t.Fatalf("route observations = %#v", observed)
 	}
 
-	planner := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	plan, err := planner.PlanLayoutDocument(model)
 	if err != nil {
 		t.Fatal(err)
 	}
-	explicit := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	explicit := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := explicit.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestWriteDocumentUnsupportedPolicyFailsWithoutLegacyFallback(t *testing.T) 
 		layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: authoredSecret}}},
 	}}
 	var observed []typedRouteObservation
-	pdf := MustNew(WithNoCompression(), WithHooks(Hooks{
+	pdf := mustNewPDFDocument(WithNoCompression(), WithHooks(Hooks{
 		OnLayoutEngineRoute: func(entryPoint, engine, reason string) {
 			observed = append(observed, typedRouteObservation{entryPoint, engine, reason})
 		},
@@ -84,7 +84,7 @@ func TestWriteDocumentUnsupportedPolicyFailsWithoutLegacyFallback(t *testing.T) 
 
 func TestWriteDocumentNonFreshReceiverFailsWithoutLegacyFallback(t *testing.T) {
 	var observed []typedRouteObservation
-	pdf := MustNew(WithNoCompression(), WithHooks(Hooks{OnLayoutEngineRoute: func(entryPoint, engine, reason string) {
+	pdf := mustNewPDFDocument(WithNoCompression(), WithHooks(Hooks{OnLayoutEngineRoute: func(entryPoint, engine, reason string) {
 		observed = append(observed, typedRouteObservation{entryPoint, engine, reason})
 	}}))
 	pdf.AddPage()
@@ -104,7 +104,7 @@ func TestWriteDocumentNonFreshReceiverFailsWithoutLegacyFallback(t *testing.T) {
 
 func TestWriteDocumentInvalidUnifiedInputFailsAtomicallyWithoutFallback(t *testing.T) {
 	var observed []typedRouteObservation
-	pdf := MustNew(WithHooks(Hooks{OnLayoutEngineRoute: func(entryPoint, engine, reason string) {
+	pdf := mustNewPDFDocument(WithHooks(Hooks{OnLayoutEngineRoute: func(entryPoint, engine, reason string) {
 		observed = append(observed, typedRouteObservation{entryPoint, engine, reason})
 	}}))
 	pdf.WriteDocument(&layout.LayoutDocument{Body: []layout.Block{
@@ -131,12 +131,12 @@ func TestWriteDocumentMatchesExactPlanAcrossCharacterizationCorpus(t *testing.T)
 		}
 		t.Run(fixture.inventory.Name, func(t *testing.T) {
 			options := []Option{WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression(), WithDeterministicOutput()}
-			planner := MustNew(options...)
+			planner := mustNewPDFDocument(options...)
 			plan, err := planner.PlanLayoutDocument(fixture.doc)
 			if err != nil {
 				t.Skipf("characterized non-planned fixture: %v", err)
 			}
-			explicit := MustNew(options...)
+			explicit := mustNewPDFDocument(options...)
 			if _, err := explicit.WriteLayoutDocumentPlan(plan); err != nil {
 				t.Fatal(err)
 			}
@@ -144,7 +144,7 @@ func TestWriteDocumentMatchesExactPlanAcrossCharacterizationCorpus(t *testing.T)
 			directOptions := append(append([]Option(nil), options...), WithHooks(Hooks{OnLayoutEngineRoute: func(entryPoint, engine, reason string) {
 				observed = append(observed, typedRouteObservation{entryPoint, engine, reason})
 			}}))
-			direct := MustNew(directOptions...)
+			direct := mustNewPDFDocument(directOptions...)
 			direct.WriteDocument(fixture.doc)
 			if err := direct.Error(); err != nil {
 				t.Fatal(err)
@@ -159,7 +159,7 @@ func TestWriteDocumentMatchesExactPlanAcrossCharacterizationCorpus(t *testing.T)
 	}
 }
 
-func deterministicDocumentBytes(t *testing.T, pdf *Document) []byte {
+func deterministicDocumentBytes(t *testing.T, pdf *pdfDocument) []byte {
 	t.Helper()
 	var output bytes.Buffer
 	if err := pdf.OutputWithOptions(&output, OutputOptions{Deterministic: true}); err != nil {

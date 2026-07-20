@@ -105,11 +105,6 @@ func TypedLayoutInventory() TypedCharacterizationInventory {
 		{Package: "layout", Receiver: "*LayoutDocument", Name: "AddBlock", Signature: "func(Block)", Status: TypedBehaviorDocumented},
 		{Package: "layout", Name: "NormalizeBlock", Signature: "func(Block) (Block, bool)", Status: TypedBehaviorDocumented},
 		{Package: "layout", Name: "NormalizeBlocks", Signature: "func([]Block) []Block", Status: TypedBehaviorDocumented},
-		{Package: "document", Receiver: "*Document", Name: "WriteDocument", Signature: "func(*layout.LayoutDocument)", Status: TypedBehaviorDocumented, Notes: "unified immutable-plan lowering adapter; unsupported receiver/model contracts fail without a legacy renderer"},
-		{Package: "document", Receiver: "*Document", Name: "PlanLayoutDocument", Signature: "func(*layout.LayoutDocument) (LayoutDocumentPlan, error)", Status: TypedBehaviorDocumented},
-		{Package: "document", Receiver: "*Document", Name: "PlanLayoutDocumentContext", Signature: "func(context.Context, *layout.LayoutDocument) (LayoutDocumentPlan, error)", Status: TypedBehaviorDocumented},
-		{Package: "document", Receiver: "*Document", Name: "WriteLayoutDocumentPlan", Signature: "func(LayoutDocumentPlan) (int, error)", Status: TypedBehaviorDocumented},
-		{Package: "document", Receiver: "*Document", Name: "WriteLayoutDocumentPlanContext", Signature: "func(context.Context, LayoutDocumentPlan) (int, error)", Status: TypedBehaviorDocumented},
 	}
 	blocks := make([]TypedBlockInventory, 0, len(typedBlockTypes))
 	for _, item := range typedBlockTypes {
@@ -236,7 +231,7 @@ func RunTypedCharacterization(ctx context.Context, limits TypedCharacterizationL
 		if work > limits.MaxWork {
 			return TypedCharacterizationProjection{}, errors.New("document: typed characterization work limit exceeded")
 		}
-		planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression())
+		planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression())
 		fixtureContext := ctx
 		if fixture.mode == "cancel" {
 			canceled, cancel := context.WithCancel(ctx)
@@ -288,7 +283,7 @@ func RunTypedCharacterization(ctx context.Context, limits TypedCharacterizationL
 				wait.Add(1)
 				go func() {
 					defer wait.Done()
-					target := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression())
+					target := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression())
 					if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 						failures <- err
 					}
@@ -307,7 +302,7 @@ func RunTypedCharacterization(ctx context.Context, limits TypedCharacterizationL
 }
 
 func typedCharacterizationPDFEvidence(plan LayoutDocumentPlan, pageHeight float64) (CharacterizationPDFEvidence, []layoutengine.SemanticRole, error) {
-	target := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: pageHeight}), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: pageHeight}), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		return CharacterizationPDFEvidence{}, nil, err
 	}

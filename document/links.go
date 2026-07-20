@@ -40,13 +40,13 @@ func checkedExternalLinkTarget(target string) (string, error) {
 // link is a clickable area that points to another place within the document.
 // The identifier can then be passed to Cell, Write, ImageOptions, or Link. The
 // destination is defined with SetLink.
-func (f *Document) AddLink() int {
+func (f *pdfDocument) AddLink() int {
 	f.links = append(f.links, internalLink{})
 	return len(f.links) - 1
 }
 
 // SetLink defines the page and position that link points to. See AddLink.
-func (f *Document) SetLink(link int, y float64, page int) {
+func (f *pdfDocument) SetLink(link int, y float64, page int) {
 	if !f.validLinkID(link) {
 		f.SetErrorf("invalid link id: %d", link)
 		return
@@ -68,7 +68,7 @@ func (f *Document) SetLink(link int, y float64, page int) {
 	f.links[link] = internalLink{page: page, y: y}
 }
 
-func (f *Document) setPlannedLink(link int, x, y float64, page int) {
+func (f *pdfDocument) setPlannedLink(link int, x, y float64, page int) {
 	if !f.validLinkID(link) || page <= 0 || page > f.page || !finiteNumbers(x, y) {
 		f.SetErrorf("invalid planned link destination")
 		return
@@ -77,7 +77,7 @@ func (f *Document) setPlannedLink(link int, x, y float64, page int) {
 }
 
 // newLink adds a new clickable link on the current page.
-func (f *Document) newLink(x, y, w, h float64, link int, linkStr string) {
+func (f *pdfDocument) newLink(x, y, w, h float64, link int, linkStr string) {
 	if f.page <= 0 {
 		f.SetErrorf("link requires an active page")
 		return
@@ -114,7 +114,7 @@ func (f *Document) newLink(x, y, w, h float64, link int, linkStr string) {
 	})
 }
 
-func (f *Document) validLinkID(link int) bool {
+func (f *pdfDocument) validLinkID(link int) bool {
 	return link > 0 && link < len(f.links)
 }
 
@@ -122,7 +122,7 @@ func (f *Document) validLinkID(link int) bool {
 // generally put via Cell, Write, or ImageOptions, but this method can be useful
 // to define a clickable area inside an image. link is the value returned by
 // AddLink.
-func (f *Document) Link(x, y, w, h float64, link int) {
+func (f *pdfDocument) Link(x, y, w, h float64, link int) {
 	f.newLink(x, y, w, h, link, "")
 }
 
@@ -130,7 +130,7 @@ func (f *Document) Link(x, y, w, h float64, link int) {
 // links are generally put via Cell, Write, or ImageOptions, but this method can
 // be useful to define a clickable area inside an image. linkStr is the target
 // URL.
-func (f *Document) LinkString(x, y, w, h float64, linkStr string) {
+func (f *pdfDocument) LinkString(x, y, w, h float64, linkStr string) {
 	f.newLink(x, y, w, h, 0, linkStr)
 }
 
@@ -139,7 +139,7 @@ func (f *Document) LinkString(x, y, w, h float64, linkStr string) {
 // the outline; 0 is the top level, 1 is just below, and so on. y specifies the
 // vertical position of the bookmark destination in the current page; -1
 // indicates the current position.
-func (f *Document) Bookmark(txtStr string, level int, y float64) {
+func (f *pdfDocument) Bookmark(txtStr string, level int, y float64) {
 	if f.err != nil {
 		return
 	}

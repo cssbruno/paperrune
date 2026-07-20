@@ -22,8 +22,8 @@ import (
 // paged media, or browser-grade typography. It supports a bounded flexbox
 // subset for direct child blocks. For predictable output, generate simple
 // content that stays within the documented subset.
-type HTML struct {
-	pdf *Document
+type htmlRenderer struct {
+	pdf *pdfDocument
 	// Link controls the style applied to rendered anchor text.
 	Link struct {
 		// ClrR defines the red component of rendered link text.
@@ -70,7 +70,7 @@ const (
 )
 
 // HTMLNew returns an instance that writes HTML into the current PDF document.
-func (f *Document) HTMLNew() (html HTML) {
+func (f *pdfDocument) htmlNew() (html htmlRenderer) {
 	html.pdf = f
 	html.Link.ClrR, html.Link.ClrG, html.Link.ClrB = 0, 0, 128
 	html.Link.Bold, html.Link.Italic, html.Link.Underscore = false, false, true
@@ -98,7 +98,7 @@ func (f *Document) HTMLNew() (html HTML) {
 // left at the end of the text.
 //
 // lineHt indicates the line height in the unit of measure specified in New.
-func (html *HTML) Write(lineHt float64, htmlStr string) {
+func (html *htmlRenderer) Write(lineHt float64, htmlStr string) {
 	_ = html.writeContextEntry(context.Background(), lineHt, htmlStr, "HTML.Write")
 }
 
@@ -106,11 +106,11 @@ func (html *HTML) Write(lineHt float64, htmlStr string) {
 // checks ctx before compile and render. Deeper cancellation within long
 // table/image rendering remains best effort until those internals accept
 // context directly.
-func (html *HTML) WriteContext(ctx context.Context, lineHt float64, htmlStr string) error {
+func (html *htmlRenderer) WriteContext(ctx context.Context, lineHt float64, htmlStr string) error {
 	return html.writeContextEntry(ctx, lineHt, htmlStr, "HTML.WriteContext")
 }
 
-func (html *HTML) writeContextEntry(ctx context.Context, lineHt float64, htmlStr, entryPoint string) error {
+func (html *htmlRenderer) writeContextEntry(ctx context.Context, lineHt float64, htmlStr, entryPoint string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -119,7 +119,7 @@ func (html *HTML) writeContextEntry(ctx context.Context, lineHt float64, htmlStr
 		return err
 	}
 	if len(htmlStr) > html.maxHTMLBytes() {
-		html.pdf.SetError(ErrHTMLLimitExceeded)
+		html.pdf.SetError(errHTMLLimitExceeded)
 		return html.pdf.Error()
 	}
 	if err := html.ensureCurrentFont(); err != nil {
@@ -141,11 +141,11 @@ func (html *HTML) writeContextEntry(ctx context.Context, lineHt float64, htmlStr
 
 // WriteCompiled renders a precompiled HTML fragment. Use CompileHTML when the
 // same HTML is rendered repeatedly across documents.
-func (html *HTML) WriteCompiled(lineHt float64, compiled *CompiledHTML) {
+func (html *htmlRenderer) WriteCompiled(lineHt float64, compiled *compiledHTML) {
 	html.writeCompiledContext(context.Background(), lineHt, compiled, "HTML.WriteCompiled")
 }
 
-func (html *HTML) writeCompiledContext(ctx context.Context, lineHt float64, compiled *CompiledHTML, entryPoint string) {
+func (html *htmlRenderer) writeCompiledContext(ctx context.Context, lineHt float64, compiled *compiledHTML, entryPoint string) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -161,7 +161,7 @@ func (html *HTML) writeCompiledContext(ctx context.Context, lineHt float64, comp
 		return
 	}
 	if compiled.sourceBytes > html.maxHTMLBytes() {
-		html.pdf.SetError(ErrHTMLLimitExceeded)
+		html.pdf.SetError(errHTMLLimitExceeded)
 		return
 	}
 	if err := compiled.validate(); err != nil {
@@ -192,7 +192,7 @@ func (html *HTML) writeCompiledContext(ctx context.Context, lineHt float64, comp
 		}
 		html.pdf.observeLayoutEngineRoute(entryPoint, "unified", "")
 		return
-	} else if !errors.Is(routeErr, ErrHTMLPlanUnsupported) {
+	} else if !errors.Is(routeErr, errHTMLPlanUnsupported) {
 		html.pdf.SetError(routeErr)
 		return
 	}
@@ -205,7 +205,7 @@ func (html *HTML) writeCompiledContext(ctx context.Context, lineHt float64, comp
 	html.pdf.SetError(routeErr)
 }
 
-func (html *HTML) ensureCurrentFont() error {
+func (html *htmlRenderer) ensureCurrentFont() error {
 	if html == nil || html.pdf == nil {
 		return errors.New("document: HTML receiver is nil")
 	}
@@ -215,7 +215,7 @@ func (html *HTML) ensureCurrentFont() error {
 	return html.pdf.Error()
 }
 
-func (html *HTML) validateCompiledLinkSafety(compiled *CompiledHTML) error {
+func (html *htmlRenderer) validateCompiledLinkSafety(compiled *compiledHTML) error {
 	if compiled == nil {
 		return errors.New("compiled HTML is nil")
 	}
@@ -234,7 +234,7 @@ func (html *HTML) validateCompiledLinkSafety(compiled *CompiledHTML) error {
 	return nil
 }
 
-func (html *HTML) validateCompiledTableRowLimit(compiled *CompiledHTML) error {
+func (html *htmlRenderer) validateCompiledTableRowLimit(compiled *compiledHTML) error {
 	if compiled == nil {
 		return errors.New("compiled HTML is nil")
 	}
@@ -247,7 +247,7 @@ func (html *HTML) validateCompiledTableRowLimit(compiled *CompiledHTML) error {
 		case token.Cat == 'O' && token.Str == "tr" && len(rows) != 0:
 			rows[len(rows)-1]++
 			if rows[len(rows)-1] > limit {
-				return fmt.Errorf("%w: HTML table row count exceeds maximum size", ErrHTMLLimitExceeded)
+				return fmt.Errorf("%w: HTML table row count exceeds maximum size", errHTMLLimitExceeded)
 			}
 		case token.Cat == 'C' && token.Str == "table" && len(rows) != 0:
 			rows = rows[:len(rows)-1]
@@ -281,7 +281,7 @@ func htmlBreakForcesPage(value string) bool {
 	}
 }
 
-func parseHTMLBoxLength(value string, pdf *Document, relative float64) (float64, bool) {
+func parseHTMLBoxLength(value string, pdf *pdfDocument, relative float64) (float64, bool) {
 	value = strings.TrimSpace(strings.ToLower(value))
 	if value == "" || value == "auto" {
 		return 0, false

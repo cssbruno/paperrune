@@ -191,8 +191,8 @@ func (w *Workspace) PaperSetBinding(request PaperSetBindingRequest) (PaperMutati
 		}
 	}
 	node := findNodeByID(revision.parsed.AST.Root, request.Guard.Target)
-	if node == nil || (node.Kind != paperlang.NodeParagraph && node.Kind != paperlang.NodeHeading && node.Kind != paperlang.NodeUse) {
-		return PaperMutationResult{}, workspaceError("INVALID_BINDING", "binding target must be a paragraph, heading, or component use", paperedit.ErrInvalidOperation)
+	if node == nil || (node.Kind != paperlang.NodeParagraph && node.Kind != paperlang.NodeHeading && node.Kind != paperlang.NodeUse && node.Kind != paperlang.NodeTableCell) {
+		return PaperMutationResult{}, workspaceError("INVALID_BINDING", "binding target must be a paragraph, heading, table cell, or component use", paperedit.ErrInvalidOperation)
 	}
 	bindCount := 0
 	for _, member := range node.Members {
@@ -202,6 +202,12 @@ func (w *Workspace) PaperSetBinding(request PaperSetBindingRequest) (PaperMutati
 	}
 	if bindCount > 1 {
 		return PaperMutationResult{}, workspaceError("AMBIGUOUS_TARGET", "binding target has more than one bind property", paperedit.ErrInvalidOperation)
+	}
+	present := make(map[string]bool)
+	for _, member := range node.Members {
+		if member.Property != nil {
+			present[member.Property.Name] = true
+		}
 	}
 	properties := []paperedit.PropertySpec{{Name: "bind", Value: paperedit.StringValue(request.Path)}}
 	if request.Required != nil {
@@ -222,7 +228,17 @@ func (w *Workspace) PaperSetBinding(request PaperSetBindingRequest) (PaperMutati
 	if request.MaxFractionDigits != nil {
 		properties = append(properties, paperedit.PropertySpec{Name: "format-max-fraction", Value: paperedit.NumberValue(float64(*request.MaxFractionDigits))})
 	}
-	operations := []paperedit.Operation{paperedit.SetProperties{Target: request.Guard.Target, Properties: properties}}
+	wanted := map[string]bool{"bind": true}
+	for _, property := range properties {
+		wanted[property.Name] = true
+	}
+	operations := make([]paperedit.Operation, 0, 7)
+	for _, name := range []string{"bind-required", "format", "format-locale", "format-currency", "format-min-fraction", "format-max-fraction"} {
+		if present[name] && !wanted[name] {
+			operations = append(operations, paperedit.DeleteProperty{Target: request.Guard.Target, Name: name})
+		}
+	}
+	operations = append(operations, paperedit.SetProperties{Target: request.Guard.Target, Properties: properties})
 	return w.applyPaperMutation("set_binding", request.Guard, opened, revision, []string{request.Guard.Target}, operations, "INVALID_BINDING")
 }
 

@@ -33,20 +33,20 @@ test('projects and deduplicates exact semantic table-cell ownership', () => {
   assert.deepEqual(marks, [{cell: 4, fragment: 1, rect, tableHeader: true, label: 'table header cell'}]);
 });
 
-test('projects exact page-local retained grid tracks', () => {
-  const marks = model.gridTrackMarks([
+test('projects exact page-local layout guides', () => {
+  const marks = model.layoutGuideMarks([
     {index: 4, track: {group: 2, page: 1, axis: 'column', index: 0, bounds: {x: 10, y: 20, width: 30, height: 12}, gap_after: 8}},
     {index: 5, track: {group: 2, page: 1, axis: 'row', index: 0, bounds: {x: 10, y: 20, width: 68, height: 12}}},
     {index: 6, track: {group: 3, page: 2, axis: 'column', index: 0, bounds: {x: 10, y: 20, width: 30, height: 12}}},
   ], 1);
   assert.deepEqual(marks, [
-    {index: 4, group: 2, axis: 'column', trackIndex: 0, gapAfter: 8, rect: {x: 10, y: 20, width: 30, height: 12}, label: 'column track 1 · grid 2'},
-    {index: 5, group: 2, axis: 'row', trackIndex: 0, gapAfter: 0, rect: {x: 10, y: 20, width: 68, height: 12}, label: 'row track 1 · grid 2'},
+    {index: 4, group: 2, axis: 'column', guideIndex: 0, gapAfter: 8, rect: {x: 10, y: 20, width: 30, height: 12}, label: 'column guide 1 · layout 2'},
+    {index: 5, group: 2, axis: 'row', guideIndex: 0, gapAfter: 0, rect: {x: 10, y: 20, width: 68, height: 12}, label: 'row guide 1 · layout 2'},
   ]);
 });
 
-test('rejects malformed retained grid tracks', () => {
-  assert.deepEqual(model.gridTrackMarks([
+test('rejects malformed retained layout guides', () => {
+  assert.deepEqual(model.layoutGuideMarks([
     {track: {group: 1, page: 1, axis: 'column', index: 0, bounds: {x: 0, y: 0, width: 0, height: 10}}},
     {track: {group: 1, page: 1, axis: 'diagonal', index: 0, bounds: {x: 0, y: 0, width: 10, height: 10}}},
   ], 1), []);

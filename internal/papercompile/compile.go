@@ -345,8 +345,8 @@ var listProperties = func() map[string]bool {
 	return properties
 }()
 var rowColumnProperties = map[string]bool{
-	"gap": true, "cross-gap": true, "cross-size": true,
-	"wrap": true, "main-align": true, "cross-align": true, "align-content": true, "reverse-main": true,
+	"gap": true, "line-gap": true, "width": true, "height": true,
+	"wrap": true, "justify-content": true, "align-items": true, "align-content": true, "reverse": true,
 	"when": true,
 }
 var canvasProperties = map[string]bool{"width": true, "height": true, "default-horizontal": true, "default-vertical": true}
@@ -371,11 +371,11 @@ var imageProperties = func() map[string]bool {
 	return properties
 }()
 var tableProperties = map[string]bool{"caption": true, "repeat-header": true, "split": true, "when": true}
-var tableTrackProperties = map[string]bool{"width": true, "min-width": true, "max-width": true}
+var tableColumnProperties = map[string]bool{"width": true, "min-width": true, "max-width": true}
 var tableRowProperties = map[string]bool{"keep-together": true, "keep-with-next": true, "orphans": true, "widows": true}
 var tableCellProperties = func() map[string]bool {
 	properties := copyPropertySet(boxedTextProperties)
-	for _, name := range []string{"header", "colspan", "rowspan", "vertical-align"} {
+	for _, name := range []string{"header-cell", "colspan", "rowspan", "vertical-align"} {
 		properties[name] = true
 	}
 	return properties
@@ -383,8 +383,8 @@ var tableCellProperties = func() map[string]bool {
 var rowColumnChildProperties = func() map[string]bool {
 	properties := copyPropertySet(boxedTextProperties)
 	for _, name := range []string{
-		"level", "track", "track-size", "track-min", "track-max", "track-weight", "track-grow", "track-shrink",
-		"cross-size", "cross-min", "cross-max", "cross-align",
+		"width", "min-width", "max-width", "height", "min-height", "max-height", "flex-grow", "flex-shrink", "align-self",
+		"level",
 	} {
 		properties[name] = true
 	}
@@ -393,8 +393,7 @@ var rowColumnChildProperties = func() map[string]bool {
 var rowColumnImageProperties = func() map[string]bool {
 	properties := copyPropertySet(imageProperties)
 	for _, name := range []string{
-		"track", "track-size", "track-min", "track-max", "track-weight", "track-grow", "track-shrink",
-		"cross-size", "cross-min", "cross-max", "cross-align",
+		"min-width", "min-height", "flex-grow", "flex-shrink", "align-self",
 	} {
 		properties[name] = true
 	}
@@ -403,8 +402,7 @@ var rowColumnImageProperties = func() map[string]bool {
 var rowColumnTableProperties = func() map[string]bool {
 	properties := copyPropertySet(tableProperties)
 	for _, name := range []string{
-		"track", "track-size", "track-min", "track-max", "track-weight", "track-grow", "track-shrink",
-		"cross-size", "cross-min", "cross-max", "cross-align",
+		"width", "min-width", "max-width", "height", "min-height", "max-height", "flex-grow", "flex-shrink", "align-self",
 	} {
 		properties[name] = true
 	}
@@ -413,8 +411,7 @@ var rowColumnTableProperties = func() map[string]bool {
 var rowColumnNestedProperties = func() map[string]bool {
 	properties := copyPropertySet(rowColumnProperties)
 	for _, name := range []string{
-		"track", "track-size", "track-min", "track-max", "track-weight", "track-grow", "track-shrink",
-		"cross-min", "cross-max",
+		"min-width", "max-width", "min-height", "max-height", "flex-grow", "flex-shrink", "align-self",
 	} {
 		properties[name] = true
 	}
@@ -506,8 +503,12 @@ func (c *compiler) compilePage(node *paperlang.Node) {
 	}
 	if property, ok := properties["page-number-format"]; ok {
 		if value, valid := c.stringProperty(property); valid {
-			c.result.Document.PageTemplate.PageNumbers.Format = value
-			c.result.Document.PageTemplate.PageNumbers.Enabled = true
+			if validPageNumberFormat(value) {
+				c.result.Document.PageTemplate.PageNumbers.Format = value
+				c.result.Document.PageTemplate.PageNumbers.Enabled = true
+			} else {
+				c.add("PAPER_COMPILE_PAGE_NUMBER_FORMAT", "page-number-format must contain a valid page-number directive", "use one integer directive such as Page %d or Page %02d", property.Value.Span)
+			}
 		}
 	}
 	if property, ok := properties["page-total-alias"]; ok {
@@ -554,6 +555,15 @@ func (c *compiler) compilePage(node *paperlang.Node) {
 		c.result.Document.PageTemplate.Footer = &layout.FooterBlock{Blocks: blocks, ReservePageArea: reserve, Box: box}
 	}
 	c.compileBody(body)
+}
+
+func validPageNumberFormat(format string) bool {
+	if strings.TrimSpace(format) == "" {
+		return false
+	}
+	first := fmt.Sprintf(format, 1)
+	second := fmt.Sprintf(format, 2)
+	return first != second && !strings.Contains(first, "%!") && !strings.Contains(second, "%!")
 }
 
 func (c *compiler) compilePageRegion(node *paperlang.Node) ([]layout.Block, bool, layout.BoxStyle) {
@@ -806,6 +816,18 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 		if property, ok := rowProperties["keep-with-next"]; ok {
 			row.KeepWithNext, _ = c.boolProperty(property)
 		}
+		for _, policy := range []struct {
+			name string
+			set  func(uint32)
+		}{{"orphans", func(value uint32) { row.Orphans = value }}, {"widows", func(value uint32) { row.Widows = value }}} {
+			if property, ok := rowProperties[policy.name]; ok {
+				if value, valid := c.numberProperty(property); valid && value >= 1 && value <= 1<<20 && math.Trunc(value) == value {
+					policy.set(uint32(value))
+				} else if valid {
+					c.add("PAPER_COMPILE_TABLE_PAGINATION", policy.name+" must be an integer from 1 through 1048576", "use a bounded positive row count", property.Value.Span)
+				}
+			}
+		}
 		for _, cellNode := range cells {
 			if cellNode.Kind != paperlang.NodeTableCell {
 				c.unsupportedNode(cellNode, "table-row accepts only cell children")
@@ -814,7 +836,7 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 			cellCount++
 			cellProperties, content := c.members(cellNode, tableCellProperties)
 			cell := layout.TableCell{Header: header, ColSpan: 1, RowSpan: 1, Style: c.compileTextStyle(cellNode, cellProperties), Box: c.compileBoxStyle(cellProperties)}
-			if property, ok := cellProperties["header"]; ok {
+			if property, ok := cellProperties["header-cell"]; ok {
 				cell.Header, _ = c.boolProperty(property)
 			}
 			for _, span := range []struct {
@@ -903,6 +925,13 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 					c.unsupportedNode(child, "table cell supports text, paragraph, list, and image content")
 				}
 			}
+			if binding, bound := c.bindings[cellNode]; bound && c.fixture != nil {
+				text, ok := c.bindingText(cellNode, binding)
+				if !ok {
+					text = ""
+				}
+				cell.Blocks = []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: text}}}}
+			}
 			row.Cells = append(row.Cells, cell)
 		}
 		rowCount++
@@ -910,8 +939,8 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 	}
 	for _, child := range children {
 		switch child.Kind {
-		case paperlang.NodeTableTrack:
-			p, _ := c.members(child, tableTrackProperties)
+		case paperlang.NodeTableColumn:
+			p, _ := c.members(child, tableColumnProperties)
 			column := layout.TableColumn{}
 			for _, name := range []string{"width", "min-width", "max-width"} {
 				property, ok := p[name]
@@ -1129,7 +1158,7 @@ func (c *compiler) decodeImageSource(source string) ([]byte, string, string) {
 
 func (c *compiler) compileRowColumn(node *paperlang.Node) {
 	properties, children := c.members(node, rowColumnProperties)
-	block := c.compileRowColumnSurface(node, properties)
+	block := c.compileRowColumnSurface(node, properties, false)
 	bodyIndex := len(c.result.Document.Body)
 	c.mapNode(node, bodyIndex, -1)
 	for _, child := range children {
@@ -1138,7 +1167,7 @@ func (c *compiler) compileRowColumn(node *paperlang.Node) {
 			continue
 		}
 		itemIndex := len(block.Items)
-		item, textNodes := c.compileRowColumnItem(child, bodyIndex, itemIndex)
+		item, textNodes := c.compileRowColumnItem(child, bodyIndex, itemIndex, block.Direction)
 		block.Items = append(block.Items, item)
 		c.mapNestedNode(child, bodyIndex, itemIndex, -1)
 		if image, ok := item.Block.(layout.ImageBlock); ok {
@@ -1155,7 +1184,7 @@ func (c *compiler) compileRowColumn(node *paperlang.Node) {
 	c.recordComputedStyle(node, bodyIndex)
 }
 
-func (c *compiler) compileRowColumnSurface(node *paperlang.Node, properties map[string]paperlang.Property) layout.RowColumnBlock {
+func (c *compiler) compileRowColumnSurface(node *paperlang.Node, properties map[string]paperlang.Property, nested bool) layout.RowColumnBlock {
 	direction := layout.RowDirection
 	if node.Kind == paperlang.NodeColumn {
 		direction = layout.ColumnDirection
@@ -1166,18 +1195,28 @@ func (c *compiler) compileRowColumnSurface(node *paperlang.Node, properties map[
 			block.Gap = value
 		}
 	}
-	if property, ok := properties["cross-gap"]; ok {
+	if property, ok := properties["line-gap"]; ok {
 		if value, valid := c.lengthProperty(property, false); valid {
 			block.CrossGap = value
 		}
 	}
-	if property, ok := properties["cross-size"]; ok {
-		if value, valid := c.contextualLengthProperty(property, true, true); valid && !value.auto {
-			if value.percentSet {
-				c.add("PAPER_COMPILE_PERCENT_AXIS", "row/column cross-size needs a definite physical extent", "use a physical cross-size; child cross constraints accept percentages", property.Value.Span)
-			} else {
-				block.CrossSize = value.points
+	crossSizeName := "height"
+	mainSizeName := "width"
+	if direction == layout.ColumnDirection {
+		crossSizeName, mainSizeName = "width", "height"
+	}
+	if !nested {
+		if property, ok := properties[crossSizeName]; ok {
+			if value, valid := c.contextualLengthProperty(property, true, true); valid && !value.auto {
+				if value.percentSet {
+					c.add("PAPER_COMPILE_PERCENT_AXIS", fmt.Sprintf("%s %s needs a definite physical extent", node.Kind, crossSizeName), "use a physical "+crossSizeName+"; child dimensions may use percentages", property.Value.Span)
+				} else {
+					block.CrossSize = value.points
+				}
 			}
+		}
+		if property, ok := properties[mainSizeName]; ok {
+			c.add("PAPER_COMPILE_MAIN_SIZE", fmt.Sprintf("%s %s is determined by its containing flow", node.Kind, mainSizeName), "set "+mainSizeName+" on the children instead", property.Value.Span)
 		}
 	}
 	if property, ok := properties["wrap"]; ok {
@@ -1189,7 +1228,7 @@ func (c *compiler) compileRowColumnSurface(node *paperlang.Node, properties map[
 			}
 		}
 	}
-	if property, ok := properties["main-align"]; ok {
+	if property, ok := properties["justify-content"]; ok {
 		if value, valid := c.stringProperty(property); valid {
 			if align, supported := canonicalMainAlign(value); supported {
 				block.MainAlign = align
@@ -1198,7 +1237,7 @@ func (c *compiler) compileRowColumnSurface(node *paperlang.Node, properties map[
 			}
 		}
 	}
-	if property, ok := properties["cross-align"]; ok {
+	if property, ok := properties["align-items"]; ok {
 		if value, valid := c.stringProperty(property); valid {
 			if align, supported := canonicalCrossAlign(value); supported {
 				block.CrossAlign = align
@@ -1216,13 +1255,13 @@ func (c *compiler) compileRowColumnSurface(node *paperlang.Node, properties map[
 			}
 		}
 	}
-	if property, ok := properties["reverse-main"]; ok {
+	if property, ok := properties["reverse"]; ok {
 		block.ReverseMain, _ = c.boolProperty(property)
 	}
 	return block
 }
 
-func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemIndex int) (layout.RowColumnItem, []*paperlang.Node) {
+func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemIndex int, parentDirection layout.RowColumnDirection) (layout.RowColumnItem, []*paperlang.Node) {
 	allowed := rowColumnChildProperties
 	switch node.Kind {
 	case paperlang.NodeImage:
@@ -1233,15 +1272,33 @@ func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemInd
 		allowed = rowColumnNestedProperties
 	}
 	properties, children := c.members(node, allowed)
+	blockProperties := properties
+	if node.Kind == paperlang.NodeImage {
+		blockProperties = copyPaperProperties(properties)
+		for _, name := range []string{"width", "min-width", "max-width", "height", "min-height", "max-height"} {
+			delete(blockProperties, name)
+		}
+	}
 	var textNodes []*paperlang.Node
 	var child layout.Block
 	switch node.Kind {
 	case paperlang.NodeImage:
-		child = c.compileImageBlock(node, properties, children)
+		image := c.compileImageBlock(node, blockProperties, children)
+		if _, hasWidth := properties["width"]; hasWidth {
+			image.WidthPercent = 100_000_000
+		}
+		// A physical height is both the allocated item height and the image's
+		// target height, so measurement cannot overflow the box it requested.
+		if property, hasHeight := properties["height"]; hasHeight {
+			if value, valid := c.contextualLengthProperty(property, true, true); valid && !value.auto && !value.percentSet {
+				image.Height = value.points
+			}
+		}
+		child = image
 	case paperlang.NodeTable:
 		child = c.compileTableBlock(node, properties, children)
 	case paperlang.NodeRow, paperlang.NodeColumn:
-		nested := c.compileRowColumnSurface(node, properties)
+		nested := c.compileRowColumnSurface(node, properties, true)
 		for nestedIndex, nestedChild := range children {
 			if nestedChild.Kind == paperlang.NodeRow || nestedChild.Kind == paperlang.NodeColumn {
 				c.unsupportedNode(nestedChild, "readable nested row/column source is bounded to one nested level")
@@ -1251,7 +1308,7 @@ func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemInd
 				c.unsupportedNode(nestedChild, "nested row/column supports paragraph, heading, image, and table children")
 				continue
 			}
-			nestedItem, nestedText := c.compileRowColumnItem(nestedChild, bodyIndex, itemIndex)
+			nestedItem, nestedText := c.compileRowColumnItem(nestedChild, bodyIndex, itemIndex, nested.Direction)
 			nested.Items = append(nested.Items, nestedItem)
 			c.mapNestedNode(nestedChild, bodyIndex, itemIndex, nestedIndex)
 			if image, ok := nestedItem.Block.(layout.ImageBlock); ok {
@@ -1284,71 +1341,44 @@ func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemInd
 		}
 	}
 	item := layout.RowColumnItem{Block: child, Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackAuto}}
-	trackExplicit := false
-	if property, ok := properties["track"]; ok {
-		if value, valid := c.stringProperty(property); valid {
-			trackExplicit = true
-			switch strings.ToLower(strings.TrimSpace(value)) {
-			case "fixed":
-				item.Track.Kind = layout.RowColumnTrackFixed
-			case "auto":
-				item.Track.Kind = layout.RowColumnTrackAuto
-			case "fraction", "fr":
-				item.Track.Kind = layout.RowColumnTrackFraction
-			case "flex":
-				item.Track.Kind = layout.RowColumnTrackFlex
-				item.Track.BasisKind = layout.RowColumnFlexBasisContent
-				item.Track.Shrink = 1
-			default:
-				c.add("PAPER_COMPILE_TRACK", fmt.Sprintf("track kind %q is unsupported", value), "use fixed, auto, fraction, or flex", property.Value.Span)
-			}
-		}
+	mainSizeName, mainMinName, mainMaxName := "width", "min-width", "max-width"
+	crossSizeName, crossMinName, crossMaxName := "height", "min-height", "max-height"
+	if parentDirection == layout.ColumnDirection {
+		mainSizeName, mainMinName, mainMaxName, crossSizeName, crossMinName, crossMaxName =
+			"height", "min-height", "max-height", "width", "min-width", "max-width"
 	}
-	if property, ok := properties["track-size"]; ok {
-		if value, valid := c.contextualLengthProperty(property, true, true); valid {
+	if property, ok := properties[mainSizeName]; ok {
+		if property.Value.Kind == paperlang.ScalarUnit && property.Value.UnitValue != nil && property.Value.UnitValue.Unit == "fr" {
+			value := property.Value.UnitValue.Number
+			if !isFinite(value) || value <= 0 || value > math.MaxUint32 || math.Trunc(value) != value {
+				c.add("PAPER_COMPILE_TRACK_FRACTION", mainSizeName+" fraction must be a positive 32-bit integer", "use a whole fraction such as "+mainSizeName+": 1fr or "+mainSizeName+": 2fr", property.Value.Span)
+			} else {
+				item.Track = layout.RowColumnTrack{Kind: layout.RowColumnTrackFraction, Weight: uint32(value)}
+			}
+		} else if value, valid := c.contextualLengthProperty(property, true, true); valid {
 			switch {
 			case value.auto:
-				if trackExplicit && item.Track.Kind != layout.RowColumnTrackAuto && item.Track.Kind != layout.RowColumnTrackFlex {
-					c.warn("PAPER_COMPILE_TRACK_CONTEXT", "automatic track-size promotes the selected track to flexible sizing", "use track: \"flex\" or remove the track property for an explicit contract", property.Value.Span)
-				}
 				item.Track = layout.RowColumnTrack{Kind: layout.RowColumnTrackFlex, BasisKind: layout.RowColumnFlexBasisContent, Shrink: 1}
 			case value.percentSet:
-				if trackExplicit && item.Track.Kind != layout.RowColumnTrackAuto && item.Track.Kind != layout.RowColumnTrackFlex {
-					c.warn("PAPER_COMPILE_TRACK_CONTEXT", "percentage track-size promotes the selected track to flexible sizing", "use track: \"flex\" or remove the track property for an explicit contract", property.Value.Span)
-				}
 				item.Track = layout.RowColumnTrack{Kind: layout.RowColumnTrackFlex, BasisKind: layout.RowColumnFlexBasisPercent, BasisPercent: value.percent, Shrink: 1}
-			case item.Track.Kind == layout.RowColumnTrackFlex:
-				item.Track.BasisKind, item.Track.Basis = layout.RowColumnFlexBasisFixed, value.points
-			case !trackExplicit:
-				item.Track.Kind, item.Track.Size = layout.RowColumnTrackFixed, value.points
 			default:
-				item.Track.Size = value.points
+				item.Track.Kind, item.Track.Size = layout.RowColumnTrackFixed, value.points
 			}
 		}
 	}
-	if property, ok := properties["track-min"]; ok {
+	if property, ok := properties[mainMinName]; ok {
 		if value, valid := c.contextualLengthProperty(property, false, true); valid && !value.auto {
 			if value.percentSet {
-				if item.Track.Kind != layout.RowColumnTrackAuto && item.Track.Kind != layout.RowColumnTrackFlex {
-					c.add("PAPER_COMPILE_TRACK_CONTEXT", "percentage track-min requires a flexible track", "use track: \"flex\" or remove the fixed/fraction track property", property.Value.Span)
-				}
-				if item.Track.Kind != layout.RowColumnTrackFlex {
-					item.Track = layout.RowColumnTrack{Kind: layout.RowColumnTrackFlex, BasisKind: layout.RowColumnFlexBasisContent, Shrink: 1}
-				}
+				promoteRowColumnFlexTrack(&item.Track)
 				item.Track.MinPercent = value.percent
 			} else {
 				item.Track.Min = value.points
 			}
 		}
 	}
-	if property, ok := properties["track-max"]; ok {
+	if property, ok := properties[mainMaxName]; ok {
 		if value, valid := c.contextualLengthProperty(property, false, true); valid && !value.auto {
-			if item.Track.Kind != layout.RowColumnTrackFlex {
-				if item.Track.Kind != layout.RowColumnTrackAuto {
-					c.add("PAPER_COMPILE_TRACK_CONTEXT", "track-max requires a flexible track", "use track: \"flex\" or remove the fixed/fraction track property", property.Value.Span)
-				}
-				item.Track = layout.RowColumnTrack{Kind: layout.RowColumnTrackFlex, BasisKind: layout.RowColumnFlexBasisContent, Shrink: 1}
-			}
+			promoteRowColumnFlexTrack(&item.Track)
 			if value.percentSet {
 				item.Track.MaxPercent = value.percent
 			} else {
@@ -1356,21 +1386,12 @@ func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemInd
 			}
 		}
 	}
-	if property, ok := properties["track-weight"]; ok {
-		if value, valid := c.numberProperty(property); valid {
-			if value <= 0 || value > math.MaxUint32 || math.Trunc(value) != value {
-				c.add("PAPER_COMPILE_TRACK_WEIGHT", "track-weight must be a positive 32-bit integer", "use an integer such as 1 or 2", property.Value.Span)
-			} else {
-				item.Track.Weight = uint32(value)
-			}
-		}
-	}
 	for _, factor := range []struct {
 		name string
 		set  func(uint32, uint64)
 	}{
-		{"track-grow", func(integral uint32, scaled uint64) { item.Track.Grow, item.Track.GrowFactor = integral, scaled }},
-		{"track-shrink", func(integral uint32, scaled uint64) { item.Track.Shrink, item.Track.ShrinkFactor = integral, scaled }},
+		{"flex-grow", func(integral uint32, scaled uint64) { item.Track.Grow, item.Track.GrowFactor = integral, scaled }},
+		{"flex-shrink", func(integral uint32, scaled uint64) { item.Track.Shrink, item.Track.ShrinkFactor = integral, scaled }},
 	} {
 		property, ok := properties[factor.name]
 		if !ok {
@@ -1389,9 +1410,9 @@ func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemInd
 		setFixed   func(float64)
 		setPercent func(uint32)
 	}{
-		{"cross-size", true, func(value float64) { item.CrossSize = value }, func(value uint32) { item.CrossMinPercent, item.CrossMaxPercent = value, value }},
-		{"cross-min", false, func(value float64) { item.CrossMin = value }, func(value uint32) { item.CrossMinPercent = value }},
-		{"cross-max", false, func(value float64) { item.CrossMax = value }, func(value uint32) { item.CrossMaxPercent = value }},
+		{crossSizeName, true, func(value float64) { item.CrossSize = value }, func(value uint32) { item.CrossMinPercent, item.CrossMaxPercent = value, value }},
+		{crossMinName, false, func(value float64) { item.CrossMin = value }, func(value uint32) { item.CrossMinPercent = value }},
+		{crossMaxName, false, func(value float64) { item.CrossMax = value }, func(value uint32) { item.CrossMaxPercent = value }},
 	} {
 		property, ok := properties[constraint.name]
 		if !ok {
@@ -1407,7 +1428,7 @@ func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemInd
 			constraint.setFixed(value.points)
 		}
 	}
-	if property, ok := properties["cross-align"]; ok {
+	if property, ok := properties["align-self"]; ok {
 		if value, valid := c.stringProperty(property); valid {
 			if align, supported := canonicalCrossAlign(value); supported {
 				item.CrossAlign = align
@@ -1419,30 +1440,23 @@ func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemInd
 	switch item.Track.Kind {
 	case layout.RowColumnTrackFixed:
 		if item.Track.Size <= 0 {
-			c.add("PAPER_COMPILE_TRACK_SIZE", "fixed track requires a positive track-size", "add track-size: 120pt", node.HeaderSpan)
-		}
-		if item.Track.Weight != 0 {
-			c.add("PAPER_COMPILE_TRACK_WEIGHT", "fixed track cannot have track-weight", "remove track-weight", node.HeaderSpan)
+			c.add("PAPER_COMPILE_TRACK_SIZE", "fixed item requires a positive "+mainSizeName, "add "+mainSizeName+": 120pt", node.HeaderSpan)
 		}
 	case layout.RowColumnTrackAuto:
 		if item.Track.Size != 0 || item.Track.Weight != 0 {
-			c.add("PAPER_COMPILE_TRACK_AUTO", "auto track cannot have track-size or track-weight", "remove the fixed or fractional property", node.HeaderSpan)
+			c.add("PAPER_COMPILE_TRACK_AUTO", "automatic item contains incompatible sizing state", "use one width or height value", node.HeaderSpan)
 		}
 	case layout.RowColumnTrackFraction:
 		if item.Track.Weight == 0 {
-			c.add("PAPER_COMPILE_TRACK_WEIGHT", "fraction track requires track-weight", "add track-weight: 1", node.HeaderSpan)
+			c.add("PAPER_COMPILE_TRACK_WEIGHT", "fractional item requires a positive share", "use "+mainSizeName+": 1fr", node.HeaderSpan)
 		}
 		if item.Track.Size != 0 {
-			c.add("PAPER_COMPILE_TRACK_SIZE", "fraction track cannot have track-size", "remove track-size", node.HeaderSpan)
+			c.add("PAPER_COMPILE_TRACK_SIZE", "fractional item contains incompatible fixed sizing", "use either a physical size or an fr size", node.HeaderSpan)
 		}
 	case layout.RowColumnTrackFlex:
 		if item.Track.BasisKind == "" {
 			item.Track.BasisKind = layout.RowColumnFlexBasisContent
 			item.Track.Shrink = 1
-		}
-		if item.Track.Weight != 0 {
-			c.warn("PAPER_COMPILE_TRACK_WEIGHT", "track-weight is ignored after contextual sizing promotes the track to flex", "remove track-weight or use a fraction track without track-size", node.HeaderSpan)
-			item.Track.Weight = 0
 		}
 	}
 	return item, textNodes
@@ -2239,6 +2253,14 @@ func (c *compiler) warn(code, message, hint string, span paperlang.Span) {
 
 func copyPropertySet(input map[string]bool) map[string]bool {
 	result := make(map[string]bool, len(input)+1)
+	for key, value := range input {
+		result[key] = value
+	}
+	return result
+}
+
+func copyPaperProperties(input map[string]paperlang.Property) map[string]paperlang.Property {
+	result := make(map[string]paperlang.Property, len(input))
 	for key, value := range input {
 		result[key] = value
 	}

@@ -11,8 +11,8 @@ import (
 
 // ExtractHTMLFooterBlock removes the first HTML footer element from an HTML
 // fragment and returns it as a shared layout.FooterBlock.
-func ExtractHTMLFooterBlock(htmlStr string) (bodyHTML string, footer *layout.FooterBlock) {
-	tokens := HTMLTokenize(htmlStr)
+func extractHTMLFooterBlock(htmlStr string) (bodyHTML string, footer *layout.FooterBlock) {
+	tokens := htmlTokenize(htmlStr)
 	bodyTokens, footerTokens, found := splitHTMLFooterTokens(tokens)
 	if !found {
 		return htmlStr, nil
@@ -33,7 +33,7 @@ func ExtractHTMLFooterBlock(htmlStr string) (bodyHTML string, footer *layout.Foo
 	}
 }
 
-func splitHTMLFooterTokens(tokens []HTMLSegmentType) (body []HTMLSegmentType, footer []HTMLSegmentType, found bool) {
+func splitHTMLFooterTokens(tokens []htmlSegmentType) (body []htmlSegmentType, footer []htmlSegmentType, found bool) {
 	for i := 0; i < len(tokens); i++ {
 		token := tokens[i]
 		if !found && htmlTokenIsFooterBlock(token) {
@@ -50,7 +50,7 @@ func splitHTMLFooterTokens(tokens []HTMLSegmentType) (body []HTMLSegmentType, fo
 	return body, footer, found
 }
 
-func htmlTokenIsFooterBlock(token HTMLSegmentType) bool {
+func htmlTokenIsFooterBlock(token htmlSegmentType) bool {
 	if token.Cat != 'O' {
 		return false
 	}

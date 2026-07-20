@@ -84,7 +84,7 @@ func TestAttachSVGDisplayPlanCanonicalPlanCaptureRasterAndPDF(t *testing.T) {
 	if err != nil || !bytes.Equal(raster.PNG(), rasterAgain.PNG()) {
 		t.Fatalf("raster determinism = %v, equal=%t", err, bytes.Equal(raster.PNG(), rasterAgain.PNG()))
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestAttachSVGDisplayPlanBoundedLinearGradientParity(t *testing.T) {
 	if err != nil || len(raster.PNG()) == 0 {
 		t.Fatalf("gradient raster = %d bytes, %v", len(raster.PNG()), err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestAttachSVGDisplayPlanDiagonalTranslucentGradientParity(t *testing.T) {
 	if err != nil || !bytes.Equal(firstRaster.PNG(), secondRaster.PNG()) {
 		t.Fatalf("diagonal raster is not deterministic: %v", err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestAttachSVGDisplayPlanCenteredRadialGradientParity(t *testing.T) {
 	if err != nil || !bytes.Equal(first.PNG(), second.PNG()) {
 		t.Fatalf("radial raster is not deterministic: %v", err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +305,7 @@ func TestAttachSVGDisplayPlanBoundedPatternParity(t *testing.T) {
 	if err != nil || len(raster.PNG()) == 0 {
 		t.Fatalf("pattern raster = %d bytes, %v", len(raster.PNG()), err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, nil); err != nil || !bytes.Contains(target.pages[1].Bytes(), []byte(" gs\n")) {
 		t.Fatalf("pattern PDF err=%v", err)
 	}
@@ -371,7 +371,7 @@ func TestAttachSVGDisplayPlanTextImageAndClip(t *testing.T) {
 	if err != nil || len(raster.PNG()) == 0 {
 		t.Fatalf("clipped text/image direct raster = %d bytes, %v", len(raster.PNG()), err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, images); err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +422,7 @@ func TestAttachSVGDisplayPlanStyledStrokeParity(t *testing.T) {
 	if err != nil || len(raster.PNG()) == 0 {
 		t.Fatalf("styled stroke raster = %d bytes, %v", len(raster.PNG()), err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, nil); err != nil {
 		t.Fatal(err)
 	}

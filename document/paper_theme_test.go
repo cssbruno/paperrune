@@ -47,7 +47,7 @@ func TestPaperThemeControlsExactPlanAndPaintTextStyle(t *testing.T) {
 		t.Fatalf("themed font resources = %#v", projection.Fonts)
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	rendered, err := target.WritePaper("themed.paper", source)
 	if err != nil || !rendered.OK() {
 		t.Fatalf("WritePaper() = %#v, %v", rendered, err)

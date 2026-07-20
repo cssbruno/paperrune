@@ -59,11 +59,11 @@ func TestHTMLUnifiedFlexPinnedBrowserGeometryAndRasterCorpus(t *testing.T) {
 	}
 	for _, fixture := range fixtures {
 		t.Run(fixture.name, func(t *testing.T) {
-			compiled, err := CompileHTML(fixture.paper)
+			compiled, err := compileHTML(fixture.paper)
 			if err != nil {
 				t.Fatal(err)
 			}
-			plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			if err != nil {
 				t.Fatal(err)
 			}

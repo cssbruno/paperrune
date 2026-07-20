@@ -67,7 +67,7 @@ func typedEmbeddedUTF8FontResource(font fontDefinition) (layoutengine.CoreFontRe
 	}, data, nil
 }
 
-func (f *Document) typedLayoutFontSourcesContext(ctx context.Context, plan layoutengine.LayoutPlan) (plannedFontSources, error) {
+func (f *pdfDocument) typedLayoutFontSourcesContext(ctx context.Context, plan layoutengine.LayoutPlan) (plannedFontSources, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -147,7 +147,7 @@ type typedCoreFontResourceCacheKey struct {
 	up, ut int
 }
 
-func (f *Document) typedCachedCoreFontResource(font fontDefinition) (layoutengine.CoreFontResource, error) {
+func (f *pdfDocument) typedCachedCoreFontResource(font fontDefinition) (layoutengine.CoreFontResource, error) {
 	if f == nil {
 		return layoutengine.CoreFontResource{}, errors.New("font metric scratch is nil")
 	}
@@ -166,7 +166,7 @@ func (f *Document) typedCachedCoreFontResource(font fontDefinition) (layoutengin
 	return actual.(layoutengine.CoreFontResource), nil
 }
 
-func typedScratchCoreFontResource(scratch *Document) (layoutengine.CoreFontResource, error) {
+func typedScratchCoreFontResource(scratch *pdfDocument) (layoutengine.CoreFontResource, error) {
 	if scratch == nil {
 		return layoutengine.CoreFontResource{}, errors.New("font metric scratch is nil")
 	}
@@ -214,7 +214,7 @@ func typedCoreFontFace(font fontDefinition) (layoutengine.CoreFontFace, string, 
 // final sum. It deliberately does not inherit the legacy PDF serializer's
 // two-decimal Tf/Td quantization; fixed command geometry is the new painter's
 // normative input.
-func typedCoreGlyphAdvances(pdf *Document, codes string, width layoutengine.Fixed) ([]layoutengine.Fixed, error) {
+func typedCoreGlyphAdvances(pdf *pdfDocument, codes string, width layoutengine.Fixed) ([]layoutengine.Fixed, error) {
 	if pdf == nil || len(codes) == 0 {
 		return nil, errors.New("core glyph run is empty")
 	}
@@ -244,7 +244,7 @@ func typedCoreGlyphAdvances(pdf *Document, codes string, width layoutengine.Fixe
 	return advances, nil
 }
 
-func typedUTF8GlyphAdvances(pdf *Document, text string, width layoutengine.Fixed) ([]layoutengine.Fixed, error) {
+func typedUTF8GlyphAdvances(pdf *pdfDocument, text string, width layoutengine.Fixed) ([]layoutengine.Fixed, error) {
 	if pdf == nil || text == "" || !pdf.isCurrentUTF8 {
 		return nil, errors.New("embedded UTF-8 glyph run is empty or has no active UTF-8 font")
 	}

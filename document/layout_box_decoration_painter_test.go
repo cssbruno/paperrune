@@ -30,7 +30,7 @@ func TestPaintAttachedBoxDecorationsAsExactPDFFills(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, nil); err != nil {
 		t.Fatal(err)
 	}

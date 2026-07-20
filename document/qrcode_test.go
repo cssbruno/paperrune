@@ -50,7 +50,7 @@ func TestQRCodeImageNameIsStable(t *testing.T) {
 }
 
 func TestRegisterQRCodePNGRegistersImage(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	name, err := pdf.RegisterQRCodePNG("https://example.test/verify/document-1", 64)
 	if err != nil {
 		t.Fatalf("RegisterQRCodePNG() error = %v", err)

@@ -55,7 +55,7 @@ func TestPaperImagePlansRendersCapturesAndRetainsFigureSemantics(t *testing.T) {
 	if err != nil || len(raster.Pages) != 1 || len(raster.Pages[0].PNG) == 0 {
 		t.Fatalf("raster = %#v, %v", raster, err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	rendered, err := target.WritePaperPlan(plan)
 	if err != nil || !rendered.OK() || target.PageCount() != 1 {
 		t.Fatalf("WritePaperPlan() = %#v, %v", rendered, err)
@@ -114,7 +114,7 @@ func TestPaperAssetReferenceIsHumanReadableContentAddressedAndAmbientFree(t *tes
 	if err != nil || !bytes.Contains(display.SVG, []byte("<image")) {
 		t.Fatalf("asset capture = %q, %v", display.SVG, err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	rendered, err := target.WritePaperWithAssets("asset.paper", source, catalog)
 	if err != nil || !rendered.OK() || target.PageCount() != 1 {
 		t.Fatalf("WritePaperWithAssets() = %#v, %v", rendered, err)
@@ -157,7 +157,7 @@ func TestPaperManifestFontIsEmbeddedAndSubsetAtPDFPaint(t *testing.T) {
 	if len(plan.plan.Projection().Fonts) != 1 || plan.plan.Projection().Fonts[0].EmbeddedUTF8 == nil || len(plan.fontSources) != 1 {
 		t.Fatalf("custom font projection/sources = %#v / %d", plan.plan.Projection().Fonts, len(plan.fontSources))
 	}
-	pdf := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	rendered, err := pdf.WritePaperPlan(plan)
 	if err != nil || !rendered.OK() {
 		t.Fatalf("custom font PDF paint = %#v, %v", rendered, err)

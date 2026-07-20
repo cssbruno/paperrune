@@ -16,7 +16,7 @@ import (
 
 // createTemplate creates a template, copying graphics settings from a Document
 // when one is provided.
-func createTemplate(corner Point, size Size, orientationStr, unitStr, fontDirStr string, fn func(*Tpl), copyFrom *Document) Template {
+func createTemplate(corner Point, size Size, orientationStr, unitStr, fontDirStr string, fn func(*Tpl), copyFrom *pdfDocument) Template {
 	sizeStr := ""
 
 	pdf := documentNew(orientationStr, unitStr, sizeStr, fontDirStr, size)
@@ -903,10 +903,10 @@ func invalidTemplate(tpl TemplateView) bool {
 // a Document, but cannot add more pages. Tpl is used directly only during the
 // limited time a template is writable.
 type Tpl struct {
-	Document
+	pdfDocument
 }
 
-func (t *Tpl) loadParamsFromDocument(f *Document) {
+func (t *Tpl) loadParamsFromDocument(f *pdfDocument) {
 	t.compress = false
 	tResources := t.ensureResourceStore()
 	fResources := f.ensureResourceStore()

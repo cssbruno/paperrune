@@ -23,7 +23,7 @@ func getFontKey(familyStr, styleStr string) string {
 // descriptor is returned.
 // See FontDescriptor for documentation about the font descriptor.
 // See AddFont for details about familyStr and styleStr.
-func (f *Document) GetFontDesc(familyStr, styleStr string) FontDescriptor {
+func (f *pdfDocument) GetFontDesc(familyStr, styleStr string) FontDescriptor {
 	if familyStr == "" {
 		return f.currentFont.Desc
 	}
@@ -58,7 +58,7 @@ func (f *Document) GetFontDesc(familyStr, styleStr string) FontDescriptor {
 // size is the font size measured in points. The default value is the current
 // size. If no size has been specified since the beginning of the document, this
 // uses 12.
-func (f *Document) SetFont(familyStr, styleStr string, size float64) {
+func (f *pdfDocument) SetFont(familyStr, styleStr string, size float64) {
 	if f.err != nil {
 		return
 	}
@@ -127,13 +127,13 @@ func (f *Document) SetFont(familyStr, styleStr string, size float64) {
 }
 
 // SetFontStyle sets the style of the current font. See also SetFont().
-func (f *Document) SetFontStyle(styleStr string) {
+func (f *pdfDocument) SetFontStyle(styleStr string) {
 	f.SetFont(f.fontFamily, styleStr, f.fontSizePt)
 }
 
 // SetFontSize defines the size of the current font. Size is specified in
 // points (1/72 inch). See also SetFontUnitSize().
-func (f *Document) SetFontSize(size float64) {
+func (f *pdfDocument) SetFontSize(size float64) {
 	f.fontSizePt = size
 	f.fontSize = size / f.k
 	if f.page > 0 && f.currentFont.Name != "" {
@@ -143,7 +143,7 @@ func (f *Document) SetFontSize(size float64) {
 
 // SetFontUnitSize defines the size of the current font. Size is specified in
 // the unit of measure specified in New(). See also SetFontSize().
-func (f *Document) SetFontUnitSize(size float64) {
+func (f *pdfDocument) SetFontUnitSize(size float64) {
 	f.fontSizePt = size * f.k
 	f.fontSize = size
 	if f.page > 0 && f.currentFont.Name != "" {
@@ -154,6 +154,6 @@ func (f *Document) SetFontUnitSize(size float64) {
 // GetFontSize returns the size of the current font in points followed by the
 // size in the unit of measure specified in New(). The second value can be used
 // as a line height value in drawing operations.
-func (f *Document) GetFontSize() (ptSize, unitSize float64) {
+func (f *pdfDocument) GetFontSize() (ptSize, unitSize float64) {
 	return f.fontSizePt, f.fontSize
 }

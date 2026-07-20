@@ -19,7 +19,7 @@ import (
 func TestProductionPolicyAppliesSupportedSettings(t *testing.T) {
 	policy := ServerSafePolicy()
 	policy.Limits.MaxAttachmentBytes = 123
-	pdf, err := NewDocument(WithProductionPolicy(policy))
+	pdf, err := newPDFDocument(WithProductionPolicy(policy))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -42,7 +42,7 @@ func TestProductionPolicyAppliesSupportedSettings(t *testing.T) {
 }
 
 func TestWithServerSafeDefaultsAppliesServerPolicy(t *testing.T) {
-	pdf, err := NewDocument(WithServerSafeDefaults())
+	pdf, err := newPDFDocument(WithServerSafeDefaults())
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -62,21 +62,21 @@ func TestWithServerSafeDefaultsDoesNotPopulateSharedHTMLCache(t *testing.T) {
 	ClearSharedCaches()
 	t.Cleanup(ClearSharedCaches)
 
-	pdf := MustNew(WithServerSafeDefaults())
+	pdf := mustNewPDFDocument(WithServerSafeDefaults())
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	html.Write(5, `<p>server-safe cache isolation</p>`)
 	if err := pdf.Error(); err != nil {
 		t.Fatalf("HTML.Write() error = %v", err)
 	}
-	if stats := SharedCacheStats(); stats.HTML.Entries != 0 || stats.HTML.Bytes != 0 {
-		t.Fatalf("SharedCacheStats().HTML = %#v, want empty cache", stats.HTML)
+	if stats := SharedCacheStats(); stats.htmlRenderer.Entries != 0 || stats.htmlRenderer.Bytes != 0 {
+		t.Fatalf("SharedCacheStats().HTML = %#v, want empty cache", stats.htmlRenderer)
 	}
 }
 
 func TestSetProductionPolicyAppliesToLegacyDocument(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	policy := ServerSafePolicy()
 	policy.Limits.MaxPages = 1
 	if err := pdf.SetProductionPolicy(policy); err != nil {
@@ -93,7 +93,7 @@ func TestSetProductionPolicyAppliesToLegacyDocument(t *testing.T) {
 }
 
 func TestPartialProductionPolicyUsesDocumentLocalCache(t *testing.T) {
-	pdf, err := NewDocument(WithProductionPolicy(ProductionPolicy{Limits: ServerSafeLimits()}))
+	pdf, err := newPDFDocument(WithProductionPolicy(ProductionPolicy{Limits: ServerSafeLimits()}))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -104,7 +104,7 @@ func TestPartialProductionPolicyUsesDocumentLocalCache(t *testing.T) {
 
 func TestSecurityPolicyGatesFeatures(t *testing.T) {
 	t.Run("JavaScript", func(t *testing.T) {
-		pdf, err := NewDocument(WithSecurityPolicy(SecurityPolicy{}))
+		pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
 		if err != nil {
 			t.Fatalf("NewDocument() error = %v", err)
 		}
@@ -115,7 +115,7 @@ func TestSecurityPolicyGatesFeatures(t *testing.T) {
 	})
 
 	t.Run("raw writes", func(t *testing.T) {
-		pdf, err := NewDocument(WithSecurityPolicy(SecurityPolicy{}))
+		pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
 		if err != nil {
 			t.Fatalf("NewDocument() error = %v", err)
 		}
@@ -125,7 +125,7 @@ func TestSecurityPolicyGatesFeatures(t *testing.T) {
 	})
 
 	t.Run("legacy protection", func(t *testing.T) {
-		pdf, err := NewDocument(WithSecurityPolicy(SecurityPolicy{}))
+		pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
 		if err != nil {
 			t.Fatalf("NewDocument() error = %v", err)
 		}
@@ -140,7 +140,7 @@ func TestSecurityPolicyGatesFeatures(t *testing.T) {
 		if err := os.WriteFile(fileStr, []byte("payload"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		pdf, err := NewDocument(WithSecurityPolicy(SecurityPolicy{}))
+		pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
 		if err != nil {
 			t.Fatalf("NewDocument() error = %v", err)
 		}
@@ -154,7 +154,7 @@ func TestSecurityPolicyGatesFeatures(t *testing.T) {
 	})
 
 	t.Run("PDF import", func(t *testing.T) {
-		pdf, err := NewDocument(WithSecurityPolicy(SecurityPolicy{}))
+		pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
 		if err != nil {
 			t.Fatalf("NewDocument() error = %v", err)
 		}
@@ -165,7 +165,7 @@ func TestSecurityPolicyGatesFeatures(t *testing.T) {
 	})
 
 	t.Run("PDF signing", func(t *testing.T) {
-		pdf, err := NewDocument(WithSecurityPolicy(SecurityPolicy{}))
+		pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
 		if err != nil {
 			t.Fatalf("NewDocument() error = %v", err)
 		}
@@ -177,7 +177,7 @@ func TestSecurityPolicyGatesFeatures(t *testing.T) {
 }
 
 func TestImportPageStreamContextCanceled(t *testing.T) {
-	pdf, err := NewDocument()
+	pdf, err := newPDFDocument()
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -199,7 +199,7 @@ func TestOutputOptionsApplyAttachmentLimits(t *testing.T) {
 	if err := os.WriteFile(fileStr, []byte("payload"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pdf, err := NewDocument()
+	pdf, err := newPDFDocument()
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -213,7 +213,7 @@ func TestOutputOptionsApplyAttachmentLimits(t *testing.T) {
 }
 
 func TestLimitsApplyPageLimit(t *testing.T) {
-	pdf, err := NewDocument(WithLimits(Limits{MaxPages: 1}))
+	pdf, err := newPDFDocument(WithLimits(Limits{MaxPages: 1}))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -225,14 +225,14 @@ func TestLimitsApplyPageLimit(t *testing.T) {
 }
 
 func TestLimitsApplyHTMLLimits(t *testing.T) {
-	pdf, err := NewDocument(WithLimits(Limits{MaxHTMLBytes: 3}))
+	pdf, err := newPDFDocument(WithLimits(Limits{MaxHTMLBytes: 3}))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
 	pdf.AddPage()
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	err = html.WriteContext(context.Background(), 6, "<p>too large</p>")
-	if !errors.Is(err, ErrHTMLLimitExceeded) {
+	if !errors.Is(err, errHTMLLimitExceeded) {
 		t.Fatalf("HTML.WriteContext() error = %v, want ErrHTMLLimitExceeded", err)
 	}
 }
@@ -243,7 +243,7 @@ func TestLimitsApplyImageSourceLimit(t *testing.T) {
 	if err := os.WriteFile(fileStr, []byte("not a png but too large"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	pdf, err := NewDocument(WithLimits(Limits{MaxImageSourceBytes: 3}))
+	pdf, err := newPDFDocument(WithLimits(Limits{MaxImageSourceBytes: 3}))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -254,7 +254,7 @@ func TestLimitsApplyImageSourceLimit(t *testing.T) {
 }
 
 func TestLimitsApplyImportedPDFStreamLimit(t *testing.T) {
-	pdf, err := NewDocument(WithLimits(Limits{MaxImportedPDFBytes: 3}))
+	pdf, err := newPDFDocument(WithLimits(Limits{MaxImportedPDFBytes: 3}))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -265,7 +265,7 @@ func TestLimitsApplyImportedPDFStreamLimit(t *testing.T) {
 }
 
 func TestOutputOptionsApplyCompression(t *testing.T) {
-	pdf, err := NewDocument(WithNoCompression())
+	pdf, err := newPDFDocument(WithNoCompression())
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -284,7 +284,7 @@ func TestOutputOptionsApplyCompression(t *testing.T) {
 }
 
 func TestOutputContextCanceledBeforeOutput(t *testing.T) {
-	pdf, err := NewDocument()
+	pdf, err := newPDFDocument()
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -301,7 +301,7 @@ func TestOutputContextCanceledBeforeOutput(t *testing.T) {
 }
 
 func TestOutputWithOptionsContextCanceledRestoresOutputSettings(t *testing.T) {
-	pdf, err := NewDocument()
+	pdf, err := newPDFDocument()
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -322,7 +322,7 @@ func TestOutputWithOptionsContextCanceledRestoresOutputSettings(t *testing.T) {
 }
 
 func TestOutputOptionsValidationIsAtomic(t *testing.T) {
-	pdf, err := NewDocument(WithNoCompression())
+	pdf, err := newPDFDocument(WithNoCompression())
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -344,7 +344,7 @@ func TestOutputOptionsValidationIsAtomic(t *testing.T) {
 func TestOutputContextCanceledDuringPageCompression(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	pdf, err := NewDocument(
+	pdf, err := newPDFDocument(
 		WithCompressionPolicy(CompressionPolicy{
 			Mode:                     CompressionEnabled,
 			Level:                    zlib.BestSpeed,
@@ -383,7 +383,7 @@ func TestHooksObserveAttachmentLoad(t *testing.T) {
 	}
 	var gotName string
 	var gotBytes int64
-	pdf, err := NewDocument(WithHooks(Hooks{
+	pdf, err := newPDFDocument(WithHooks(Hooks{
 		OnAttachmentLoaded: func(filename string, bytes int64) {
 			gotName = filename
 			gotBytes = bytes

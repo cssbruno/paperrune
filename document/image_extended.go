@@ -42,7 +42,7 @@ type ExtendedImageOptions struct {
 
 // ImageOptionsExtended places an image with optional rotation, flipping,
 // cropping, and an external soft-mask image.
-func (f *Document) ImageOptionsExtended(name string, opts ExtendedImageOptions) {
+func (f *pdfDocument) ImageOptionsExtended(name string, opts ExtendedImageOptions) {
 	if f.err != nil {
 		return
 	}
@@ -149,7 +149,7 @@ func (f *Document) ImageOptionsExtended(name string, opts ExtendedImageOptions) 
 	}
 }
 
-func (f *Document) applyExternalImageMask(info *ImageInfo, maskPath string, options ImageOptions) {
+func (f *pdfDocument) applyExternalImageMask(info *ImageInfo, maskPath string, options ImageOptions) {
 	if info == nil {
 		f.SetErrorf("image mask target is missing")
 		return

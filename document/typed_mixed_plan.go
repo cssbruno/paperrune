@@ -33,7 +33,7 @@ func (typedMixedDecoratedBlock) DocumentBlockKind() layout.BlockKind { return la
 // predecessor. Each child planner receives a shortened first body and the full
 // selected body on continuation pages. Composition only rebases already-final
 // geometry and display payloads; it never measures or paginates again.
-func (f *Document) planTypedMixedBodies(ctx context.Context, doc *layout.LayoutDocument, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planTypedMixedBodies(ctx context.Context, doc *layout.LayoutDocument, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
 	return f.planTypedMixedBodiesMapped(ctx, doc, papercompile.CompileMapping{}, selectBody)
 }
 
@@ -41,7 +41,7 @@ func (f *Document) planTypedMixedBodies(ctx context.Context, doc *layout.LayoutD
 // while composing heterogeneous top-level blocks. Child planners still own
 // all measurement and pagination; this layer only supplies the exact mapping
 // to text/row-column children before rebasing their finalized plans.
-func (f *Document) planTypedMixedBodiesMapped(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planTypedMixedBodiesMapped(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
 	blocks, err := typedMixedExpandContainers(doc.Body, "body")
 	if err != nil {
 		return layoutengine.LayoutPlan{}, err
@@ -450,7 +450,7 @@ func typedMixedExpandContainers(blocks []layout.Block, path string) ([]layout.Bl
 	return expanded, nil
 }
 
-func (f *Document) planTypedMixedDecoratedBlock(ctx context.Context, doc *layout.LayoutDocument, wrapper typedMixedDecoratedBlock, outer paperBodySelector) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planTypedMixedDecoratedBlock(ctx context.Context, doc *layout.LayoutDocument, wrapper typedMixedDecoratedBlock, outer paperBodySelector) (layoutengine.LayoutPlan, error) {
 	measured, err := f.paperMeasureBox(wrapper.box, wrapper.path)
 	if err != nil {
 		return layoutengine.LayoutPlan{}, err

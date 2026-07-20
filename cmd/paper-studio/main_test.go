@@ -71,6 +71,10 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		!bytes.Contains(response.Body, []byte(`src="/syntax-model.js"`)) ||
 		!bytes.Contains(response.Body, []byte(`src="/page-setup-model.js"`)) ||
 		!bytes.Contains(response.Body, []byte(`src="/issue-model.js"`)) ||
+		!bytes.Contains(response.Body, []byte(`src="/tooling-model.js"`)) ||
+		!bytes.Contains(response.Body, []byte(`class="insertbar"`)) ||
+		!bytes.Contains(response.Body, []byte(`data-template="header"`)) ||
+		!bytes.Contains(response.Body, []byte(`data-template="footer"`)) ||
 		!bytes.Contains(response.Body, []byte(`id="page-setup-controls"`)) ||
 		!bytes.Contains(response.Body, []byte(`id="tag-tree"`)) ||
 		!bytes.Contains(response.Body, []byte(`data-overlay="margin"`)) ||
@@ -170,10 +174,10 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 	}
 	inspectionModel := studioRequest(t, handler, http.MethodGet, "/inspection-model.js", nil, "")
 	if inspectionModel.StatusCode != http.StatusOK || !bytes.Contains(inspectionModel.Body, []byte("baselineMarks")) ||
-		!bytes.Contains(inspectionModel.Body, []byte("tableCellMarks")) || !bytes.Contains(inspectionModel.Body, []byte("gridTrackMarks")) || !bytes.Contains(inspectionModel.Body, []byte("pageRegionMarks")) ||
+		!bytes.Contains(inspectionModel.Body, []byte("tableCellMarks")) || !bytes.Contains(inspectionModel.Body, []byte("layoutGuideMarks")) || !bytes.Contains(inspectionModel.Body, []byte("pageRegionMarks")) ||
 		!bytes.Contains(inspectionModel.Body, []byte("boxModelMarks")) ||
 		!bytes.Contains(inspectionModel.Body, []byte("issueMarks")) ||
-		!bytes.Contains(inspectionModel.Body, []byte("baseline ${line.index + 1}")) || !bytes.Contains(inspectionModel.Body, []byte("grid ${track.group}")) {
+		!bytes.Contains(inspectionModel.Body, []byte("baseline ${line.index + 1}")) || !bytes.Contains(inspectionModel.Body, []byte("layout ${guide.group}")) {
 		t.Fatalf("inspection model = %d / %s", inspectionModel.StatusCode, inspectionModel.Body)
 	}
 	provenanceModel := studioRequest(t, handler, http.MethodGet, "/provenance-model.js", nil, "")
@@ -451,7 +455,7 @@ func (w *studioStreamRecorder) Flush() {}
 
 func TestPaperStudioInspectionRetainsRepeatedFragmentEvidence(t *testing.T) {
 	var source strings.Builder
-	source.WriteString("document @report:\n  page @sheet:\n    width: 180pt\n    height: 96pt\n    margin: 6pt\n    body @body:\n      table @ledger:\n        repeat-header: true\n        split: \"rows\"\n        table-track @left:\n          width: 84pt\n        table-track @right:\n          width: 84pt\n        table-header @head:\n          table-row @head-row:\n            cell @head-cell:\n              colspan: 2\n              text: \"REPEATED HEADER\"\n")
+	source.WriteString("document @report:\n  page @sheet:\n    width: 180pt\n    height: 96pt\n    margin: 6pt\n    body @body:\n      table @ledger:\n        repeat-header: true\n        split: \"rows\"\n        table-column @left:\n          width: 84pt\n        table-column @right:\n          width: 84pt\n        table-header @head:\n          table-row @head-row:\n            cell @head-cell:\n              colspan: 2\n              text: \"REPEATED HEADER\"\n")
 	for index := 0; index < 10; index++ {
 		fmt.Fprintf(&source, "        table-row @row-%d:\n          cell @label-%d:\n            text: \"Row %d\"\n          cell @value-%d:\n            text: \"Value %d\"\n", index, index, index, index, index)
 	}

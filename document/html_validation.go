@@ -10,7 +10,7 @@ import (
 
 // ValidateHTML returns best-effort diagnostics for unsupported HTML tags, CSS
 // selectors, and CSS properties without writing anything to the PDF.
-func (html *HTML) ValidateHTML(htmlStr string) []string {
+func (html *htmlRenderer) validateHTML(htmlStr string) []string {
 	var messages []string
 	if html == nil {
 		return messages
@@ -18,7 +18,7 @@ func (html *HTML) ValidateHTML(htmlStr string) []string {
 	if len(htmlStr) > html.maxHTMLBytes() {
 		return []string{"HTML input exceeds maximum size"}
 	}
-	tokens := HTMLTokenize(htmlStr)
+	tokens := htmlTokenize(htmlStr)
 	if message := htmlElementDepthMessage(tokens, html.maxElementDepth()); message != "" {
 		return []string{message}
 	}
@@ -30,42 +30,42 @@ func (html *HTML) ValidateHTML(htmlStr string) []string {
 	return messages
 }
 
-func (html *HTML) maxHTMLBytes() int {
+func (html *htmlRenderer) maxHTMLBytes() int {
 	if html == nil || html.MaxHTMLBytes <= 0 {
 		return htmlDefaultMaxHTMLBytes
 	}
 	return html.MaxHTMLBytes
 }
 
-func (html *HTML) maxTableRows() int {
+func (html *htmlRenderer) maxTableRows() int {
 	if html == nil || html.MaxTableRows <= 0 {
 		return htmlDefaultMaxTableRows
 	}
 	return html.MaxTableRows
 }
 
-func (html *HTML) maxElementDepth() int {
+func (html *htmlRenderer) maxElementDepth() int {
 	if html == nil || html.MaxElementDepth <= 0 {
 		return htmlDefaultMaxElementDepth
 	}
 	return html.MaxElementDepth
 }
 
-func (html *HTML) maxGeneratedPages() int {
+func (html *htmlRenderer) maxGeneratedPages() int {
 	if html == nil || html.MaxGeneratedPages <= 0 {
 		return htmlDefaultMaxGeneratedPages
 	}
 	return html.MaxGeneratedPages
 }
 
-func (html *HTML) maxDataImageBytes() int {
+func (html *htmlRenderer) maxDataImageBytes() int {
 	if html == nil || html.MaxDataImageBytes <= 0 {
 		return htmlDefaultMaxDataImageBytes
 	}
 	return html.MaxDataImageBytes
 }
 
-func (html *HTML) generatedPageCount() int {
+func (html *htmlRenderer) generatedPageCount() int {
 	if html == nil || html.pdf == nil {
 		return 0
 	}
@@ -79,16 +79,16 @@ func (html *HTML) generatedPageCount() int {
 	return pageCount - html.renderStartPageCount + 1
 }
 
-func (html *HTML) checkGeneratedPageLimitForAdd() error {
+func (html *htmlRenderer) checkGeneratedPageLimitForAdd() error {
 	pageCount := html.generatedPageCount() + 1
 	maxPages := html.maxGeneratedPages()
 	if pageCount <= maxPages {
 		return nil
 	}
-	return fmt.Errorf("%w: HTML rendering exceeded maximum generated pages: %d > %d", ErrHTMLLimitExceeded, pageCount, maxPages)
+	return fmt.Errorf("%w: HTML rendering exceeded maximum generated pages: %d > %d", errHTMLLimitExceeded, pageCount, maxPages)
 }
 
-func (html *HTML) addPageFormat() bool {
+func (html *htmlRenderer) addPageFormat() bool {
 	if html == nil || html.pdf == nil {
 		return false
 	}
@@ -96,7 +96,7 @@ func (html *HTML) addPageFormat() bool {
 	return html.pdf.err == nil
 }
 
-func htmlElementDepthMessage(tokens []HTMLSegmentType, maxDepth int) string {
+func htmlElementDepthMessage(tokens []htmlSegmentType, maxDepth int) string {
 	depth := 0
 	for _, token := range tokens {
 		switch token.Cat {
@@ -132,7 +132,7 @@ func init() {
 	delete(htmlSupportedCSSProperties, "position")
 }
 
-func (html *HTML) logUnsupportedHTML(tokens []HTMLSegmentType) {
+func (html *htmlRenderer) logUnsupportedHTML(tokens []htmlSegmentType) {
 	if html.DebugLog == nil {
 		return
 	}
@@ -161,7 +161,7 @@ func (html *HTML) logUnsupportedHTML(tokens []HTMLSegmentType) {
 	}
 }
 
-func (html *HTML) logUnsupportedStyleProperties(style string, seen map[string]bool, source string) {
+func (html *htmlRenderer) logUnsupportedStyleProperties(style string, seen map[string]bool, source string) {
 	if html.DebugLog == nil {
 		return
 	}
@@ -213,7 +213,7 @@ func htmlSupportedDisplayValue(value string) bool {
 	}
 }
 
-func (html *HTML) logUnsupportedCSSRules(css string, seen map[string]bool) {
+func (html *htmlRenderer) logUnsupportedCSSRules(css string, seen map[string]bool) {
 	if html.DebugLog == nil {
 		return
 	}

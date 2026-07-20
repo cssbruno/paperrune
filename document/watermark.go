@@ -13,7 +13,7 @@ const (
 
 // AddTextWatermark draws a centered, translucent text watermark on the current
 // page.
-func (f *Document) AddTextWatermark(label string) {
+func (f *pdfDocument) AddTextWatermark(label string) {
 	if f.err != nil || label == "" {
 		return
 	}

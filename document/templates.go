@@ -10,7 +10,7 @@ import (
 )
 
 // CreateTemplate defines a new template using the current page size.
-func (f *Document) CreateTemplate(fn func(*Tpl)) Template {
+func (f *pdfDocument) CreateTemplate(fn func(*Tpl)) Template {
 	if f.err != nil {
 		return nil
 	}
@@ -18,7 +18,7 @@ func (f *Document) CreateTemplate(fn func(*Tpl)) Template {
 }
 
 // CreateTemplateCustom starts a template, using the given bounds.
-func (f *Document) CreateTemplateCustom(corner Point, size Size, fn func(*Tpl)) Template {
+func (f *pdfDocument) CreateTemplateCustom(corner Point, size Size, fn func(*Tpl)) Template {
 	if f.err != nil {
 		return nil
 	}
@@ -39,14 +39,14 @@ func CreateTpl(corner Point, size Size, orientationStr, unitStr, fontDirStr stri
 
 // UseTemplate adds a template to the current page or another template,
 // using the size and position at which it was originally written.
-func (f *Document) UseTemplate(t Template) {
+func (f *pdfDocument) UseTemplate(t Template) {
 	f.UseTemplateView(t)
 }
 
 // UseTemplateView adds a renderable template view to the current page or
 // another template using the size and position at which it was originally
 // written. It does not require paging or serialization support.
-func (f *Document) UseTemplateView(t TemplateView) {
+func (f *pdfDocument) UseTemplateView(t TemplateView) {
 	if t == nil {
 		f.SetErrorf("template is nil")
 		return
@@ -57,14 +57,14 @@ func (f *Document) UseTemplateView(t TemplateView) {
 
 // UseTemplateScaled adds a template to the current page or another template,
 // using the given page coordinates.
-func (f *Document) UseTemplateScaled(t Template, corner Point, size Size) {
+func (f *pdfDocument) UseTemplateScaled(t Template, corner Point, size Size) {
 	f.UseTemplateViewScaled(t, corner, size)
 }
 
 // UseTemplateViewScaled adds a renderable template view to the current page or
 // another template using the given page coordinates. It does not require paging
 // or serialization support.
-func (f *Document) UseTemplateViewScaled(t TemplateView, corner Point, size Size) {
+func (f *pdfDocument) UseTemplateViewScaled(t TemplateView, corner Point, size Size) {
 	if f.err != nil {
 		return
 	}
@@ -111,7 +111,7 @@ func validateTemplateGeometry(corner Point, size Size) error {
 	return nil
 }
 
-func (f *Document) registerTemplate(t TemplateView) {
+func (f *pdfDocument) registerTemplate(t TemplateView) {
 	resources := f.ensureResourceStore()
 	for _, tpl := range collectTemplates(t) {
 		resources.addTemplate(tpl)
@@ -143,7 +143,7 @@ func collectTemplates(root TemplateView) []TemplateView {
 	return templates
 }
 
-func (f *Document) registerTemplateImages(t TemplateView) {
+func (f *pdfDocument) registerTemplateImages(t TemplateView) {
 	resources := f.ensureResourceStore()
 	existingImages := make(map[string]bool, len(resources.images))
 	for _, image := range resources.images {
@@ -208,7 +208,7 @@ type Template interface {
 	Templates() []Template
 }
 
-func (f *Document) templateFontCatalog() {
+func (f *pdfDocument) templateFontCatalog() {
 	f.out("/Font")
 	f.beginPDFDict()
 	for _, font := range f.ensureResourceStore().fontsByKey(f.catalogSort) {
@@ -218,7 +218,7 @@ func (f *Document) templateFontCatalog() {
 }
 
 // putTemplates writes the templates to the PDF.
-func (f *Document) putTemplates() {
+func (f *pdfDocument) putTemplates() {
 	resources := f.ensureResourceStore()
 	templates := resources.templatesForOutput(f.catalogSort)
 	for _, t := range templates {
@@ -261,7 +261,7 @@ func (f *Document) putTemplates() {
 	}
 }
 
-func (f *Document) templateXObjectCatalog(t TemplateView) {
+func (f *pdfDocument) templateXObjectCatalog(t TemplateView) {
 	images := templateImages(t)
 	templates := templateChildren(t)
 	if len(images) == 0 && len(templates) == 0 {
@@ -275,7 +275,7 @@ func (f *Document) templateXObjectCatalog(t TemplateView) {
 	f.endPDFDict()
 }
 
-func (f *Document) templateImageCatalog(t TemplateView, images map[string]*ImageInfo) {
+func (f *pdfDocument) templateImageCatalog(t TemplateView, images map[string]*ImageInfo) {
 	for _, key := range templateImageKeys(images, f.catalogSort) {
 		if image := f.templateOutputImage(t, key, images[key]); image != nil {
 			f.outbytes(appendPDFResourceRefValue(nil, imagePDFResourceRef(image)))
@@ -283,11 +283,11 @@ func (f *Document) templateImageCatalog(t TemplateView, images map[string]*Image
 	}
 }
 
-func (f *Document) templateOutputImage(t TemplateView, name string, image *ImageInfo) *ImageInfo {
+func (f *pdfDocument) templateOutputImage(t TemplateView, name string, image *ImageInfo) *ImageInfo {
 	return f.ensureResourceStore().templateOutputImage(t.ID(), name, image)
 }
 
-func (f *Document) templateDependencyCatalog(templates []TemplateView) {
+func (f *pdfDocument) templateDependencyCatalog(templates []TemplateView) {
 	resources := f.ensureResourceStore()
 	for _, t := range templates {
 		if invalidTemplate(t) {

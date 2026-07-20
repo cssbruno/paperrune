@@ -11,21 +11,23 @@ import (
 	"testing"
 
 	"github.com/cssbruno/paperrune/document"
-	"github.com/cssbruno/paperrune/internal/testsupport/example"
 )
 
 func TestBuildProducesDeterministicStructuralAndTextEvidence(t *testing.T) {
 	pdf := document.MustNew(document.WithUnit(document.UnitPoint), document.WithNoCompression(), document.WithDeterministicOutput())
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Characterization evidence"})
-	pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
-	pdf.AddPage()
-	pdf.SetFont("DejaVu", "", 10)
-	pdf.BeginStructure("P")
-	pdf.Text(20, 20, "baseline one")
-	pdf.EndStructure()
-	pdf.LinkString(20, 25, 40, 10, "https://example.test/evidence")
-	pdf.AddPage()
-	pdf.Text(20, 20, "baseline two")
+	source := "document @evidence:\n" +
+		"  language: \"en-US\"\n" +
+		"  page @sheet:\n" +
+		"    body @body:\n" +
+		"      paragraph @first:\n" +
+		"        text: \"baseline one evidence\"\n" +
+		"      page-break @next:\n" +
+		"      paragraph @second:\n" +
+		"        text: \"baseline two\"\n"
+	if rendered, err := pdf.WritePaper("evidence.paper", source); err != nil || !rendered.OK() {
+		t.Fatalf("WritePaper() = %#v, %v", rendered, err)
+	}
 	var output bytes.Buffer
 	if err := pdf.Output(&output); err != nil {
 		t.Fatal(err)
@@ -47,8 +49,8 @@ func TestBuildProducesDeterministicStructuralAndTextEvidence(t *testing.T) {
 	}
 	evidence := first.Fixtures[0]
 	if evidence.Pages != 2 || !strings.Contains(evidence.Text, "baseline one") ||
-		!strings.Contains(evidence.PageText[1], "baseline two") || evidence.Structure.LinkAnnotations != 1 ||
-		evidence.Structure.URIActions != 1 || evidence.Structure.StructureTrees == 0 || !evidence.Structure.HasTagMarkInfo {
+		!strings.Contains(evidence.PageText[1], "baseline two") || evidence.Structure.LinkAnnotations != 0 ||
+		evidence.Structure.URIActions != 0 || evidence.Structure.StructureTrees == 0 || !evidence.Structure.HasTagMarkInfo {
 		t.Fatalf("evidence = %#v", evidence)
 	}
 }

@@ -22,8 +22,8 @@ func (*architectureNilStringer) String() string {
 }
 
 func TestNilSafeHTMLAndParserBoundaries(t *testing.T) {
-	pdf := MustNew()
-	html := pdf.HTMLNew()
+	pdf := mustNewPDFDocument()
+	html := pdf.htmlNew()
 	html.WriteCompiled(6, nil)
 	if err := pdf.Error(); err == nil || err.Error() != "compiled HTML is nil" {
 		t.Fatalf("WriteCompiled(nil) error = %v, want compiled HTML is nil", err)
@@ -84,7 +84,7 @@ func TestLegacyRC4RestartsForEveryPDFValue(t *testing.T) {
 
 func TestLegacyProtectionEncryptsEveryMetadataAndAttachmentStringIndependently(t *testing.T) {
 	stamp := time.Date(2026, 7, 16, 12, 34, 56, 0, time.UTC)
-	pdf := MustNew(WithNoCompression(), WithUnit(UnitPoint))
+	pdf := mustNewPDFDocument(WithNoCompression(), WithUnit(UnitPoint))
 	if err := pdf.SetLegacyProtection(CnProtectPrint, "reader", "owner"); err != nil {
 		t.Fatalf("SetLegacyProtection() error = %v", err)
 	}
@@ -196,7 +196,7 @@ func TestLegacyProtectionEncryptsEveryMetadataAndAttachmentStringIndependently(t
 }
 
 func TestSymbolUsesItsOwnCoreFontAndMetrics(t *testing.T) {
-	pdf := MustNew(WithNoCompression())
+	pdf := mustNewPDFDocument(WithNoCompression())
 	pdf.AddPage()
 	pdf.SetFont("Symbol", "BI", 12)
 	if err := pdf.Error(); err != nil {
@@ -229,7 +229,7 @@ func TestSymbolUsesItsOwnCoreFontAndMetrics(t *testing.T) {
 func TestSetWordSpacingTracksStateGeometryAndPageTransitions(t *testing.T) {
 	for _, spacing := range []float64{3.25, -2.5} {
 		t.Run(fmt.Sprintf("spacing_%g", spacing), func(t *testing.T) {
-			pdf := MustNew(WithUnit(UnitPoint), WithNoCompression())
+			pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 			pdf.AddPage()
 			pdf.SetFont("Helvetica", "", 12)
 			pdf.SetWordSpacing(spacing)
@@ -275,7 +275,7 @@ func TestSetWordSpacingTracksStateGeometryAndPageTransitions(t *testing.T) {
 
 func TestSetWordSpacingRejectsInvalidNumericValues(t *testing.T) {
 	for _, spacing := range []float64{math.NaN(), math.Inf(1), math.Inf(-1), math.MaxFloat64} {
-		pdf := MustNew()
+		pdf := mustNewPDFDocument()
 		pdf.AddPage()
 		pdf.SetWordSpacing(1)
 		pdf.SetWordSpacing(spacing)
@@ -289,7 +289,7 @@ func TestSetWordSpacingRejectsInvalidNumericValues(t *testing.T) {
 }
 
 func TestSetWordSpacingBeforePageAndFont(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	pdf.SetWordSpacing(1)
 	if err := pdf.Error(); err != nil {
 		t.Fatalf("SetWordSpacing() before selecting a font: %v", err)
@@ -306,7 +306,7 @@ func TestSetWordSpacingBeforePageAndFont(t *testing.T) {
 }
 
 func TestSetWordSpacingAppliesToUTF8Text(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	pdf.AddUTF8FontFromBytes("fixture", "", readUTF8FontFixture(t))
 	pdf.AddPage()
 	pdf.SetFont("fixture", "", 10)
@@ -348,7 +348,7 @@ func TestSetWordSpacingAppliesToUTF8Text(t *testing.T) {
 func TestUTF8CellWordSpacingHandlesEdgeSpaces(t *testing.T) {
 	for _, text := range []string{"A ", " A", "A  B", "   "} {
 		t.Run(strconv.Quote(text), func(t *testing.T) {
-			pdf := MustNew(WithUnit(UnitPoint), WithNoCompression())
+			pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 			pdf.AddUTF8FontFromBytes("fixture", "", readUTF8FontFixture(t))
 			pdf.AddPage()
 			pdf.SetFont("fixture", "", 10)
@@ -370,7 +370,7 @@ func TestMultiCellPreservesAndMeasuresWordSpacing(t *testing.T) {
 		for _, spacing := range []float64{6, -2} {
 			name := fmt.Sprintf("utf8_%t_spacing_%g", utf8Font, spacing)
 			t.Run(name, func(t *testing.T) {
-				pdf := MustNew(WithUnit(UnitPoint), WithNoCompression())
+				pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 				if utf8Font {
 					pdf.AddUTF8FontFromBytes("fixture", "", readUTF8FontFixture(t))
 				}
@@ -415,7 +415,7 @@ func TestWordSpacingAffectsWriteAdvanceAndLineSplitting(t *testing.T) {
 	const spacing = 6.0
 	text := "A A"
 
-	core := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	core := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	core.AddPage()
 	core.SetFont("Helvetica", "", 10)
 	naturalWidth := core.GetStringWidth(text)
@@ -431,7 +431,7 @@ func TestWordSpacingAffectsWriteAdvanceAndLineSplitting(t *testing.T) {
 		t.Fatalf("word-spaced SplitLines = %q (count %d), want two matching lines", lines, core.SplitLineCount([]byte(text), wrapWidth))
 	}
 
-	unicodePDF := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	unicodePDF := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	unicodePDF.AddUTF8FontFromBytes("fixture", "", readUTF8FontFixture(t))
 	unicodePDF.AddPage()
 	unicodePDF.SetFont("fixture", "", 10)
@@ -455,7 +455,7 @@ func TestServerSafePolicyDoesNotUseGlobalUTF8SubsetCache(t *testing.T) {
 	fontData := readUTF8FontFixture(t)
 
 	build := func(options ...Option) {
-		pdf := MustNew(options...)
+		pdf := mustNewPDFDocument(options...)
 		pdf.AddUTF8FontFromBytes("fixture", "", fontData)
 		pdf.AddPage()
 		pdf.SetFont("fixture", "", 12)

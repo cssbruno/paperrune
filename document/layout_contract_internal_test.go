@@ -16,7 +16,7 @@ import (
 )
 
 func TestWriteDocumentAppliesLanguageToCatalog(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.Language = "pt-BR"
@@ -32,7 +32,7 @@ func TestWriteDocumentAppliesLanguageToCatalog(t *testing.T) {
 }
 
 func TestWriteDocumentRendersSegmentStyleAndLink(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{
@@ -54,7 +54,7 @@ func TestWriteDocumentRendersSegmentStyleAndLink(t *testing.T) {
 }
 
 func TestWriteDocumentRendersQRCodeImage(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.QR = &layout.QRBlock{Value: "verified-value", Label: "Verify", Size: 18}
@@ -73,7 +73,7 @@ func TestWriteDocumentRendersQRCodeImage(t *testing.T) {
 }
 
 func TestTypedTableRepeatsHeaderAcrossPages(t *testing.T) {
-	pdf := MustNew(WithCustomPageSize(Size{Wd: 90, Ht: 90}))
+	pdf := mustNewPDFDocument(WithCustomPageSize(Size{Wd: 90, Ht: 90}))
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.PageTemplate.Margins = layout.Spacing{Top: 8, Right: 8, Bottom: 8, Left: 8}
@@ -105,7 +105,7 @@ func TestTypedTableRepeatsHeaderAcrossPages(t *testing.T) {
 }
 
 func TestTypedTableFixedColumnsRetainAuthoredWidthOnWiderPage(t *testing.T) {
-	pdf := MustNew(WithCustomPageSize(Size{Wd: 595.275590551, Ht: 841.88976378}))
+	pdf := mustNewPDFDocument(WithCustomPageSize(Size{Wd: 595.275590551, Ht: 841.88976378}))
 	doc := layout.NewLayoutDocument()
 	doc.PageTemplate.Margins = layout.Spacing{Top: 12, Right: 12, Bottom: 12, Left: 12}
 	doc.Body = []layout.Block{layout.TableBlock{
@@ -146,7 +146,7 @@ func TestTypedTableFixedColumnsRetainAuthoredWidthOnWiderPage(t *testing.T) {
 
 func TestTypedAndHTMLTablesSharePaginationBoundary(t *testing.T) {
 	const rowCount = 24
-	typedPDF := MustNew(WithCustomPageSize(Size{Wd: 90, Ht: 90}))
+	typedPDF := mustNewPDFDocument(WithCustomPageSize(Size{Wd: 90, Ht: 90}))
 	typedDoc := layout.NewLayoutDocument()
 	typedDoc.PageTemplate.Margins = layout.Spacing{Top: 8, Right: 8, Bottom: 8, Left: 8}
 	typedRows := make([]layout.TableRow, rowCount)
@@ -158,7 +158,7 @@ func TestTypedAndHTMLTablesSharePaginationBoundary(t *testing.T) {
 	typedDoc.Body = []layout.Block{layout.TableBlock{Body: typedRows, Style: layout.TableStyle{BorderCollapse: true}}}
 	typedPDF.WriteDocument(typedDoc)
 
-	htmlPDF := MustNew(WithCustomPageSize(Size{Wd: 90, Ht: 90}))
+	htmlPDF := mustNewPDFDocument(WithCustomPageSize(Size{Wd: 90, Ht: 90}))
 	htmlPDF.SetMargins(8, 8, 8)
 	htmlPDF.SetAutoPageBreak(true, 8)
 	htmlPDF.AddPage()
@@ -169,14 +169,14 @@ func TestTypedAndHTMLTablesSharePaginationBoundary(t *testing.T) {
 		fmt.Fprintf(&tableHTML, "<tr><td>row-%02d</td></tr>", i)
 	}
 	tableHTML.WriteString(`</table>`)
-	html := htmlPDF.HTMLNew()
+	html := htmlPDF.htmlNew()
 	if err := html.WriteContext(t.Context(), 5, tableHTML.String()); err != nil {
 		t.Fatalf("HTML.WriteContext() error = %v", err)
 	}
 	if typedPDF.PageCount() < 2 || htmlPDF.PageCount() < 2 {
 		t.Fatalf("table pagination did not cross a page boundary: typed pages = %d, HTML pages = %d", typedPDF.PageCount(), htmlPDF.PageCount())
 	}
-	renderedPDF := func(pdf *Document) []byte {
+	renderedPDF := func(pdf *pdfDocument) []byte {
 		var output bytes.Buffer
 		if err := pdf.Output(&output); err != nil {
 			t.Fatalf("Output() error = %v", err)
@@ -197,7 +197,7 @@ func TestTypedAndHTMLTablesSharePaginationBoundary(t *testing.T) {
 }
 
 func TestTypedSignatureSuppliesDefaultSigningFieldName(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "signature"}}}}
 	doc.Signature = &layout.SignatureBlock{PlaceholderReference: "ApprovalSignature"}
@@ -212,7 +212,7 @@ func TestTypedSignatureSuppliesDefaultSigningFieldName(t *testing.T) {
 }
 
 func TestTypedBoxBackgroundUsesMeasuredContentHeight(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{layout.ParagraphBlock{

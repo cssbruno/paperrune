@@ -13,17 +13,17 @@ import (
 )
 
 // OutputSigned writes the current document as a signed PDF.
-func (f *Document) OutputSigned(w io.Writer, options sign.Options) error {
+func (f *pdfDocument) OutputSigned(w io.Writer, options sign.Options) error {
 	return f.OutputSignedContext(context.Background(), w, options)
 }
 
 // OutputSignedContext writes the current document as a signed PDF and checks
 // ctx before generation/signing and before the final writer call.
-func (f *Document) OutputSignedContext(ctx context.Context, w io.Writer, options sign.Options) error {
+func (f *pdfDocument) OutputSignedContext(ctx context.Context, w io.Writer, options sign.Options) error {
 	return f.writeSignedOutputContext(ctx, w, options)
 }
 
-func (f *Document) writeSignedOutputContext(ctx context.Context, w io.Writer, options sign.Options) error {
+func (f *pdfDocument) writeSignedOutputContext(ctx context.Context, w io.Writer, options sign.Options) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -60,13 +60,13 @@ func (f *Document) writeSignedOutputContext(ctx context.Context, w io.Writer, op
 
 // OutputSignedFile creates or truncates fileStr and writes the current document
 // as a signed PDF.
-func (f *Document) OutputSignedFile(fileStr string, options sign.Options) error {
+func (f *pdfDocument) OutputSignedFile(fileStr string, options sign.Options) error {
 	return f.OutputSignedFileContext(context.Background(), fileStr, options)
 }
 
 // OutputSignedFileContext creates or truncates fileStr and writes the current
 // document as a signed PDF with context cancellation.
-func (f *Document) OutputSignedFileContext(ctx context.Context, fileStr string, options sign.Options) error {
+func (f *pdfDocument) OutputSignedFileContext(ctx context.Context, fileStr string, options sign.Options) error {
 	if fileStr == "" {
 		f.SetError(sign.ErrMissingOutput)
 		return sign.ErrMissingOutput
@@ -77,13 +77,13 @@ func (f *Document) OutputSignedFileContext(ctx context.Context, fileStr string, 
 // OutputSignedFileWithOptions writes the current document as a signed PDF using
 // explicit file output options. A zero-value OutputOptions keeps the durable
 // default.
-func (f *Document) OutputSignedFileWithOptions(fileStr string, signOptions sign.Options, fileOptions OutputOptions) error {
+func (f *pdfDocument) OutputSignedFileWithOptions(fileStr string, signOptions sign.Options, fileOptions OutputOptions) error {
 	return f.OutputSignedFileWithOptionsContext(context.Background(), fileStr, signOptions, fileOptions)
 }
 
 // OutputSignedFileWithOptionsContext writes the current document as a signed
 // PDF using output-wide options and context cancellation.
-func (f *Document) OutputSignedFileWithOptionsContext(ctx context.Context, fileStr string, signOptions sign.Options, fileOptions OutputOptions) error {
+func (f *pdfDocument) OutputSignedFileWithOptionsContext(ctx context.Context, fileStr string, signOptions sign.Options, fileOptions OutputOptions) error {
 	if fileStr == "" {
 		f.SetError(sign.ErrMissingOutput)
 		return sign.ErrMissingOutput
@@ -93,17 +93,17 @@ func (f *Document) OutputSignedFileWithOptionsContext(ctx context.Context, fileS
 
 // OutputSignedWithOptions writes the current document as a signed PDF using
 // output-wide options before signing.
-func (f *Document) OutputSignedWithOptions(w io.Writer, signOptions sign.Options, outputOptions OutputOptions) error {
+func (f *pdfDocument) OutputSignedWithOptions(w io.Writer, signOptions sign.Options, outputOptions OutputOptions) error {
 	return f.OutputSignedWithOptionsContext(context.Background(), w, signOptions, outputOptions)
 }
 
 // OutputSignedWithOptionsContext writes the current document as a signed PDF
 // using output-wide options and context cancellation.
-func (f *Document) OutputSignedWithOptionsContext(ctx context.Context, w io.Writer, signOptions sign.Options, outputOptions OutputOptions) error {
+func (f *pdfDocument) OutputSignedWithOptionsContext(ctx context.Context, w io.Writer, signOptions sign.Options, outputOptions OutputOptions) error {
 	return f.coordinateOutput(ctx, w, f.signedOutputRequest(signOptions, outputOptions))
 }
 
-func (f *Document) signedOutputRequest(signOptions sign.Options, outputOptions OutputOptions) outputRequest {
+func (f *pdfDocument) signedOutputRequest(signOptions sign.Options, outputOptions OutputOptions) outputRequest {
 	return outputRequest{
 		options: outputOptions,
 		write: func(ctx context.Context, w io.Writer) error {
@@ -112,11 +112,11 @@ func (f *Document) signedOutputRequest(signOptions sign.Options, outputOptions O
 	}
 }
 
-func (f *Document) outputSignedBytes(options sign.Options) ([]byte, error) {
+func (f *pdfDocument) outputSignedBytes(options sign.Options) ([]byte, error) {
 	return f.outputSignedBytesContext(context.Background(), options)
 }
 
-func (f *Document) outputSignedBytesContext(ctx context.Context, options sign.Options) ([]byte, error) {
+func (f *pdfDocument) outputSignedBytesContext(ctx context.Context, options sign.Options) ([]byte, error) {
 	options = f.signingOptions(options)
 	var buf bytes.Buffer
 	outputPolicy := f.outputPolicy
@@ -142,7 +142,7 @@ func (f *Document) outputSignedBytesContext(ctx context.Context, options sign.Op
 	return signed, nil
 }
 
-func (f *Document) signingOptions(options sign.Options) sign.Options {
+func (f *pdfDocument) signingOptions(options sign.Options) sign.Options {
 	if strings.TrimSpace(options.FieldName) == "" && f.signatureFieldName != "" {
 		options.FieldName = f.signatureFieldName
 	}

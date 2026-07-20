@@ -32,8 +32,19 @@ func blankFinalPDF(t *testing.T) ([]byte, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pdf.SetMargins(0, 0, 0)
-	pdf.AddPage()
+	source := "document @blank:\n" +
+		"  page @sheet:\n" +
+		"    width: 72pt\n" +
+		"    height: 72pt\n" +
+		"    margin: 0pt\n" +
+		"    body @body:\n" +
+		"      paragraph @mark:\n" +
+		"        size: 1pt\n" +
+		"        color: \"#FFFFFF\"\n" +
+		"        text: \".\"\n"
+	if rendered, err := pdf.WritePaper("blank.paper", source); err != nil || !rendered.OK() {
+		t.Fatalf("WritePaper() = %#v, %v", rendered, err)
+	}
 	var output bytes.Buffer
 	if err := pdf.OutputWithOptions(&output, document.OutputOptions{Deterministic: true}); err != nil {
 		t.Fatal(err)

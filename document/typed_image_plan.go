@@ -83,7 +83,7 @@ func validateTypedPlanningImage(block layout.ImageBlock, path string) error {
 	return nil
 }
 
-func (f *Document) measureTypedPlanningImageContext(ctx context.Context, block layout.ImageBlock, contentWidth float64) (paperMeasuredImage, error) {
+func (f *pdfDocument) measureTypedPlanningImageContext(ctx context.Context, block layout.ImageBlock, contentWidth float64) (paperMeasuredImage, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

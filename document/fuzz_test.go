@@ -14,7 +14,7 @@ func FuzzCompileHTML(f *testing.F) {
 	f.Add(`<table><tr><td>A</td></tr></table>`)
 	f.Add(`<img src="data:image/png;base64,AAAA">`)
 	f.Fuzz(func(t *testing.T, input string) {
-		_, _ = CompileHTML(input)
+		_, _ = compileHTML(input)
 	})
 }
 
@@ -30,7 +30,7 @@ func FuzzCompileHTMLDataImageSource(f *testing.F) {
 func FuzzHTMLTokenize(f *testing.F) {
 	f.Add("<section><p>Hello</p></section>")
 	f.Fuzz(func(t *testing.T, input string) {
-		_ = HTMLTokenize(input)
+		_ = htmlTokenize(input)
 	})
 }
 

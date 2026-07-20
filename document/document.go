@@ -17,12 +17,12 @@ func (b *fmtBuffer) printf(fmtStr string, args ...any) {
 	fmt.Fprintf(&b.Buffer, fmtStr, args...)
 }
 
-func documentNew(orientationStr, unitStr, sizeStr, fontDirStr string, size Size) (f *Document) {
+func documentNew(orientationStr, unitStr, sizeStr, fontDirStr string, size Size) (f *pdfDocument) {
 	return documentNewWithDefaults(orientationStr, unitStr, sizeStr, fontDirStr, size, DefaultSettings())
 }
 
-func documentNewWithDefaults(orientationStr, unitStr, sizeStr, fontDirStr string, size Size, defaults Defaults) (f *Document) {
-	f = new(Document)
+func documentNewWithDefaults(orientationStr, unitStr, sizeStr, fontDirStr string, size Size, defaults Defaults) (f *pdfDocument) {
+	f = new(pdfDocument)
 	if orientationStr == "" {
 		orientationStr = "p"
 	} else {
@@ -175,13 +175,13 @@ func documentNewWithDefaults(orientationStr, unitStr, sizeStr, fontDirStr string
 	return
 }
 
-func newWithOptions(cfg normalizedOptions) (f *Document) {
+func newWithOptions(cfg normalizedOptions) (f *pdfDocument) {
 	f = documentNewWithDefaults(cfg.orientationStr, cfg.unitStr, cfg.sizeStr, cfg.fontDirStr, cfg.size, DefaultSettings())
 	f.applyNormalizedOptions(cfg)
 	return f
 }
 
-func (f *Document) applyNormalizedOptions(cfg normalizedOptions) {
+func (f *pdfDocument) applyNormalizedOptions(cfg normalizedOptions) {
 	if f.err != nil {
 		return
 	}
@@ -191,7 +191,7 @@ func (f *Document) applyNormalizedOptions(cfg normalizedOptions) {
 	}
 }
 
-func (f *Document) applyRuntimePolicy(policy runtimePolicy) {
+func (f *pdfDocument) applyRuntimePolicy(policy runtimePolicy) {
 	if f.err != nil {
 		return
 	}
@@ -206,7 +206,7 @@ func (f *Document) applyRuntimePolicy(policy runtimePolicy) {
 	f.applyOperationalPolicy(policy)
 }
 
-func (f *Document) applyResourceCachePolicy(policy runtimePolicy) {
+func (f *pdfDocument) applyResourceCachePolicy(policy runtimePolicy) {
 	f.resourceCachePolicy = policy.cachePolicy
 	switch policy.cachePolicy {
 	case ResourceCacheShared:
@@ -233,7 +233,7 @@ func (f *Document) applyResourceCachePolicy(policy runtimePolicy) {
 	}
 }
 
-func (f *Document) applyExecutionPolicy(policy runtimePolicy) {
+func (f *pdfDocument) applyExecutionPolicy(policy runtimePolicy) {
 	if policy.compressionPolicySet {
 		_ = f.SetCompressionPolicy(policy.compressionPolicy)
 		if f.err != nil {
@@ -248,7 +248,7 @@ func (f *Document) applyExecutionPolicy(policy runtimePolicy) {
 	}
 }
 
-func (f *Document) applyOperationalPolicy(policy runtimePolicy) {
+func (f *pdfDocument) applyOperationalPolicy(policy runtimePolicy) {
 	if policy.limitsSet {
 		_ = f.applyLimits(policy.limits)
 		if f.err != nil {
@@ -272,9 +272,7 @@ func (f *Document) applyOperationalPolicy(policy runtimePolicy) {
 	}
 }
 
-// NewDocument returns a new Document instance using functional options and
-// normal Go error handling.
-func NewDocument(options ...Option) (*Document, error) {
+func newPDFDocument(options ...Option) (*pdfDocument, error) {
 	f := newWithOptions(buildOptions(options...))
 	if f.err != nil {
 		return nil, f.err
@@ -282,19 +280,15 @@ func NewDocument(options ...Option) (*Document, error) {
 	return f, nil
 }
 
-// MustNew returns a new Document instance using functional options and panics if
-// construction fails.
-func MustNew(options ...Option) *Document {
-	f, err := NewDocument(options...)
+func mustNewPDFDocument(options ...Option) *pdfDocument {
+	f, err := newPDFDocument(options...)
 	if err != nil {
 		panic(err)
 	}
 	return f
 }
 
-// NewDocumentWithDefaults returns a new Document instance using explicit
-// per-document defaults and reports constructor failures directly.
-func NewDocumentWithDefaults(defaults Defaults, options ...Option) (*Document, error) {
+func newPDFDocumentWithDefaults(defaults Defaults, options ...Option) (*pdfDocument, error) {
 	cfg := buildOptions(options...)
 	f := documentNewWithDefaults(cfg.orientationStr, cfg.unitStr, cfg.sizeStr, cfg.fontDirStr, cfg.size, defaults)
 	f.applyNormalizedOptions(cfg)
@@ -305,12 +299,12 @@ func NewDocumentWithDefaults(defaults Defaults, options ...Option) (*Document, e
 }
 
 // Ok returns true if no processing errors have occurred.
-func (f *Document) Ok() bool {
+func (f *pdfDocument) Ok() bool {
 	return f.err == nil
 }
 
 // Err returns true if a processing error has occurred.
-func (f *Document) Err() bool {
+func (f *pdfDocument) Err() bool {
 	return f.err != nil
 }
 
@@ -318,7 +312,7 @@ func (f *Document) Err() bool {
 // care, as an internal error condition usually indicates an unrecoverable
 // problem with the generation of a document. It is intended to deal with cases
 // in which an error is used to select an alternate form of the document.
-func (f *Document) ClearError() {
+func (f *pdfDocument) ClearError() {
 	f.err = nil
 }
 
@@ -328,7 +322,7 @@ func (f *Document) ClearError() {
 //
 // See the documentation for printing in the standard fmt package for details
 // about fmtStr and args.
-func (f *Document) SetErrorf(fmtStr string, args ...any) {
+func (f *pdfDocument) SetErrorf(fmtStr string, args ...any) {
 	if f.err == nil {
 		f.err = fmt.Errorf(fmtStr, args...)
 	}
@@ -336,13 +330,13 @@ func (f *Document) SetErrorf(fmtStr string, args ...any) {
 
 // String satisfies the fmt.Stringer interface and summarizes the Document
 // instance.
-func (f *Document) String() string {
+func (f *pdfDocument) String() string {
 	return "Document " + cnDocumentVersion
 }
 
 // SetError sets an error to halt PDF generation. This may facilitate error
 // handling by an application. See also Ok(), Err(), and Error().
-func (f *Document) SetError(err error) {
+func (f *pdfDocument) SetError(err error) {
 	if f.err == nil && err != nil {
 		f.err = err
 	}
@@ -350,11 +344,11 @@ func (f *Document) SetError(err error) {
 
 // Error returns the internal Document error; this will be nil if no error has
 // occurred.
-func (f *Document) Error() error {
+func (f *pdfDocument) Error() error {
 	return f.err
 }
 
-func (f *Document) requirePDFVersion(version string) {
+func (f *pdfDocument) requirePDFVersion(version string) {
 	if version != "" {
 		f.setMinimumPDFVersion(version)
 	}

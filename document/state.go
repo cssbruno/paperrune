@@ -134,7 +134,7 @@ type documentPolicyState struct {
 // render it, and create a separate Document for each independently generated
 // PDF. Reusable inputs such as CompiledHTML, ImageCache, and FontCache may be
 // shared across documents according to their own concurrency contracts.
-type Document struct {
+type pdfDocument struct {
 	pdfSerializationState
 	resourceOwnershipState
 	pageGeometryState

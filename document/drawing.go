@@ -22,7 +22,7 @@ type stringWidthCacheKey struct {
 
 // GetStringWidth returns the length of a string in user units. A font must be
 // currently selected.
-func (f *Document) GetStringWidth(s string) float64 {
+func (f *pdfDocument) GetStringWidth(s string) float64 {
 	if f.err != nil {
 		return 0
 	}
@@ -35,7 +35,7 @@ func (f *Document) GetStringWidth(s string) float64 {
 
 // GetStringSymbolWidth returns the length of a string in glyph units. A font
 // must be currently selected.
-func (f *Document) GetStringSymbolWidth(s string) int {
+func (f *pdfDocument) GetStringSymbolWidth(s string) int {
 	if !f.requireCurrentFont("measuring text") {
 		return 0
 	}
@@ -50,7 +50,7 @@ func (f *Document) GetStringSymbolWidth(s string) int {
 	return f.computeStringSymbolWidth(s)
 }
 
-func (f *Document) computeStringSymbolWidth(s string) int {
+func (f *pdfDocument) computeStringSymbolWidth(s string) int {
 	w := 0
 	if f.isCurrentUTF8 {
 		if isASCIIString(s) {
@@ -74,7 +74,7 @@ func (f *Document) computeStringSymbolWidth(s string) int {
 	return w
 }
 
-func (f *Document) requireCurrentFont(action string) bool {
+func (f *pdfDocument) requireCurrentFont(action string) bool {
 	if f.err != nil {
 		return false
 	}
@@ -94,14 +94,14 @@ func isASCIIString(s string) bool {
 	return true
 }
 
-func (f *Document) stringWidthCacheKey(s string) (stringWidthCacheKey, bool) {
+func (f *pdfDocument) stringWidthCacheKey(s string) (stringWidthCacheKey, bool) {
 	if s == "" || len(s) > stringWidthCacheMaxLen || f.currentFont.i == "" {
 		return stringWidthCacheKey{}, false
 	}
 	return stringWidthCacheKey{text: s, fontID: f.currentFont.i, utf8: f.isCurrentUTF8}, true
 }
 
-func (f *Document) cacheStringSymbolWidth(key stringWidthCacheKey, width int) {
+func (f *pdfDocument) cacheStringSymbolWidth(key stringWidthCacheKey, width int) {
 	if f.stringWidthCache == nil {
 		f.stringWidthCache = make(map[stringWidthCacheKey]int, stringWidthCacheLimit)
 		f.stringWidthKeys = make([]stringWidthCacheKey, 0, stringWidthCacheLimit)
@@ -124,7 +124,7 @@ func (f *Document) cacheStringSymbolWidth(key stringWidthCacheKey, width int) {
 	f.stringWidthCache[key] = width
 }
 
-func (f *Document) currentFontRuneWidth(char rune) int {
+func (f *pdfDocument) currentFontRuneWidth(char rune) int {
 	intChar := int(char)
 	if intChar >= 0 && intChar < len(f.currentFont.Cw) {
 		width := f.currentFont.Cw[intChar]
@@ -144,11 +144,11 @@ func (f *Document) currentFontRuneWidth(char rune) int {
 // SetLineWidth defines the line width. By default, the value equals 0.2 mm.
 // The method can be called before the first page is created. The value is
 // retained from page to page.
-func (f *Document) SetLineWidth(width float64) {
+func (f *pdfDocument) SetLineWidth(width float64) {
 	f.setLineWidth(width)
 }
 
-func (f *Document) setLineWidth(width float64) {
+func (f *pdfDocument) setLineWidth(width float64) {
 	f.lineWidth = width
 	if f.page > 0 {
 		f.outPDFLineWidth(width * f.k)
@@ -156,7 +156,7 @@ func (f *Document) setLineWidth(width float64) {
 }
 
 // GetLineWidth returns the current line thickness.
-func (f *Document) GetLineWidth() float64 {
+func (f *pdfDocument) GetLineWidth() float64 {
 	return f.lineWidth
 }
 
@@ -164,7 +164,7 @@ func (f *Document) GetLineWidth() float64 {
 // "round" or "square". A square style projects from the end of the line. The
 // method can be called before the first page is created. The value is
 // retained from page to page.
-func (f *Document) SetLineCapStyle(styleStr string) {
+func (f *pdfDocument) SetLineCapStyle(styleStr string) {
 	var capStyle int
 	switch styleStr {
 	case "round":
@@ -183,7 +183,7 @@ func (f *Document) SetLineCapStyle(styleStr string) {
 // SetLineJoinStyle defines the line join style. styleStr should be "miter",
 // "round" or "bevel". The method can be called before the first page is
 // created. The value is retained from page to page.
-func (f *Document) SetLineJoinStyle(styleStr string) {
+func (f *pdfDocument) SetLineJoinStyle(styleStr string) {
 	var joinStyle int
 	switch styleStr {
 	case "round":
@@ -207,11 +207,11 @@ func (f *Document) SetLineJoinStyle(styleStr string) {
 // array to restore solid line drawing.
 //
 // The Beziergon() example demonstrates this method.
-func (f *Document) SetDashPattern(dashArray []float64, dashPhase float64) {
+func (f *pdfDocument) SetDashPattern(dashArray []float64, dashPhase float64) {
 	f.setDashPatternScaled(dashArray, 1, dashPhase)
 }
 
-func (f *Document) setDashPatternScaled(dashArray []float64, valueScale, dashPhase float64) {
+func (f *pdfDocument) setDashPatternScaled(dashArray []float64, valueScale, dashPhase float64) {
 	if len(dashArray) == 0 {
 		f.dashArray = nil
 		f.dashPhase = dashPhase * f.k
@@ -238,7 +238,7 @@ func (f *Document) setDashPatternScaled(dashArray []float64, valueScale, dashPha
 	}
 }
 
-func (f *Document) outputDashPattern() {
+func (f *pdfDocument) outputDashPattern() {
 	var buf bytes.Buffer
 	buf.WriteByte('[')
 	for i, value := range f.dashArray {

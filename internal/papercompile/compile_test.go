@@ -100,6 +100,17 @@ func TestCompileLowersPaperASTToLayoutDocumentAndMapping(t *testing.T) {
 	}
 }
 
+func TestCompileRejectsMalformedPageNumberFormats(t *testing.T) {
+	for _, format := range []string{"Page", "Page %s", "Page %d / %d"} {
+		source := "document:\n  page:\n    page-number-format: \"" + format + "\"\n    body:\n      text: \"x\"\n"
+		parsed := paperlang.Parse("page-number-format.paper", source)
+		compiled := Compile(parsed.AST)
+		if !parsed.OK() || compiled.OK() || !hasCompileDiagnostic(compiled.Diagnostics, "PAPER_COMPILE_PAGE_NUMBER_FORMAT") {
+			t.Fatalf("format %q diagnostics = %#v/%#v", format, parsed.Diagnostics, compiled.Diagnostics)
+		}
+	}
+}
+
 func TestCompileSupportsNamedA3A5AndLegalPageSizes(t *testing.T) {
 	for _, test := range []struct {
 		name   string

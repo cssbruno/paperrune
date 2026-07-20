@@ -1,0 +1,30 @@
+document @hello-world:
+  title: "Hello from PaperRune"
+  language: "en"
+
+  style @hello-title-style:
+    font: "Helvetica"
+    size: 24pt
+    line-height: 30pt
+    bold: true
+    color: "#1F5F8B"
+
+  style @hello-body-style:
+    font: "Helvetica"
+    size: 11pt
+    line-height: 17pt
+    color: "#243746"
+
+  page @hello-page:
+    size: "A4"
+    margin: 36pt
+
+    body @hello-content:
+      heading @hello-heading:
+        level: 1
+        style: "@hello-title-style"
+        text: "Hello from PaperRune"
+
+      paragraph @hello-message:
+        style: "@hello-body-style"
+        text: "This PDF was authored in the native Paper format. No direct page, cursor, cell, or drawing API is used."

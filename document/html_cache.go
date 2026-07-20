@@ -21,16 +21,16 @@ type htmlCompiledCacheKey struct {
 
 var sharedCompiledHTMLCache = struct {
 	sync.Mutex
-	entries map[htmlCompiledCacheKey]*CompiledHTML
+	entries map[htmlCompiledCacheKey]*compiledHTML
 	order   []htmlCompiledCacheKey
 	bytes   int64
 	sizes   map[htmlCompiledCacheKey]int64
 }{
-	entries: make(map[htmlCompiledCacheKey]*CompiledHTML),
+	entries: make(map[htmlCompiledCacheKey]*compiledHTML),
 	sizes:   make(map[htmlCompiledCacheKey]int64),
 }
 
-func compileHTMLForWriteContext(ctx context.Context, htmlStr string, maxDataImageBytes int, useSharedCache bool) (*CompiledHTML, error) {
+func compileHTMLForWriteContext(ctx context.Context, htmlStr string, maxDataImageBytes int, useSharedCache bool) (*compiledHTML, error) {
 	if !useSharedCache {
 		return compileHTMLWithDataImageLimitContext(ctx, htmlStr, true, maxDataImageBytes)
 	}
@@ -46,14 +46,14 @@ func compileHTMLForWriteContext(ctx context.Context, htmlStr string, maxDataImag
 	return compiled, nil
 }
 
-func lookupSharedCompiledHTML(key htmlCompiledCacheKey) (*CompiledHTML, bool) {
+func lookupSharedCompiledHTML(key htmlCompiledCacheKey) (*compiledHTML, bool) {
 	sharedCompiledHTMLCache.Lock()
 	compiled, ok := sharedCompiledHTMLCache.entries[key]
 	sharedCompiledHTMLCache.Unlock()
 	return compiled, ok
 }
 
-func storeSharedCompiledHTML(key htmlCompiledCacheKey, htmlStr string, compiled *CompiledHTML) {
+func storeSharedCompiledHTML(key htmlCompiledCacheKey, htmlStr string, compiled *compiledHTML) {
 	if compiled == nil {
 		return
 	}
@@ -83,7 +83,7 @@ func storeSharedCompiledHTML(key htmlCompiledCacheKey, htmlStr string, compiled 
 
 func clearSharedCompiledHTMLCache() {
 	sharedCompiledHTMLCache.Lock()
-	sharedCompiledHTMLCache.entries = make(map[htmlCompiledCacheKey]*CompiledHTML)
+	sharedCompiledHTMLCache.entries = make(map[htmlCompiledCacheKey]*compiledHTML)
 	sharedCompiledHTMLCache.order = nil
 	sharedCompiledHTMLCache.sizes = make(map[htmlCompiledCacheKey]int64)
 	sharedCompiledHTMLCache.bytes = 0
@@ -99,7 +99,7 @@ func sharedCompiledHTMLCacheStats() CacheStats {
 	}
 }
 
-func compiledHTMLCacheBytes(htmlStr string, compiled *CompiledHTML) int64 {
+func compiledHTMLCacheBytes(htmlStr string, compiled *compiledHTML) int64 {
 	if compiled == nil {
 		return 0
 	}

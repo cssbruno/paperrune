@@ -13,7 +13,7 @@ import (
 )
 
 func TestTypedParagraphLineShadowSoftWrapMatchesLegacyPageAndLineAllocation(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 60, Ht: 50}))
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 60, Ht: 50}))
 	pdf.SetMargins(10, 10, 10)
 	pdf.SetAutoPageBreak(true, 10)
 	pdf.SetFont("Courier", "", 10)
@@ -45,7 +45,7 @@ func TestTypedParagraphLineShadowSoftWrapMatchesLegacyPageAndLineAllocation(t *t
 }
 
 func TestTypedParagraphLineShadowMatchesLegacyPageAllocationWithoutMutation(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 60}))
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 60}))
 	pdf.SetMargins(10, 10, 10)
 	pdf.SetAutoPageBreak(true, 10)
 	pdf.SetFont("Courier", "", 10)
@@ -112,7 +112,7 @@ func TestTypedParagraphLineShadowUsesExactCoreTrailingLFProfile(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.text, func(t *testing.T) {
-			pdf := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}))
+			pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}))
 			pdf.SetMargins(10, 10, 10)
 			pdf.SetAutoPageBreak(true, 10)
 			doc := layout.NewLayoutDocument()
@@ -138,7 +138,7 @@ func TestTypedParagraphLineShadowUsesExactCoreTrailingLFProfile(t *testing.T) {
 func TestTypedParagraphLineShadowConvertsLineGeometryAcrossUnits(t *testing.T) {
 	for _, unit := range []Unit{UnitPoint, UnitMillimeter, UnitCentimeter, UnitInch} {
 		t.Run(unit.String(), func(t *testing.T) {
-			pdf := MustNew(WithUnit(unit))
+			pdf := mustNewPDFDocument(WithUnit(unit))
 			margin := pdf.PointConvert(36)
 			pdf.SetMargins(margin, margin, margin)
 			pdf.SetAutoPageBreak(true, margin)
@@ -171,36 +171,36 @@ func TestTypedParagraphLineShadowConvertsLineGeometryAcrossUnits(t *testing.T) {
 func TestTypedParagraphLineShadowRejectsUnsupportedContentWithoutMutation(t *testing.T) {
 	tests := []struct {
 		name   string
-		mutate func(*Document, *layout.LayoutDocument)
+		mutate func(*pdfDocument, *layout.LayoutDocument)
 		reason typedShadowUnsupportedReason
 	}{
-		{"two blocks", func(_ *Document, doc *layout.LayoutDocument) {
+		{"two blocks", func(_ *pdfDocument, doc *layout.LayoutDocument) {
 			doc.Body = append(doc.Body, layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "two"}}})
 		}, typedShadowDocumentEnvelope},
-		{"keep together", func(_ *Document, doc *layout.LayoutDocument) {
+		{"keep together", func(_ *pdfDocument, doc *layout.LayoutDocument) {
 			paragraph := doc.Body[0].(layout.ParagraphBlock)
 			paragraph.Box.KeepTogether = true
 			doc.Body[0] = paragraph
 		}, typedShadowParagraphContract},
-		{"non ASCII", func(_ *Document, doc *layout.LayoutDocument) {
+		{"non ASCII", func(_ *pdfDocument, doc *layout.LayoutDocument) {
 			paragraph := doc.Body[0].(layout.ParagraphBlock)
 			paragraph.Segments[0].Text = "café"
 			doc.Body[0] = paragraph
 		}, typedShadowParagraphContract},
-		{"tab", func(_ *Document, doc *layout.LayoutDocument) {
+		{"tab", func(_ *pdfDocument, doc *layout.LayoutDocument) {
 			paragraph := doc.Body[0].(layout.ParagraphBlock)
 			paragraph.Segments[0].Text = "A\tB"
 			doc.Body[0] = paragraph
 		}, typedShadowParagraphContract},
-		{"invalid UTF-8", func(_ *Document, doc *layout.LayoutDocument) {
+		{"invalid UTF-8", func(_ *pdfDocument, doc *layout.LayoutDocument) {
 			paragraph := doc.Body[0].(layout.ParagraphBlock)
 			paragraph.Segments[0].Text = string([]byte{'A', 0xff, 'B'})
 			doc.Body[0] = paragraph
 		}, typedShadowParagraphContract},
-		{"custom lifecycle", func(pdf *Document, _ *layout.LayoutDocument) {
+		{"custom lifecycle", func(pdf *pdfDocument, _ *layout.LayoutDocument) {
 			pdf.SetAcceptPageBreakFunc(func() bool { return true })
 		}, typedShadowDocumentPolicy},
-		{"oversized line height", func(_ *Document, doc *layout.LayoutDocument) {
+		{"oversized line height", func(_ *pdfDocument, doc *layout.LayoutDocument) {
 			paragraph := doc.Body[0].(layout.ParagraphBlock)
 			paragraph.Style.LineHeight = 10000
 			doc.Body[0] = paragraph
@@ -208,7 +208,7 @@ func TestTypedParagraphLineShadowRejectsUnsupportedContentWithoutMutation(t *tes
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pdf := MustNew(WithUnit(UnitPoint))
+			pdf := mustNewPDFDocument(WithUnit(UnitPoint))
 			pdf.SetMargins(20, 20, 20)
 			pdf.SetAutoPageBreak(true, 20)
 			doc := layout.NewLayoutDocument()
@@ -231,7 +231,7 @@ func TestTypedParagraphLineShadowRejectsUnsupportedContentWithoutMutation(t *tes
 }
 
 func TestTypedParagraphLineShadowEmitsOneUnitOversizedLineOnce(t *testing.T) {
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 200}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 200}), WithNoCompression())
 	doc := &layout.LayoutDocument{
 		PageTemplate: layout.PageTemplate{Margins: layout.Spacing{Top: 10, Right: 10, Bottom: 10, Left: 10}},
 		Body: []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "over"}}, Style: layout.TextStyle{
@@ -249,7 +249,7 @@ func TestTypedParagraphLineShadowEmitsOneUnitOversizedLineOnce(t *testing.T) {
 }
 
 func TestTypedParagraphLineShadowRejectsFixedRoundingPageDrift(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 60}))
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 60}))
 	pdf.SetMargins(10, 10, 10)
 	pdf.SetAutoPageBreak(true, 10)
 	doc := layout.NewLayoutDocument()

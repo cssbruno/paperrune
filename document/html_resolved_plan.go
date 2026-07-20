@@ -77,12 +77,12 @@ var htmlUnifiedTableBoxProperties = func() map[string]bool {
 // resolveCompiledHTMLUnifiedSnapshot performs the whole-fragment capability
 // scan and creates a detached, selector-free snapshot. No layout is attempted
 // until every opening element has passed this scan.
-func (f *Document) resolveCompiledHTMLUnifiedSnapshot(ctx context.Context, compiled *CompiledHTML, lineHeight float64) (*CompiledHTML, error) {
+func (f *pdfDocument) resolveCompiledHTMLUnifiedSnapshot(ctx context.Context, compiled *compiledHTML, lineHeight float64) (*compiledHTML, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	clone := *compiled
-	clone.tokens = append([]HTMLSegmentType(nil), compiled.tokens...)
+	clone.tokens = append([]htmlSegmentType(nil), compiled.tokens...)
 	clone.cssRules = nil
 	clone.unifiedResolved = make([]htmlUnifiedResolvedElement, len(compiled.tokens))
 
@@ -244,7 +244,7 @@ func (f *Document) resolveCompiledHTMLUnifiedSnapshot(ctx context.Context, compi
 	return &clone, nil
 }
 
-func htmlUnifiedDestination(token HTMLSegmentType) string {
+func htmlUnifiedDestination(token htmlSegmentType) string {
 	name := strings.TrimSpace(token.Attr["id"])
 	if name == "" && token.Str == "a" {
 		name = strings.TrimSpace(token.Attr["name"])
@@ -360,7 +360,7 @@ func htmlUnifiedApplyElementTextDefaults(tag string, style *htmlTextStyle, white
 	}
 }
 
-func htmlUnifiedResolvedBox(tag string, token int, decl map[string]string, fontSize float64, headingMargins bool, pdf *Document) (layout.BoxStyle, error) {
+func htmlUnifiedResolvedBox(tag string, token int, decl map[string]string, fontSize float64, headingMargins bool, pdf *pdfDocument) (layout.BoxStyle, error) {
 	if htmlUnifiedBlockLikeTag(tag, decl) {
 		return htmlUnifiedParseBlockBox(tag, token, decl, fontSize, headingMargins, pdf)
 	}

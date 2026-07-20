@@ -42,7 +42,7 @@ func TestWriteDocumentGoldenPDFs(t *testing.T) {
 
 func goldenDocumentPDFSHA(t *testing.T, doc *layout.LayoutDocument) string {
 	t.Helper()
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetCatalogSort(true)
 	fixed := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -132,7 +132,7 @@ func goldenGenericDocument() *layout.LayoutDocument {
 }
 
 func goldenLongFormDocument() *layout.LayoutDocument {
-	doc, messages := LongFormHTMLDocumentModel("Long Form", `<h2>Clause</h2><p>Long-form text.</p><footer>Long footer</footer>`)
+	doc, messages := longFormHTMLDocumentModel("Long Form", `<h2>Clause</h2><p>Long-form text.</p><footer>Long footer</footer>`)
 	if len(messages) != 0 {
 		panic(fmt.Sprintf("unexpected long-form diagnostics: %#v", messages))
 	}

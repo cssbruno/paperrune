@@ -36,7 +36,7 @@ func testFormDocument() FormDocument {
 }
 
 func TestFormDocumentHTMLCanonicalOutput(t *testing.T) {
-	html := FormDocumentHTML(testFormDocument())
+	html := formDocumentHTML(testFormDocument())
 	for _, want := range []string{
 		"<h1>Form Title</h1>",
 		`<section class="form-section" style="break-inside: avoid">`,
@@ -53,7 +53,7 @@ func TestFormDocumentHTMLCanonicalOutput(t *testing.T) {
 }
 
 func TestFormDocumentHTMLValidation(t *testing.T) {
-	if messages := ValidateFormDocumentHTML(testFormDocument()); len(messages) != 0 {
+	if messages := validateFormDocumentHTML(testFormDocument()); len(messages) != 0 {
 		t.Fatalf("ValidateFormDocumentHTML messages = %#v, want none", messages)
 	}
 }
@@ -76,7 +76,7 @@ func TestFormDocumentBlocks(t *testing.T) {
 }
 
 func TestWriteDocumentRendersFormDocumentModel(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := FormDocumentModel(testFormDocument())
 

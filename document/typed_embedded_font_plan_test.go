@@ -18,7 +18,7 @@ import (
 
 func TestLayoutDocumentPlanEmbedsImmutableUTF8FontForPDFA(t *testing.T) {
 	fontBytes := readUTF8FontFixture(t)
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
 	if err := source.AddUTF8FontFromBytesError("PlanSans", "", fontBytes); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestLayoutDocumentPlanEmbedsImmutableUTF8FontForPDFA(t *testing.T) {
 
 	render := func() []byte {
 		t.Helper()
-		target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+		target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 		if pages, err := target.WriteLayoutDocumentPlan(first); err != nil || pages != 1 {
 			t.Fatalf("WriteLayoutDocumentPlan() = %d, %v", pages, err)
 		}
@@ -81,7 +81,7 @@ func TestLayoutDocumentPlanEmbedsImmutableUTF8FontForPDFA(t *testing.T) {
 }
 
 func TestLayoutDocumentPlanSupportsMixedCoreAndEmbeddedUTF8MetricRuns(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
 	if err := source.AddUTF8FontFromBytesError("PlanSans", "", readUTF8FontFixture(t)); err != nil {
 		t.Fatal(err)
 	}
@@ -115,14 +115,14 @@ func TestLayoutDocumentPlanSupportsMixedCoreAndEmbeddedUTF8MetricRuns(t *testing
 	if err != nil || !strings.Contains(capturedSVG, ">日<") || !strings.Contains(capturedSVG, ">́<") {
 		t.Fatalf("mixed embedded display capture = %v, svg=%q", err, string(capture.SVG()))
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if pages, err := target.WriteLayoutDocumentPlan(plan); err != nil || pages != plan.PageCount() {
 		t.Fatalf("WriteLayoutDocumentPlan() = pages %d, want %d, err %v", pages, plan.PageCount(), err)
 	}
 }
 
 func TestLayoutDocumentPlanEmitsTypedPDFUASemanticStructure(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 220}), WithNoCompression(), WithDeterministicOutput())
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 220}), WithNoCompression(), WithDeterministicOutput())
 	source.SetMargins(10, 10, 10)
 	if err := source.AddUTF8FontFromBytesError("PlanSans", "", readUTF8FontFixture(t)); err != nil {
 		t.Fatal(err)
@@ -156,7 +156,7 @@ func TestLayoutDocumentPlanEmitsTypedPDFUASemanticStructure(t *testing.T) {
 	if err != nil || plan.PageCount() != 1 {
 		t.Fatalf("typed PDF/UA plan = pages %d, %v", plan.PageCount(), err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestLayoutDocumentEmbeddedFontPreflightIsBoundedCancelableAndAtomic(t *test
 		t.Fatalf("deduplicated font byte charge = used %d, %v", used, err)
 	}
 
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}))
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}))
 	if err := source.AddUTF8FontFromBytesError("PlanSans", "", readUTF8FontFixture(t)); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestLayoutDocumentEmbeddedFontPreflightIsBoundedCancelableAndAtomic(t *test
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := MustNew(WithUnit(UnitPoint)).WriteLayoutDocumentPlanContext(canceled, plan); !errors.Is(err, context.Canceled) {
+	if _, err := mustNewPDFDocument(WithUnit(UnitPoint)).WriteLayoutDocumentPlanContext(canceled, plan); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled write = %v", err)
 	}
 	tampered := plan
@@ -206,7 +206,7 @@ func TestLayoutDocumentEmbeddedFontPreflightIsBoundedCancelableAndAtomic(t *test
 		tampered.fontSources[digest] = append([]byte(nil), data...)
 		tampered.fontSources[digest][0] ^= 0xff
 	}
-	target := MustNew(WithUnit(UnitPoint))
+	target := mustNewPDFDocument(WithUnit(UnitPoint))
 	if _, err := target.WriteLayoutDocumentPlan(tampered); err == nil || target.PageCount() != 0 || target.state != documentStateUnopened {
 		t.Fatalf("tampered font write = pages %d state %d error %v", target.PageCount(), target.state, err)
 	}

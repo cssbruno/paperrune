@@ -14,7 +14,7 @@ import (
 
 func TestPageStreamCompressorStopReleasesBlockedPublishers(t *testing.T) {
 	compressed := make(chan struct{}, 8)
-	pdf, err := NewDocument(
+	pdf, err := newPDFDocument(
 		WithCompressionPolicy(CompressionPolicy{
 			Mode:                     CompressionEnabled,
 			Level:                    zlib.BestSpeed,
@@ -71,7 +71,7 @@ func TestPageStreamCompressorStopReleasesBlockedPublishers(t *testing.T) {
 }
 
 func TestOutputStreamWriterFailureWithPageCompressionReturns(t *testing.T) {
-	pdf, err := NewDocument(WithCompressionPolicy(CompressionPolicy{
+	pdf, err := newPDFDocument(WithCompressionPolicy(CompressionPolicy{
 		Mode:                     CompressionEnabled,
 		Level:                    zlib.BestSpeed,
 		PageWorkers:              2,
@@ -120,7 +120,7 @@ func (w *failOnPDFStreamWriter) Write(p []byte) (int, error) {
 }
 
 func TestCloseCreatesEmptyPageAndIsIdempotent(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.Close()
 	if pdf.Err() {
 		t.Fatalf("Close() error = %v", pdf.Error())

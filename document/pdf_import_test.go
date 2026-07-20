@@ -18,7 +18,7 @@ import (
 func importSourcePDF(t *testing.T, compress bool) []byte {
 	t.Helper()
 
-	pdf := document.MustNew(document.WithUnit(document.UnitPoint))
+	pdf := document.MustNewTestPDFDocument(document.WithUnit(document.UnitPoint))
 	pdf.SetCompression(compress)
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 16)
@@ -54,7 +54,7 @@ func TestImportPageFromFileBytesAndReader(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 
-	pdf := document.MustNew(document.WithUnit(document.UnitPoint))
+	pdf := document.MustNewTestPDFDocument(document.WithUnit(document.UnitPoint))
 	pdf.SetCompression(false)
 	if methodSizes := pdf.GetPageSizes(bytes.NewReader(source)); pdf.Err() || len(methodSizes) != 1 {
 		t.Fatalf("method GetPageSizes() failed: %v", pdf.Error())
@@ -94,7 +94,7 @@ func TestImportPageFromParsedSource(t *testing.T) {
 		t.Fatalf("OpenBytes() error = %v", err)
 	}
 
-	pdf := document.MustNew(document.WithUnit(document.UnitPoint))
+	pdf := document.MustNewTestPDFDocument(document.WithUnit(document.UnitPoint))
 	pdf.SetCompression(false)
 	pdf.AddPage()
 	pageID := pdf.ImportPageSource(sourcePDF, 1, "MediaBox")
@@ -116,7 +116,7 @@ func TestImportPageFromParsedSource(t *testing.T) {
 }
 
 func TestImportPageRejectsUnsupportedSource(t *testing.T) {
-	pdf := document.MustNew(document.WithUnit(document.UnitPoint))
+	pdf := document.MustNewTestPDFDocument(document.WithUnit(document.UnitPoint))
 	if ids := pdf.ImportPagesFromSource(123, "MediaBox"); ids != nil {
 		t.Fatalf("expected no IDs for unsupported source, got %v", ids)
 	}
@@ -129,7 +129,7 @@ func TestImportPageRejectsUnsupportedSource(t *testing.T) {
 }
 
 func TestDocumentGetPageSizesAppliesImportLimit(t *testing.T) {
-	pdf := document.MustNew(document.WithLimits(document.Limits{MaxImportedPDFBytes: 3}))
+	pdf := document.MustNewTestPDFDocument(document.WithLimits(document.Limits{MaxImportedPDFBytes: 3}))
 	if sizes := pdf.GetPageSizes(importSourcePDF(t, false)); sizes != nil {
 		t.Fatalf("GetPageSizes() = %#v, want nil", sizes)
 	}

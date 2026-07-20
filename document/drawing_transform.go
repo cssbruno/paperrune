@@ -23,7 +23,7 @@ type TransformMatrix struct {
 // TransformScale(), TransformSkew(), etc. This is followed by text, drawing or
 // image output and finally a call to TransformEnd(). All transformation
 // contexts must be properly ended prior to outputting the document.
-func (f *Document) TransformBegin() {
+func (f *pdfDocument) TransformBegin() {
 	if f.err != nil {
 		return
 	}
@@ -35,7 +35,7 @@ func (f *Document) TransformBegin() {
 // scaleWd is the percentage scaling factor. (x, y) is at the center of scaling.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformScaleX(scaleWd, x, y float64) {
+func (f *pdfDocument) TransformScaleX(scaleWd, x, y float64) {
 	f.TransformScale(scaleWd, 100, x, y)
 }
 
@@ -44,7 +44,7 @@ func (f *Document) TransformScaleX(scaleWd, x, y float64) {
 // scaling.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformScaleY(scaleHt, x, y float64) {
+func (f *pdfDocument) TransformScaleY(scaleHt, x, y float64) {
 	f.TransformScale(100, scaleHt, x, y)
 }
 
@@ -53,7 +53,7 @@ func (f *Document) TransformScaleY(scaleHt, x, y float64) {
 // and height. (x, y) is at the center of scaling.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformScaleXY(s, x, y float64) {
+func (f *pdfDocument) TransformScaleXY(s, x, y float64) {
 	f.TransformScale(s, s, x, y)
 }
 
@@ -62,7 +62,7 @@ func (f *Document) TransformScaleXY(s, x, y float64) {
 // (x, y) is at the center of scaling.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformScale(scaleWd, scaleHt, x, y float64) {
+func (f *pdfDocument) TransformScale(scaleWd, scaleHt, x, y float64) {
 	if f.err != nil {
 		return
 	}
@@ -82,7 +82,7 @@ func (f *Document) TransformScale(scaleWd, scaleHt, x, y float64) {
 // and images. x is the axis of reflection.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformMirrorHorizontal(x float64) {
+func (f *pdfDocument) TransformMirrorHorizontal(x float64) {
 	f.TransformScale(-100, 100, x, f.y)
 }
 
@@ -90,7 +90,7 @@ func (f *Document) TransformMirrorHorizontal(x float64) {
 // images. y is the axis of reflection.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformMirrorVertical(y float64) {
+func (f *pdfDocument) TransformMirrorVertical(y float64) {
 	f.TransformScale(100, -100, f.x, y)
 }
 
@@ -98,7 +98,7 @@ func (f *Document) TransformMirrorVertical(y float64) {
 // images on the point specified by (x, y).
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformMirrorPoint(x, y float64) {
+func (f *pdfDocument) TransformMirrorPoint(x, y float64) {
 	f.TransformScale(-100, -100, x, y)
 }
 
@@ -108,7 +108,7 @@ func (f *Document) TransformMirrorPoint(x, y float64) {
 // position.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformMirrorLine(angle, x, y float64) {
+func (f *pdfDocument) TransformMirrorLine(angle, x, y float64) {
 	f.TransformScale(-100, 100, x, y)
 	f.TransformRotate(-2*(angle-90), x, y)
 }
@@ -117,7 +117,7 @@ func (f *Document) TransformMirrorLine(angle, x, y float64) {
 // horizontally by the amount specified by tx.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformTranslateX(tx float64) {
+func (f *pdfDocument) TransformTranslateX(tx float64) {
 	f.TransformTranslate(tx, 0)
 }
 
@@ -125,7 +125,7 @@ func (f *Document) TransformTranslateX(tx float64) {
 // by the amount specified by ty.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformTranslateY(ty float64) {
+func (f *pdfDocument) TransformTranslateY(ty float64) {
 	f.TransformTranslate(0, ty)
 }
 
@@ -133,7 +133,7 @@ func (f *Document) TransformTranslateY(ty float64) {
 // horizontally and vertically by the amounts specified by tx and ty.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformTranslate(tx, ty float64) {
+func (f *pdfDocument) TransformTranslate(tx, ty float64) {
 	f.Transform(TransformMatrix{1, 0, 0, 1, tx * f.k, -ty * f.k})
 }
 
@@ -142,7 +142,7 @@ func (f *Document) TransformTranslate(tx, ty float64) {
 // counter-clockwise from the 3 o'clock position.
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformRotate(angle, x, y float64) {
+func (f *pdfDocument) TransformRotate(angle, x, y float64) {
 	y = (f.h - y) * f.k
 	x *= f.k
 	angle = angle * math.Pi / 180
@@ -161,7 +161,7 @@ func (f *Document) TransformRotate(angle, x, y float64) {
 // the left) to 90 degrees (skew to the right).
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformSkewX(angleX, x, y float64) {
+func (f *pdfDocument) TransformSkewX(angleX, x, y float64) {
 	f.TransformSkew(angleX, 0, x, y)
 }
 
@@ -170,7 +170,7 @@ func (f *Document) TransformSkewX(angleX, x, y float64) {
 // the bottom) to 90 degrees (skew to the top).
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformSkewY(angleY, x, y float64) {
+func (f *pdfDocument) TransformSkewY(angleY, x, y float64) {
 	f.TransformSkew(0, angleY, x, y)
 }
 
@@ -180,7 +180,7 @@ func (f *Document) TransformSkewY(angleY, x, y float64) {
 // (skew to the bottom) to 90 degrees (skew to the top).
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformSkew(angleX, angleY, x, y float64) {
+func (f *pdfDocument) TransformSkew(angleX, angleY, x, y float64) {
 	if f.err != nil {
 		return
 	}
@@ -203,7 +203,7 @@ func (f *Document) TransformSkew(angleX, angleY, x, y float64) {
 // Transform generally transforms the following text, drawings and images
 // according to the specified matrix. It is typically easier to use the various
 // methods such as TransformRotate() and TransformMirrorVertical() instead.
-func (f *Document) Transform(tm TransformMatrix) {
+func (f *pdfDocument) Transform(tm TransformMatrix) {
 	if f.err != nil {
 		return
 	}
@@ -218,7 +218,7 @@ func (f *Document) Transform(tm TransformMatrix) {
 // TransformEnd ends a transformation that was begun with TransformBegin().
 //
 // The TransformBegin() example demonstrates this method.
-func (f *Document) TransformEnd() {
+func (f *pdfDocument) TransformEnd() {
 	if f.err != nil {
 		return
 	}

@@ -15,7 +15,7 @@ import (
 // paints that plan. Automatic layout no longer retries through a second
 // renderer: unsupported receiver state or model contracts are reported on the
 // receiver before any page bytes are opened.
-func (f *Document) WriteDocument(doc *layout.LayoutDocument) {
+func (f *pdfDocument) WriteDocument(doc *layout.LayoutDocument) {
 	if f == nil || f.err != nil {
 		return
 	}
@@ -56,12 +56,12 @@ func (f *Document) WriteDocument(doc *layout.LayoutDocument) {
 	f.observeLayoutEngineRoute("WriteDocument", "unified", "")
 }
 
-func (f *Document) typedWriteDocumentFresh() bool {
+func (f *pdfDocument) typedWriteDocumentFresh() bool {
 	return f != nil && f.err == nil && f.page == 0 && f.state == documentStateUnopened &&
 		f.clipNest == 0 && f.transformNest == 0
 }
 
-func (f *Document) observeLayoutEngineRoute(entryPoint, engine, reason string) {
+func (f *pdfDocument) observeLayoutEngineRoute(entryPoint, engine, reason string) {
 	if f != nil && f.hooks.OnLayoutEngineRoute != nil {
 		f.hooks.OnLayoutEngineRoute(entryPoint, engine, reason)
 	}
@@ -70,7 +70,7 @@ func (f *Document) observeLayoutEngineRoute(entryPoint, engine, reason string) {
 // installTypedWriteDocumentCompatibilityAliases keeps the historical QR image
 // resource aliases available to callers while the actual image is planned and
 // painted by the unified display-list path.
-func (f *Document) installTypedWriteDocumentCompatibilityAliases(doc *layout.LayoutDocument) {
+func (f *pdfDocument) installTypedWriteDocumentCompatibilityAliases(doc *layout.LayoutDocument) {
 	if doc == nil {
 		return
 	}
@@ -185,7 +185,7 @@ func metadataFieldText(field layout.MetadataField) string {
 	return field.Label + ": " + field.Value
 }
 
-func (f *Document) applyPageTemplateMargins(template layout.PageTemplate) {
+func (f *pdfDocument) applyPageTemplateMargins(template layout.PageTemplate) {
 	margins := template.Margins
 	if margins.Top <= 0 && margins.Right <= 0 && margins.Bottom <= 0 && margins.Left <= 0 {
 		return

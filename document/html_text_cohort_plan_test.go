@@ -16,7 +16,7 @@ import (
 )
 
 func TestHTMLUnifiedTextCohortResolvedInlineStylesWhitespaceDisplayRasterAndPDF(t *testing.T) {
-	compiled, err := CompileHTML(`<style>
+	compiled, err := compileHTML(`<style>
 		h2,p,pre{font-family:Courier;font-size:10pt;line-height:12pt}
 		.accent{font-weight:bold;color:#b02030}
 		.em{font-style:italic}
@@ -63,7 +63,7 @@ func TestHTMLUnifiedTextCohortResolvedInlineStylesWhitespaceDisplayRasterAndPDF(
 	}
 
 	planner := paginationTestDocument(t, 180, WithNoCompression(), WithDeterministicOutput())
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || planner.PageCount() != 0 {
 		t.Fatalf("plan = hash %q pages %d, %v", plan.Hash(), planner.PageCount(), err)
 	}
@@ -93,7 +93,7 @@ func TestHTMLUnifiedTextCohortResolvedInlineStylesWhitespaceDisplayRasterAndPDF(
 	if png := captureFlexPlanPNG(t, plan); len(png) == 0 {
 		t.Fatal("direct display raster is empty")
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -110,12 +110,12 @@ func TestHTMLUnifiedTextCohortPlansMetricChangingInlineStyleAndDecoration(t *tes
 		`<p>before <span style="font-size:16pt;line-height:20pt">taller</span> after</p>`,
 		`<p style="font-family:Helvetica">before <strong>wide MMMM</strong> after</p>`,
 	} {
-		compiled, err := CompileHTML(source)
+		compiled, err := compileHTML(source)
 		if err != nil {
 			t.Fatal(err)
 		}
 		planner := paginationTestDocument(t, 100)
-		plan, err := planner.PlanCompiledHTML(12, compiled)
+		plan, err := planner.planCompiledHTML(12, compiled)
 		if err != nil || plan.Hash() == "" || plan.PageCount() == 0 || planner.PageCount() != 0 {
 			t.Fatalf("metric-changing source %q = plan %q pages %d, %v", source, plan.Hash(), planner.PageCount(), err)
 		}
@@ -157,12 +157,12 @@ func TestHTMLUnifiedTextCohortPlansMetricChangingInlineStyleAndDecoration(t *tes
 			t.Fatalf("metric-changing source %q display capture: %v", source, err)
 		}
 	}
-	compiled, err := CompileHTML(`<p><span style="text-decoration:underline">underlined</span> <span style="text-decoration:line-through">struck</span></p>`)
+	compiled, err := compileHTML(`<p><span style="text-decoration:underline">underlined</span> <span style="text-decoration:line-through">struck</span></p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := paginationTestDocument(t, 100)
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || plan.PageCount() == 0 || planner.PageCount() != 0 {
 		t.Fatalf("decoration source = plan %q pages %d, %v", plan.Hash(), planner.PageCount(), err)
 	}
@@ -179,19 +179,19 @@ func TestHTMLUnifiedTextCohortPlansMetricChangingInlineStyleAndDecoration(t *tes
 	if _, err := plan.CaptureDisplayPage(1); err != nil {
 		t.Fatalf("decoration display capture: %v", err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatalf("decoration PDF replay: %v", err)
 	}
 }
 
 func TestHTMLUnifiedTableCellPlansMetricChangingInlineStyle(t *testing.T) {
-	compiled, err := CompileHTML(`<table><tbody><tr><td>before <span style="font-size:18pt">larger</span> after</td></tr></tbody></table>`)
+	compiled, err := compileHTML(`<table><tbody><tr><td>before <span style="font-size:18pt">larger</span> after</td></tr></tbody></table>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := paginationTestDocument(t, 160)
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || plan.PageCount() == 0 || planner.PageCount() != 0 {
 		t.Fatalf("metric-changing table cell = plan %q pages %d, %v", plan.Hash(), planner.PageCount(), err)
 	}
@@ -202,11 +202,11 @@ func TestHTMLUnifiedTableCellPlansMetricChangingInlineStyle(t *testing.T) {
 	if !hasLargerSize {
 		t.Fatalf("metric-changing table cell did not retain the inline font size: %#v", plan.plan.Projection().GlyphRuns)
 	}
-	decorated, err := CompileHTML(`<table><tbody><tr><td><span style="text-decoration:underline">underlined</span></td></tr></tbody></table>`)
+	decorated, err := compileHTML(`<table><tbody><tr><td><span style="text-decoration:underline">underlined</span></td></tr></tbody></table>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoratedPlan, err := paginationTestDocument(t, 160).PlanCompiledHTML(12, decorated)
+	decoratedPlan, err := paginationTestDocument(t, 160).planCompiledHTML(12, decorated)
 	if err != nil || decoratedPlan.Hash() == "" {
 		t.Fatalf("decorated metric-changing table cell = plan %q, %v", decoratedPlan.Hash(), err)
 	}
@@ -222,7 +222,7 @@ func TestHTMLUnifiedTableCellPlansMetricChangingInlineStyle(t *testing.T) {
 }
 
 func TestHTMLUnifiedListsRetainResolvedTextLinksSemanticsAndBreakPolicy(t *testing.T) {
-	compiled, err := CompileHTML(`<style>ol,li,dt,dd{font-family:Courier;font-size:10pt;line-height:12pt}</style>` +
+	compiled, err := compileHTML(`<style>ol,li,dt,dd{font-family:Courier;font-size:10pt;line-height:12pt}</style>` +
 		`<p>first page</p><ol style="break-before:page;break-inside:avoid"><li>one <strong>bold</strong></li>` +
 		`<li><a href="https://example.test/item">linked item</a></li></ol>` +
 		`<dl><dt style="break-inside:avoid">Term</dt><dd>Definition</dd></dl>`)
@@ -230,7 +230,7 @@ func TestHTMLUnifiedListsRetainResolvedTextLinksSemanticsAndBreakPolicy(t *testi
 		t.Fatal(err)
 	}
 	planner := paginationTestDocument(t, 140)
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.PageCount() != 2 {
 		t.Fatalf("list plan pages = %d, %v", plan.PageCount(), err)
 	}
@@ -262,11 +262,11 @@ func TestHTMLUnifiedListsRetainResolvedTextLinksSemanticsAndBreakPolicy(t *testi
 }
 
 func TestHTMLUnifiedTextPlanIsDetachedCancelableAndConcurrent(t *testing.T) {
-	compiled, err := CompileHTML(`<p style="font-family:Courier">stable <strong>content</strong> <a href="https://example.test/stable">link</a></p>`)
+	compiled, err := compileHTML(`<p style="font-family:Courier">stable <strong>content</strong> <a href="https://example.test/stable">link</a></p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	base, err := paginationTestDocument(t, 100).PlanCompiledHTML(12, compiled)
+	base, err := paginationTestDocument(t, 100).planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestHTMLUnifiedTextPlanIsDetachedCancelableAndConcurrent(t *testing.T) {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+			target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 			if _, writeErr := target.WriteLayoutDocumentPlan(base); writeErr != nil {
 				errs <- writeErr
 				return
@@ -302,7 +302,7 @@ func TestHTMLUnifiedTextPlanIsDetachedCancelableAndConcurrent(t *testing.T) {
 
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	plan, err := paginationTestDocument(t, 100).PlanCompiledHTMLContext(canceled, 12, compiled)
+	plan, err := paginationTestDocument(t, 100).planCompiledHTMLContext(canceled, 12, compiled)
 	if !errors.Is(err, context.Canceled) || plan.Hash() != "" {
 		t.Fatalf("canceled plan = %q, %v", plan.Hash(), err)
 	}

@@ -69,7 +69,7 @@ func QRCodePNG(payload string, sizePx int) ([]byte, error) {
 
 // RegisterQRCodePNG registers a QR code as a PNG image and returns its image
 // name for subsequent ImageOptions calls.
-func (f *Document) RegisterQRCodePNG(payload string, sizePx int) (string, error) {
+func (f *pdfDocument) RegisterQRCodePNG(payload string, sizePx int) (string, error) {
 	if f == nil {
 		return "", errors.New("document is nil")
 	}

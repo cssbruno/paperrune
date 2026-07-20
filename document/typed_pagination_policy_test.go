@@ -13,11 +13,11 @@ import (
 	"github.com/cssbruno/paperrune/layout"
 )
 
-func paginationTestDocument(t *testing.T, height float64, options ...Option) *Document {
+func paginationTestDocument(t *testing.T, height float64, options ...Option) *pdfDocument {
 	t.Helper()
 	base := []Option{WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 140, Ht: height}), WithNoCompression()}
 	base = append(base, options...)
-	doc := MustNew(base...)
+	doc := mustNewPDFDocument(base...)
 	doc.SetMargins(10, 10, 10)
 	doc.SetAutoPageBreak(true, 10)
 	return doc

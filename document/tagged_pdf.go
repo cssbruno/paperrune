@@ -93,14 +93,14 @@ type taggedContentOptions struct {
 
 // EnableTaggedPDF enables structure-tree and marked-content output. PDF/UA-2
 // metadata enables this automatically.
-func (f *Document) EnableTaggedPDF() {
+func (f *pdfDocument) EnableTaggedPDF() {
 	f.tagged.enabled = true
 	f.setMinimumPDFVersion("2.0")
 }
 
 // SetNextTextRole sets the structure role for the next text operation. Common
 // values are P, H1-H6, L, LI, Lbl, LBody, Caption, Span, and Link.
-func (f *Document) SetNextTextRole(role string) {
+func (f *pdfDocument) SetNextTextRole(role string) {
 	role = normalizeTaggedRole(role)
 	if role == "" {
 		f.SetErrorf("invalid tagged PDF role")
@@ -110,13 +110,13 @@ func (f *Document) SetNextTextRole(role string) {
 }
 
 // SetNextTextArtifact marks the next text operation as an artifact.
-func (f *Document) SetNextTextArtifact() {
+func (f *pdfDocument) SetNextTextArtifact() {
 	f.tagged.nextText = taggedContentOptions{Artifact: true}
 }
 
 // BeginStructure starts a tagged PDF structure container. Containers define
 // reading order and semantic grouping for subsequent marked content.
-func (f *Document) BeginStructure(role string) {
+func (f *pdfDocument) BeginStructure(role string) {
 	if !f.tagged.enabled {
 		return
 	}
@@ -137,11 +137,11 @@ func (f *Document) BeginStructure(role string) {
 // BeginTableCellStructure starts a tagged TH or TD structure and attaches its
 // validated PDF/UA scope and span attributes. Call EndStructure after writing
 // the cell's content.
-func (f *Document) BeginTableCellStructure(role string, options TableCellStructureOptions) {
+func (f *pdfDocument) BeginTableCellStructure(role string, options TableCellStructureOptions) {
 	f.beginTableCellStructure(role, taggedTableAttributes(options))
 }
 
-func (f *Document) beginTableCellStructure(role string, attrs taggedTableAttributes) {
+func (f *pdfDocument) beginTableCellStructure(role string, attrs taggedTableAttributes) {
 	if !f.tagged.enabled {
 		return
 	}
@@ -154,7 +154,7 @@ func (f *Document) beginTableCellStructure(role string, attrs taggedTableAttribu
 }
 
 // EndStructure closes the most recent structure container.
-func (f *Document) EndStructure() {
+func (f *pdfDocument) EndStructure() {
 	if !f.tagged.enabled {
 		return
 	}
@@ -167,7 +167,7 @@ func (f *Document) EndStructure() {
 
 // BeginArtifact marks subsequent low-level drawing operations as artifact
 // content until EndArtifact is called.
-func (f *Document) BeginArtifact() {
+func (f *pdfDocument) BeginArtifact() {
 	if f.tagged.enabled {
 		if f.tagged.artifactDepth == 0 {
 			f.outbytes(f.beginTaggedContent(taggedContentOptions{Artifact: true}))
@@ -177,7 +177,7 @@ func (f *Document) BeginArtifact() {
 }
 
 // EndArtifact closes an artifact content span started with BeginArtifact.
-func (f *Document) EndArtifact() {
+func (f *pdfDocument) EndArtifact() {
 	if f.tagged.enabled {
 		if f.tagged.artifactDepth <= 0 {
 			f.SetErrorf("tagged PDF artifact stack is empty")
@@ -190,21 +190,21 @@ func (f *Document) EndArtifact() {
 	}
 }
 
-func (f *Document) beginPathArtifact() {
+func (f *pdfDocument) beginPathArtifact() {
 	if f.tagged.enabled && !f.tagged.pathArtifactOpen {
 		f.BeginArtifact()
 		f.tagged.pathArtifactOpen = true
 	}
 }
 
-func (f *Document) endPathArtifact() {
+func (f *pdfDocument) endPathArtifact() {
 	if f.tagged.enabled && f.tagged.pathArtifactOpen {
 		f.tagged.pathArtifactOpen = false
 		f.EndArtifact()
 	}
 }
 
-func (f *Document) taggedBeginPage(page int) {
+func (f *pdfDocument) taggedBeginPage(page int) {
 	if !f.tagged.enabled {
 		return
 	}
@@ -216,14 +216,14 @@ func (f *Document) taggedBeginPage(page int) {
 	}
 }
 
-func (f *Document) taggedPageStructParents(page int) int {
+func (f *pdfDocument) taggedPageStructParents(page int) int {
 	if !f.tagged.enabled || page <= 0 || page >= len(f.tagged.pageStructParents) {
 		return -1
 	}
 	return f.tagged.pageStructParents[page]
 }
 
-func (f *Document) consumeNextTextTag(link bool) taggedContentOptions {
+func (f *pdfDocument) consumeNextTextTag(link bool) taggedContentOptions {
 	tag := f.tagged.nextText
 	f.tagged.nextText = taggedContentOptions{}
 	if !f.tagged.enabled {
@@ -246,7 +246,7 @@ func (f *Document) consumeNextTextTag(link bool) taggedContentOptions {
 	return tag
 }
 
-func (f *Document) validateTaggedImageOptions(tag taggedContentOptions) bool {
+func (f *pdfDocument) validateTaggedImageOptions(tag taggedContentOptions) bool {
 	if !f.tagged.enabled || tag.Artifact {
 		return true
 	}
@@ -257,7 +257,7 @@ func (f *Document) validateTaggedImageOptions(tag taggedContentOptions) bool {
 	return true
 }
 
-func (f *Document) outTaggedContent(content []byte, tag taggedContentOptions) {
+func (f *pdfDocument) outTaggedContent(content []byte, tag taggedContentOptions) {
 	if !f.tagged.enabled || len(content) == 0 || (tag.Artifact && f.tagged.artifactDepth > 0) {
 		f.outbytes(content)
 		return
@@ -276,7 +276,7 @@ func (f *Document) outTaggedContent(content []byte, tag taggedContentOptions) {
 	f.writeRawByte('\n')
 }
 
-func (f *Document) beginTaggedContent(tag taggedContentOptions) []byte {
+func (f *pdfDocument) beginTaggedContent(tag taggedContentOptions) []byte {
 	if !f.tagged.enabled {
 		return nil
 	}
@@ -304,7 +304,7 @@ func (f *Document) beginTaggedContent(tag taggedContentOptions) []byte {
 // an already materialized plan semantic element. Unlike registerTaggedElement,
 // this keeps one structure element for a semantic node even when its content
 // is split across glyph runs, fragments, or pages.
-func (f *Document) registerPreparedSemanticElement(elem *taggedElement) int {
+func (f *pdfDocument) registerPreparedSemanticElement(elem *taggedElement) int {
 	if !f.tagged.enabled || elem == nil || f.page <= 0 {
 		return -1
 	}
@@ -320,7 +320,7 @@ func (f *Document) registerPreparedSemanticElement(elem *taggedElement) int {
 	return mcid
 }
 
-func (f *Document) beginPreparedTaggedContent(role string, mcid int) []byte {
+func (f *pdfDocument) beginPreparedTaggedContent(role string, mcid int) []byte {
 	if !f.tagged.enabled || mcid < 0 {
 		return nil
 	}
@@ -337,7 +337,7 @@ func (f *Document) beginPreparedTaggedContent(role string, mcid int) []byte {
 	return out
 }
 
-func (f *Document) registerTaggedElement(role, alt string) (*taggedElement, int) {
+func (f *pdfDocument) registerTaggedElement(role, alt string) (*taggedElement, int) {
 	page := f.page
 	if page <= 0 {
 		return &taggedElement{Role: role, MCID: 0}, 0
@@ -365,14 +365,14 @@ func (f *Document) registerTaggedElement(role, alt string) (*taggedElement, int)
 	return elem, mcid
 }
 
-func (f *Document) currentStructureParent() *taggedElement {
+func (f *pdfDocument) currentStructureParent() *taggedElement {
 	if len(f.tagged.stack) == 0 {
 		return nil
 	}
 	return f.tagged.stack[len(f.tagged.stack)-1]
 }
 
-func (f *Document) taggedLinkAnnotation() (*taggedElement, int) {
+func (f *pdfDocument) taggedLinkAnnotation() (*taggedElement, int) {
 	if !f.tagged.enabled {
 		return nil, -1
 	}
@@ -392,7 +392,7 @@ func (f *Document) taggedLinkAnnotation() (*taggedElement, int) {
 	return elem, key
 }
 
-func (f *Document) putTaggedPDF() {
+func (f *pdfDocument) putTaggedPDF() {
 	if !f.tagged.enabled {
 		return
 	}
@@ -414,7 +414,7 @@ func (f *Document) putTaggedPDF() {
 	f.putTaggedStructTreeRoot()
 }
 
-func (f *Document) putTaggedElement(elem *taggedElement) {
+func (f *pdfDocument) putTaggedElement(elem *taggedElement) {
 	f.newPDFDictObject()
 	f.out("/Type /StructElem")
 	f.outf("/S /%s", elem.Role)
@@ -466,7 +466,7 @@ func (f *Document) putTaggedElement(elem *taggedElement) {
 	f.endPDFObject()
 }
 
-func (f *Document) taggedTableAttributeString(elem *taggedElement) string {
+func (f *pdfDocument) taggedTableAttributeString(elem *taggedElement) string {
 	if elem == nil || (elem.Table.Scope == "" && elem.Table.RowSpan <= 1 && elem.Table.ColSpan <= 1) {
 		return ""
 	}
@@ -524,7 +524,7 @@ func taggedElementKidCount(elem *taggedElement) int {
 	return count
 }
 
-func (f *Document) appendTaggedElementKids(out []byte, elem *taggedElement, trailingSpaces bool) []byte {
+func (f *pdfDocument) appendTaggedElementKids(out []byte, elem *taggedElement, trailingSpaces bool) []byte {
 	if elem.MCID >= 0 {
 		out = f.appendTaggedMCR(out, elem.Page, elem.MCID)
 		if trailingSpaces {
@@ -554,7 +554,7 @@ func (f *Document) appendTaggedElementKids(out []byte, elem *taggedElement, trai
 	return out
 }
 
-func (f *Document) appendTaggedMCR(out []byte, page, mcid int) []byte {
+func (f *pdfDocument) appendTaggedMCR(out []byte, page, mcid int) []byte {
 	out = append(out, "<< /Type /MCR /Pg "...)
 	out = appendPDFObjectRef(out, f.tagged.pageObjNums[page])
 	out = append(out, " /MCID "...)
@@ -563,7 +563,7 @@ func (f *Document) appendTaggedMCR(out []byte, page, mcid int) []byte {
 	return out
 }
 
-func (f *Document) putTaggedDocumentElement() {
+func (f *pdfDocument) putTaggedDocumentElement() {
 	f.newPDFDictObject()
 	f.out("/Type /StructElem")
 	f.out("/S /Document")
@@ -593,7 +593,7 @@ func (f *Document) putTaggedDocumentElement() {
 	f.endPDFObject()
 }
 
-func (f *Document) putTaggedParentTree() {
+func (f *pdfDocument) putTaggedParentTree() {
 	f.newPDFDictObject()
 	nums := make([]byte, 0, 64)
 	nums = append(nums, "/Nums ["...)
@@ -625,7 +625,7 @@ func (f *Document) putTaggedParentTree() {
 	f.endPDFObject()
 }
 
-func (f *Document) putTaggedStructTreeRoot() {
+func (f *pdfDocument) putTaggedStructTreeRoot() {
 	f.newPDFDictObject()
 	f.out("/Type /StructTreeRoot")
 	f.outf("/K %d 0 R", f.tagged.documentElemObj)
@@ -637,7 +637,7 @@ func (f *Document) putTaggedStructTreeRoot() {
 	f.endPDFObject()
 }
 
-func (f *Document) putTaggedNamespace() {
+func (f *pdfDocument) putTaggedNamespace() {
 	f.newPDFDictObject()
 	f.out("/Type /Namespace")
 	f.out("/NS (http://iso.org/pdf2/ssn)")

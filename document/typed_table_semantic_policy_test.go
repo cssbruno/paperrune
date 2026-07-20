@@ -26,7 +26,7 @@ func TestTypedTableListItemsOwnDistinctContentFragmentsAndPDFStructure(t *testin
 		Columns: []layout.TableColumn{{Width: 160}},
 		Body:    []layout.TableRow{{Cells: []layout.TableCell{{Blocks: []layout.Block{list}}}}},
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(10, 10, 10)
 	planner.EnableTaggedPDF()
 	planner.SetComplianceMetadata(ComplianceMetadata{PDFUA2: true, Title: "Typed list table", Lang: "en-US"})
@@ -67,7 +67,7 @@ func TestTypedTableListItemsOwnDistinctContentFragmentsAndPDFStructure(t *testin
 	if items != 3 || ownedParagraphs != 3 || len(distinctItems) != 3 || len(projection.SemanticFragments) != len(projection.Fragments) {
 		t.Fatalf("list semantic ownership items=%d paragraphs=%d distinct=%d nodes=%+v associations=%+v", items, ownedParagraphs, len(distinctItems), projection.SemanticNodes, projection.SemanticFragments)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestTypedTableCaptionPreservesMixedRunsAndExactLinks(t *testing.T) {
 		Columns: []layout.TableColumn{{Width: 160}},
 		Body:    []layout.TableRow{{Cells: []layout.TableCell{{Blocks: []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "body"}}}}}}}},
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(10, 10, 10)
 	plan, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Language: "en-US", Body: []layout.Block{table}})
 	if err != nil {
@@ -133,7 +133,7 @@ func TestTypedTablePoliciesReachPlanBreaksRelaxationAndCancellation(t *testing.T
 	for index := 0; index < 5; index++ {
 		table.Body = append(table.Body, layout.TableRow{KeepTogether: true, Cells: []layout.TableCell{{Box: layout.BoxStyle{KeepTogether: true}, Blocks: paragraph(string(rune('A' + index)))}}})
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(10, 10, 10)
 	plan, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{table}})
 	if err != nil || plan.PageCount() != 3 {
@@ -155,7 +155,7 @@ func TestTypedTablePoliciesReachPlanBreaksRelaxationAndCancellation(t *testing.T
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	atomic := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}))
+	atomic := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}))
 	atomic.SetMargins(10, 10, 10)
 	zero, err := atomic.PlanLayoutDocumentContext(canceled, &layout.LayoutDocument{Body: []layout.Block{table}})
 	if !errors.Is(err, context.Canceled) || zero.Hash() != "" || atomic.PageCount() != 0 {
@@ -171,7 +171,7 @@ func TestTypedTableKeepWithNextMovesExactTableAndTextChain(t *testing.T) {
 		Columns: []layout.TableColumn{{Width: 80}}, Box: layout.BoxStyle{KeepWithNext: true},
 		Body: []layout.TableRow{{KeepTogether: true, Cells: []layout.TableCell{{Blocks: []layout.Block{paragraph("table\nrow")}}}}},
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(10, 10, 10)
 	planner.SetAutoPageBreak(true, 10)
 	plan, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{paragraph("before-1\nbefore-2\nbefore-3\nbefore-4\nbefore-5"), table, paragraph("after-1\nafter-2")}})

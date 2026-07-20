@@ -20,16 +20,16 @@ func TestHTMLUnifiedNestedFlexPlansRecursivelyWithSemanticsAndReplay(t *testing.
 		`<section style="display:flex;flex-direction:column;flex:0 0 90pt;gap:4pt;align-items:stretch">` +
 		`<p style="flex:0 0 18pt">Nested one</p><h2 style="flex:0 0 18pt">Nested two</h2></section>` +
 		`<p style="flex:1 1 0">Outer peer</p></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	first, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	first, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	second, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil || first.Hash() == "" || first.Hash() != second.Hash() {
 		t.Fatalf("nested plan determinism = %q/%q err=%v", first.Hash(), second.Hash(), err)
 	}
@@ -55,7 +55,7 @@ func TestHTMLUnifiedNestedFlexPlansRecursivelyWithSemanticsAndReplay(t *testing.
 	render := func() ([]byte, float64) {
 		pdf := newHTMLFrameTestDocument(t, 160)
 		pdf.SetXY(16, 42)
-		html := pdf.HTMLNew()
+		html := pdf.htmlNew()
 		if err := html.WriteContext(context.Background(), 12, source); err != nil {
 			t.Fatal(err)
 		}
@@ -75,12 +75,12 @@ func TestHTMLUnifiedNestedFlexPlansRecursivelyWithSemanticsAndReplay(t *testing.
 func TestHTMLUnifiedWrappedColumnResolvesBoundedIntrinsicWidth(t *testing.T) {
 	source := `<div style="display:flex;flex-direction:column;flex-wrap:wrap;gap:5pt 7pt;align-content:flex-start;align-items:flex-start">` +
 		`<p style="flex:0 0 50pt">Alpha</p><p style="flex:0 0 50pt">Longer beta</p><p style="flex:0 0 50pt">Gamma</p></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestHTMLUnifiedWrappedColumnResolvesBoundedIntrinsicWidth(t *testing.T) {
 	if third.X+third.Width > 220*1024 {
 		t.Fatalf("intrinsic wrapped column escaped body: %+v", projection.Fragments)
 	}
-	secondPlan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	secondPlan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil || plan.Hash() == "" || plan.Hash() != secondPlan.Hash() || len(projection.ReadingOrder) != 3 {
 		t.Fatalf("intrinsic wrapped column determinism/semantics hash=%q/%q reading=%+v err=%v", plan.Hash(), secondPlan.Hash(), projection.ReadingOrder, err)
 	}
@@ -110,7 +110,7 @@ func TestHTMLUnifiedWrappedColumnResolvesBoundedIntrinsicWidth(t *testing.T) {
 
 func TestHTMLUnifiedNestedFlexConcurrentReuseAndDepthFailureAreAtomic(t *testing.T) {
 	source := `<div style="display:flex"><section style="display:flex;flex-direction:column;flex:0 0 80pt"><p style="flex:0 0 18pt">A</p></section><p style="flex:1 1 0">B</p></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestHTMLUnifiedNestedFlexConcurrentReuseAndDepthFailureAreAtomic(t *testing
 		group.Add(1)
 		go func(index int) {
 			defer group.Done()
-			plan, planErr := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			plan, planErr := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			errs[index], hashes[index] = planErr, plan.Hash()
 		}(index)
 	}
@@ -144,21 +144,21 @@ func TestHTMLUnifiedNestedFlexConcurrentReuseAndDepthFailureAreAtomic(t *testing
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	plan, err = target.PlanCompiledHTMLContext(canceled, 12, compiled)
+	plan, err = target.planCompiledHTMLContext(canceled, 12, compiled)
 	if !errors.Is(err, context.Canceled) || plan.Hash() != "" || target.PageCount() != 0 {
 		t.Fatalf("canceled nested plan=%#v pages=%d err=%v", plan, target.PageCount(), err)
 	}
 }
 
 func BenchmarkHTMLUnifiedNestedFlexPlanning(b *testing.B) {
-	compiled, err := CompileHTML(`<div style="display:flex;gap:8pt"><section style="display:flex;flex-direction:column;flex:0 0 90pt;gap:3pt"><p style="flex:0 0 18pt">A</p><p style="flex:0 0 18pt">B</p></section><p style="flex:1 1 0">C</p></div>`)
+	compiled, err := compileHTML(`<div style="display:flex;gap:8pt"><section style="display:flex;flex-direction:column;flex:0 0 90pt;gap:3pt"><p style="flex:0 0 18pt">A</p><p style="flex:0 0 18pt">B</p></section><p style="flex:1 1 0">C</p></div>`)
 	if err != nil {
 		b.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
 	b.ReportAllocs()
 	for index := 0; index < b.N; index++ {
-		if _, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
+		if _, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
 			b.Fatal(err)
 		}
 	}

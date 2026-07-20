@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/paperrune/document"
 	"github.com/cssbruno/paperrune/font"
 	"github.com/cssbruno/paperrune/internal/testsupport/example"
 )
@@ -130,25 +129,6 @@ func TestMakeOpenTypeCFF(t *testing.T) {
 		t.Fatalf("embedded CFF = %x, want %x", embedded, cffData)
 	}
 
-	zBytes, err := os.ReadFile(filepath.Join(dir, "minimal.z"))
-	if err != nil {
-		t.Fatalf("read generated compressed font: %s", err)
-	}
-	pdf := document.MustNew()
-	pdf.AddFontFromBytes("Minimal", "", def, zBytes)
-	pdf.SetFont("Minimal", "", 12)
-	pdf.AddPage()
-	pdf.Text(10, 10, "A")
-	var out bytes.Buffer
-	err = pdf.Output(&out)
-	if err != nil {
-		t.Fatalf("output PDF with OpenType/CFF font: %s", err)
-	}
-	for _, want := range []string{"/Subtype /Type1C", "/FontFile3"} {
-		if !bytes.Contains(out.Bytes(), []byte(want)) {
-			t.Fatalf("PDF missing %s", want)
-		}
-	}
 }
 
 func minimalOpenTypeCFF(cffData []byte) []byte {
@@ -328,22 +308,4 @@ func hexStr(s string) string {
 	}
 	b.WriteString("\":")
 	return b.String()
-}
-
-func ExampleDocument_GetStringWidth() {
-	pdf := document.MustNew(document.WithFontDir(example.FontDir()))
-	pdf.SetFont("Helvetica", "", 12)
-	pdf.AddPage()
-	for _, s := range []string{"Hello", "世界", "\xe7a va?"} {
-		fmt.Printf("%-32s width %5.2f, bytes %2d, runes %2d\n",
-			hexStr(s), pdf.GetStringWidth(s), len(s), len([]rune(s)))
-		if pdf.Err() {
-			fmt.Println(pdf.Error())
-		}
-	}
-	pdf.Close()
-	// Output:
-	// "\x48\x65\x6c\x6c\x6f":          width  9.64, bytes  5, runes  5
-	// "\xe4\xb8\x96\xe7\x95\x8c":      width 13.95, bytes  6, runes  2
-	// "\xe7\x61\x20\x76\x61\x3f":      width 12.47, bytes  6, runes  6
 }

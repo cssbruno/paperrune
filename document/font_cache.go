@@ -180,13 +180,13 @@ func newCachedUTF8Font(fontKey, fontPath string, data []byte) (cachedUTF8Font, e
 }
 
 // AddUTF8FontFromCache imports a cached UTF-8 TrueType font into this document.
-func (f *Document) AddUTF8FontFromCache(family, style string, cache *FontCache) {
+func (f *pdfDocument) AddUTF8FontFromCache(family, style string, cache *FontCache) {
 	_ = f.AddUTF8FontFromCacheError(family, style, cache)
 }
 
 // AddUTF8FontFromCacheError imports a cached UTF-8 TrueType font into this
 // document and returns failures directly.
-func (f *Document) AddUTF8FontFromCacheError(family, style string, cache *FontCache) error {
+func (f *pdfDocument) AddUTF8FontFromCacheError(family, style string, cache *FontCache) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -210,7 +210,7 @@ func (f *Document) AddUTF8FontFromCacheError(family, style string, cache *FontCa
 	return f.err
 }
 
-func (f *Document) addCachedUTF8Font(fontKey, family, style string, cached cachedUTF8Font) {
+func (f *pdfDocument) addCachedUTF8Font(fontKey, family, style string, cached cachedUTF8Font) {
 	def := cached.def
 	def.File = ""
 	def.Name = fontKey

@@ -49,7 +49,7 @@ func htmlImageTypeFromMime(mimeType string) string {
 	}
 }
 
-func htmlCollectElementTokens(tokens []HTMLSegmentType, start int, tag string) ([]HTMLSegmentType, int) {
+func htmlCollectElementTokens(tokens []htmlSegmentType, start int, tag string) ([]htmlSegmentType, int) {
 	if start < 0 || start >= len(tokens) {
 		return nil, len(tokens) - 1
 	}
@@ -68,12 +68,12 @@ func htmlCollectElementTokens(tokens []HTMLSegmentType, start int, tag string) (
 	return tokens[start:], len(tokens) - 1
 }
 
-func htmlSkipElement(tokens []HTMLSegmentType, start int, tag string) int {
+func htmlSkipElement(tokens []htmlSegmentType, start int, tag string) int {
 	_, end := htmlCollectElementTokens(tokens, start, tag)
 	return end
 }
 
-func htmlSerializeTokens(tokens []HTMLSegmentType) string {
+func htmlSerializeTokens(tokens []htmlSegmentType) string {
 	var out strings.Builder
 	for _, token := range tokens {
 		switch token.Cat {
@@ -133,7 +133,7 @@ func htmlCanonicalSVGName(name string) string {
 	}
 }
 
-func htmlCollectCSSRules(tokens []HTMLSegmentType) []htmlCSSRule {
+func htmlCollectCSSRules(tokens []htmlSegmentType) []htmlCSSRule {
 	var rules []htmlCSSRule
 	for i := 0; i < len(tokens); i++ {
 		if tokens[i].Cat != 'O' || tokens[i].Str != "style" {
@@ -149,7 +149,7 @@ func htmlCollectCSSRules(tokens []HTMLSegmentType) []htmlCSSRule {
 	return htmlIndexCSSRules(rules)
 }
 
-func htmlTokenText(tokens []HTMLSegmentType) string {
+func htmlTokenText(tokens []htmlSegmentType) string {
 	var out strings.Builder
 	for _, token := range tokens {
 		if token.Cat == 'T' {
@@ -159,7 +159,7 @@ func htmlTokenText(tokens []HTMLSegmentType) string {
 	return out.String()
 }
 
-func htmlPlainText(tokens []HTMLSegmentType) string {
+func htmlPlainText(tokens []htmlSegmentType) string {
 	var out strings.Builder
 	needSpace, lastWasNewline := false, false
 	for _, token := range tokens {
@@ -193,7 +193,7 @@ func htmlPlainText(tokens []HTMLSegmentType) string {
 	return strings.TrimSpace(out.String())
 }
 
-func htmlPlainTextWithMode(tokens []HTMLSegmentType, preserveWhitespace bool) string {
+func htmlPlainTextWithMode(tokens []htmlSegmentType, preserveWhitespace bool) string {
 	if !preserveWhitespace {
 		return htmlPlainText(tokens)
 	}

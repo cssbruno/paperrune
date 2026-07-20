@@ -30,7 +30,7 @@ import (
 // time with odd-numbered pages on the left, or "TwoPageRight" to display pages
 // two at a time with odd-numbered pages on the right, or "default" to use the
 // viewer default mode.
-func (f *Document) SetDisplayMode(zoomStr, layoutStr string) {
+func (f *pdfDocument) SetDisplayMode(zoomStr, layoutStr string) {
 	if f.err != nil {
 		return
 	}
@@ -57,7 +57,7 @@ func (f *Document) SetDisplayMode(zoomStr, layoutStr string) {
 // activated, the internal representation of each page is compressed, which
 // leads to a compression ratio of about 2 for the resulting document.
 // Compression is on by default.
-func (f *Document) SetCompression(compress bool) {
+func (f *pdfDocument) SetCompression(compress bool) {
 	if compress && f.compressLevel == zlib.NoCompression {
 		f.compressLevel = zlib.BestSpeed
 	}
@@ -69,7 +69,7 @@ func (f *Document) SetCompression(compress bool) {
 // including zlib.HuffmanOnly, zlib.DefaultCompression, zlib.NoCompression and
 // levels 1 through 9. Passing zlib.NoCompression disables Flate compression for
 // page and template streams, matching SetCompression(false).
-func (f *Document) SetCompressionLevel(level int) {
+func (f *pdfDocument) SetCompressionLevel(level int) {
 	if !validCompressionLevel(level) {
 		f.SetErrorf("invalid compression level: %d", level)
 		return
@@ -161,7 +161,7 @@ func normalizeCompressionPolicy(policy CompressionPolicy) (CompressionPolicy, er
 
 // SetCompressionPolicy sets generated stream compression and background
 // compression worker limits.
-func (f *Document) SetCompressionPolicy(policy CompressionPolicy) error {
+func (f *pdfDocument) SetCompressionPolicy(policy CompressionPolicy) error {
 	policy, err := normalizeCompressionPolicy(policy)
 	if err != nil {
 		f.SetError(err)
@@ -176,7 +176,7 @@ func (f *Document) SetCompressionPolicy(policy CompressionPolicy) error {
 }
 
 // CompressionPolicy returns the document's current compression settings.
-func (f *Document) CompressionPolicy() CompressionPolicy {
+func (f *pdfDocument) CompressionPolicy() CompressionPolicy {
 	return CompressionPolicy{
 		Mode:                     compressionModeForEnabled(f.compress),
 		Level:                    f.compressLevel,
@@ -196,7 +196,7 @@ func compressionModeForEnabled(enabled bool) CompressionMode {
 // SetPageCompressionWorkers sets how many goroutines may compress page streams
 // during output. Passing 0 disables background page compression; pages are then
 // compressed synchronously as they are written.
-func (f *Document) SetPageCompressionWorkers(workers int) {
+func (f *pdfDocument) SetPageCompressionWorkers(workers int) {
 	if workers < 0 {
 		f.SetErrorf("invalid page compression workers: %d", workers)
 		return
@@ -208,7 +208,7 @@ func (f *Document) SetPageCompressionWorkers(workers int) {
 // embedded attachments during output. Passing 0 disables background attachment
 // compression; attachments are then compressed synchronously as they are
 // embedded.
-func (f *Document) SetAttachmentCompressionWorkers(workers int) {
+func (f *pdfDocument) SetAttachmentCompressionWorkers(workers int) {
 	if workers < 0 {
 		f.SetErrorf("invalid attachment compression workers: %d", workers)
 		return
@@ -217,11 +217,11 @@ func (f *Document) SetAttachmentCompressionWorkers(workers int) {
 }
 
 // SetNoCompression disables Flate compression for page and template streams.
-func (f *Document) SetNoCompression() {
+func (f *pdfDocument) SetNoCompression() {
 	f.SetCompressionLevel(zlib.NoCompression)
 }
 
-func (f *Document) compressBytes(data []byte) []byte {
+func (f *pdfDocument) compressBytes(data []byte) []byte {
 	level := f.compressLevel
 	if !validCompressionLevel(level) {
 		level = defaultCompressionLevel()
@@ -240,7 +240,7 @@ func defaultCompressionLevel() int {
 
 const defaultTinyStreamCompressionThreshold = 32
 
-func (f *Document) compressStreamBytes(data []byte) ([]byte, bool) {
+func (f *pdfDocument) compressStreamBytes(data []byte) ([]byte, bool) {
 	threshold := f.compressionTinyStreamThreshold
 	if threshold <= 0 {
 		threshold = defaultTinyStreamCompressionThreshold
@@ -256,7 +256,7 @@ func (f *Document) compressStreamBytes(data []byte) ([]byte, bool) {
 // string "{nb}".
 //
 // See the example for AddPage for a demonstration of this method.
-func (f *Document) AliasNbPages(aliasStr string) {
+func (f *pdfDocument) AliasNbPages(aliasStr string) {
 	if aliasStr == "" {
 		aliasStr = "{nb}"
 	}
@@ -266,17 +266,17 @@ func (f *Document) AliasNbPages(aliasStr string) {
 }
 
 // RTL enables right-to-left text layout mode.
-func (f *Document) RTL() {
+func (f *pdfDocument) RTL() {
 	f.isRTL = true
 }
 
 // LTR disables right-to-left text layout mode.
-func (f *Document) LTR() {
+func (f *pdfDocument) LTR() {
 	f.isRTL = false
 }
 
 // open starts a PDF document.
-func (f *Document) open() {
+func (f *pdfDocument) open() {
 	f.state = documentStateOpen
 }
 
@@ -284,11 +284,11 @@ func (f *Document) open() {
 // explicitly because Output, OutputAndClose, and OutputFileAndClose do it
 // automatically. If the document contains no page, AddPage is called to
 // prevent the generation of an invalid document.
-func (f *Document) Close() {
+func (f *pdfDocument) Close() {
 	f.closeContext(context.Background())
 }
 
-func (f *Document) closeContext(ctx context.Context) {
+func (f *pdfDocument) closeContext(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

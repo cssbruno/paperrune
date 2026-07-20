@@ -5,7 +5,7 @@ package document
 
 // SetProducer sets the document producer. isUTF8 indicates whether producerStr
 // is encoded as ISO-8859-1 (false) or UTF-8 (true).
-func (f *Document) SetProducer(producerStr string, isUTF8 bool) {
+func (f *pdfDocument) SetProducer(producerStr string, isUTF8 bool) {
 	if isUTF8 {
 		producerStr = utf8toutf16(producerStr)
 	}
@@ -14,7 +14,7 @@ func (f *Document) SetProducer(producerStr string, isUTF8 bool) {
 
 // SetTitle sets the document title. isUTF8 indicates whether titleStr is
 // encoded as ISO-8859-1 (false) or UTF-8 (true).
-func (f *Document) SetTitle(titleStr string, isUTF8 bool) {
+func (f *pdfDocument) SetTitle(titleStr string, isUTF8 bool) {
 	if isUTF8 {
 		titleStr = utf8toutf16(titleStr)
 	}
@@ -23,7 +23,7 @@ func (f *Document) SetTitle(titleStr string, isUTF8 bool) {
 
 // SetSubject sets the document subject. isUTF8 indicates whether subjectStr is
 // encoded as ISO-8859-1 (false) or UTF-8 (true).
-func (f *Document) SetSubject(subjectStr string, isUTF8 bool) {
+func (f *pdfDocument) SetSubject(subjectStr string, isUTF8 bool) {
 	if isUTF8 {
 		subjectStr = utf8toutf16(subjectStr)
 	}
@@ -32,7 +32,7 @@ func (f *Document) SetSubject(subjectStr string, isUTF8 bool) {
 
 // SetAuthor sets the document author. isUTF8 indicates whether authorStr is
 // encoded as ISO-8859-1 (false) or UTF-8 (true).
-func (f *Document) SetAuthor(authorStr string, isUTF8 bool) {
+func (f *pdfDocument) SetAuthor(authorStr string, isUTF8 bool) {
 	if isUTF8 {
 		authorStr = utf8toutf16(authorStr)
 	}
@@ -42,7 +42,7 @@ func (f *Document) SetAuthor(authorStr string, isUTF8 bool) {
 // SetKeywords sets the document keywords. keywordsStr is a space-delimited
 // string, for example "invoice August". isUTF8 indicates whether keywordsStr
 // is encoded as ISO-8859-1 (false) or UTF-8 (true).
-func (f *Document) SetKeywords(keywordsStr string, isUTF8 bool) {
+func (f *pdfDocument) SetKeywords(keywordsStr string, isUTF8 bool) {
 	if isUTF8 {
 		keywordsStr = utf8toutf16(keywordsStr)
 	}
@@ -51,7 +51,7 @@ func (f *Document) SetKeywords(keywordsStr string, isUTF8 bool) {
 
 // SetCreator sets the document creator. isUTF8 indicates whether creatorStr is
 // encoded as ISO-8859-1 (false) or UTF-8 (true).
-func (f *Document) SetCreator(creatorStr string, isUTF8 bool) {
+func (f *pdfDocument) SetCreator(creatorStr string, isUTF8 bool) {
 	if isUTF8 {
 		creatorStr = utf8toutf16(creatorStr)
 	}
@@ -59,7 +59,7 @@ func (f *Document) SetCreator(creatorStr string, isUTF8 bool) {
 }
 
 // SetXmpMetadata defines XMP metadata that will be embedded with the document.
-func (f *Document) SetXmpMetadata(xmpStream []byte) {
+func (f *pdfDocument) SetXmpMetadata(xmpStream []byte) {
 	f.xmp = append([]byte(nil), xmpStream...)
 	f.nXmp = 0
 }

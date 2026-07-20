@@ -20,18 +20,16 @@ func TestPlanAndWritePaperRowUsesFixedPointContainerGeometry(t *testing.T) {
 		"    body:\n" +
 		"      row @summary:\n" +
 		"        gap: 10pt\n" +
-		"        cross-align: \"start\"\n" +
+		"        align-items: \"start\"\n" +
 		"        heading @label:\n" +
-		"          track: \"fixed\"\n" +
-		"          track-size: 60pt\n" +
+		"          width: 60pt\n" +
 		"          font: \"Courier\"\n" +
 		"          size: 10pt\n" +
 		"          line-height: 12pt\n" +
 		"          text: \"L\\nL\"\n" +
 		"        paragraph @value:\n" +
-		"          track: \"fraction\"\n" +
-		"          track-weight: 1\n" +
-		"          cross-align: \"end\"\n" +
+		"          width: 1fr\n" +
+		"          align-self: \"end\"\n" +
 		"          font: \"Courier\"\n" +
 		"          size: 10pt\n" +
 		"          line-height: 12pt\n" +
@@ -60,7 +58,7 @@ func TestPlanAndWritePaperRowUsesFixedPointContainerGeometry(t *testing.T) {
 		t.Fatalf("Query(@value) = %s, %v", query.JSON(), err)
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	painted, err := target.WritePaperPlan(plan)
 	if err != nil || painted.Pages != 1 {
 		t.Fatalf("WritePaperPlan() = %#v, %v", painted, err)
@@ -81,7 +79,7 @@ func TestPlanAndWritePaperRowUsesFixedPointContainerGeometry(t *testing.T) {
 }
 
 func TestPlanPaperColumnUsesFixedAndFractionalHeightTracks(t *testing.T) {
-	const source = "document:\n  page:\n    width: 100pt\n    height: 100pt\n    margin: 10pt\n    body:\n      column @stack:\n        gap: 5pt\n        paragraph @top:\n          track: \"fixed\"\n          track-size: 20pt\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"TOP\"\n        paragraph @bottom:\n          track: \"fraction\"\n          track-weight: 1\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"BOTTOM\"\n"
+	const source = "document:\n  page:\n    width: 100pt\n    height: 100pt\n    margin: 10pt\n    body:\n      column @stack:\n        gap: 5pt\n        paragraph @top:\n          height: 20pt\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"TOP\"\n        paragraph @bottom:\n          height: 1fr\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"BOTTOM\"\n"
 	plan, result, err := PlanPaper("column.paper", source)
 	if err != nil || result.Pages != 1 {
 		t.Fatalf("PlanPaper(column) = %#v, %v", result, err)
@@ -94,7 +92,7 @@ func TestPlanPaperColumnUsesFixedAndFractionalHeightTracks(t *testing.T) {
 }
 
 func TestPlanPaperRowResolvesPercentageTracksAgainstContainingWidth(t *testing.T) {
-	const source = "document:\n  page:\n    width: 200pt\n    height: 100pt\n    margin: 10pt\n    body:\n      row:\n        gap: 10pt\n        paragraph @left:\n          track-size: 50%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"LEFT\"\n        paragraph @right:\n          track-size: 50%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"RIGHT\"\n"
+	const source = "document:\n  page:\n    width: 200pt\n    height: 100pt\n    margin: 10pt\n    body:\n      row:\n        gap: 10pt\n        paragraph @left:\n          width: 50%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"LEFT\"\n        paragraph @right:\n          width: 50%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"RIGHT\"\n"
 	plan, result, err := PlanPaper("responsive-row.paper", source)
 	if err != nil || !result.OK() {
 		t.Fatalf("PlanPaper() = %#v, %v", result, err)
@@ -108,7 +106,7 @@ func TestPlanPaperRowResolvesPercentageTracksAgainstContainingWidth(t *testing.T
 
 func TestPlanPaperRowSupportsResponsiveImageChildren(t *testing.T) {
 	const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-	source := "document:\n  page:\n    width: 200pt\n    height: 100pt\n    margin: 10pt\n    body:\n      row @media:\n        image @hero:\n          track-size: 40%\n          source: \"data:image/png;base64," + pixel + "\"\n          width: 100%\n          height: 20pt\n          alt: \"Evidence\"\n        paragraph @copy:\n          track-size: 60%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Caption\"\n"
+	source := "document:\n  page:\n    width: 200pt\n    height: 100pt\n    margin: 10pt\n    body:\n      row @media:\n        image @hero:\n          width: 40%\n          source: \"data:image/png;base64," + pixel + "\"\n          height: 20pt\n          alt: \"Evidence\"\n        paragraph @copy:\n          width: 60%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Caption\"\n"
 	plan, result, err := PlanPaper("row-image.paper", source)
 	if err != nil || !result.OK() || plan.Hash() == "" || plan.PageCount() != 1 {
 		t.Fatalf("PlanPaper() = plan=%#v result=%#v err=%v", plan, result, err)
@@ -120,7 +118,7 @@ func TestPlanPaperRowSupportsResponsiveImageChildren(t *testing.T) {
 }
 
 func TestPlanPaperRowSupportsResponsiveTableChildren(t *testing.T) {
-	const source = "document:\n  page:\n    width: 240pt\n    height: 120pt\n    margin: 10pt\n    body:\n      row @summary:\n        table @facts:\n          track-size: 70%\n          table-track:\n            width: 50%\n          table-track:\n            width: 50%\n          table-row:\n            cell:\n              text: \"Name\"\n            cell:\n              text: \"Value\"\n        paragraph @aside:\n          track-size: 30%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Aside\"\n"
+	const source = "document:\n  page:\n    width: 240pt\n    height: 120pt\n    margin: 10pt\n    body:\n      row @summary:\n        table @facts:\n          width: 70%\n          table-column:\n            width: 50%\n          table-column:\n            width: 50%\n          table-row:\n            cell:\n              text: \"Name\"\n            cell:\n              text: \"Value\"\n        paragraph @aside:\n          width: 30%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Aside\"\n"
 	plan, result, err := PlanPaper("row-table.paper", source)
 	if err != nil || !result.OK() || plan.Hash() == "" || plan.PageCount() != 1 {
 		t.Fatalf("PlanPaper() = plan=%#v result=%#v err=%v", plan, result, err)
@@ -138,7 +136,7 @@ func TestPlanPaperRowSupportsResponsiveTableChildren(t *testing.T) {
 }
 
 func TestPlanPaperRowSupportsWrappedFlexLayoutProperties(t *testing.T) {
-	const source = "document:\n  page:\n    width: 180pt\n    height: 140pt\n    margin: 10pt\n    body:\n      row @wrapped:\n        cross-gap: 4pt\n        cross-size: 80pt\n        wrap: \"wrap\"\n        main-align: \"space-between\"\n        align-content: \"space-around\"\n        paragraph @one:\n          track-size: 70pt\n          track-grow: 1\n          track-shrink: 1\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"One\"\n        paragraph @two:\n          track-size: 70pt\n          track-grow: 1\n          track-shrink: 1\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Two\"\n        paragraph @three:\n          track-size: 70pt\n          track-grow: 1\n          track-shrink: 1\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Three\"\n"
+	const source = "document:\n  page:\n    width: 180pt\n    height: 140pt\n    margin: 10pt\n    body:\n      row @wrapped:\n        line-gap: 4pt\n        height: 80pt\n        wrap: \"wrap\"\n        justify-content: \"space-between\"\n        align-content: \"space-around\"\n        paragraph @one:\n          width: 70pt\n          flex-grow: 1\n          flex-shrink: 1\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"One\"\n        paragraph @two:\n          width: 70pt\n          flex-grow: 1\n          flex-shrink: 1\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Two\"\n        paragraph @three:\n          width: 70pt\n          flex-grow: 1\n          flex-shrink: 1\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Three\"\n"
 	plan, result, err := PlanPaper("wrapped-flex.paper", source)
 	if err != nil || !result.OK() || plan.Hash() == "" || plan.PageCount() != 1 {
 		t.Fatalf("PlanPaper() = plan=%#v result=%#v err=%v", plan, result, err)
@@ -150,7 +148,7 @@ func TestPlanPaperRowSupportsWrappedFlexLayoutProperties(t *testing.T) {
 }
 
 func TestPlanPaperSupportsOneReadableNestedRowColumnLevel(t *testing.T) {
-	const source = "document:\n  page:\n    width: 220pt\n    height: 140pt\n    margin: 10pt\n    body:\n      row @outer:\n        column @details:\n          track-size: 70%\n          gap: 2pt\n          paragraph @first:\n            track-size: 14pt\n            font: \"Courier\"\n            size: 10pt\n            line-height: 12pt\n            text: \"First\"\n          paragraph @second:\n            track-size: 14pt\n            font: \"Courier\"\n            size: 10pt\n            line-height: 12pt\n            text: \"Second\"\n        paragraph @aside:\n          track-size: 30%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Aside\"\n"
+	const source = "document:\n  page:\n    width: 220pt\n    height: 140pt\n    margin: 10pt\n    body:\n      row @outer:\n        column @details:\n          width: 70%\n          gap: 2pt\n          paragraph @first:\n            height: 14pt\n            font: \"Courier\"\n            size: 10pt\n            line-height: 12pt\n            text: \"First\"\n          paragraph @second:\n            height: 14pt\n            font: \"Courier\"\n            size: 10pt\n            line-height: 12pt\n            text: \"Second\"\n        paragraph @aside:\n          width: 30%\n          font: \"Courier\"\n          size: 10pt\n          line-height: 12pt\n          text: \"Aside\"\n"
 	plan, result, err := PlanPaper("nested-layout.paper", source)
 	if err != nil || !result.OK() || plan.Hash() == "" || plan.PageCount() != 1 {
 		t.Fatalf("PlanPaper() = plan=%#v result=%#v err=%v", plan, result, err)

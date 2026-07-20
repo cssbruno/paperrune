@@ -15,7 +15,7 @@ import (
 )
 
 func TestWriteDocumentRendersSharedBlocks(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.Title = "Shared renderer"
@@ -67,7 +67,7 @@ func TestWriteDocumentRendersSharedBlocks(t *testing.T) {
 }
 
 func TestWriteDocumentEmitsTaggedRoles(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged document"})
 	doc := layout.NewLayoutDocument()
@@ -106,7 +106,7 @@ func TestWriteDocumentEmitsTaggedRoles(t *testing.T) {
 }
 
 func TestWriteDocumentPageBreakBlockAddsPage(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{
 		layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "before break"}}},
@@ -125,7 +125,7 @@ func TestWriteDocumentAcceptsBuiltInBlockPointersAndSkipsTypedNil(t *testing.T) 
 	heading := &layout.HeadingBlock{Level: 2, Segments: []layout.TextSegment{{Text: "pointer heading"}}}
 	pageBreak := &layout.PageBreakBlock{After: true}
 	paragraph := &layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "pointer paragraph"}}}
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{nilParagraph, heading, pageBreak, paragraph}
@@ -150,7 +150,7 @@ func TestWriteDocumentAcceptsBuiltInBlockPointersAndSkipsTypedNil(t *testing.T) 
 }
 
 func TestWriteDocumentErrorsForUnknownFont(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{
 		layout.ParagraphBlock{
@@ -166,7 +166,7 @@ func TestWriteDocumentErrorsForUnknownFont(t *testing.T) {
 }
 
 func TestWriteDocumentErrorsForUnavailableBoldItalicFace(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.ensureResourceStore().setFont("custom", fontDefinition{})
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{
@@ -183,7 +183,7 @@ func TestWriteDocumentErrorsForUnavailableBoldItalicFace(t *testing.T) {
 }
 
 func TestWriteDocumentErrorsForUnsupportedBlock(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{unsupportedTestBlock{}}
 
@@ -198,7 +198,7 @@ type unsupportedTestBlock struct{}
 func (unsupportedTestBlock) DocumentBlockKind() layout.BlockKind { return "test-unsupported" }
 
 func TestWriteDocumentRendersSignatureMetadata(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.Signature = &layout.SignatureBlock{Rows: []layout.SignatureRowBlock{{
@@ -226,7 +226,7 @@ func TestWriteDocumentRendersSignatureMetadata(t *testing.T) {
 }
 
 func TestWriteDocumentErrorsForEmptyQRVerificationBlock(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{layout.QRVerificationBlock{QR: layout.QRBlock{Label: "Verify"}}}
 
@@ -237,7 +237,7 @@ func TestWriteDocumentErrorsForEmptyQRVerificationBlock(t *testing.T) {
 }
 
 func TestCellFormatUTF8JustifiedSingleWordDoesNotWriteInvalidNumber(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	fontBytes, err := os.ReadFile("../assets/static/font/DejaVuSansCondensed.ttf")
 	if err != nil {
@@ -260,7 +260,7 @@ func TestCellFormatUTF8JustifiedSingleWordDoesNotWriteInvalidNumber(t *testing.T
 }
 
 func TestWriteDocumentAppliesPageTemplateMargins(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	doc := layout.NewLayoutDocument()
 	doc.PageTemplate.Margins = layout.Spacing{Left: 18, Top: 16, Right: 14, Bottom: 22}
 	doc.Body = []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "Body"}}}}
@@ -274,7 +274,7 @@ func TestWriteDocumentAppliesPageTemplateMargins(t *testing.T) {
 }
 
 func TestWriteDocumentRendersTemplateFooterOnEveryRendererPage(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.PageTemplate.Footer = &layout.FooterBlock{
@@ -298,7 +298,7 @@ func TestWriteDocumentRendersTemplateFooterOnEveryRendererPage(t *testing.T) {
 }
 
 func TestWriteDocumentSelectsTemplateHeadersAndFootersPerPage(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	doc := layout.NewLayoutDocument()
 	doc.PageTemplate.Header = &layout.HeaderBlock{
@@ -344,7 +344,7 @@ func TestWriteDocumentSelectsTemplateHeadersAndFootersPerPage(t *testing.T) {
 }
 
 func TestWriteDocumentMapsLayoutAttachments(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	doc := layout.NewLayoutDocument()
 	doc.Attachments = []layout.AttachmentBlock{{
 		Name:        "evidence.txt",
@@ -364,7 +364,7 @@ func TestWriteDocumentMapsLayoutAttachments(t *testing.T) {
 
 func TestWriteDocumentInlineImagesUseContentHashAndFit(t *testing.T) {
 	pixel := decodeDocumentRenderTestPNG(t)
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	doc := layout.NewLayoutDocument()
 	doc.Body = []layout.Block{
 		layout.ImageBlock{Data: pixel, Format: "png", Width: 16, Height: 8, Fit: layout.ImageFitContain},

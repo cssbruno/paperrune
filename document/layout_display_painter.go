@@ -122,7 +122,7 @@ type preparedDisplayPlanPDF struct {
 // paintDisplayLayoutPlanPDF is the initial mixed text/image production sink.
 // All plan validation, byte-digest verification, image decoding, intrinsic
 // dimension checks, and resource preparation complete before target mutation.
-func (f *Document) paintDisplayLayoutPlanPDF(plan layoutengine.LayoutPlan, sources plannedImageSources) error {
+func (f *pdfDocument) paintDisplayLayoutPlanPDF(plan layoutengine.LayoutPlan, sources plannedImageSources) error {
 	prepared, err := f.preflightDisplayLayoutPlanPDF(plan, sources)
 	if err != nil {
 		return err
@@ -130,7 +130,7 @@ func (f *Document) paintDisplayLayoutPlanPDF(plan layoutengine.LayoutPlan, sourc
 	return f.paintPreparedDisplayLayoutPlanPDF(prepared)
 }
 
-func (f *Document) paintPreparedDisplayLayoutPlanPDF(prepared preparedDisplayPlanPDF) error {
+func (f *pdfDocument) paintPreparedDisplayLayoutPlanPDF(prepared preparedDisplayPlanPDF) error {
 	return f.paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared, false, 0, false)
 }
 
@@ -174,7 +174,7 @@ func typedPDFSemanticRole(node layoutengine.SemanticNode) string {
 // the renderer-neutral semantic tree. The planned text remains owned by the
 // existing list item content, but the tagged PDF gets the required Lbl/LBody
 // siblings without changing layout geometry or plan identity.
-func (f *Document) ensureTaggedListBody(item *taggedElement) *taggedElement {
+func (f *pdfDocument) ensureTaggedListBody(item *taggedElement) *taggedElement {
 	if item == nil || item.Role != taggedRoleLI {
 		return item
 	}
@@ -199,7 +199,7 @@ func (f *Document) ensureTaggedListBody(item *taggedElement) *taggedElement {
 	return body
 }
 
-func (f *Document) beginPreparedSemantic(path []preparedDisplaySemantic, elements map[layoutengine.SemanticNodeID]*taggedElement) func() {
+func (f *pdfDocument) beginPreparedSemantic(path []preparedDisplaySemantic, elements map[layoutengine.SemanticNodeID]*taggedElement) func() {
 	if !f.tagged.enabled || len(path) == 0 {
 		return func() {}
 	}
@@ -258,7 +258,7 @@ func (f *Document) beginPreparedSemantic(path []preparedDisplaySemantic, element
 	}
 }
 
-func (f *Document) paintPreparedSemanticContent(path []preparedDisplaySemantic, elements map[layoutengine.SemanticNodeID]*taggedElement, content []byte) {
+func (f *pdfDocument) paintPreparedSemanticContent(path []preparedDisplaySemantic, elements map[layoutengine.SemanticNodeID]*taggedElement, content []byte) {
 	if len(path) == 0 || !f.tagged.enabled {
 		f.outbytes(content)
 		return
@@ -268,7 +268,7 @@ func (f *Document) paintPreparedSemanticContent(path []preparedDisplaySemantic, 
 	closeSemantic()
 }
 
-func (f *Document) paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared preparedDisplayPlanPDF, reuseCurrent bool, pageOffset int, preserveAuthoredText bool) error {
+func (f *pdfDocument) paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared preparedDisplayPlanPDF, reuseCurrent bool, pageOffset int, preserveAuthoredText bool) error {
 	resources := f.ensureResourceStore()
 	for _, id := range prepared.fontOrder {
 		font := prepared.fonts[id]
@@ -379,19 +379,19 @@ func (f *Document) paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared prepa
 	return f.err
 }
 
-func (f *Document) preflightDisplayLayoutPlanPDF(plan layoutengine.LayoutPlan, sources plannedImageSources) (preparedDisplayPlanPDF, error) {
+func (f *pdfDocument) preflightDisplayLayoutPlanPDF(plan layoutengine.LayoutPlan, sources plannedImageSources) (preparedDisplayPlanPDF, error) {
 	return f.preflightDisplayLayoutPlanPDFContext(context.Background(), plan, sources)
 }
 
-func (f *Document) preflightDisplayLayoutPlanPDFContext(ctx context.Context, plan layoutengine.LayoutPlan, sources plannedImageSources) (preparedDisplayPlanPDF, error) {
+func (f *pdfDocument) preflightDisplayLayoutPlanPDFContext(ctx context.Context, plan layoutengine.LayoutPlan, sources plannedImageSources) (preparedDisplayPlanPDF, error) {
 	return f.preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx, plan, sources, nil, false)
 }
 
-func (f *Document) preflightDisplayLayoutPlanPDFContextForTarget(ctx context.Context, plan layoutengine.LayoutPlan, sources plannedImageSources, allowActivePage bool) (preparedDisplayPlanPDF, error) {
+func (f *pdfDocument) preflightDisplayLayoutPlanPDFContextForTarget(ctx context.Context, plan layoutengine.LayoutPlan, sources plannedImageSources, allowActivePage bool) (preparedDisplayPlanPDF, error) {
 	return f.preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx, plan, sources, nil, allowActivePage)
 }
 
-func (f *Document) preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx context.Context, plan layoutengine.LayoutPlan, sources plannedImageSources, fontSources plannedFontSources, allowActivePage bool) (preparedDisplayPlanPDF, error) {
+func (f *pdfDocument) preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx context.Context, plan layoutengine.LayoutPlan, sources plannedImageSources, fontSources plannedFontSources, allowActivePage bool) (preparedDisplayPlanPDF, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -569,7 +569,7 @@ func (f *Document) preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx co
 	return prepared, nil
 }
 
-func (f *Document) preflightDisplayImageCrop(image layoutengine.PlannedImage) (preparedDisplayImageCrop, error) {
+func (f *pdfDocument) preflightDisplayImageCrop(image layoutengine.PlannedImage) (preparedDisplayImageCrop, error) {
 	if image.Crop == nil {
 		return preparedDisplayImageCrop{}, nil
 	}
@@ -595,11 +595,11 @@ func (f *Document) preflightDisplayImageCrop(image layoutengine.PlannedImage) (p
 	}, nil
 }
 
-func (f *Document) preflightDisplayImage(resource layoutengine.ImageResource, encoded []byte) (preparedDisplayImage, error) {
+func (f *pdfDocument) preflightDisplayImage(resource layoutengine.ImageResource, encoded []byte) (preparedDisplayImage, error) {
 	return f.preflightDisplayImageContext(context.Background(), resource, encoded)
 }
 
-func (f *Document) preflightDisplayImageContext(ctx context.Context, resource layoutengine.ImageResource, encoded []byte) (preparedDisplayImage, error) {
+func (f *pdfDocument) preflightDisplayImageContext(ctx context.Context, resource layoutengine.ImageResource, encoded []byte) (preparedDisplayImage, error) {
 	if len(encoded) == 0 {
 		return preparedDisplayImage{}, fmt.Errorf("%w: image %s bytes are unavailable", errCoreLayoutPlanPaintUnsupported, resource.Digest)
 	}

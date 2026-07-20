@@ -8,9 +8,9 @@ document @report:
       table @ledger:
         repeat-header: true
         split: "rows"
-        table-track @left:
+        table-column @left:
           width: 84pt
-        table-track @right:
+        table-column @right:
           width: 84pt
         table-header @head:
           table-row @head-row:

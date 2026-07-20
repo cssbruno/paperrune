@@ -62,6 +62,6 @@ func (FileResourceLoader) OpenResource(ctx context.Context, _ ResourceKind, name
 	return file, info, nil
 }
 
-func (f *Document) SetResourceLoader(loader ResourceLoader) {
+func (f *pdfDocument) SetResourceLoader(loader ResourceLoader) {
 	f.resourceLoader = loader
 }

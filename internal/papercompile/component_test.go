@@ -69,7 +69,7 @@ func TestComponentExpansionUsesFilledAndDefaultSlotsDeterministically(t *testing
 }
 
 func TestComponentExpansionSupportsListAndRowColumnSlotContent(t *testing.T) {
-	const source = "document:\n  component @layout:\n    slot @main:\n      type: \"blocks\"\n      required: true\n  page:\n    body:\n      use @instance:\n        component: \"@layout\"\n        fill @main:\n          list:\n            item:\n              text: \"One\"\n          row:\n            paragraph:\n              track: \"fraction\"\n              track-weight: 1\n              text: \"Two\"\n"
+	const source = "document:\n  component @layout:\n    slot @main:\n      type: \"blocks\"\n      required: true\n  page:\n    body:\n      use @instance:\n        component: \"@layout\"\n        fill @main:\n          list:\n            item:\n              text: \"One\"\n          row:\n            paragraph:\n              width: 1fr\n              text: \"Two\"\n"
 	parsed := paperlang.Parse("component-layout.paper", source)
 	compiled := Compile(parsed.AST)
 	if !parsed.OK() || !compiled.OK() {

@@ -38,7 +38,7 @@ func htmlUnifiedBlockBoxTag(tag string) bool {
 	return heading
 }
 
-func htmlUnifiedParseBlockBox(tag string, token int, decl map[string]string, fontSize float64, headingMargins bool, pdf *Document) (layout.BoxStyle, error) {
+func htmlUnifiedParseBlockBox(tag string, token int, decl map[string]string, fontSize float64, headingMargins bool, pdf *pdfDocument) (layout.BoxStyle, error) {
 	box := layout.BoxStyle{}
 	box.KeepTogether = strings.EqualFold(strings.TrimSpace(firstNonEmpty(decl["break-inside"], decl["page-break-inside"])), "avoid")
 	if headingMargins {
@@ -249,7 +249,7 @@ func htmlUnifiedBoxLengthSyntax(value string) bool {
 	return err == nil
 }
 
-func htmlUnifiedValidateNonFlexBoxConstraints(compiled *CompiledHTML) error {
+func htmlUnifiedValidateNonFlexBoxConstraints(compiled *compiledHTML) error {
 	for _, node := range compiled.nodeIndexes {
 		token := node.Token
 		resolved := compiled.unifiedResolved[token]
@@ -326,7 +326,7 @@ func htmlUnifiedApplyBoxSpacing(target *layout.Spacing, prefix string, decl map[
 	return nil
 }
 
-func htmlUnifiedResolveBlockBox(compiled *CompiledHTML, token int, availableWidth, availableHeight float64, pointsToUnits func(float64) float64) (layout.BoxStyle, error) {
+func htmlUnifiedResolveBlockBox(compiled *compiledHTML, token int, availableWidth, availableHeight float64, pointsToUnits func(float64) float64) (layout.BoxStyle, error) {
 	resolved := compiled.unifiedResolved[token]
 	box := resolved.box
 	decl := resolved.decl

@@ -21,7 +21,7 @@ import (
 
 func main() {
 	command := flag.String("command", "paper-characterize", "reproduction command recorded in the report")
-	builtin := flag.String("builtin", "", "emit the built-in typed or html characterization corpus")
+	builtin := flag.String("builtin", "", "emit the built-in typed compatibility corpus")
 	flag.Parse()
 	if *builtin != "" {
 		encoded, err := builtinCharacterization(context.Background(), *builtin)
@@ -52,15 +52,8 @@ func builtinCharacterization(ctx context.Context, kind string) ([]byte, error) {
 			return nil, err
 		}
 		projection, err = result.CanonicalJSON()
-	case "html":
-		result, runErr := document.RunHTMLCharacterization(ctx)
-		err = runErr
-		if err != nil {
-			return nil, err
-		}
-		projection, err = result.CanonicalJSON()
 	default:
-		return nil, fmt.Errorf("paper-characterize: builtin must be typed or html")
+		return nil, fmt.Errorf("paper-characterize: builtin must be typed")
 	}
 	if err != nil {
 		return nil, err

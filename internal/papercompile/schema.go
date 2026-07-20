@@ -449,8 +449,8 @@ func validateBindings(ast paperlang.AST, provenance map[*paperlang.Node]expansio
 		base := provenance[node].bindingBase
 		path, span := "", provenance[node].bindingSpan
 		if bind != nil {
-			if node.Kind != paperlang.NodeParagraph && node.Kind != paperlang.NodeHeading {
-				analysis.add("PAPER_BIND_TARGET", fmt.Sprintf("bind is unsupported on %s", node.Kind), "bind paragraphs/headings or component use instances", bind.Span)
+			if node.Kind != paperlang.NodeParagraph && node.Kind != paperlang.NodeHeading && node.Kind != paperlang.NodeTableCell {
+				analysis.add("PAPER_BIND_TARGET", fmt.Sprintf("bind is unsupported on %s", node.Kind), "bind paragraphs, headings, table cells, or component use instances", bind.Span)
 			} else if bind.Value.Kind != paperlang.ScalarString || bind.Value.StringValue == nil {
 				analysis.add("PAPER_BIND_PATH", "bind requires a quoted path", "use field.path with one schema, schema.field with several schemas, or a component-relative path", bind.Value.Span)
 			} else if strings.HasPrefix(strings.TrimSpace(*bind.Value.StringValue), "@") {

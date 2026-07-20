@@ -48,7 +48,7 @@ func TestPlanAndWritePaperJSONEndToEnd(t *testing.T) {
 		t.Fatalf("changed plan = %#v, %v", changedResult, err)
 	}
 
-	pdf, err := NewDocument(WithUnit(UnitPoint), WithDeterministicOutput())
+	pdf, err := newPDFDocument(WithUnit(UnitPoint), WithDeterministicOutput())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestPlanAndWritePaperJSONEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	withBoundaries, err := NewDocument(WithUnit(UnitPoint), WithDeterministicOutput())
+	withBoundaries, err := newPDFDocument(WithUnit(UnitPoint), WithDeterministicOutput())
 	if err != nil {
 		t.Fatal(err)
 	}

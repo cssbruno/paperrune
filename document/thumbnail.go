@@ -127,7 +127,7 @@ func RegisterThumbnail(pdf ImageRegistrar, name string, r io.Reader, options Thu
 
 // RegisterThumbnail creates a thumbnail from r and registers it on this PDF
 // document under name.
-func (f *Document) RegisterThumbnail(name string, r io.Reader, options ThumbnailOptions) (*ImageInfo, error) {
+func (f *pdfDocument) RegisterThumbnail(name string, r io.Reader, options ThumbnailOptions) (*ImageInfo, error) {
 	return RegisterThumbnail(f, name, r, options)
 }
 

@@ -1,0 +1,101 @@
+document @monthly-report:
+  title: "Monthly report"
+  language: "en"
+
+  schema report:
+    string period
+    string owner
+    list object entries:
+      max-items: 100
+      string name
+      string status
+      string note
+
+  style @base:
+    font: "Helvetica"
+    size: 10pt
+    line-height: 14pt
+    color: "#344451"
+
+  style @title:
+    style: "@base"
+    size: 17pt
+    line-height: 22pt
+    bold: true
+    color: "#203D5C"
+
+  style @label:
+    style: "@base"
+    size: 8pt
+    line-height: 11pt
+    bold: true
+    color: "#667788"
+
+  page @a5:
+    size: "A5"
+    margin: 30pt
+    page-numbers: true
+    page-number-format: "Monthly report | Page %d of {pages}"
+    page-total-alias: "{pages}"
+
+    header @report-header:
+      paragraph @report-title:
+        style: "@title"
+        text: "MONTHLY OPERATIONS REPORT"
+      paragraph @period:
+        style: "@label"
+        bind: "period"
+        text: "Reporting period"
+      paragraph @owner:
+        style: "@label"
+        bind: "owner"
+        text: "Owner"
+
+    body @content:
+      table @entries-table:
+        repeat-header: true
+        split: "rows"
+
+        table-column @name-column:
+          width: 28%
+        table-column @status-column:
+          width: 18%
+        table-column @note-column:
+          width: 54%
+
+        table-header @entries-header:
+          table-row @entries-header-row:
+            cell @name-heading:
+              paragraph:
+                style: "@label"
+                text: "SERVICE"
+            cell @status-heading:
+              paragraph:
+                style: "@label"
+                text: "STATUS"
+            cell @note-heading:
+              paragraph:
+                style: "@label"
+                text: "NOTES"
+
+        repeat @entry-rows:
+          source: "entries"
+          instance-prefix: "entries"
+          max-items: 100
+
+          table-row @entry-row:
+            cell @name-cell:
+              paragraph:
+                style: "@base"
+                bind: "name"
+                text: "Service"
+            cell @status-cell:
+              paragraph:
+                style: "@base"
+                bind: "status"
+                text: "Status"
+            cell @note-cell:
+              paragraph:
+                style: "@base"
+                bind: "note"
+                text: "Note"

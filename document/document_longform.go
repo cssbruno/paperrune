@@ -12,17 +12,17 @@ import (
 
 // LongFormHTMLDocumentModel converts supported long-form HTML into a shared
 // document model with extracted footer configuration.
-func LongFormHTMLDocumentModel(title, htmlStr string) (*layout.LayoutDocument, []string) {
-	bodyHTML, footer := ExtractHTMLFooterBlock(htmlStr)
-	pdf := MustNew()
-	html := pdf.HTMLNew()
-	messages := html.ValidateHTML(bodyHTML)
+func longFormHTMLDocumentModel(title, htmlStr string) (*layout.LayoutDocument, []string) {
+	bodyHTML, footer := extractHTMLFooterBlock(htmlStr)
+	pdf := mustNewPDFDocument()
+	html := pdf.htmlNew()
+	messages := html.validateHTML(bodyHTML)
 	doc := layout.NewLayoutDocument()
 	doc.Title = strings.TrimSpace(title)
 	if doc.Title != "" {
 		doc.Body = append(doc.Body, layout.HeadingBlock{Level: 1, Segments: []layout.TextSegment{{Text: doc.Title}}})
 	}
-	compiled, err := CompileHTML(bodyHTML)
+	compiled, err := compileHTML(bodyHTML)
 	if err != nil {
 		messages = append(messages, err.Error())
 	} else {

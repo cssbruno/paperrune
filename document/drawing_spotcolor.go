@@ -22,7 +22,7 @@ func clampSpotColorPercent(percent byte) byte {
 // ranging from 0 to 100. Values above this range are quietly capped to 100.
 // An error occurs if the specified name is already associated with a
 // color.
-func (f *Document) AddSpotColor(name string, cyan, magenta, yellow, black byte) {
+func (f *pdfDocument) AddSpotColor(name string, cyan, magenta, yellow, black byte) {
 	if f.err != nil {
 		return
 	}
@@ -41,7 +41,7 @@ func (f *Document) AddSpotColor(name string, cyan, magenta, yellow, black byte) 
 	}
 }
 
-func (f *Document) lookupSpotColor(name string) (spotColorType, bool) {
+func (f *pdfDocument) lookupSpotColor(name string) (spotColorType, bool) {
 	if f.err != nil {
 		return spotColorType{}, false
 	}
@@ -57,7 +57,7 @@ func (f *Document) lookupSpotColor(name string) (spotColorType, bool) {
 // with name. An error occurs if the name is not associated with a color.
 // The value for tint ranges from 0 (no intensity) to 100 (full intensity). It
 // is quietly capped to this range.
-func (f *Document) SetDrawSpotColor(name string, tint byte) {
+func (f *pdfDocument) SetDrawSpotColor(name string, tint byte) {
 	spotColor, ok := f.lookupSpotColor(name)
 	if !ok {
 		return
@@ -74,7 +74,7 @@ func (f *Document) SetDrawSpotColor(name string, tint byte) {
 // with name. An error occurs if the name is not associated with a color.
 // The value for tint ranges from 0 (no intensity) to 100 (full intensity). It
 // is quietly capped to this range.
-func (f *Document) SetFillSpotColor(name string, tint byte) {
+func (f *pdfDocument) SetFillSpotColor(name string, tint byte) {
 	spotColor, ok := f.lookupSpotColor(name)
 	if !ok {
 		return
@@ -92,7 +92,7 @@ func (f *Document) SetFillSpotColor(name string, tint byte) {
 // with name. An error occurs if the name is not associated with a color.
 // The value for tint ranges from 0 (no intensity) to 100 (full intensity). It
 // is quietly capped to this range.
-func (f *Document) SetTextSpotColor(name string, tint byte) {
+func (f *pdfDocument) SetTextSpotColor(name string, tint byte) {
 	spotColor, ok := f.lookupSpotColor(name)
 	if !ok {
 		return
@@ -111,7 +111,7 @@ func spotColorFillCommand(colorID int, tint byte) string {
 	return sprintf("%s cs %.3f scn", spotColorPDFResourceName(colorID).String(), float64(clampSpotColorPercent(tint))/100)
 }
 
-func (f *Document) currentSpotColorComponents(color pdfColor) (name string, cyan, magenta, yellow, black byte) {
+func (f *pdfDocument) currentSpotColorComponents(color pdfColor) (name string, cyan, magenta, yellow, black byte) {
 	name = color.spotStr
 	if name == "" {
 		return
@@ -131,7 +131,7 @@ func (f *Document) currentSpotColorComponents(color pdfColor) (name string, cyan
 // drawing. This will not be the current drawing color if some other color type
 // such as RGB is active. If no spot color has been set for drawing, zero
 // values are returned.
-func (f *Document) GetDrawSpotColor() (name string, c, m, y, k byte) {
+func (f *pdfDocument) GetDrawSpotColor() (name string, c, m, y, k byte) {
 	return f.currentSpotColorComponents(f.color.draw)
 }
 
@@ -139,7 +139,7 @@ func (f *Document) GetDrawSpotColor() (name string, c, m, y, k byte) {
 // text output. This will not be the current text color if some other color
 // type such as RGB is active. If no spot color has been set for text, zero
 // values are returned.
-func (f *Document) GetTextSpotColor() (name string, c, m, y, k byte) {
+func (f *pdfDocument) GetTextSpotColor() (name string, c, m, y, k byte) {
 	return f.currentSpotColorComponents(f.color.text)
 }
 
@@ -147,11 +147,11 @@ func (f *Document) GetTextSpotColor() (name string, c, m, y, k byte) {
 // fill output. This will not be the current fill color if some other color
 // type such as RGB is active. If no fill spot color has been set, zero values
 // are returned.
-func (f *Document) GetFillSpotColor() (name string, c, m, y, k byte) {
+func (f *pdfDocument) GetFillSpotColor() (name string, c, m, y, k byte) {
 	return f.currentSpotColorComponents(f.color.fill)
 }
 
-func (f *Document) putSpotColors() {
+func (f *pdfDocument) putSpotColors() {
 	for _, name := range f.spotColorOutputNames() {
 		spotColor := f.spotColorMap[name]
 		f.newobj()
@@ -167,7 +167,7 @@ func (f *Document) putSpotColors() {
 	}
 }
 
-func (f *Document) putSpotColorResourceDict() {
+func (f *pdfDocument) putSpotColorResourceDict() {
 	f.out("/ColorSpace")
 	f.beginPDFDict()
 	for _, name := range f.spotColorOutputNames() {
@@ -177,7 +177,7 @@ func (f *Document) putSpotColorResourceDict() {
 	f.endPDFDict()
 }
 
-func (f *Document) spotColorOutputNames() []string {
+func (f *pdfDocument) spotColorOutputNames() []string {
 	names := make([]string, 0, len(f.spotColorMap))
 	for name := range f.spotColorMap {
 		names = append(names, name)

@@ -283,7 +283,7 @@ func (c *ImageCache) Get(name string) (*ImageInfo, bool) {
 
 // RegisterImageFromCache registers a cached image with this document.
 // The returned ImageInfo can be used with ImageOptions using the same name.
-func (f *Document) RegisterImageFromCache(name string, cache *ImageCache) *ImageInfo {
+func (f *pdfDocument) RegisterImageFromCache(name string, cache *ImageCache) *ImageInfo {
 	if f.err != nil {
 		return nil
 	}
@@ -309,7 +309,7 @@ func (f *Document) RegisterImageFromCache(name string, cache *ImageCache) *Image
 	return f.registerCachedImageInfo(name, info)
 }
 
-func (f *Document) registerCachedImageInfo(name string, info *ImageInfo) *ImageInfo {
+func (f *pdfDocument) registerCachedImageInfo(name string, info *ImageInfo) *ImageInfo {
 	if info == nil {
 		f.err = errors.New("image cache entry is invalid")
 		return nil
@@ -335,7 +335,7 @@ func (f *Document) registerCachedImageInfo(name string, info *ImageInfo) *ImageI
 }
 
 // ImageFromCache places a cached image on the current page.
-func (f *Document) ImageFromCache(name string, cache *ImageCache, x, y, w, h float64, flow bool, options ImageOptions, link int, linkStr string) {
+func (f *pdfDocument) ImageFromCache(name string, cache *ImageCache, x, y, w, h float64, flow bool, options ImageOptions, link int, linkStr string) {
 	if f.err != nil {
 		return
 	}

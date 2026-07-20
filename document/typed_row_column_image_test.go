@@ -48,7 +48,7 @@ func TestTypedRowColumnInterleavesTextAndDecoratedImagesExactly(t *testing.T) {
 			}},
 		},
 	}}}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 100}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 100}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(20, 20, 20)
 	plan, err := planner.PlanLayoutDocument(doc)
 	if err != nil || plan.PageCount() != 1 || plan.Hash() == "" || planner.PageCount() != 0 {
@@ -115,7 +115,7 @@ func TestTypedRowColumnInterleavesTextAndDecoratedImagesExactly(t *testing.T) {
 	if plan.Hash() != before || plan.plan.Projection().Fragments[1] != firstImage {
 		t.Fatal("row image plan aliases DataRef or BoxRef")
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if pages, err := target.WriteLayoutDocumentPlan(plan); err != nil || pages != 1 || target.PageCount() != 1 {
 		t.Fatalf("WriteLayoutDocumentPlan(row images) = pages %d target pages %d, %v", pages, target.PageCount(), err)
 	}
@@ -128,7 +128,7 @@ func TestTypedRowColumnInterleavesTextAndDecoratedImagesExactly(t *testing.T) {
 
 func TestTypedRowColumnImagePlansCaptionAndCancellationAtomically(t *testing.T) {
 	pixel, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 120, Ht: 140}))
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 120, Ht: 140}))
 	image := layout.ImageBlock{Data: pixel, Format: "png", Width: 20, Height: 20, Caption: []layout.TextSegment{{Text: "pending"}}}
 	doc := &layout.LayoutDocument{Body: []layout.Block{layout.RowColumnBlock{Direction: layout.RowDirection, Items: []layout.RowColumnItem{{
 		Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFixed, Size: 40}, Block: image,

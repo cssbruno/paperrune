@@ -117,12 +117,12 @@ func assertEquivalentFrontendPlans(t *testing.T, paperSource string, typedBlocks
 		t.Fatalf("typed plan = %v", err)
 	}
 
-	compiled, err := CompileHTML(htmlSource)
+	compiled, err := compileHTML(htmlSource)
 	if err != nil {
 		t.Fatal(err)
 	}
 	htmlPlanner := equivalentFrontendPlanner()
-	htmlPlan, err := htmlPlanner.PlanCompiledHTML(lineHeight, compiled)
+	htmlPlan, err := htmlPlanner.planCompiledHTML(lineHeight, compiled)
 	if err != nil {
 		t.Fatalf("HTML plan = %v", err)
 	}
@@ -144,8 +144,8 @@ func assertEquivalentFrontendPlans(t *testing.T, paperSource string, typedBlocks
 	}
 }
 
-func equivalentFrontendPlanner() *Document {
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 120}), WithNoCompression(), WithDeterministicOutput())
+func equivalentFrontendPlanner() *pdfDocument {
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 120}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(10, 10, 10)
 	planner.SetAutoPageBreak(true, 10)
 	return planner

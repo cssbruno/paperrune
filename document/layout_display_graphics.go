@@ -5,7 +5,7 @@ package document
 
 import "github.com/cssbruno/paperrune/internal/layoutengine"
 
-func (f *Document) paintPlannedTransform(pageHeight layoutengine.Fixed, transform layoutengine.Transform) {
+func (f *pdfDocument) paintPlannedTransform(pageHeight layoutengine.Fixed, transform layoutengine.Transform) {
 	h := pageHeight.Points()
 	a := transform.A.Points()
 	b := transform.B.Points()
@@ -27,7 +27,7 @@ func (f *Document) paintPlannedTransform(pageHeight layoutengine.Fixed, transfor
 	f.retainContentCommandBuffer(buf)
 }
 
-func (f *Document) paintPlannedClip(pageHeight layoutengine.Fixed, path layoutengine.PlannedPath, clip layoutengine.PlannedClip) {
+func (f *pdfDocument) paintPlannedClip(pageHeight layoutengine.Fixed, path layoutengine.PlannedPath, clip layoutengine.PlannedClip) {
 	buf := appendPlannedPDFPath(f.contentCommandBuffer(256), pageHeight, path)
 	if clip.Rule == layoutengine.FillEvenOdd {
 		buf = append(buf, ' ', 'W', '*', ' ', 'n')
@@ -38,7 +38,7 @@ func (f *Document) paintPlannedClip(pageHeight layoutengine.Fixed, path layouten
 	f.retainContentCommandBuffer(buf)
 }
 
-func (f *Document) paintPlannedFill(pageHeight layoutengine.Fixed, path layoutengine.PlannedPath, fill layoutengine.PlannedFill) {
+func (f *pdfDocument) paintPlannedFill(pageHeight layoutengine.Fixed, path layoutengine.PlannedPath, fill layoutengine.PlannedFill) {
 	if fill.Opacity != 0 {
 		f.out("q")
 		f.SetAlpha(fill.Opacity.Points(), "Normal")
@@ -55,7 +55,7 @@ func (f *Document) paintPlannedFill(pageHeight layoutengine.Fixed, path layouten
 	f.retainContentCommandBuffer(buf)
 }
 
-func (f *Document) paintPlannedStroke(pageHeight layoutengine.Fixed, path layoutengine.PlannedPath, stroke layoutengine.PlannedStroke) {
+func (f *pdfDocument) paintPlannedStroke(pageHeight layoutengine.Fixed, path layoutengine.PlannedPath, stroke layoutengine.PlannedStroke) {
 	if stroke.Opacity != 0 {
 		f.out("q")
 		f.SetAlpha(stroke.Opacity.Points(), "Normal")

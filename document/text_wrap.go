@@ -59,7 +59,7 @@ type wrappedCoreText struct {
 // walkWrappedText is the shared streaming line scanner. The callback runs
 // synchronously before scanning resumes so a future MultiCell migration can
 // preserve lifecycle callbacks that change document state between lines.
-func (f *Document) walkWrappedText(text string, options wrappedTextOptions, yield func(wrappedTextLine) bool) int {
+func (f *pdfDocument) walkWrappedText(text string, options wrappedTextOptions, yield func(wrappedTextLine) bool) int {
 	separator := -1
 	separatorSize := 0
 	separatorInclude := false
@@ -203,7 +203,7 @@ func normalizeCoreMultiCellText(text string) string {
 	return text
 }
 
-func (f *Document) wrappedTextMaxWidth(width float64) float64 {
+func (f *pdfDocument) wrappedTextMaxWidth(width float64) float64 {
 	return math.Ceil((width - 2*f.cMargin) * 1000 / f.fontSize)
 }
 
@@ -218,7 +218,7 @@ func isPlannerCoreText(text string) bool {
 	return true
 }
 
-func (f *Document) wrapCoreMultiCellText(text string, width float64, align string) (wrappedCoreText, error) {
+func (f *pdfDocument) wrapCoreMultiCellText(text string, width float64, align string) (wrappedCoreText, error) {
 	if f == nil || f.err != nil || f.currentFont.Name == "" || f.isCurrentUTF8 ||
 		f.fontSize <= 0 || !isFiniteFloat(f.fontSize) || !isFiniteFloat(width) || !isFiniteFloat(f.cMargin) {
 		return wrappedCoreText{}, errCoreTextWrapUnsupported

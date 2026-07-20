@@ -36,12 +36,12 @@ func TestHTMLUnifiedImagesResolveIntrinsicContainCoverAlignmentReuseAndAlt(t *te
 		`<img src="` + uri + `" alt="Covered mark" style="width:80px;height:80px;object-fit:cover;text-align:right">` +
 		`<img src="` + uri + `" alt="Percentage mark" style="width:50%;height:auto;max-width:100%">` +
 		`<img alt="Missing source fallback">`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestHTMLUnifiedImagesResolveIntrinsicContainCoverAlignmentReuseAndAlt(t *te
 	if err != nil || status != "captured" || firstRaster == nil || firstRaster.Pages[0].PNGSHA256 == "" {
 		t.Fatalf("image raster = %q %+v err=%v", status, firstRaster, err)
 	}
-	second, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	second, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil || second.Hash() != plan.Hash() {
 		t.Fatalf("image plan determinism = %q/%q err=%v", plan.Hash(), second.Hash(), err)
 	}
@@ -104,28 +104,28 @@ func TestHTMLUnifiedLocalAndCatalogImagesRequirePolicyAndSnapshotBytes(t *testin
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	compiled, err := CompileHTML(`<img src="` + path + `" alt="Local" style="width:20px">`)
+	compiled, err := compileHTML(`<img src="` + path + `" alt="Local" style="width:20px">`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	denied := htmlUnifiedFlexTestPlanner()
-	bad, err := denied.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	bad, err := denied.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if !errors.Is(err, ErrSecurityPolicyDenied) || bad.Hash() != "" || denied.PageCount() != 0 || denied.Error() != nil {
 		t.Fatalf("denied local plan=%#v pages=%d documentErr=%v err=%v", bad, denied.PageCount(), denied.Error(), err)
 	}
-	allowed := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput(),
+	allowed := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput(),
 		WithSecurityPolicy(SecurityPolicy{AllowLocalHTMLImages: true}))
 	allowed.SetMargins(20, 20, 20)
-	plan, err := allowed.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := allowed.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil || len(plan.plan.Projection().ImageResources) != 1 {
 		t.Fatalf("allowed local plan resources=%d err=%v", len(plan.plan.Projection().ImageResources), err)
 	}
-	live := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(),
+	live := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(),
 		WithSecurityPolicy(SecurityPolicy{AllowLocalHTMLImages: true}))
 	live.SetMargins(20, 20, 20)
 	live.AddPage()
 	live.SetFont("Helvetica", "", 12)
-	html := live.HTMLNew()
+	html := live.htmlNew()
 	before := append([]byte(nil), live.pages[1].Bytes()...)
 	if _, err := html.planCompiledHTMLFragmentContext(context.Background(), 12, compiled); !errors.Is(err, ErrSecurityPolicyDenied) || !bytes.Equal(before, live.pages[1].Bytes()) {
 		t.Fatalf("live local gate mutation=%t err=%v", !bytes.Equal(before, live.pages[1].Bytes()), err)
@@ -143,7 +143,7 @@ func TestHTMLUnifiedLocalAndCatalogImagesRequirePolicyAndSnapshotBytes(t *testin
 	}
 
 	var opens atomic.Int64
-	catalog := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithSecurityPolicy(SecurityPolicy{AllowLocalHTMLImages: true}), WithResourceLoader(ResourceLoaderFunc(
+	catalog := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithSecurityPolicy(SecurityPolicy{AllowLocalHTMLImages: true}), WithResourceLoader(ResourceLoaderFunc(
 		func(ctx context.Context, kind ResourceKind, name string) (io.ReadCloser, ResourceInfo, error) {
 			opens.Add(1)
 			if kind != ResourceImage || name != "catalog-mark" {
@@ -151,11 +151,11 @@ func TestHTMLUnifiedLocalAndCatalogImagesRequirePolicyAndSnapshotBytes(t *testin
 			}
 			return io.NopCloser(bytes.NewReader(data)), ResourceInfo{Size: int64(len(data)), StableID: "mark-v1"}, nil
 		})))
-	catalogCompiled, err := CompileHTML(`<img src="catalog-mark" alt="Catalog one"><img src="catalog-mark" alt="Catalog two">`)
+	catalogCompiled, err := compileHTML(`<img src="catalog-mark" alt="Catalog one"><img src="catalog-mark" alt="Catalog two">`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := catalog.PlanCompiledHTMLContext(context.Background(), 12, catalogCompiled)
+	first, err := catalog.planCompiledHTMLContext(context.Background(), 12, catalogCompiled)
 	if err != nil || first.Hash() == "" || opens.Load() != 1 || len(first.plan.Projection().ImageResources) != 1 || len(first.plan.Projection().Images) != 2 {
 		t.Fatalf("catalog plan hash=%q opens=%d err=%v", first.Hash(), opens.Load(), err)
 	}
@@ -170,11 +170,11 @@ func TestHTMLUnifiedJPEGDataImageUsesIntrinsicGeometry(t *testing.T) {
 		t.Fatal(err)
 	}
 	uri := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(encoded.Bytes())
-	compiled, err := CompileHTML(`<img src="` + uri + `" alt="JPEG swatch">`)
+	compiled, err := compileHTML(`<img src="` + uri + `" alt="JPEG swatch">`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,12 +191,12 @@ func TestHTMLUnifiedFigureCaptionSemanticStructureCursorRasterAndPDF(t *testing.
 	source := `<style>.hero{width:96px;height:48px;object-fit:contain;text-align:center} figcaption{font-size:10pt;color:#334455}</style>` +
 		`<figure><img class="hero" src="` + uri + `" alt="Two color swatch">` +
 		`<figcaption>Verified <a href="https://example.test/figure">figure caption</a></figcaption></figure>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestHTMLUnifiedFigureCaptionSemanticStructureCursorRasterAndPDF(t *testing.
 	live.AddPage()
 	live.SetFont("Helvetica", "", 12)
 	live.SetXY(20, 20)
-	html := live.HTMLNew()
+	html := live.htmlNew()
 	fragment, err := html.planCompiledHTMLFragmentContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatalf("unified live figure plan: %v", err)
@@ -278,13 +278,13 @@ func TestHTMLUnifiedFigureFrameMovesImageAndCaptionTogether(t *testing.T) {
 	data := htmlImagePlanFixturePNG(t)
 	uri := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
 	source := `<figure><img src="` + uri + `" alt="Kept figure" style="width:80px;height:40px"><figcaption>Kept caption</figcaption></figure>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	pdf := newHTMLFrameTestDocument(t, 160)
 	pdf.SetXY(16, 120)
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	fragment, err := html.planCompiledHTMLFragmentContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
@@ -317,30 +317,30 @@ func TestHTMLUnifiedImagesRejectMalformedOversizedUnsafeAndCancelAtomically(t *t
 		`<img>`,
 	}
 	for _, source := range tests {
-		compiled, compileErr := CompileHTML(source)
+		compiled, compileErr := compileHTML(source)
 		if compileErr != nil {
 			continue
 		}
 		planner := htmlUnifiedFlexTestPlanner()
-		plan, planErr := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+		plan, planErr := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 		if planErr == nil || plan.Hash() != "" || planner.PageCount() != 0 || planner.Error() != nil {
 			t.Fatalf("malformed image %q plan=%#v pages=%d documentErr=%v err=%v", source, plan, planner.PageCount(), planner.Error(), planErr)
 		}
 	}
 
-	limited := MustNew(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: 8}), WithSecurityPolicy(SecurityPolicy{AllowLocalHTMLImages: true}))
+	limited := mustNewPDFDocument(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: 8}), WithSecurityPolicy(SecurityPolicy{AllowLocalHTMLImages: true}))
 	limited.SetResourceLoader(ResourceLoaderFunc(func(context.Context, ResourceKind, string) (io.ReadCloser, ResourceInfo, error) {
 		return io.NopCloser(bytes.NewReader(data)), ResourceInfo{Size: int64(len(data))}, nil
 	}))
-	compiled, _ := CompileHTML(`<img src="oversized.png" alt="large">`)
-	plan, err := limited.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	compiled, _ := compileHTML(`<img src="oversized.png" alt="large">`)
+	plan, err := limited.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err == nil || plan.Hash() != "" || limited.PageCount() != 0 || limited.Error() != nil {
 		t.Fatalf("oversized image plan=%#v pages=%d documentErr=%v err=%v", plan, limited.PageCount(), limited.Error(), err)
 	}
 
 	other := htmlImagePlanSolidPNG(t, color.RGBA{R: 40, G: 180, B: 70, A: 255})
 	cumulativeLimit := len(data) + len(other) - 1
-	cumulative := MustNew(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: int64(cumulativeLimit)}),
+	cumulative := mustNewPDFDocument(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: int64(cumulativeLimit)}),
 		WithSecurityPolicy(SecurityPolicy{AllowLocalHTMLImages: true}), WithResourceLoader(ResourceLoaderFunc(
 			func(_ context.Context, _ ResourceKind, name string) (io.ReadCloser, ResourceInfo, error) {
 				payload := data
@@ -349,8 +349,8 @@ func TestHTMLUnifiedImagesRejectMalformedOversizedUnsafeAndCancelAtomically(t *t
 				}
 				return io.NopCloser(bytes.NewReader(payload)), ResourceInfo{Size: int64(len(payload))}, nil
 			})))
-	compiled, _ = CompileHTML(`<img src="first.png" alt="first"><img src="second.png" alt="second">`)
-	plan, err = cumulative.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	compiled, _ = compileHTML(`<img src="first.png" alt="first"><img src="second.png" alt="second">`)
+	plan, err = cumulative.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err == nil || plan.Hash() != "" || cumulative.PageCount() != 0 || cumulative.Error() != nil {
 		t.Fatalf("cumulative image limit plan=%#v pages=%d documentErr=%v err=%v", plan, cumulative.PageCount(), cumulative.Error(), err)
 	}
@@ -358,20 +358,20 @@ func TestHTMLUnifiedImagesRejectMalformedOversizedUnsafeAndCancelAtomically(t *t
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	planner := htmlUnifiedFlexTestPlanner()
-	compiled, _ = CompileHTML(`<img src="` + validURI + `" alt="cancel">`)
-	plan, err = planner.PlanCompiledHTMLContext(canceled, 12, compiled)
+	compiled, _ = compileHTML(`<img src="` + validURI + `" alt="cancel">`)
+	plan, err = planner.planCompiledHTMLContext(canceled, 12, compiled)
 	if !errors.Is(err, context.Canceled) || plan.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("canceled image plan=%#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
 
 	loadContext, cancelLoad := context.WithCancel(context.Background())
-	loading := MustNew(WithUnit(UnitPoint), WithSecurityPolicy(SecurityPolicy{AllowLocalHTMLImages: true}),
+	loading := mustNewPDFDocument(WithUnit(UnitPoint), WithSecurityPolicy(SecurityPolicy{AllowLocalHTMLImages: true}),
 		WithResourceLoader(ResourceLoaderFunc(func(context.Context, ResourceKind, string) (io.ReadCloser, ResourceInfo, error) {
 			cancelLoad()
 			return io.NopCloser(bytes.NewReader(data)), ResourceInfo{Size: int64(len(data))}, nil
 		})))
-	compiled, _ = CompileHTML(`<img src="cancel-during-load.png" alt="cancel load">`)
-	plan, err = loading.PlanCompiledHTMLContext(loadContext, 12, compiled)
+	compiled, _ = compileHTML(`<img src="cancel-during-load.png" alt="cancel load">`)
+	plan, err = loading.planCompiledHTMLContext(loadContext, 12, compiled)
 	if !errors.Is(err, context.Canceled) || plan.Hash() != "" || loading.PageCount() != 0 || loading.Error() != nil {
 		t.Fatalf("load-canceled image plan=%#v pages=%d documentErr=%v err=%v", plan, loading.PageCount(), loading.Error(), err)
 	}
@@ -380,7 +380,7 @@ func TestHTMLUnifiedImagesRejectMalformedOversizedUnsafeAndCancelAtomically(t *t
 func TestHTMLUnifiedImageCompiledReuseIsConcurrentAndDetached(t *testing.T) {
 	data := htmlImagePlanFixturePNG(t)
 	uri := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
-	compiled, err := CompileHTML(`<img src="` + uri + `" alt="Concurrent" style="width:32px;object-fit:contain">`)
+	compiled, err := compileHTML(`<img src="` + uri + `" alt="Concurrent" style="width:32px;object-fit:contain">`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +392,7 @@ func TestHTMLUnifiedImageCompiledReuseIsConcurrentAndDetached(t *testing.T) {
 		group.Add(1)
 		go func(index int) {
 			defer group.Done()
-			plan, planErr := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			plan, planErr := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			hashes[index], errs[index] = plan.Hash(), planErr
 		}(index)
 	}
@@ -410,11 +410,11 @@ func TestHTMLUnifiedImageCompiledReuseIsConcurrentAndDetached(t *testing.T) {
 func TestHTMLUnifiedImagePinnedBrowserGeometryAndRaster(t *testing.T) {
 	data := htmlImagePlanFixturePNG(t)
 	uri := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
-	compiled, err := CompileHTML(`<img src="` + uri + `" alt="Browser parity swatch" style="width:80px;height:80px;object-fit:contain;text-align:center">`)
+	compiled, err := compileHTML(`<img src="` + uri + `" alt="Browser parity swatch" style="width:80px;height:80px;object-fit:contain;text-align:center">`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,14 +469,14 @@ func TestHTMLUnifiedImagePinnedBrowserGeometryAndRaster(t *testing.T) {
 func BenchmarkHTMLUnifiedImagePlanning(b *testing.B) {
 	data := htmlImagePlanFixturePNG(b)
 	uri := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
-	compiled, err := CompileHTML(`<figure><img src="` + uri + `" alt="Benchmark" style="width:96px;height:48px;object-fit:cover"><figcaption>Caption</figcaption></figure>`)
+	compiled, err := compileHTML(`<figure><img src="` + uri + `" alt="Benchmark" style="width:96px;height:48px;object-fit:cover"><figcaption>Caption</figcaption></figure>`)
 	if err != nil {
 		b.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
 	b.ReportAllocs()
 	for index := 0; index < b.N; index++ {
-		if _, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
+		if _, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -493,12 +493,12 @@ func TestHTMLUnifiedImageVisualFixture(t *testing.T) {
 		`<h2>Unified image and figure</h2><p>Intrinsic, fitted, semantic, and deterministic.</p>` +
 		`<figure><img class="swatch" src="` + uri + `" alt="Red and blue verification swatch">` +
 		`<figcaption>Figure 1 - contained source with exact caption geometry.</figcaption></figure>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}

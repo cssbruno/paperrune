@@ -165,6 +165,16 @@ type SetProperty struct {
 
 func (SetProperty) paperEditOperation() {}
 
+// DeleteProperty removes one uniquely named property line from a readable-ID
+// node. It is intentionally distinct from setting a zero value because zero
+// can be meaningful in the Paper language.
+type DeleteProperty struct {
+	Target string
+	Name   string
+}
+
+func (DeleteProperty) paperEditOperation() {}
+
 // SetProperties applies a bounded group of properties to one node. Grouping
 // the insertions into one source patch keeps an authoring action atomic when
 // several new properties share the same insertion point.
@@ -543,6 +553,8 @@ func operationTargetIDs(operation Operation) []string {
 	switch edit := operation.(type) {
 	case SetProperty:
 		return []string{edit.Target}
+	case DeleteProperty:
+		return []string{edit.Target}
 	case SetProperties:
 		return []string{edit.Target}
 	case SetNodeValue:
@@ -707,6 +719,32 @@ func resolveOperation(source string, index sourceIndex, operationIndex int, oper
 		point, prefix, newline := insertionPoint(source, int(node.Span.End.Offset)) // #nosec G115 -- source offset is bounded by validated input or parser state
 		patch.start, patch.end = point, point
 		patch.replacement = prefix + strings.Repeat(" ", indent) + edit.Name + ": " + value + newline
+		return []sourcePatch{patch}, patch.target, nil
+
+	case DeleteProperty:
+		patch.target = edit.Target
+		node, err := targetNode(index, edit.Target)
+		if err != nil {
+			return nil, patch.target, err
+		}
+		if !validPropertyName(edit.Name) {
+			return nil, patch.target, fmt.Errorf("property name %q is not a .paper identifier", edit.Name)
+		}
+		var found *paperlang.Property
+		for _, member := range node.Members {
+			if member.Property == nil || member.Property.Name != edit.Name {
+				continue
+			}
+			if found != nil {
+				return nil, patch.target, fmt.Errorf("property %q is ambiguous on %s", edit.Name, edit.Target)
+			}
+			found = member.Property
+		}
+		if found == nil {
+			return nil, patch.target, fmt.Errorf("property %q does not exist on %s", edit.Name, edit.Target)
+		}
+		patch.start = lineStart(source, int(found.Span.Start.Offset))           // #nosec G115 -- source offset is bounded by validated input or parser state
+		patch.end = lineEndIncludingNewline(source, int(found.Span.End.Offset)) // #nosec G115 -- source offset is bounded by validated input or parser state
 		return []sourcePatch{patch}, patch.target, nil
 
 	case SetProperties:
@@ -1092,7 +1130,7 @@ func editorAllowedChild(parent, child paperlang.NodeKind) bool {
 	case paperlang.NodeCanvas:
 		return child == paperlang.NodeAnchor
 	case paperlang.NodeTable:
-		return child == paperlang.NodeTableTrack || child == paperlang.NodeTableHeader || child == paperlang.NodeTableRow
+		return child == paperlang.NodeTableColumn || child == paperlang.NodeTableHeader || child == paperlang.NodeTableRow
 	case paperlang.NodeTableHeader:
 		return child == paperlang.NodeTableRow
 	case paperlang.NodeTableRow:
@@ -1292,7 +1330,7 @@ func validNodeKind(kind paperlang.NodeKind) bool {
 		paperlang.NodeCanvas, paperlang.NodeAnchor,
 		paperlang.NodeHeading, paperlang.NodeText, paperlang.NodeParagraph,
 		paperlang.NodeList, paperlang.NodeItem, paperlang.NodePageBreak, paperlang.NodeImage,
-		paperlang.NodeTable, paperlang.NodeTableTrack, paperlang.NodeTableHeader, paperlang.NodeTableRow, paperlang.NodeTableCell,
+		paperlang.NodeTable, paperlang.NodeTableColumn, paperlang.NodeTableHeader, paperlang.NodeTableRow, paperlang.NodeTableCell,
 		paperlang.NodeRow, paperlang.NodeColumn, paperlang.NodeComponent,
 		paperlang.NodeSlot, paperlang.NodeUse, paperlang.NodeFill, paperlang.NodeRepeat, paperlang.NodeLoop,
 		paperlang.NodeSchema, paperlang.NodeObjectType, paperlang.NodeField, paperlang.NodeScenario, paperlang.NodeValue, paperlang.NodeObject, paperlang.NodeKeyedList:
@@ -1353,7 +1391,7 @@ func validReadableID(value string) bool {
 
 func validUnit(unit string) bool {
 	switch unit {
-	case "pt", "mm", "cm", "in", "px", "pc", "em", "rem", "vh", "vw", "%":
+	case "pt", "mm", "cm", "in", "px", "pc", "em", "rem", "vh", "vw", "%", "fr":
 		return true
 	default:
 		return false
@@ -1603,6 +1641,8 @@ func invalidationScope(index sourceIndex, operations []Operation) *InvalidationS
 	for _, operation := range operations {
 		switch edit := operation.(type) {
 		case SetProperty:
+			addNodeAndAncestors(edit.Target)
+		case DeleteProperty:
 			addNodeAndAncestors(edit.Target)
 		case SetProperties:
 			addNodeAndAncestors(edit.Target)

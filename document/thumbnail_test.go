@@ -83,7 +83,7 @@ func TestRegisterAddsThumbnailImage(t *testing.T) {
 	}
 	defer func() { _ = file.Close() }()
 
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	info, err := pdf.RegisterThumbnail("logo-thumb", file, document.ThumbnailOptions{MaxWidth: 48, MaxHeight: 48})
 	if err != nil {
 		t.Fatalf("register thumbnail: %s", err)
@@ -119,8 +119,8 @@ func ExampleGenerateThumbnail() {
 	// png true true
 }
 
-func ExampleDocument_RegisterThumbnail() {
-	pdf := document.MustNew()
+func ExampleTestPDFDocument_RegisterThumbnail() {
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetFont("Helvetica", "", 12)
 	pdf.AddPage()
 

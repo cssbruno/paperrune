@@ -14,7 +14,7 @@ import (
 )
 
 func TestAttachTypedSegmentLinksMapsWrappedAuthoredRangesToExactPDFAnnotations(t *testing.T) {
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 125, Ht: 150}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 125, Ht: 150}), WithNoCompression())
 	planner.SetMargins(15, 15, 15)
 	planner.SetAutoPageBreak(true, 15)
 	segments := []layout.TextSegment{
@@ -37,7 +37,7 @@ func TestAttachTypedSegmentLinksMapsWrappedAuthoredRangesToExactPDFAnnotations(t
 			t.Fatalf("links[%d] = %#v", index, link)
 		}
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestAttachTypedSegmentLinksMapsWrappedAuthoredRangesToExactPDFAnnotations(t
 }
 
 func TestAttachTypedSegmentLinksRejectsUnsafeAndUnrepresentedAuthoredTargets(t *testing.T) {
-	planner := MustNew(WithUnit(UnitPoint))
+	planner := mustNewPDFDocument(WithUnit(UnitPoint))
 	unsafe, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{
 		layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "visible", Link: "javascript:alert(1)"}}},
 	}})
@@ -59,7 +59,7 @@ func TestAttachTypedSegmentLinksRejectsUnsafeAndUnrepresentedAuthoredTargets(t *
 		t.Fatalf("unsafe public link = plan %#v pages %d, %v", unsafe, planner.PageCount(), err)
 	}
 
-	planner = MustNew(WithUnit(UnitPoint))
+	planner = mustNewPDFDocument(WithUnit(UnitPoint))
 	base, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{
 		layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "visible"}}},
 	}})
@@ -87,7 +87,7 @@ func TestTypedInternalDestinationsLinksHierarchyReadingOrderAndPDFReplay(t *test
 			}},
 		}},
 	}}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 220}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 220}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(15, 15, 15)
 	plan, err := planner.PlanLayoutDocument(doc)
 	if err != nil {
@@ -150,7 +150,7 @@ func TestTypedInternalDestinationsLinksHierarchyReadingOrderAndPDFReplay(t *test
 	if plan.Hash() != before || plan.plan.Projection().Destinations[0] != destination {
 		t.Fatal("internal destination plan aliases source model")
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -178,9 +178,9 @@ func TestTypedInternalDestinationFailuresAreAtomicAndDeterministic(t *testing.T)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			model := &layout.LayoutDocument{Body: []layout.Block{layout.ParagraphBlock{Segments: test.segments, Style: style}}}
-			firstPlanner := MustNew(WithUnit(UnitPoint))
+			firstPlanner := mustNewPDFDocument(WithUnit(UnitPoint))
 			first, firstErr := firstPlanner.PlanLayoutDocument(model)
-			second, secondErr := MustNew(WithUnit(UnitPoint)).PlanLayoutDocument(model)
+			second, secondErr := mustNewPDFDocument(WithUnit(UnitPoint)).PlanLayoutDocument(model)
 			if firstErr == nil || secondErr == nil || first.Hash() != "" || second.Hash() != "" || firstPlanner.PageCount() != 0 ||
 				firstErr.Error() != secondErr.Error() || !strings.Contains(firstErr.Error(), test.want) {
 				t.Fatalf("atomic deterministic failure = %#v/%#v, %v / %v", first, second, firstErr, secondErr)
@@ -194,7 +194,7 @@ func TestTypedRowColumnRejectsUnrepresentedDestinationSegmentsAtomically(t *test
 		Block: layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "target", Destination: "inside"}}},
 		Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFraction, Weight: 1},
 	}}}}}
-	planner := MustNew(WithUnit(UnitPoint))
+	planner := mustNewPDFDocument(WithUnit(UnitPoint))
 	plan, err := planner.PlanLayoutDocument(model)
 	if !errors.Is(err, ErrLayoutDocumentPlanUnsupported) || plan.Hash() != "" || planner.PageCount() != 0 || !strings.Contains(err.Error(), "not represented") {
 		t.Fatalf("row/column destination rejection = plan %#v pages %d, %v", plan, planner.PageCount(), err)
@@ -206,7 +206,7 @@ func TestTypedCharacterizationIncludesInternalLinkPDFEvidence(t *testing.T) {
 		if fixture.inventory.Name != "internal-links-hierarchy" {
 			continue
 		}
-		if _, err := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression()).PlanLayoutDocument(fixture.doc); err != nil {
+		if _, err := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression()).PlanLayoutDocument(fixture.doc); err != nil {
 			t.Fatalf("plan internal-link characterization fixture: %v", err)
 		}
 	}

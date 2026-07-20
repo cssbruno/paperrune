@@ -80,13 +80,13 @@ document @receituario:
         gap: 8pt
 
         paragraph @specialty:
-          track-size: 55%
+          width: 55%
           style: "@small"
           bind: "specialty"
           text: "Especialidade"
 
         paragraph @header-document-title:
-          track-size: 45%
+          width: 45%
           style: "@document-title"
           align: "right"
           text: "RECEITUÁRIO"
@@ -95,13 +95,13 @@ document @receituario:
         gap: 8pt
 
         paragraph @clinic-address:
-          track-size: 65%
+          width: 65%
           style: "@small"
           bind: "clinicAddress"
           text: "Endereço da clínica"
 
         paragraph @document-id:
-          track-size: 35%
+          width: 35%
           style: "@small"
           align: "right"
           bind: "documentId"
@@ -138,12 +138,12 @@ document @receituario:
         gap: 8pt
 
         paragraph @patient-label:
-          track-size: 70%
+          width: 70%
           style: "@label"
           text: "PACIENTE"
 
         paragraph @date-label:
-          track-size: 30%
+          width: 30%
           style: "@label"
           align: "right"
           text: "DATA"
@@ -152,13 +152,13 @@ document @receituario:
         gap: 12pt
 
         paragraph @patient-name:
-          track-size: 70%
+          width: 70%
           style: "@base"
           bind: "patient.name"
           text: "Nome do paciente"
 
         paragraph @issued-at:
-          track-size: 30%
+          width: 30%
           style: "@base"
           align: "right"
           bind: "issuedAt"
@@ -175,13 +175,13 @@ document @receituario:
         gap: 12pt
 
         paragraph @patient-address:
-          track-size: 70%
+          width: 70%
           style: "@small"
           bind: "patient.address"
           text: "Endereço"
 
         paragraph @patient-cpf:
-          track-size: 30%
+          width: 30%
           style: "@small"
           align: "right"
           bind: "patient.cpf"
@@ -205,13 +205,13 @@ document @receituario:
           gap: 8pt
 
           paragraph @medication-number:
-            track-size: 8%
+            width: 8%
             style: "@document-title"
             bind: "number"
             text: "01"
 
           paragraph @medication-content:
-            track-size: 92%
+            width: 92%
             style: "@medication-copy"
             bind: "content"
             text: "Medicamento, quantidade e modo de usar"

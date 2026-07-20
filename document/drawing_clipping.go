@@ -17,7 +17,7 @@ import (
 // rectangle. Call ClipEnd() to restore unclipped operations.
 //
 // This ClipText() example demonstrates this method.
-func (f *Document) ClipRect(x, y, w, h float64, outline bool) {
+func (f *pdfDocument) ClipRect(x, y, w, h float64, outline bool) {
 	if f.err != nil {
 		return
 	}
@@ -37,7 +37,7 @@ func (f *Document) ClipRect(x, y, w, h float64, outline bool) {
 // will be shown. After calling this method, all rendering operations (for
 // example, ImageOptions(), LinearGradient(), etc.) will be clipped. Call
 // ClipEnd() to restore unclipped operations.
-func (f *Document) ClipText(x, y float64, txtStr string, outline bool) {
+func (f *pdfDocument) ClipText(x, y float64, txtStr string, outline bool) {
 	if f.err != nil {
 		return
 	}
@@ -49,7 +49,7 @@ func (f *Document) ClipText(x, y float64, txtStr string, outline bool) {
 	f.outf("q BT %.5f %.5f Td %d Tr (%s) Tj ET", x*f.k, (f.h-y)*f.k, intIf(outline, 5, 7), f.escape(txtStr))
 }
 
-func (f *Document) clipArc(x1, y1, x2, y2, x3, y3 float64) {
+func (f *pdfDocument) clipArc(x1, y1, x2, y2, x3, y3 float64) {
 	h := f.h
 	f.outf("%.5f %.5f %.5f %.5f %.5f %.5f c ", x1*f.k, (h-y1)*f.k, x2*f.k, (h-y2)*f.k, x3*f.k, (h-y3)*f.k)
 }
@@ -65,7 +65,7 @@ func (f *Document) clipArc(x1, y1, x2, y2, x3, y3 float64) {
 // ClipEnd() to restore unclipped operations.
 //
 // This ClipText() example demonstrates this method.
-func (f *Document) ClipRoundedRect(x, y, w, h, r float64, outline bool) {
+func (f *pdfDocument) ClipRoundedRect(x, y, w, h, r float64, outline bool) {
 	f.ClipRoundedRectExt(x, y, w, h, r, r, r, r, outline)
 }
 
@@ -73,7 +73,7 @@ func (f *Document) ClipRoundedRect(x, y, w, h, r float64, outline bool) {
 // different radius for each corner, given by rTL (top-left), rTR (top-right),
 // rBR (bottom-right), rBL (bottom-left). See ClipRoundedRect() for more
 // details. This method is demonstrated in the ClipText() example.
-func (f *Document) ClipRoundedRectExt(x, y, w, h, rTL, rTR, rBR, rBL float64, outline bool) {
+func (f *pdfDocument) ClipRoundedRectExt(x, y, w, h, rTL, rTR, rBR, rBL float64, outline bool) {
 	if f.err != nil {
 		return
 	}
@@ -88,7 +88,7 @@ func (f *Document) ClipRoundedRectExt(x, y, w, h, rTL, rTR, rBR, rBL float64, ou
 
 // roundedRectPath adds a rounded rectangle path. RoundedRect() and
 // ClipRoundedRect() share this helper and add their own drawing operation.
-func (f *Document) roundedRectPath(x, y, w, h, rTL, rTR, rBR, rBL float64) {
+func (f *pdfDocument) roundedRectPath(x, y, w, h, rTL, rTR, rBR, rBL float64) {
 	k := f.k
 	hp := f.h
 	myArc := (4.0 / 3.0) * (math.Sqrt2 - 1.0)
@@ -128,7 +128,7 @@ func (f *Document) roundedRectPath(x, y, w, h, rTL, rTR, rBR, rBL float64) {
 // ellipse. Call ClipEnd() to restore unclipped operations.
 //
 // This ClipText() example demonstrates this method.
-func (f *Document) ClipEllipse(x, y, rx, ry float64, outline bool) {
+func (f *pdfDocument) ClipEllipse(x, y, rx, ry float64, outline bool) {
 	if f.err != nil {
 		return
 	}
@@ -156,7 +156,7 @@ func (f *Document) ClipEllipse(x, y, rx, ry float64, outline bool) {
 // operations.
 //
 // The ClipText() example demonstrates this method.
-func (f *Document) ClipCircle(x, y, r float64, outline bool) {
+func (f *pdfDocument) ClipCircle(x, y, r float64, outline bool) {
 	f.ClipEllipse(x, y, r, r, outline)
 }
 
@@ -171,7 +171,7 @@ func (f *Document) ClipCircle(x, y, r float64, outline bool) {
 // ClipEnd() to restore unclipped operations.
 //
 // The ClipText() example demonstrates this method.
-func (f *Document) ClipPolygon(points []Point, outline bool) {
+func (f *pdfDocument) ClipPolygon(points []Point, outline bool) {
 	if f.err != nil {
 		return
 	}
@@ -203,7 +203,7 @@ func (f *Document) ClipPolygon(points []Point, outline bool) {
 // output successfully while a clipping operation is active.
 //
 // The ClipText() example demonstrates this method.
-func (f *Document) ClipEnd() {
+func (f *pdfDocument) ClipEnd() {
 	if f.err == nil {
 		if f.clipNest > 0 {
 			f.clipNest--

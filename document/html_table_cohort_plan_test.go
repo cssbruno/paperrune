@@ -39,7 +39,7 @@ func htmlUnifiedTableStructuredFixture(t testing.TB) string {
 
 func TestHTMLUnifiedTableTracksStructuredCellsSemanticsRasterPDFAndCursor(t *testing.T) {
 	source := htmlUnifiedTableStructuredFixture(t)
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestHTMLUnifiedTableTracksStructuredCellsSemanticsRasterPDFAndCursor(t *tes
 	if firstCell.Box.Padding.Left != 1.5 || firstCell.Box.Border.Left.Width != .75 || firstCell.Box.Border.Left.Color.R != 0x50 {
 		t.Fatalf("legacy table defaults = %#v", firstCell.Box)
 	}
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestHTMLUnifiedTableTracksStructuredCellsSemanticsRasterPDFAndCursor(t *tes
 	tagged := htmlUnifiedFlexTestPlanner()
 	tagged.EnableTaggedPDF()
 	tagged.SetComplianceMetadata(ComplianceMetadata{PDFUA2: true, Title: "HTML structured table", Lang: "en-US"})
-	taggedPlan, err := tagged.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	taggedPlan, err := tagged.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,13 +128,13 @@ func TestHTMLUnifiedTableTracksStructuredCellsSemanticsRasterPDFAndCursor(t *tes
 		}
 	}
 
-	live := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 220}), WithNoCompression(), WithDeterministicOutput())
+	live := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 220}), WithNoCompression(), WithDeterministicOutput())
 	live.SetMargins(20, 20, 20)
 	live.SetAutoPageBreak(true, 20)
 	live.AddPage()
 	live.SetFont("Helvetica", "", 12)
 	live.SetXY(20, 170)
-	html := live.HTMLNew()
+	html := live.htmlNew()
 	fragment, err := html.planCompiledHTMLFragmentContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
@@ -158,11 +158,11 @@ func TestHTMLUnifiedTableRepeatedHeaderPaginationAndAtomicContracts(t *testing.T
 		rows.WriteString(`</td><td>bounded content</td></tr>`)
 	}
 	source := `<table><thead><tr><th width="40%">Name</th><th width="60%">Value</th></tr></thead><tbody>` + rows.String() + `</tbody></table>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := typedTableTestPlanner().PlanCompiledHTMLContext(context.Background(), 10, compiled)
+	plan, err := typedTableTestPlanner().planCompiledHTMLContext(context.Background(), 10, compiled)
 	if err != nil || plan.PageCount() < 2 {
 		t.Fatalf("paginated HTML table pages=%d err=%v", plan.PageCount(), err)
 	}
@@ -184,12 +184,12 @@ func TestHTMLUnifiedTableRepeatedHeaderPaginationAndAtomicContracts(t *testing.T
 		`<table><tr><td><table><tbody><tr><td>nested</td></tr></tbody><tbody><tr><td>duplicate section</td></tr></tbody></table></td></tr></table>`,
 	}
 	for _, source := range invalid {
-		compiled, compileErr := CompileHTML(source)
+		compiled, compileErr := compileHTML(source)
 		if compileErr != nil {
 			continue
 		}
 		planner := htmlUnifiedFlexTestPlanner()
-		bad, planErr := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+		bad, planErr := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 		if planErr == nil || bad.Hash() != "" || planner.PageCount() != 0 || planner.Error() != nil {
 			t.Fatalf("invalid table %q plan=%#v pages=%d documentErr=%v err=%v", source, bad, planner.PageCount(), planner.Error(), planErr)
 		}
@@ -197,14 +197,14 @@ func TestHTMLUnifiedTableRepeatedHeaderPaginationAndAtomicContracts(t *testing.T
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	planner := htmlUnifiedFlexTestPlanner()
-	bad, err := planner.PlanCompiledHTMLContext(canceled, 12, compiled)
+	bad, err := planner.planCompiledHTMLContext(canceled, 12, compiled)
 	if !errors.Is(err, context.Canceled) || bad.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("canceled table plan=%#v pages=%d err=%v", bad, planner.PageCount(), err)
 	}
 }
 
 func TestHTMLUnifiedTableCompiledReuseIsConcurrentAndDetached(t *testing.T) {
-	compiled, err := CompileHTML(`<table><caption>Concurrent</caption><tr><th width="30%">Key</th><th width="70%">Value</th></tr><tr><td>A</td><td>Reusable</td></tr></table>`)
+	compiled, err := compileHTML(`<table><caption>Concurrent</caption><tr><th width="30%">Key</th><th width="70%">Value</th></tr><tr><td>A</td><td>Reusable</td></tr></table>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestHTMLUnifiedTableCompiledReuseIsConcurrentAndDetached(t *testing.T) {
 		group.Add(1)
 		go func(index int) {
 			defer group.Done()
-			plan, planErr := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			plan, planErr := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			hashes[index], errs[index] = plan.Hash(), planErr
 		}(index)
 	}
@@ -231,11 +231,11 @@ func TestHTMLUnifiedTableCompiledReuseIsConcurrentAndDetached(t *testing.T) {
 func TestHTMLUnifiedTablePinnedBrowserTrackGeometry(t *testing.T) {
 	const paper = `<style>table{width:100%;border-collapse:collapse}td{padding:0;border:none;font-size:12pt;line-height:12pt}.a{width:30%}.b{width:70%}</style>` +
 		`<table><tr><td class="a">A</td><td class="b">B</td></tr></table>`
-	compiled, err := CompileHTML(paper)
+	compiled, err := compileHTML(paper)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,14 +274,14 @@ func TestHTMLUnifiedTablePinnedBrowserTrackGeometry(t *testing.T) {
 
 func BenchmarkHTMLUnifiedStructuredTablePlanning(b *testing.B) {
 	source := htmlUnifiedTableStructuredFixture(b)
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		b.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
 	b.ReportAllocs()
 	for index := 0; index < b.N; index++ {
-		if _, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
+		if _, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -292,12 +292,12 @@ func TestHTMLUnifiedTableVisualFixture(t *testing.T) {
 	if destination == "" {
 		t.Skip("set PAPERRUNE_TABLE_FIXTURE_PDF to write the reviewed table PDF")
 	}
-	compiled, err := CompileHTML(htmlUnifiedTableStructuredFixture(t))
+	compiled, err := compileHTML(htmlUnifiedTableStructuredFixture(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}

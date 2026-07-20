@@ -10,7 +10,7 @@ import (
 )
 
 func TestMustNewBestCompression(t *testing.T) {
-	pdf := MustNew(WithBestCompression())
+	pdf := mustNewPDFDocument(WithBestCompression())
 	if pdf.compressLevel != zlib.BestCompression {
 		t.Fatalf("compressLevel = %d, want %d", pdf.compressLevel, zlib.BestCompression)
 	}
@@ -20,7 +20,7 @@ func TestMustNewBestCompression(t *testing.T) {
 }
 
 func TestMustNewCompressionCanStillBeOverridden(t *testing.T) {
-	pdf := MustNew(WithBestCompression())
+	pdf := mustNewPDFDocument(WithBestCompression())
 	pdf.SetNoCompression()
 	if pdf.compressLevel != zlib.NoCompression {
 		t.Fatalf("compressLevel = %d, want %d", pdf.compressLevel, zlib.NoCompression)
@@ -31,7 +31,7 @@ func TestMustNewCompressionCanStillBeOverridden(t *testing.T) {
 }
 
 func TestNewDocumentReturnsConstructorError(t *testing.T) {
-	pdf, err := NewDocument(WithUnit(Unit("parsec")))
+	pdf, err := newPDFDocument(WithUnit(Unit("parsec")))
 	if err == nil {
 		t.Fatal("expected constructor error for invalid unit")
 	}
@@ -41,7 +41,7 @@ func TestNewDocumentReturnsConstructorError(t *testing.T) {
 }
 
 func TestNewDocumentReturnsCachePolicyError(t *testing.T) {
-	pdf, err := NewDocument(WithResourceCachePolicy(ResourceCachePolicy(99)))
+	pdf, err := newPDFDocument(WithResourceCachePolicy(ResourceCachePolicy(99)))
 	if err == nil {
 		t.Fatal("expected constructor error for invalid cache policy")
 	}
@@ -51,7 +51,7 @@ func TestNewDocumentReturnsCachePolicyError(t *testing.T) {
 }
 
 func TestNewDocumentWithDefaultsReturnsCachePolicyError(t *testing.T) {
-	pdf, err := NewDocumentWithDefaults(Defaults{Compression: true}, WithResourceCachePolicy(ResourceCachePolicy(99)))
+	pdf, err := newPDFDocumentWithDefaults(Defaults{Compression: true}, WithResourceCachePolicy(ResourceCachePolicy(99)))
 	if err == nil {
 		t.Fatal("expected constructor error for invalid cache policy")
 	}
@@ -61,7 +61,7 @@ func TestNewDocumentWithDefaultsReturnsCachePolicyError(t *testing.T) {
 }
 
 func TestNewDocumentFunctionalOptions(t *testing.T) {
-	pdf, err := NewDocument(
+	pdf, err := newPDFDocument(
 		WithOrientation(OrientationLandscape),
 		WithUnit(UnitInch),
 		WithPageSize(PageSizeLetter),
@@ -88,7 +88,7 @@ func TestNewDocumentFunctionalOptions(t *testing.T) {
 }
 
 func TestCompressionWorkerOptionsCanDisableBackgroundWork(t *testing.T) {
-	pdf, err := NewDocument(
+	pdf, err := newPDFDocument(
 		WithPageCompressionWorkers(0),
 		WithAttachmentCompressionWorkers(0),
 	)
@@ -111,7 +111,7 @@ func TestCompressionPolicyOptionConfiguresAllFields(t *testing.T) {
 		AttachmentWorkers:        2,
 		TinyStreamThresholdBytes: 128,
 	}
-	pdf, err := NewDocument(WithCompressionPolicy(policy))
+	pdf, err := newPDFDocument(WithCompressionPolicy(policy))
 	if err != nil {
 		t.Fatalf("NewDocument returned error: %s", err)
 	}
@@ -123,46 +123,46 @@ func TestCompressionPolicyOptionConfiguresAllFields(t *testing.T) {
 func TestCompressionOptionsRespectCallOrder(t *testing.T) {
 	bestSpeed := CompressionPolicy{Mode: CompressionEnabled, Level: zlib.BestSpeed}
 
-	pdf := MustNew(WithBestCompression(), WithCompressionPolicy(bestSpeed))
+	pdf := mustNewPDFDocument(WithBestCompression(), WithCompressionPolicy(bestSpeed))
 	if got := pdf.CompressionPolicy().Level; got != zlib.BestSpeed {
 		t.Fatalf("later WithCompressionPolicy level = %d, want BestSpeed", got)
 	}
 
-	pdf = MustNew(WithCompressionPolicy(bestSpeed), WithBestCompression())
+	pdf = mustNewPDFDocument(WithCompressionPolicy(bestSpeed), WithBestCompression())
 	if got := pdf.CompressionPolicy().Level; got != zlib.BestCompression {
 		t.Fatalf("later WithBestCompression level = %d, want BestCompression", got)
 	}
 
-	pdf = MustNew(WithBestCompression(), WithProductionPolicy(ServerSafePolicy()))
+	pdf = mustNewPDFDocument(WithBestCompression(), WithProductionPolicy(ServerSafePolicy()))
 	if got := pdf.CompressionPolicy().Level; got != zlib.BestSpeed {
 		t.Fatalf("later server policy level = %d, want BestSpeed", got)
 	}
 
-	pdf = MustNew(WithProductionPolicy(ServerSafePolicy()), WithBestCompression())
+	pdf = mustNewPDFDocument(WithProductionPolicy(ServerSafePolicy()), WithBestCompression())
 	if got := pdf.CompressionPolicy().Level; got != zlib.BestCompression {
 		t.Fatalf("later WithBestCompression after server policy level = %d, want BestCompression", got)
 	}
 }
 
 func TestDeterministicOutputOptionsRespectCallOrder(t *testing.T) {
-	pdf := MustNew(WithDeterministicOutput(), WithOutputPolicy(OutputPolicy{}))
+	pdf := mustNewPDFDocument(WithDeterministicOutput(), WithOutputPolicy(OutputPolicy{}))
 	if !pdf.creationDate.IsZero() {
 		t.Fatalf("later non-deterministic output policy kept creation date %v", pdf.creationDate)
 	}
 
-	pdf = MustNew(WithOutputPolicy(OutputPolicy{}), WithDeterministicOutput())
+	pdf = mustNewPDFDocument(WithOutputPolicy(OutputPolicy{}), WithDeterministicOutput())
 	if pdf.creationDate.IsZero() {
 		t.Fatal("later WithDeterministicOutput did not install a fixed creation date")
 	}
 
-	pdf = MustNew(WithProductionPolicy(DeterministicPolicy()), WithOutputPolicy(OutputPolicy{}))
+	pdf = mustNewPDFDocument(WithProductionPolicy(DeterministicPolicy()), WithOutputPolicy(OutputPolicy{}))
 	if !pdf.creationDate.IsZero() {
 		t.Fatalf("later output policy did not disable production determinism: %v", pdf.creationDate)
 	}
 }
 
 func TestCompressionPolicyPartialStructsDoNotDisableCompression(t *testing.T) {
-	pdf, err := NewDocument(WithCompressionPolicy(CompressionPolicy{PageWorkers: 2}))
+	pdf, err := newPDFDocument(WithCompressionPolicy(CompressionPolicy{PageWorkers: 2}))
 	if err != nil {
 		t.Fatalf("NewDocument returned error: %s", err)
 	}
@@ -171,7 +171,7 @@ func TestCompressionPolicyPartialStructsDoNotDisableCompression(t *testing.T) {
 		t.Fatalf("CompressionPolicy() = %#v, want enabled best-speed with 2 page workers", got)
 	}
 
-	pdf, err = NewDocument(WithCompressionPolicy(CompressionPolicy{Level: zlib.BestCompression}))
+	pdf, err = newPDFDocument(WithCompressionPolicy(CompressionPolicy{Level: zlib.BestCompression}))
 	if err != nil {
 		t.Fatalf("NewDocument returned error: %s", err)
 	}
@@ -182,7 +182,7 @@ func TestCompressionPolicyPartialStructsDoNotDisableCompression(t *testing.T) {
 }
 
 func TestCompressionPolicyCanExplicitlyDisableWorkers(t *testing.T) {
-	pdf, err := NewDocument(WithCompressionPolicy(CompressionPolicy{
+	pdf, err := newPDFDocument(WithCompressionPolicy(CompressionPolicy{
 		Level:             zlib.BestSpeed,
 		PageWorkers:       CompressionWorkersDisabled,
 		AttachmentWorkers: CompressionWorkersDisabled,
@@ -197,7 +197,7 @@ func TestCompressionPolicyCanExplicitlyDisableWorkers(t *testing.T) {
 }
 
 func TestNoCompressionOptionDisablesCompression(t *testing.T) {
-	pdf, err := NewDocument(WithNoCompression())
+	pdf, err := newPDFDocument(WithNoCompression())
 	if err != nil {
 		t.Fatalf("NewDocument returned error: %s", err)
 	}
@@ -236,7 +236,7 @@ func TestRuntimePolicyFromProductionPolicyResolvesOperationalDefaults(t *testing
 }
 
 func TestCompressionWorkerOptionsRejectNegativeValues(t *testing.T) {
-	pdf, err := NewDocument(WithPageCompressionWorkers(-1))
+	pdf, err := newPDFDocument(WithPageCompressionWorkers(-1))
 	if err == nil {
 		t.Fatal("expected page worker constructor error")
 	}
@@ -244,7 +244,7 @@ func TestCompressionWorkerOptionsRejectNegativeValues(t *testing.T) {
 		t.Fatalf("pdf = %#v, want nil on constructor error", pdf)
 	}
 
-	pdf, err = NewDocument(WithAttachmentCompressionWorkers(-1))
+	pdf, err = newPDFDocument(WithAttachmentCompressionWorkers(-1))
 	if err == nil {
 		t.Fatal("expected attachment worker constructor error")
 	}
@@ -255,7 +255,7 @@ func TestCompressionWorkerOptionsRejectNegativeValues(t *testing.T) {
 
 func TestNewDocumentFontCacheOptions(t *testing.T) {
 	cache := NewFontCache()
-	pdf, err := NewDocument(WithFontCache(cache))
+	pdf, err := newPDFDocument(WithFontCache(cache))
 	if err != nil {
 		t.Fatalf("NewDocument returned error: %s", err)
 	}
@@ -263,7 +263,7 @@ func TestNewDocumentFontCacheOptions(t *testing.T) {
 		t.Fatal("WithFontCache did not install explicit font cache")
 	}
 
-	pdf, err = NewDocument(WithResourceCachePolicy(ResourceCacheDocument))
+	pdf, err = newPDFDocument(WithResourceCachePolicy(ResourceCacheDocument))
 	if err != nil {
 		t.Fatalf("NewDocument(document cache) returned error: %s", err)
 	}
@@ -271,7 +271,7 @@ func TestNewDocumentFontCacheOptions(t *testing.T) {
 		t.Fatal("ResourceCacheDocument should create a document-local font cache")
 	}
 
-	pdf, err = NewDocument(WithResourceCachePolicy(ResourceCacheDisabled))
+	pdf, err = newPDFDocument(WithResourceCachePolicy(ResourceCacheDisabled))
 	if err != nil {
 		t.Fatalf("NewDocument(disabled cache) returned error: %s", err)
 	}
@@ -281,7 +281,7 @@ func TestNewDocumentFontCacheOptions(t *testing.T) {
 }
 
 func TestMustNewUsesTypedConstructionOptions(t *testing.T) {
-	pdf := MustNew(
+	pdf := mustNewPDFDocument(
 		WithOrientation(OrientationLandscape),
 		WithUnit(UnitInch),
 		WithPageSize(PageSizeLetter),

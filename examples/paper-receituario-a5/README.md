@@ -1,8 +1,7 @@
 # A5 Receituários in Paper
 
 This example defines a restrained A5 prescription as data-driven `.paper`
-source. It uses the same fictional content and safety labeling as the Go
-version in `examples/medical-document-suite`.
+source with fictional content and explicit safety labeling.
 
 From the repository root:
 

@@ -19,7 +19,7 @@ import (
 // ErrHTMLPlanUnsupported reports that a compiled HTML fragment cannot be
 // lowered as one unit to the unified planner. Public HTML entry points fail
 // atomically for this error; there is no automatic legacy renderer route.
-var ErrHTMLPlanUnsupported = errors.New("document: HTML unified plan unsupported")
+var errHTMLPlanUnsupported = errors.New("document: HTML unified plan unsupported")
 
 const htmlUnifiedMaxTextBytes = 4 << 20
 
@@ -37,13 +37,13 @@ func preservesHTMLAuthoredWhitespace(ctx context.Context) bool {
 // PlanCompiledHTML lowers the initial strict HTML text/list cohort through the
 // same immutable LayoutDocumentPlan used by typed and .paper inputs. Planning
 // is atomic and does not mutate the receiving Document.
-func (f *Document) PlanCompiledHTML(lineHeight float64, compiled *CompiledHTML) (LayoutDocumentPlan, error) {
-	return f.PlanCompiledHTMLContext(context.Background(), lineHeight, compiled)
+func (f *pdfDocument) planCompiledHTML(lineHeight float64, compiled *compiledHTML) (LayoutDocumentPlan, error) {
+	return f.planCompiledHTMLContext(context.Background(), lineHeight, compiled)
 }
 
 // PlanCompiledHTMLContext is the cancellation-aware form of PlanCompiledHTML.
 // The entire fragment is capability-scanned and lowered before layout begins.
-func (f *Document) PlanCompiledHTMLContext(ctx context.Context, lineHeight float64, compiled *CompiledHTML) (LayoutDocumentPlan, error) {
+func (f *pdfDocument) planCompiledHTMLContext(ctx context.Context, lineHeight float64, compiled *compiledHTML) (LayoutDocumentPlan, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -96,7 +96,7 @@ func (f *Document) PlanCompiledHTMLContext(ctx context.Context, lineHeight float
 	plan, err := f.PlanLayoutDocumentContext(withHTMLAuthoredWhitespace(ctx), model)
 	if err != nil {
 		if errors.Is(err, ErrLayoutDocumentPlanUnsupported) {
-			return LayoutDocumentPlan{}, fmt.Errorf("%w: typed lowering: %w", ErrHTMLPlanUnsupported, err)
+			return LayoutDocumentPlan{}, fmt.Errorf("%w: typed lowering: %w", errHTMLPlanUnsupported, err)
 		}
 		return LayoutDocumentPlan{}, err
 	}
@@ -123,19 +123,19 @@ func (f *Document) PlanCompiledHTMLContext(ctx context.Context, lineHeight float
 	return plan, nil
 }
 
-func lowerCompiledHTMLTextCohort(ctx context.Context, compiled *CompiledHTML, lineHeight float64) (*layout.LayoutDocument, error) {
+func lowerCompiledHTMLTextCohort(ctx context.Context, compiled *compiledHTML, lineHeight float64) (*layout.LayoutDocument, error) {
 	return lowerCompiledHTMLTextCohortUnits(ctx, compiled, lineHeight, func(value float64) float64 { return value })
 }
 
-func lowerCompiledHTMLTextCohortUnits(ctx context.Context, compiled *CompiledHTML, lineHeight float64, pointsToUnits func(float64) float64) (*layout.LayoutDocument, error) {
+func lowerCompiledHTMLTextCohortUnits(ctx context.Context, compiled *compiledHTML, lineHeight float64, pointsToUnits func(float64) float64) (*layout.LayoutDocument, error) {
 	return lowerCompiledHTMLTextCohortUnitsWidth(ctx, compiled, lineHeight, pointsToUnits, 0)
 }
 
-func lowerCompiledHTMLTextCohortUnitsWidth(ctx context.Context, compiled *CompiledHTML, lineHeight float64, pointsToUnits func(float64) float64, availableWidth float64) (*layout.LayoutDocument, error) {
+func lowerCompiledHTMLTextCohortUnitsWidth(ctx context.Context, compiled *compiledHTML, lineHeight float64, pointsToUnits func(float64) float64, availableWidth float64) (*layout.LayoutDocument, error) {
 	return lowerCompiledHTMLTextCohortUnitsBounds(ctx, compiled, lineHeight, pointsToUnits, availableWidth, 0)
 }
 
-func lowerCompiledHTMLTextCohortUnitsBounds(ctx context.Context, compiled *CompiledHTML, lineHeight float64, pointsToUnits func(float64) float64, availableWidth, availableHeight float64) (*layout.LayoutDocument, error) {
+func lowerCompiledHTMLTextCohortUnitsBounds(ctx context.Context, compiled *compiledHTML, lineHeight float64, pointsToUnits func(float64) float64, availableWidth, availableHeight float64) (*layout.LayoutDocument, error) {
 	if len(compiled.unifiedResolved) != len(compiled.tokens) {
 		clone := *compiled
 		clone.unifiedResolved = make([]htmlUnifiedResolvedElement, len(compiled.tokens))
@@ -165,15 +165,15 @@ func lowerCompiledHTMLTextCohortUnitsBounds(ctx context.Context, compiled *Compi
 	return model, nil
 }
 
-func lowerHTMLPlanBlockRange(ctx context.Context, compiled *CompiledHTML, start, limit int, lineHeight float64, textBytes *int, depth int, pointsToUnits func(float64) float64) ([]layout.Block, error) {
+func lowerHTMLPlanBlockRange(ctx context.Context, compiled *compiledHTML, start, limit int, lineHeight float64, textBytes *int, depth int, pointsToUnits func(float64) float64) ([]layout.Block, error) {
 	return lowerHTMLPlanBlockRangeWidthState(ctx, compiled, start, limit, lineHeight, textBytes, depth, pointsToUnits, 0, &htmlPlanLoweringState{})
 }
 
-func lowerHTMLPlanBlockRangeWidth(ctx context.Context, compiled *CompiledHTML, start, limit int, lineHeight float64, textBytes *int, depth int, pointsToUnits func(float64) float64, availableWidth float64) ([]layout.Block, error) {
+func lowerHTMLPlanBlockRangeWidth(ctx context.Context, compiled *compiledHTML, start, limit int, lineHeight float64, textBytes *int, depth int, pointsToUnits func(float64) float64, availableWidth float64) ([]layout.Block, error) {
 	return lowerHTMLPlanBlockRangeWidthState(ctx, compiled, start, limit, lineHeight, textBytes, depth, pointsToUnits, availableWidth, &htmlPlanLoweringState{})
 }
 
-func lowerHTMLPlanBlockRangeWidthState(ctx context.Context, compiled *CompiledHTML, start, limit int, lineHeight float64, textBytes *int, depth int, pointsToUnits func(float64) float64, availableWidth float64, state *htmlPlanLoweringState) ([]layout.Block, error) {
+func lowerHTMLPlanBlockRangeWidthState(ctx context.Context, compiled *compiledHTML, start, limit int, lineHeight float64, textBytes *int, depth int, pointsToUnits func(float64) float64, availableWidth float64, state *htmlPlanLoweringState) ([]layout.Block, error) {
 	if depth > 512 {
 		return nil, htmlPlanUnsupported("fragment", start, "block nesting exceeds the unified adapter limit")
 	}
@@ -195,7 +195,7 @@ func lowerHTMLPlanBlockRangeWidthState(ctx context.Context, compiled *CompiledHT
 			if text != "" {
 				*textBytes += len(text)
 				if *textBytes > htmlUnifiedMaxTextBytes {
-					return nil, ErrHTMLLimitExceeded
+					return nil, errHTMLLimitExceeded
 				}
 				body = append(body, htmlPlanParagraph(text, lineHeight))
 			}
@@ -398,14 +398,14 @@ type htmlPlanTableCellDefaults struct {
 	border  layout.BorderSide
 }
 
-func htmlPlanTable(ctx context.Context, compiled *CompiledHTML, start, end int, lineHeight float64, textBytes *int, pointsToUnits func(float64) float64, availableWidth float64, state *htmlPlanLoweringState) (layout.TableBlock, error) {
+func htmlPlanTable(ctx context.Context, compiled *compiledHTML, start, end int, lineHeight float64, textBytes *int, pointsToUnits func(float64) float64, availableWidth float64, state *htmlPlanLoweringState) (layout.TableBlock, error) {
 	if state == nil {
 		state = &htmlPlanLoweringState{}
 	}
 	state.tableDepth++
 	defer func() { state.tableDepth-- }()
 	if state.tableDepth > htmlUnifiedMaxNestedTableDepth {
-		return layout.TableBlock{}, ErrHTMLLimitExceeded
+		return layout.TableBlock{}, errHTMLLimitExceeded
 	}
 	tableAttrs := compiled.tokens[start].Attr
 	for name := range tableAttrs {
@@ -577,7 +577,7 @@ func htmlPlanTable(ctx context.Context, compiled *CompiledHTML, start, end int, 
 		columns = sectionColumns
 	}
 	if columns == 0 || columns > htmlUnifiedMaxTableColumns {
-		return layout.TableBlock{}, ErrHTMLLimitExceeded
+		return layout.TableBlock{}, errHTMLLimitExceeded
 	}
 	table.Columns = make([]layout.TableColumn, columns)
 	for _, hint := range columnHints {
@@ -609,7 +609,7 @@ func htmlPlanTable(ctx context.Context, compiled *CompiledHTML, start, end int, 
 	return table, nil
 }
 
-func htmlPlanTableRows(ctx context.Context, compiled *CompiledHTML, start, end int, lineHeight float64, textBytes *int, state *htmlPlanLoweringState, pointsToUnits func(float64) float64, availableWidth float64, defaults htmlPlanTableCellDefaults) ([]layout.TableRow, []htmlPlanTableColumnHint, error) {
+func htmlPlanTableRows(ctx context.Context, compiled *compiledHTML, start, end int, lineHeight float64, textBytes *int, state *htmlPlanLoweringState, pointsToUnits func(float64) float64, availableWidth float64, defaults htmlPlanTableCellDefaults) ([]layout.TableRow, []htmlPlanTableColumnHint, error) {
 	rows := make([]layout.TableRow, 0)
 	var hints []htmlPlanTableColumnHint
 	var active []int
@@ -773,7 +773,7 @@ func htmlPlanTableRows(ctx context.Context, compiled *CompiledHTML, start, end i
 		rows = append(rows, row)
 		state.tableRows++
 		if state.tableRows > htmlDefaultMaxTableRows {
-			return nil, nil, ErrHTMLLimitExceeded
+			return nil, nil, errHTMLLimitExceeded
 		}
 		for slot := range active {
 			if active[slot] > 0 {
@@ -788,7 +788,7 @@ func htmlPlanTableRows(ctx context.Context, compiled *CompiledHTML, start, end i
 	return rows, hints, nil
 }
 
-func htmlPlanTableCellBlocks(ctx context.Context, compiled *CompiledHTML, start, end int, lineHeight float64, textBytes *int, pointsToUnits func(float64) float64, inherited layout.TextStyle, state *htmlPlanLoweringState, availableWidth float64) ([]layout.Block, error) {
+func htmlPlanTableCellBlocks(ctx context.Context, compiled *compiledHTML, start, end int, lineHeight float64, textBytes *int, pointsToUnits func(float64) float64, inherited layout.TextStyle, state *htmlPlanLoweringState, availableWidth float64) ([]layout.Block, error) {
 	cellNode := compiled.tokenNode[start]
 	hasBlock := false
 	for index := start + 1; index < end; index++ {
@@ -1068,7 +1068,7 @@ func htmlPlanTableColumnCount(rows []layout.TableRow) (int, error) {
 	return max, nil
 }
 
-func htmlPlanFigure(ctx context.Context, compiled *CompiledHTML, start, end int, lineHeight float64, textBytes *int, pointsToUnits func(float64) float64, availableWidth float64) (layout.ImageBlock, error) {
+func htmlPlanFigure(ctx context.Context, compiled *compiledHTML, start, end int, lineHeight float64, textBytes *int, pointsToUnits func(float64) float64, availableWidth float64) (layout.ImageBlock, error) {
 	var image layout.ImageBlock
 	haveImage := false
 	for index := start + 1; index < end; {
@@ -1142,7 +1142,7 @@ func htmlPlanFigure(ctx context.Context, compiled *CompiledHTML, start, end int,
 	return image, nil
 }
 
-func htmlPlanImage(compiled *CompiledHTML, index int, pointsToUnits func(float64) float64, availableWidth float64) (layout.Block, error) {
+func htmlPlanImage(compiled *compiledHTML, index int, pointsToUnits func(float64) float64, availableWidth float64) (layout.Block, error) {
 	token := compiled.tokens[index]
 	for name := range token.Attr {
 		switch name {
@@ -1236,7 +1236,7 @@ func htmlPlanImage(compiled *CompiledHTML, index int, pointsToUnits func(float64
 	}, nil
 }
 
-func htmlPlanBlockBreakPolicy(compiled *CompiledHTML, index int) (bool, bool, error) {
+func htmlPlanBlockBreakPolicy(compiled *compiledHTML, index int) (bool, bool, error) {
 	token := compiled.tokens[index]
 	declarations := compiled.unifiedResolved[index].decl
 	if len(declarations) == 0 {
@@ -1295,7 +1295,7 @@ func htmlPlanParagraphSegments(segments []layout.TextSegment, lineHeight float64
 	return layout.ParagraphBlock{Segments: append([]layout.TextSegment(nil), segments...), Style: layout.TextStyle{LineHeight: lineHeight}}
 }
 
-func htmlPlanElementEnd(compiled *CompiledHTML, start int) (int, error) {
+func htmlPlanElementEnd(compiled *compiledHTML, start int) (int, error) {
 	if start < 0 || start >= len(compiled.elementEnd) {
 		return 0, htmlPlanUnsupported("element", start, "element boundary is unavailable")
 	}
@@ -1306,7 +1306,7 @@ func htmlPlanElementEnd(compiled *CompiledHTML, start int) (int, error) {
 	return end, nil
 }
 
-func htmlPlanInlineSegments(ctx context.Context, compiled *CompiledHTML, start, end int, textBytes *int) ([]layout.TextSegment, error) {
+func htmlPlanInlineSegments(ctx context.Context, compiled *compiledHTML, start, end int, textBytes *int) ([]layout.TextSegment, error) {
 	tokens := compiled.tokens
 	baseStyle := layout.TextStyle{}
 	if start > 0 && start-1 < len(compiled.unifiedResolved) {
@@ -1348,7 +1348,7 @@ func htmlPlanInlineSegments(ctx context.Context, compiled *CompiledHTML, start, 
 			out.append(token.Str)
 			*textBytes += len(token.Str)
 			if *textBytes > htmlUnifiedMaxTextBytes {
-				return nil, ErrHTMLLimitExceeded
+				return nil, errHTMLLimitExceeded
 			}
 		case 'O':
 			switch token.Str {
@@ -1452,7 +1452,7 @@ func htmlPlanExpandSegmentTabs(segments []layout.TextSegment, base layout.TextSt
 	return segments
 }
 
-func htmlPlanList(ctx context.Context, compiled *CompiledHTML, start, end int, lineHeight float64, textBytes *int) (layout.ListBlock, error) {
+func htmlPlanList(ctx context.Context, compiled *compiledHTML, start, end int, lineHeight float64, textBytes *int) (layout.ListBlock, error) {
 	ordered := compiled.tokens[start].Str == "ol"
 	resolvedList := compiled.unifiedResolved[start]
 	list := layout.ListBlock{Ordered: ordered, Style: resolvedList.text, Box: resolvedList.box}
@@ -1542,7 +1542,7 @@ func htmlPlanList(ctx context.Context, compiled *CompiledHTML, start, end int, l
 	return list, nil
 }
 
-func htmlPlanStructuredListEntry(ctx context.Context, compiled *CompiledHTML, start, end int, lineHeight float64, textBytes *int) ([]layout.Block, error) {
+func htmlPlanStructuredListEntry(ctx context.Context, compiled *compiledHTML, start, end int, lineHeight float64, textBytes *int) ([]layout.Block, error) {
 	parent := compiled.tokenNode[start]
 	blocks := make([]layout.Block, 0, 2)
 	decl := compiled.unifiedResolved[start].decl
@@ -1617,7 +1617,7 @@ func htmlPlanStructuredListEntry(ctx context.Context, compiled *CompiledHTML, st
 	return blocks, nil
 }
 
-func htmlPlanDefinitionList(ctx context.Context, compiled *CompiledHTML, start, end int, lineHeight float64, textBytes *int) ([]layout.Block, error) {
+func htmlPlanDefinitionList(ctx context.Context, compiled *compiledHTML, start, end int, lineHeight float64, textBytes *int) ([]layout.Block, error) {
 	blocks := make([]layout.Block, 0)
 	haveTerm := false
 	for index := start + 1; index < end; {
@@ -1891,7 +1891,7 @@ func htmlPlanUnsupported(tag string, token int, reason string) error {
 	if tag == "" {
 		tag = "unknown"
 	}
-	return fmt.Errorf("%w: token %d <%s>: %s", ErrHTMLPlanUnsupported, token, tag, reason)
+	return fmt.Errorf("%w: token %d <%s>: %s", errHTMLPlanUnsupported, token, tag, reason)
 }
 
 func htmlPlanHeadingLevel(tag string) (int, bool) {

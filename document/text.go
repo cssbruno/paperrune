@@ -12,7 +12,7 @@ import (
 // first character's baseline. This method allows a string to be placed
 // precisely on the page, but it is usually easier to use Cell(), MultiCell()
 // or Write(), which are the standard methods for printing text.
-func (f *Document) Text(x, y float64, txtStr string) {
+func (f *pdfDocument) Text(x, y float64, txtStr string) {
 	if !f.requireCurrentFont("rendering text") {
 		return
 	}
@@ -68,7 +68,7 @@ func (f *Document) Text(x, y float64, txtStr string) {
 	f.outTaggedContent(buf, tag)
 }
 
-func (f *Document) appendWordSpacedUTF8Text(buf []byte, text string, reverse bool) []byte {
+func (f *pdfDocument) appendWordSpacedUTF8Text(buf []byte, text string, reverse bool) []byte {
 	if reverse {
 		text = reverseText(text)
 	}
@@ -97,7 +97,7 @@ func (f *Document) appendWordSpacedUTF8Text(buf []byte, text string, reverse boo
 // layout and splitting account for it. GetStringWidth continues to report font
 // metric width only and therefore excludes this extra spacing. See the
 // WriteAligned example for a demonstration of its use.
-func (f *Document) SetWordSpacing(space float64) {
+func (f *pdfDocument) SetWordSpacing(space float64) {
 	if f.err != nil {
 		return
 	}
@@ -127,7 +127,7 @@ func (f *Document) SetWordSpacing(space float64) {
 // 6: Fill, then stroke text and add to path for clipping
 // 7: Add text to path for clipping
 // This method is demonstrated in the SetTextRenderingMode example.
-func (f *Document) SetTextRenderingMode(mode int) {
+func (f *pdfDocument) SetTextRenderingMode(mode int) {
 	if mode >= 0 && mode <= 7 {
 		var scratch [16]byte
 		buf := appendPDFInt(scratch[:0], mode)
@@ -136,7 +136,7 @@ func (f *Document) SetTextRenderingMode(mode int) {
 	}
 }
 
-func (f *Document) write(h float64, txtStr string, link int, linkStr string) {
+func (f *pdfDocument) write(h float64, txtStr string, link int, linkStr string) {
 	if !f.requireCurrentFont("rendering text") {
 		return
 	}
@@ -219,7 +219,7 @@ func (f *Document) write(h float64, txtStr string, link int, linkStr string) {
 	}
 }
 
-func (f *Document) writeUTF8(h float64, s string, link int, linkStr string, w, wmax float64) {
+func (f *pdfDocument) writeUTF8(h float64, s string, link int, linkStr string, w, wmax float64) {
 	sep := -1
 	i := 0
 	j := 0
@@ -296,26 +296,26 @@ func (f *Document) writeUTF8(h float64, s string, link int, linkStr string, w, w
 // It is possible to put a link on the text.
 //
 // h indicates the line height in the unit of measure specified in New().
-func (f *Document) Write(h float64, txtStr string) {
+func (f *pdfDocument) Write(h float64, txtStr string) {
 	f.write(h, txtStr, 0, "")
 }
 
 // Writef is like Write but uses printf-style formatting. See the documentation
 // for package fmt for more details on fmtStr and args.
-func (f *Document) Writef(h float64, fmtStr string, args ...any) {
+func (f *pdfDocument) Writef(h float64, fmtStr string, args ...any) {
 	f.write(h, sprintf(fmtStr, args...), 0, "")
 }
 
 // WriteLinkString writes text that when clicked launches an external URL. See
 // Write() for argument details.
-func (f *Document) WriteLinkString(h float64, displayStr, targetStr string) {
+func (f *pdfDocument) WriteLinkString(h float64, displayStr, targetStr string) {
 	f.write(h, displayStr, 0, targetStr)
 }
 
 // WriteLinkID writes text that when clicked jumps to another location in the
 // PDF. linkID is an identifier returned by AddLink(). See Write() for argument
 // details.
-func (f *Document) WriteLinkID(h float64, displayStr string, linkID int) {
+func (f *pdfDocument) WriteLinkID(h float64, displayStr string, linkID int) {
 	f.write(h, displayStr, linkID, "")
 }
 
@@ -331,7 +331,7 @@ func (f *Document) WriteLinkID(h float64, displayStr string, linkID int) {
 //
 // alignStr sets horizontal alignment of the given textStr. The options are
 // "L", "C" and "R" (Left, Center, Right). The default is "L".
-func (f *Document) WriteAligned(width, lineHeight float64, textStr, alignStr string) {
+func (f *pdfDocument) WriteAligned(width, lineHeight float64, textStr, alignStr string) {
 	lMargin, _, rMargin, _ := f.GetMargins()
 	pageWidth, _ := f.GetPageSize()
 	if width == 0 {
@@ -369,7 +369,7 @@ func (f *Document) WriteAligned(width, lineHeight float64, textStr, alignStr str
 // value of h indicates the height of the last printed cell.
 //
 // This method is demonstrated in the example for MultiCell.
-func (f *Document) Ln(h float64) {
+func (f *pdfDocument) Ln(h float64) {
 	f.x = f.lMargin
 	if h < 0 {
 		f.y += f.lasth
@@ -379,7 +379,7 @@ func (f *Document) Ln(h float64) {
 }
 
 // Escape special characters in strings
-func (f *Document) escape(s string) string {
+func (f *pdfDocument) escape(s string) string {
 	s = strings.ReplaceAll(s, "\\", "\\\\")
 	s = strings.ReplaceAll(s, "(", "\\(")
 	s = strings.ReplaceAll(s, ")", "\\)")
@@ -387,11 +387,11 @@ func (f *Document) escape(s string) string {
 	return s
 }
 
-func (f *Document) textstring(s string) string {
+func (f *pdfDocument) textstring(s string) string {
 	return string(f.appendTextString(make([]byte, 0, len(s)+2), s))
 }
 
-func (f *Document) appendTextString(buf []byte, s string) []byte {
+func (f *pdfDocument) appendTextString(buf []byte, s string) []byte {
 	if f.protect.encrypted {
 		b := []byte(s)
 		if err := f.protect.rc4(f.n, &b); err != nil {
@@ -415,7 +415,7 @@ func (f *Document) appendTextString(buf []byte, s string) []byte {
 	return buf
 }
 
-func (f *Document) appendUTF16TextString(buf []byte, s string) []byte {
+func (f *pdfDocument) appendUTF16TextString(buf []byte, s string) []byte {
 	if f.protect.encrypted {
 		return f.appendTextString(buf, utf8toutf16(s))
 	}
@@ -435,38 +435,38 @@ func blankCount(str string) (count int) {
 	return
 }
 
-func (f *Document) wordSpacingFontUnits() float64 {
+func (f *pdfDocument) wordSpacingFontUnits() float64 {
 	if f.fontSize == 0 {
 		return 0
 	}
 	return f.ws * 1000 / f.fontSize
 }
 
-func (f *Document) textWidthWithWordSpacing(text string) float64 {
+func (f *pdfDocument) textWidthWithWordSpacing(text string) float64 {
 	return f.GetStringWidth(text) + f.ws*float64(blankCount(text))
 }
 
 // SetUnderlineThickness accepts a multiplier for adjusting the text underline
 // thickness, defaulting to 1. See SetUnderlineThickness example.
-func (f *Document) SetUnderlineThickness(thickness float64) {
+func (f *pdfDocument) SetUnderlineThickness(thickness float64) {
 	f.userUnderlineThickness = thickness
 }
 
-func (f *Document) appendUnderlineRect(buf []byte, x, y float64, txt string) []byte {
+func (f *pdfDocument) appendUnderlineRect(buf []byte, x, y float64, txt string) []byte {
 	return f.appendUnderlineRectWidth(buf, x, y, f.textWidthWithWordSpacing(txt))
 }
 
-func (f *Document) appendUnderlineRectWidth(buf []byte, x, y, width float64) []byte {
+func (f *pdfDocument) appendUnderlineRectWidth(buf []byte, x, y, width float64) []byte {
 	up := float64(f.currentFont.Up)
 	ut := float64(f.currentFont.Ut) * f.userUnderlineThickness
 	return appendPDFRectPaint(buf, x*f.k, (f.h-(y-up/1000*f.fontSize))*f.k, width*f.k, -ut/1000*f.fontSizePt, "f", false)
 }
 
-func (f *Document) appendStrikeoutRect(buf []byte, x, y float64, txt string) []byte {
+func (f *pdfDocument) appendStrikeoutRect(buf []byte, x, y float64, txt string) []byte {
 	return f.appendStrikeoutRectWidth(buf, x, y, f.textWidthWithWordSpacing(txt))
 }
 
-func (f *Document) appendStrikeoutRectWidth(buf []byte, x, y, width float64) []byte {
+func (f *pdfDocument) appendStrikeoutRectWidth(buf []byte, x, y, width float64) []byte {
 	up := float64(f.currentFont.Up)
 	ut := float64(f.currentFont.Ut)
 	return appendPDFRectPaint(buf, x*f.k, (f.h-(y+4*up/1000*f.fontSize))*f.k, width*f.k, -ut/1000*f.fontSizePt, "f", false)

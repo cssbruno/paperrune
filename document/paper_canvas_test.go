@@ -42,7 +42,7 @@ func TestPaperCanvasUsesUnifiedAnchorPlanAndExactOutputs(t *testing.T) {
 	if err != nil || len(raster.Pages) != 1 || len(raster.Pages[0].PNG) == 0 {
 		t.Fatalf("raster = %#v, %v", raster, err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if rendered, err := target.WritePaperPlan(plan); err != nil || !rendered.OK() {
 		t.Fatalf("WritePaperPlan = %#v, %v", rendered, err)
 	}
@@ -81,7 +81,7 @@ func TestPaperCanvasComposesWithFlowAndPageShell(t *testing.T) {
 	if err != nil || bytes.Count(svg.SVG, []byte("<path ")) < 2 || bytes.Count(svg.SVG, []byte("<text ")) < len("HEADERBeforeAfter") {
 		t.Fatalf("mixed SVG = %s, %v", svg.SVG, err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if rendered, err := target.WritePaperPlan(plan); err != nil || !rendered.OK() {
 		t.Fatalf("WritePaperPlan = %#v, %v", rendered, err)
 	}

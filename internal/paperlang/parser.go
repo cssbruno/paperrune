@@ -434,7 +434,7 @@ func (p *paperParser) parseScalar() Scalar {
 		numberText, unit := splitUnit(token.Lexeme)
 		parsed, err := strconv.ParseFloat(numberText, 64)
 		if err != nil || !validUnit(unit) {
-			p.add("PAPER_INVALID_UNIT", fmt.Sprintf("%q is not a supported unit value", token.Lexeme), "use pt, mm, cm, in, px, pc, em, rem, vh, vw, or %", token.Span)
+			p.add("PAPER_INVALID_UNIT", fmt.Sprintf("%q is not a supported unit value", token.Lexeme), "use pt, mm, cm, in, px, pc, em, rem, vh, vw, %, or fr", token.Span)
 		}
 		value.UnitValue = &UnitValue{Number: parsed, Unit: unit}
 	case TokenNull:
@@ -526,7 +526,7 @@ func allowedChild(parent, child NodeKind) bool {
 	case NodeCanvas:
 		return child == NodeAnchor
 	case NodeTable:
-		return child == NodeTableTrack || child == NodeTableHeader || child == NodeTableRow || child == NodeRepeat
+		return child == NodeTableColumn || child == NodeTableHeader || child == NodeTableRow || child == NodeRepeat
 	case NodeTableHeader:
 		return child == NodeTableRow
 	case NodeTableRow:
@@ -561,7 +561,7 @@ func allowedChild(parent, child NodeKind) bool {
 		return child == NodeToken || child == NodeScope
 	case NodeStyle:
 		return false
-	case NodeText, NodeArg, NodeImage, NodeTableTrack, NodeAnchor:
+	case NodeText, NodeArg, NodeImage, NodeTableColumn, NodeAnchor:
 		return false
 	default:
 		return false
@@ -581,7 +581,7 @@ func hierarchyHint(parent NodeKind) string {
 	case NodeCanvas:
 		return "canvas accepts explicit anchor children"
 	case NodeTable:
-		return "table accepts table-track, table-header, table-row, and repeated table-row children"
+		return "table accepts table-column, table-header, table-row, and repeated table-row children"
 	case NodeTableHeader:
 		return "table-header accepts table-row children"
 	case NodeTableRow:
@@ -649,7 +649,7 @@ func splitUnit(value string) (string, string) {
 
 func validUnit(unit string) bool {
 	switch unit {
-	case "pt", "mm", "cm", "in", "px", "pc", "em", "rem", "vh", "vw", "%":
+	case "pt", "mm", "cm", "in", "px", "pc", "em", "rem", "vh", "vw", "%", "fr":
 		return true
 	default:
 		return false

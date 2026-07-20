@@ -19,7 +19,7 @@ import (
 
 func TestPaintDisplayLayoutPlanPDFInterleavesPlannedImageAndText(t *testing.T) {
 	plan, sources := mixedDisplayPDFPlan(t)
-	target := MustNew(WithUnit(UnitMillimeter), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitMillimeter), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, sources); err != nil {
 		t.Fatalf("paintDisplayLayoutPlanPDF() = %v", err)
 	}
@@ -48,7 +48,7 @@ func TestPaintDisplayLayoutPlanPDFRejectsBytesBeforeMutation(t *testing.T) {
 	for digest := range sources {
 		sources[digest] = []byte("not the planned image")
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	before := typedShadowSnapshotOf(target)
 	beforeResources := target.resources
 	err := target.paintDisplayLayoutPlanPDF(plan, sources)
@@ -64,7 +64,7 @@ func TestPaintDisplayLayoutPlanPDFRejectsBytesBeforeMutation(t *testing.T) {
 func TestPaintDisplayLayoutPlanPDFReplaysEndAlignedCoverCrop(t *testing.T) {
 	encoded := encodePlannedWidePNG(t)
 	plan, sources := croppedDisplayPDFPlan(t, encoded, 2, 1)
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	if err := target.paintDisplayLayoutPlanPDF(plan, sources); err != nil {
 		t.Fatalf("paintDisplayLayoutPlanPDF() = %v", err)
 	}
@@ -87,7 +87,7 @@ func TestPaintDisplayLayoutPlanPDFCropPreflightIsAtomic(t *testing.T) {
 	// resource/crop contract declares 2x1. Decode preflight must reject this
 	// before installing resources or opening a page.
 	plan, sources := croppedDisplayPDFPlan(t, decodeTinyPNG(t), 2, 1)
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	before := typedShadowSnapshotOf(target)
 	beforeResources := target.resources
 	err := target.paintDisplayLayoutPlanPDF(plan, sources)
@@ -102,7 +102,7 @@ func TestPaintDisplayLayoutPlanPDFCropPreflightIsAtomic(t *testing.T) {
 
 func mixedDisplayPDFPlan(t *testing.T) (layoutengine.LayoutPlan, plannedImageSources) {
 	t.Helper()
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 96, Ht: 72}))
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 96, Ht: 72}))
 	source.SetMargins(8, 8, 8)
 	source.SetAutoPageBreak(true, 8)
 	doc := layout.NewLayoutDocument()

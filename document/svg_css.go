@@ -75,7 +75,7 @@ func svgPatternUnits(value string, fallback string) string {
 	}
 }
 
-func svgNodeStyle(node svgNode, inherited SVGStyle, rules []htmlCSSRule, ancestors []HTMLSegmentType) SVGStyle {
+func svgNodeStyle(node svgNode, inherited SVGStyle, rules []htmlCSSRule, ancestors []htmlSegmentType) SVGStyle {
 	style := inherited
 	el := svgHTMLSegment(node)
 	attrs := el.Attr

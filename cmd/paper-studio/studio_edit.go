@@ -38,6 +38,7 @@ type studioEditRequest struct {
 	Points         *float64                   `json:"points,omitempty"`
 	Length         string                     `json:"length,omitempty"`
 	Number         *float64                   `json:"number,omitempty"`
+	Count          *uint32                    `json:"count,omitempty"`
 	Width          *float64                   `json:"width_points,omitempty"`
 	Height         *float64                   `json:"height_points,omitempty"`
 	Color          string                     `json:"color,omitempty"`
@@ -62,6 +63,7 @@ type studioEditRequest struct {
 	Preset         string                     `json:"preset,omitempty"`
 	Cases          []studioScenarioMatrixCase `json:"cases,omitempty"`
 	BreakPolicy    string                     `json:"break_policy,omitempty"`
+	Reset          bool                       `json:"reset,omitempty"`
 }
 
 type studioScenarioMatrixCase struct {
@@ -96,6 +98,14 @@ func studioSourceRevision(source string) string {
 }
 
 func (s *studioServer) handleEdit(w http.ResponseWriter, r *http.Request) {
+	s.handleStudioEdit(w, r, true)
+}
+
+func (s *studioServer) handleValidateEdit(w http.ResponseWriter, r *http.Request) {
+	s.handleStudioEdit(w, r, false)
+}
+
+func (s *studioServer) handleStudioEdit(w http.ResponseWriter, r *http.Request, commit bool) {
 	if r.Method != http.MethodPost {
 		methodNotAllowed(w, http.MethodPost)
 		return
@@ -110,7 +120,7 @@ func (s *studioServer) handleEdit(w http.ResponseWriter, r *http.Request) {
 
 	s.editMu.Lock()
 	defer s.editMu.Unlock()
-	result, err := s.applyStudioEdit(ctx, request)
+	result, err := s.applyStudioEdit(ctx, request, commit)
 	if err != nil {
 		status := http.StatusUnprocessableEntity
 		if errors.Is(err, paperd.ErrRevisionConflict) || errors.Is(err, errStudioStaleEdit) {
@@ -133,7 +143,7 @@ func normalizeStudioScenario(value string) string {
 	return strings.TrimPrefix(strings.TrimSpace(value), "@")
 }
 
-func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRequest) (studioEditResponse, error) {
+func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRequest, commit bool) (studioEditResponse, error) {
 	if err := validateStudioEditRequest(request); err != nil {
 		return studioEditResponse{}, err
 	}
@@ -153,19 +163,50 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 	}
 	directTargets := []string{request.Target}
 	operation := paperd.MutationSetBoxProperty
+	if request.Reset {
+		operation = paperd.MutationResetProperty
+	}
 	switch request.Operation {
+	case "document":
+		if !request.Reset {
+			operation = paperd.MutationSetDocumentProperty
+		}
+	case "appearance":
+		if !request.Reset {
+			operation = paperd.MutationSetAppearance
+		}
+	case "condition":
+		if !request.Reset {
+			operation = paperd.MutationSetCondition
+		}
 	case "text":
-		operation = paperd.MutationSetTextProperty
-	case "grid":
-		operation = paperd.MutationSetGridTrack
+		if !request.Reset {
+			operation = paperd.MutationSetTextProperty
+		}
+	case "list":
+		if !request.Reset {
+			operation = paperd.MutationSetListProperty
+		}
+	case "layout-item":
+		if !request.Reset {
+			operation = paperd.MutationSetLayoutItem
+		}
 		if parent == nil || parent.ID == "" {
-			return studioEditResponse{}, fmt.Errorf("%w: grid target requires an addressed layout parent", errStudioInvalidEdit)
+			return studioEditResponse{}, fmt.Errorf("%w: layout item requires an addressed row or column", errStudioInvalidEdit)
 		}
 		directTargets = append(directTargets, parent.ID)
+	case "layout-container":
+		if !request.Reset {
+			operation = paperd.MutationSetLayoutContainer
+		}
 	case "image":
-		operation = paperd.MutationSetImageProperty
+		if !request.Reset {
+			operation = paperd.MutationSetImageProperty
+		}
 	case "table":
-		operation = paperd.MutationSetTableProperty
+		if !request.Reset {
+			operation = paperd.MutationSetTableProperty
+		}
 		table := studioTableAncestor(parsed.AST.Root, request.Target)
 		if table == nil || table.ID == "" {
 			return studioEditResponse{}, fmt.Errorf("%w: table target requires an addressed governing table", errStudioInvalidEdit)
@@ -174,17 +215,30 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 			directTargets = append(directTargets, table.ID)
 		}
 	case "page":
-		operation = paperd.MutationSetPageMargin
+		if request.Reset {
+		} else if request.Property == "page-numbers" || request.Property == "page-number-format" || request.Property == "page-total-alias" {
+			operation = paperd.MutationSetPageNumbering
+		} else {
+			operation = paperd.MutationSetPageMargin
+		}
 	case "page-size":
 		operation = paperd.MutationSetPageSize
 	case "canvas":
-		operation = paperd.MutationSetCanvasAnchor
+		if !request.Reset {
+			operation = paperd.MutationSetCanvasItem
+		}
 		if parent == nil || parent.Kind != paperlang.NodeCanvas || parent.ID == "" {
 			return studioEditResponse{}, fmt.Errorf("%w: canvas target requires an addressed governing canvas", errStudioInvalidEdit)
 		}
 		directTargets = append(directTargets, parent.ID)
+	case "canvas-container":
+		if !request.Reset {
+			operation = paperd.MutationSetCanvasProperty
+		}
 	case "region":
-		operation = paperd.MutationSetPageRegion
+		if !request.Reset {
+			operation = paperd.MutationSetPageRegion
+		}
 		if parent == nil || parent.Kind != paperlang.NodePage || parent.ID == "" || (target.Kind != paperlang.NodeHeader && target.Kind != paperlang.NodeFooter) {
 			return studioEditResponse{}, fmt.Errorf("%w: region target requires an authored header/footer and governing page", errStudioInvalidEdit)
 		}
@@ -197,7 +251,9 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 		}
 		directTargets = append(directTargets, request.NewParent)
 	case "binding":
-		operation = paperd.MutationSetBinding
+		if !request.Reset {
+			operation = paperd.MutationSetBinding
+		}
 	case "template":
 		operation = paperd.MutationInsertTemplate
 	case "import":
@@ -267,12 +323,12 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 		parentID = parent.ID
 	}
 	additionalTarget := ""
-	if request.Operation == "grid" || request.Operation == "canvas" || request.Operation == "region" {
+	if request.Operation == "layout-item" || request.Operation == "canvas" || request.Operation == "region" {
 		if parentID == "" {
 			return studioEditResponse{}, fmt.Errorf("%w: operation requires an addressed governing parent", errStudioInvalidEdit)
 		}
 	}
-	if request.Operation == "grid" {
+	if request.Operation == "layout-item" {
 		additionalTarget = parentID
 	} else if request.Operation == "canvas" {
 		additionalTarget = parentID
@@ -300,7 +356,20 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 	if mutation.Edit.Diff == nil || len(mutation.Edit.Diff.Patches) == 0 || len(mutation.Edit.Diff.Patches) > 7 {
 		return studioEditResponse{}, errors.New("paper-studio: semantic handle did not produce a bounded minimal source patch set")
 	}
+	if !commit {
+		return studioEditResponse{OK: true, Operation: request.Operation, Target: request.Target, Property: request.Property,
+			BeforeSourceRevision: request.SourceRevision, SourceRevision: studioSourceRevision(mutation.Edit.Source),
+			BeforePlanRevision: request.PlanRevision, PlanRevision: request.PlanRevision, Scenario: request.Scenario,
+			Applied: mutation.Edit.Applied, PatchCount: len(mutation.Edit.Diff.Patches)}, nil
+	}
 	if err := writeStudioSourceCAS(snapshot.file, snapshot.sourceHash, mutation.Edit.Source); err != nil {
+		return studioEditResponse{}, err
+	}
+	journal, err := s.studioHistory(snapshot)
+	if err != nil {
+		return studioEditResponse{}, err
+	}
+	if _, _, err = journal.ApplySource(paperedit.SourceJournalRequest{ExpectedRevision: paperedit.SourceRevision(snapshot.source), Group: studioEditHistoryLabel(request), Source: mutation.Edit.Source}); err != nil {
 		return studioEditResponse{}, err
 	}
 	afterScenario := request.Scenario
@@ -328,6 +397,136 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 	}, nil
 }
 
+type studioHistoryRequest struct {
+	SourceRevision string `json:"source_revision"`
+	PlanRevision   string `json:"plan_revision"`
+	Scenario       string `json:"scenario,omitempty"`
+	Action         string `json:"action"`
+}
+
+type studioHistoryResponse struct {
+	CanUndo        bool   `json:"can_undo"`
+	CanRedo        bool   `json:"can_redo"`
+	UndoCount      int    `json:"undo_count"`
+	RedoCount      int    `json:"redo_count"`
+	UndoLabel      string `json:"undo_label,omitempty"`
+	RedoLabel      string `json:"redo_label,omitempty"`
+	SourceRevision string `json:"source_revision"`
+	PlanRevision   string `json:"plan_revision"`
+}
+
+func (s *studioServer) studioHistory(snapshot *studioSnapshot) (*paperedit.Journal, error) {
+	revision := paperedit.SourceRevision(snapshot.source)
+	if s.history != nil {
+		_, current := s.history.Source()
+		if current == revision {
+			return s.history, nil
+		}
+	}
+	journal, err := paperedit.NewJournal(snapshot.file, snapshot.source, paperedit.DefaultJournalLimits())
+	if err != nil {
+		return nil, err
+	}
+	s.history = journal
+	return journal, nil
+}
+
+func studioHistoryResult(snapshot *studioSnapshot, journal *paperedit.Journal) studioHistoryResponse {
+	status := journal.Snapshot()
+	return studioHistoryResponse{CanUndo: status.CanUndo, CanRedo: status.CanRedo, UndoCount: status.UndoCount, RedoCount: status.RedoCount,
+		UndoLabel: status.UndoLabel, RedoLabel: status.RedoLabel,
+		SourceRevision: studioSourceRevision(snapshot.source), PlanRevision: snapshot.revision}
+}
+
+func studioEditHistoryLabel(request studioEditRequest) string {
+	action := "Edit"
+	if request.Reset {
+		action = "Reset"
+	} else if request.Operation == "template" || request.Operation == "import" || request.Operation == "schema" || request.Operation == "schema-object" || request.Operation == "schema-field" {
+		action = "Create"
+	} else if request.Operation == "flow" {
+		action = "Move"
+	}
+	detail := strings.ReplaceAll(request.Operation, "-", " ")
+	if request.Property != "" {
+		detail = strings.ReplaceAll(request.Property, "-", " ")
+	}
+	return fmt.Sprintf("%s %s on %s", action, detail, request.Target)
+}
+
+func (s *studioServer) handleHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodGet+", "+http.MethodPost)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), studioAPITimeout)
+	defer cancel()
+	s.editMu.Lock()
+	defer s.editMu.Unlock()
+	if r.Method == http.MethodGet {
+		snapshot, err := s.current(ctx, r.URL.Query().Get("scenario"))
+		if err != nil {
+			writeStudioError(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+		journal, err := s.studioHistory(snapshot)
+		if err != nil {
+			writeStudioError(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+		writeStudioJSON(w, http.StatusOK, studioHistoryResult(snapshot, journal))
+		return
+	}
+	var request studioHistoryRequest
+	if err := decodeStudioJSON(r, &request); err != nil {
+		writeStudioError(w, http.StatusBadRequest, err)
+		return
+	}
+	snapshot, err := s.current(ctx, request.Scenario)
+	if err != nil {
+		writeStudioError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	if request.SourceRevision != studioSourceRevision(snapshot.source) || request.PlanRevision != snapshot.revision {
+		writeStudioError(w, http.StatusConflict, fmt.Errorf("%w: source or plan changed before history action", errStudioStaleEdit))
+		return
+	}
+	journal, err := s.studioHistory(snapshot)
+	if err != nil {
+		writeStudioError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	expected := paperedit.SourceRevision(snapshot.source)
+	if request.Action == "undo" {
+		_, _, err = journal.Undo(expected)
+	} else if request.Action == "redo" {
+		_, _, err = journal.Redo(expected)
+	} else {
+		writeStudioError(w, http.StatusBadRequest, fmt.Errorf("%w: history action must be undo or redo", errStudioInvalidEdit))
+		return
+	}
+	if err != nil {
+		writeStudioError(w, http.StatusConflict, err)
+		return
+	}
+	source, revision := journal.Source()
+	if err = writeStudioSourceCAS(snapshot.file, snapshot.sourceHash, source); err != nil {
+		if request.Action == "undo" {
+			_, _, _ = journal.Redo(revision)
+		} else {
+			_, _, _ = journal.Undo(revision)
+		}
+		writeStudioError(w, http.StatusConflict, err)
+		return
+	}
+	after, err := s.current(ctx, request.Scenario)
+	if err != nil {
+		writeStudioError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	writeStudioJSON(w, http.StatusOK, studioHistoryResult(after, journal))
+}
+
 func validateStudioEditRequest(request studioEditRequest) error {
 	fields := []string{request.SourceRevision, request.PlanRevision, request.Scenario, request.Operation, request.Target, request.Property, request.Length, request.Color, request.Kind, request.Text, request.Split, request.Path, request.Format, request.FormatLocale, request.FormatCurrency, request.Template, request.Component, request.ImportPath, request.ID, request.NewParent, request.Schema, request.Preset, request.BreakPolicy}
 	for _, field := range fields {
@@ -350,7 +549,7 @@ func validateStudioEditRequest(request studioEditRequest) error {
 	if request.Width != nil && (math.IsNaN(*request.Width) || math.IsInf(*request.Width, 0)) || request.Height != nil && (math.IsNaN(*request.Height) || math.IsInf(*request.Height, 0)) {
 		return fmt.Errorf("%w: page dimensions must be finite", errStudioInvalidEdit)
 	}
-	if request.Operation != "box" && request.Operation != "text" && request.Operation != "grid" && request.Operation != "image" && request.Operation != "table" && request.Operation != "page" && request.Operation != "page-size" && request.Operation != "canvas" && request.Operation != "region" && request.Operation != "binding" && request.Operation != "template" && request.Operation != "import" && request.Operation != "schema" && request.Operation != "schema-object" && request.Operation != "schema-field" && request.Operation != "scenario-create" && request.Operation != "scenario-matrix" && request.Operation != "scenario-value" && request.Operation != "scenario" && request.Operation != "flow" {
+	if request.Operation != "document" && request.Operation != "appearance" && request.Operation != "condition" && request.Operation != "box" && request.Operation != "text" && request.Operation != "list" && request.Operation != "layout-item" && request.Operation != "layout-container" && request.Operation != "image" && request.Operation != "table" && request.Operation != "page" && request.Operation != "page-size" && request.Operation != "canvas" && request.Operation != "canvas-container" && request.Operation != "region" && request.Operation != "binding" && request.Operation != "template" && request.Operation != "import" && request.Operation != "schema" && request.Operation != "schema-object" && request.Operation != "schema-field" && request.Operation != "scenario-create" && request.Operation != "scenario-matrix" && request.Operation != "scenario-value" && request.Operation != "scenario" && request.Operation != "flow" {
 		return fmt.Errorf("%w: operation is outside the closed Studio authoring vocabulary", errStudioInvalidEdit)
 	}
 	if request.Operation == "scenario" {
@@ -380,6 +579,18 @@ func validateStudioEditRequest(request studioEditRequest) error {
 }
 
 func applyStudioSemanticMutation(workspace *paperd.Workspace, guard paperd.PaperMutationGuard, request studioEditRequest) (paperd.PaperMutationResult, error) {
+	if request.Reset {
+		return workspace.PaperResetProperty(paperd.PaperResetPropertyRequest{Guard: guard, Category: request.Operation, Property: request.Property})
+	}
+	if request.Operation == "document" {
+		return workspace.PaperSetDocumentProperty(paperd.PaperSetDocumentPropertyRequest{Guard: guard, Property: paperd.PaperDocumentProperty(request.Property), Text: request.Text})
+	}
+	if request.Operation == "appearance" {
+		return workspace.PaperSetAppearance(paperd.PaperSetAppearanceRequest{Guard: guard, Property: paperd.PaperAppearanceProperty(request.Property), Text: request.Text})
+	}
+	if request.Operation == "condition" {
+		return workspace.PaperSetCondition(paperd.PaperSetConditionRequest{Guard: guard, Expression: request.Text})
+	}
 	if request.Operation == "binding" {
 		return workspace.PaperSetBinding(paperd.PaperSetBindingRequest{
 			Guard: guard, Path: request.Path, Required: request.Required,
@@ -435,8 +646,28 @@ func applyStudioSemanticMutation(workspace *paperd.Workspace, guard paperd.Paper
 		})
 	}
 	if request.Operation == "text" {
+		points, boolean, count := 0.0, false, uint32(0)
+		if request.Points != nil {
+			points = *request.Points
+		}
+		if request.Bool != nil {
+			boolean = *request.Bool
+		}
+		if request.Count != nil {
+			count = *request.Count
+		}
 		return workspace.PaperSetTextProperty(paperd.PaperSetTextPropertyRequest{
 			Guard: guard, Property: paperd.PaperTextProperty(request.Property), Text: request.Text,
+			Points: points, Length: request.Length, Color: request.Color, Kind: request.Kind, Bool: boolean, Count: count,
+		})
+	}
+	if request.Operation == "list" {
+		boolean := false
+		if request.Bool != nil {
+			boolean = *request.Bool
+		}
+		return workspace.PaperSetListProperty(paperd.PaperSetListPropertyRequest{
+			Guard: guard, Property: paperd.PaperListProperty(request.Property), Marker: request.Kind, Bool: boolean,
 		})
 	}
 	if request.Operation == "image" {
@@ -456,18 +687,29 @@ func applyStudioSemanticMutation(workspace *paperd.Workspace, guard paperd.Paper
 		})
 	}
 	if request.Operation == "table" {
-		points, boolean := 0.0, false
+		points, boolean, count := 0.0, false, uint32(0)
 		if request.Points != nil {
 			points = *request.Points
 		}
 		if request.Bool != nil {
 			boolean = *request.Bool
 		}
+		if request.Count != nil {
+			count = *request.Count
+		}
 		return workspace.PaperSetTableProperty(paperd.PaperSetTablePropertyRequest{
-			Guard: guard, Property: paperd.PaperTableProperty(request.Property), Split: request.Split, Points: points, Length: request.Length, Bool: boolean,
+			Guard: guard, Property: paperd.PaperTableProperty(request.Property), Split: request.Split, Points: points, Length: request.Length,
+			Text: request.Text, Kind: request.Kind, Bool: boolean, Count: count,
 		})
 	}
 	if request.Operation == "page" {
+		if request.Property == "page-numbers" || request.Property == "page-number-format" || request.Property == "page-total-alias" {
+			boolean := false
+			if request.Bool != nil {
+				boolean = *request.Bool
+			}
+			return workspace.PaperSetPageNumbering(paperd.PaperSetPageNumberingRequest{Guard: guard, Property: paperd.PaperPageNumberingProperty(request.Property), Text: request.Text, Bool: boolean})
+		}
 		points := 0.0
 		if request.Points != nil {
 			points = *request.Points
@@ -483,14 +725,26 @@ func applyStudioSemanticMutation(workspace *paperd.Workspace, guard paperd.Paper
 		return workspace.PaperSetPageSize(paperd.PaperSetPageSizeRequest{Guard: guard, WidthPoints: *request.Width, HeightPoints: *request.Height})
 	}
 	if request.Operation == "canvas" {
-		offset := 0.0
+		points := 0.0
 		if request.Points != nil {
-			offset = *request.Points
+			points = *request.Points
 		}
-		return workspace.PaperSetCanvasAnchor(paperd.PaperSetCanvasAnchorRequest{
-			Guard: guard, Property: paperd.PaperCanvasAnchorProperty(request.Property), Reference: request.Text,
-			TargetAnchor: paperd.PaperCanvasAnchorProperty(request.Kind), Offset: offset,
-		})
+		item := paperd.PaperSetCanvasItemRequest{Guard: guard, Property: request.Property}
+		if request.Property == "width" || request.Property == "height" {
+			item.Points = points
+		} else if request.Property == "alt" {
+			item.Text = request.Text
+		} else {
+			item.Reference, item.TargetAnchor, item.Offset = request.Text, paperd.PaperCanvasAnchorProperty(request.Kind), points
+		}
+		return workspace.PaperSetCanvasItem(item)
+	}
+	if request.Operation == "canvas-container" {
+		points := 0.0
+		if request.Points != nil {
+			points = *request.Points
+		}
+		return workspace.PaperSetCanvasProperty(paperd.PaperSetCanvasPropertyRequest{Guard: guard, Property: paperd.PaperCanvasProperty(request.Property), Points: points, Kind: request.Kind})
 	}
 	if request.Operation == "region" {
 		points, boolean := 0.0, false
@@ -502,20 +756,28 @@ func applyStudioSemanticMutation(workspace *paperd.Workspace, guard paperd.Paper
 		}
 		return workspace.PaperSetPageRegion(paperd.PaperSetPageRegionRequest{Guard: guard, Property: request.Property, Points: points, Color: request.Color, Bool: boolean})
 	}
+	if request.Operation == "layout-container" {
+		points, boolean := 0.0, false
+		if request.Points != nil {
+			points = *request.Points
+		}
+		if request.Bool != nil {
+			boolean = *request.Bool
+		}
+		return workspace.PaperSetLayoutContainer(paperd.PaperSetLayoutContainerRequest{
+			Guard: guard, Property: paperd.PaperLayoutContainerProperty(request.Property), Points: points, Length: request.Length, Kind: request.Kind, Bool: boolean,
+		})
+	}
 	points := 0.0
 	if request.Points != nil {
 		points = *request.Points
-	}
-	weight := uint32(0)
-	if request.Weight != nil {
-		weight = *request.Weight
 	}
 	factor := 0.0
 	if request.Number != nil {
 		factor = *request.Number
 	}
-	return workspace.PaperSetGridTrack(paperd.PaperSetGridTrackRequest{
-		Guard: guard, Property: paperd.PaperGridTrackProperty(request.Property), Kind: request.Kind, Points: points, Length: request.Length, Weight: weight, Factor: factor,
+	return workspace.PaperSetLayoutItem(paperd.PaperSetLayoutItemRequest{
+		Guard: guard, Property: paperd.PaperLayoutItemProperty(request.Property), Kind: request.Kind, Points: points, Length: request.Length, Factor: factor,
 	})
 }
 

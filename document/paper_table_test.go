@@ -25,9 +25,9 @@ const paperTableSource = "document @report:\n" +
 	"        caption: \"Ledger\"\n" +
 	"        repeat-header: true\n" +
 	"        split: \"rows\"\n" +
-	"        table-track @name-track:\n" +
+	"        table-column @name-track:\n" +
 	"          width: 100pt\n" +
-	"        table-track @value-track:\n" +
+	"        table-column @value-track:\n" +
 	"          width: 84pt\n" +
 	"        table-header @head:\n" +
 	"          table-row @head-row:\n" +
@@ -79,7 +79,7 @@ func TestPaperTablePlansRendersCapturesAndRetainsTableSemantics(t *testing.T) {
 	if err != nil || len(raster.Pages) != 1 || len(raster.Pages[0].PNG) == 0 {
 		t.Fatalf("table raster = %#v, %v", raster, err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	rendered, err := target.WritePaperPlan(plan)
 	if err != nil || !rendered.OK() || target.PageCount() != 1 {
 		t.Fatalf("WritePaperPlan(table) = %#v, %v", rendered, err)
@@ -115,7 +115,7 @@ func TestPaperTableResolvesPercentageTracksAgainstContainingBody(t *testing.T) {
 
 func TestPaperTableMultiPageRepeatHeaderSplitSpansAndNestedContent(t *testing.T) {
 	const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-	source := "document @report:\n  page @sheet:\n    width: 180pt\n    height: 96pt\n    margin: 6pt\n    body @body:\n      table @ledger:\n        repeat-header: true\n        split: \"rows\"\n        table-track @left-track:\n          width: 84pt\n        table-track @right-track:\n          width: 84pt\n        table-header @head:\n          table-row @head-row:\n            cell @head-cell:\n              colspan: 2\n              text: \"REPEATED HEADER\"\n"
+	source := "document @report:\n  page @sheet:\n    width: 180pt\n    height: 96pt\n    margin: 6pt\n    body @body:\n      table @ledger:\n        repeat-header: true\n        split: \"rows\"\n        table-column @left-track:\n          width: 84pt\n        table-column @right-track:\n          width: 84pt\n        table-header @head:\n          table-row @head-row:\n            cell @head-cell:\n              colspan: 2\n              text: \"REPEATED HEADER\"\n"
 	for index := 0; index < 10; index++ {
 		source += fmt.Sprintf("        table-row @row-%d:\n          cell @label-%d:\n            text: \"Row %d\"\n          cell @value-%d:\n            text: \"Value %d\"\n", index, index, index, index, index)
 	}
@@ -175,7 +175,7 @@ func TestPaperTableMultiPageRepeatHeaderSplitSpansAndNestedContent(t *testing.T)
 	if err != nil || len(raster.Pages) != result.Pages {
 		t.Fatalf("raster pages=%d/%d %v", len(raster.Pages), result.Pages, err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	rendered, err := target.WritePaperPlan(plan)
 	if err != nil || !rendered.OK() || rendered.Pages != result.Pages {
 		t.Fatalf("paint=%#v %v", rendered, err)
@@ -183,7 +183,7 @@ func TestPaperTableMultiPageRepeatHeaderSplitSpansAndNestedContent(t *testing.T)
 }
 
 func TestPlanPaperTableSupportsExplicitEmptyCells(t *testing.T) {
-	const source = "document:\n  page:\n    width: 180pt\n    height: 100pt\n    margin: 10pt\n    body:\n      table:\n        table-track:\n          width: 50%\n        table-track:\n          width: 50%\n        table-row:\n          cell:\n            colspan: 1\n          cell:\n            text: \"value\"\n"
+	const source = "document:\n  page:\n    width: 180pt\n    height: 100pt\n    margin: 10pt\n    body:\n      table:\n        table-column:\n          width: 50%\n        table-column:\n          width: 50%\n        table-row:\n          cell:\n            colspan: 1\n          cell:\n            text: \"value\"\n"
 	plan, result, err := PlanPaper("empty-cell.paper", source)
 	if err != nil || !result.OK() || plan.Hash() == "" || plan.PageCount() != 1 {
 		t.Fatalf("PlanPaper() = plan=%#v result=%#v err=%v", plan, result, err)
@@ -207,9 +207,9 @@ func TestPaperFixedTableTracksRemainValidWhenPageChangesToA4(t *testing.T) {
 		"    margin: 6pt\n" +
 		"    body @body:\n" +
 		"      table @ledger:\n" +
-		"        table-track @left:\n" +
+		"        table-column @left:\n" +
 		"          width: 84pt\n" +
-		"        table-track @right:\n" +
+		"        table-column @right:\n" +
 		"          width: 84pt\n" +
 		"        table-row @row:\n" +
 		"          cell @label:\n" +

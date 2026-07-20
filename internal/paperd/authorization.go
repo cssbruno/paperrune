@@ -30,12 +30,19 @@ const (
 	MutationApplyFix             MutationOperation = "apply_fix"
 	MutationSetBoxProperty       MutationOperation = "set_box_property"
 	MutationSetTextProperty      MutationOperation = "set_text_property"
-	MutationSetGridTrack         MutationOperation = "set_grid_track"
+	MutationSetListProperty      MutationOperation = "set_list_property"
+	MutationSetDocumentProperty  MutationOperation = "set_document_property"
+	MutationSetPageNumbering     MutationOperation = "set_page_numbering"
+	MutationSetCanvasProperty    MutationOperation = "set_canvas_property"
+	MutationSetAppearance        MutationOperation = "set_appearance"
+	MutationSetCondition         MutationOperation = "set_condition"
+	MutationSetLayoutItem        MutationOperation = "set_layout_item"
+	MutationSetLayoutContainer   MutationOperation = "set_layout_container"
 	MutationSetImageProperty     MutationOperation = "set_image_property"
 	MutationSetTableProperty     MutationOperation = "set_table_property"
 	MutationSetPageMargin        MutationOperation = "set_page_margin"
 	MutationSetPageSize          MutationOperation = "set_page_size"
-	MutationSetCanvasAnchor      MutationOperation = "set_canvas_anchor"
+	MutationSetCanvasItem        MutationOperation = "set_canvas_item"
 	MutationSetPageRegion        MutationOperation = "set_page_region"
 	MutationMoveNode             MutationOperation = "move_node"
 	MutationInsertTemplate       MutationOperation = "insert_template"
@@ -44,14 +51,16 @@ const (
 	MutationSetScenarioValue     MutationOperation = "set_scenario_value"
 	MutationAddSchemaField       MutationOperation = "add_schema_field"
 	MutationManageScenario       MutationOperation = "manage_scenario"
+	MutationResetProperty        MutationOperation = "reset_property"
 )
 
 func (operation MutationOperation) valid() bool {
 	switch operation {
 	case MutationSetLiteral, MutationSetRichText, MutationSetBinding, MutationFillSlot, MutationApplyFix,
-		MutationSetBoxProperty, MutationSetTextProperty, MutationSetGridTrack, MutationSetImageProperty, MutationSetTableProperty, MutationSetPageMargin, MutationSetPageSize, MutationSetCanvasAnchor, MutationSetPageRegion:
+		MutationSetBoxProperty, MutationSetTextProperty, MutationSetListProperty, MutationSetDocumentProperty, MutationSetPageNumbering, MutationSetCanvasProperty,
+		MutationSetAppearance, MutationSetCondition, MutationSetLayoutItem, MutationSetLayoutContainer, MutationSetImageProperty, MutationSetTableProperty, MutationSetPageMargin, MutationSetPageSize, MutationSetCanvasItem, MutationSetPageRegion:
 		return true
-	case MutationMoveNode, MutationInsertTemplate, MutationCreateScenario, MutationCreateScenarioMatrix, MutationSetScenarioValue, MutationAddSchemaField, MutationManageScenario:
+	case MutationMoveNode, MutationInsertTemplate, MutationCreateScenario, MutationCreateScenarioMatrix, MutationSetScenarioValue, MutationAddSchemaField, MutationManageScenario, MutationResetProperty:
 		return true
 	default:
 		return false

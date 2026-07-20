@@ -65,7 +65,7 @@ func TestNewDocumentWithDefaultsAllowsExplicitCompressionOverride(t *testing.T) 
 }
 
 func outputWithDefaults(defaults document.Defaults, options ...document.Option) (string, error) {
-	pdf, err := document.NewDocumentWithDefaults(defaults, options...)
+	pdf, err := document.NewTestPDFDocumentWithDefaults(defaults, options...)
 	if err != nil {
 		return "", err
 	}

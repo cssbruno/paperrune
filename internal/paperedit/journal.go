@@ -62,6 +62,8 @@ type JournalSnapshot struct {
 	RedoCount   int      `json:"redo_count"`
 	CanUndo     bool     `json:"can_undo"`
 	CanRedo     bool     `json:"can_redo"`
+	UndoLabel   string   `json:"undo_label,omitempty"`
+	RedoLabel   string   `json:"redo_label,omitempty"`
 	SourceBytes int      `json:"source_bytes"`
 }
 
@@ -400,9 +402,16 @@ func (journal *Journal) commitLocked(entry JournalEntry, coalesce bool) error {
 }
 
 func (journal *Journal) snapshotLocked() JournalSnapshot {
-	return JournalSnapshot{File: journal.file, Revision: journal.revision, Sequence: journal.sequence,
+	snapshot := JournalSnapshot{File: journal.file, Revision: journal.revision, Sequence: journal.sequence,
 		UndoCount: len(journal.undo), RedoCount: len(journal.redo), CanUndo: len(journal.undo) > 0,
 		CanRedo: len(journal.redo) > 0, SourceBytes: len(journal.source)}
+	if len(journal.undo) > 0 {
+		snapshot.UndoLabel = journal.undo[len(journal.undo)-1].Group
+	}
+	if len(journal.redo) > 0 {
+		snapshot.RedoLabel = journal.redo[len(journal.redo)-1].Group
+	}
+	return snapshot
 }
 
 func journalBytes(head string, undo, redo []JournalEntry) int {

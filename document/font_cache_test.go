@@ -23,8 +23,8 @@ func TestFontCacheMatchesUTF8FontFromBytes(t *testing.T) {
 		t.Fatalf("AddUTF8FontFromBytes() error = %v", err)
 	}
 
-	build := func(addFont func(*document.Document)) []byte {
-		pdf := document.MustNew()
+	build := func(addFont func(*document.TestPDFDocument)) []byte {
+		pdf := document.MustNewTestPDFDocument()
 		pdf.SetCompression(false)
 		pdf.SetCatalogSort(true)
 		pdf.SetCreationDate(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -40,10 +40,10 @@ func TestFontCacheMatchesUTF8FontFromBytes(t *testing.T) {
 		return out.Bytes()
 	}
 
-	uncached := build(func(pdf *document.Document) {
+	uncached := build(func(pdf *document.TestPDFDocument) {
 		pdf.AddUTF8FontFromBytes("DejaVu", "", fontBytes)
 	})
-	cached := build(func(pdf *document.Document) {
+	cached := build(func(pdf *document.TestPDFDocument) {
 		pdf.AddUTF8FontFromCache("DejaVu", "", cache)
 	})
 	if !bytes.Equal(uncached, cached) {
@@ -58,8 +58,8 @@ func TestAddUTF8FontUsesSharedCacheWithoutChangingOutput(t *testing.T) {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
 
-	build := func(addFont func(*document.Document)) []byte {
-		pdf := document.MustNew()
+	build := func(addFont func(*document.TestPDFDocument)) []byte {
+		pdf := document.MustNewTestPDFDocument()
 		pdf.SetCompression(false)
 		pdf.SetCatalogSort(true)
 		pdf.SetCreationDate(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -75,13 +75,13 @@ func TestAddUTF8FontUsesSharedCacheWithoutChangingOutput(t *testing.T) {
 		return out.Bytes()
 	}
 
-	fromBytes := build(func(pdf *document.Document) {
+	fromBytes := build(func(pdf *document.TestPDFDocument) {
 		pdf.AddUTF8FontFromBytes("DejaVu", "", fontBytes)
 	})
-	firstPathLoad := build(func(pdf *document.Document) {
+	firstPathLoad := build(func(pdf *document.TestPDFDocument) {
 		pdf.AddUTF8Font("DejaVu", "", fontPath)
 	})
-	secondPathLoad := build(func(pdf *document.Document) {
+	secondPathLoad := build(func(pdf *document.TestPDFDocument) {
 		pdf.AddUTF8Font("DejaVu", "", fontPath)
 	})
 

@@ -55,7 +55,7 @@ func TestPaperPlannerHonorsExplicitBreakWithoutBlankPages(t *testing.T) {
 }
 
 func TestWritePaperPaintsExplicitBreakFromTheCompletedPlan(t *testing.T) {
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	result, err := target.WritePaper("explicit.paper", paperExplicitBreakFixture)
 	if err != nil || !result.OK() || result.Pages != 2 || target.PageCount() != 2 {
 		t.Fatalf("WritePaper() = %#v, %v; pages=%d", result, err, target.PageCount())

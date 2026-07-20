@@ -153,13 +153,13 @@ func (p LayoutDocumentPlan) CaptureDisplayPageContext(ctx context.Context, page 
 // the same exact planner used by .paper. Planning is read-only: it neither
 // opens a page nor mutates the supplied model. The receiver supplies page,
 // margin, core-font, and measurement configuration and must be fresh.
-func (f *Document) PlanLayoutDocument(doc *layout.LayoutDocument) (LayoutDocumentPlan, error) {
+func (f *pdfDocument) PlanLayoutDocument(doc *layout.LayoutDocument) (LayoutDocumentPlan, error) {
 	return f.PlanLayoutDocumentContext(context.Background(), doc)
 }
 
 // PlanLayoutDocumentContext is PlanLayoutDocument with cooperative
 // cancellation for bounded planners such as tables.
-func (f *Document) PlanLayoutDocumentContext(ctx context.Context, doc *layout.LayoutDocument) (LayoutDocumentPlan, error) {
+func (f *pdfDocument) PlanLayoutDocumentContext(ctx context.Context, doc *layout.LayoutDocument) (LayoutDocumentPlan, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return LayoutDocumentPlan{}, err
@@ -327,11 +327,11 @@ func (e *layoutDocumentUnsupportedError) Unwrap() error { return ErrLayoutDocume
 // WriteLayoutDocumentPlan preflights and paints an immutable typed plan. It
 // does not measure or paginate again. On preflight failure the target remains
 // unopened. The returned count is the number of pages committed by this call.
-func (f *Document) WriteLayoutDocumentPlan(plan LayoutDocumentPlan) (int, error) {
+func (f *pdfDocument) WriteLayoutDocumentPlan(plan LayoutDocumentPlan) (int, error) {
 	return f.WriteLayoutDocumentPlanContext(context.Background(), plan)
 }
 
-func (f *Document) WriteLayoutDocumentPlanContext(ctx context.Context, plan LayoutDocumentPlan) (int, error) {
+func (f *pdfDocument) WriteLayoutDocumentPlanContext(ctx context.Context, plan LayoutDocumentPlan) (int, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -383,7 +383,7 @@ func (f *Document) WriteLayoutDocumentPlanContext(ctx context.Context, plan Layo
 	return f.PageCount() - pageStart, nil
 }
 
-func (f *Document) validateLayoutDocumentPlanEnvelope(doc *layout.LayoutDocument) error {
+func (f *pdfDocument) validateLayoutDocumentPlanEnvelope(doc *layout.LayoutDocument) error {
 	if f == nil || f.err != nil || f.page != 0 || f.state != documentStateUnopened ||
 		f.clipNest != 0 || f.transformNest != 0 {
 		return newTypedShadowUnsupported(typedShadowDocumentState, "requires a fresh error-free document")
@@ -409,7 +409,7 @@ func (f *Document) validateLayoutDocumentPlanEnvelope(doc *layout.LayoutDocument
 	return nil
 }
 
-func (f *Document) snapshotLayoutDocumentEnvelope(doc *layout.LayoutDocument) (typedLayoutDocumentEnvelope, error) {
+func (f *pdfDocument) snapshotLayoutDocumentEnvelope(doc *layout.LayoutDocument) (typedLayoutDocumentEnvelope, error) {
 	attachments := snapshotLayoutAttachments(doc.Attachments)
 	if len(doc.Attachments) == 0 {
 		attachments = snapshotDocumentAttachments(f.attachments)
@@ -483,7 +483,7 @@ func validateTypedLayoutDocumentEnvelope(envelope typedLayoutDocumentEnvelope) e
 	return nil
 }
 
-func (f *Document) validateLayoutDocumentEnvelopeTarget(envelope typedLayoutDocumentEnvelope) error {
+func (f *pdfDocument) validateLayoutDocumentEnvelopeTarget(envelope typedLayoutDocumentEnvelope) error {
 	if f == nil || f.err != nil || f.page != 0 || f.state != documentStateUnopened ||
 		f.clipNest != 0 || f.transformNest != 0 {
 		return newTypedShadowUnsupported(typedShadowDocumentState, "document-envelope replay requires a fresh error-free target")
@@ -501,7 +501,7 @@ func (f *Document) validateLayoutDocumentEnvelopeTarget(envelope typedLayoutDocu
 	return nil
 }
 
-func (f *Document) installLayoutDocumentEnvelope(envelope typedLayoutDocumentEnvelope) {
+func (f *pdfDocument) installLayoutDocumentEnvelope(envelope typedLayoutDocumentEnvelope) {
 	f.producer = envelope.producer
 	f.title = envelope.title
 	f.subject = envelope.subject

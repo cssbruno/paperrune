@@ -35,14 +35,14 @@ type importedPDFPage struct {
 // classic xref-table PDFs, unencrypted documents, and pages whose content
 // streams are unfiltered or FlateDecode-compressed. PDFs using xref streams or
 // object streams are reported as unsupported.
-func (f *Document) ImportPage(sourceFile string, pageNo int, box string) int {
+func (f *pdfDocument) ImportPage(sourceFile string, pageNo int, box string) int {
 	id, _ := f.ImportPageError(sourceFile, pageNo, box)
 	return id
 }
 
 // ImportPageError imports one page from a PDF file and returns its imported
 // page ID or an error.
-func (f *Document) ImportPageError(sourceFile string, pageNo int, box string) (int, error) {
+func (f *pdfDocument) ImportPageError(sourceFile string, pageNo int, box string) (int, error) {
 	if err := f.requireSecurityFeature("PDF import", f.securityPolicy.AllowPDFImport); err != nil {
 		return 0, err
 	}
@@ -56,20 +56,20 @@ func (f *Document) ImportPageError(sourceFile string, pageNo int, box string) (i
 
 // ImportPageStream imports one page from a PDF stream and returns its imported
 // page ID. The stream is read into memory, so callers may pass any io.Reader.
-func (f *Document) ImportPageStream(source io.Reader, pageNo int, box string) int {
+func (f *pdfDocument) ImportPageStream(source io.Reader, pageNo int, box string) int {
 	id, _ := f.ImportPageStreamError(source, pageNo, box)
 	return id
 }
 
 // ImportPageStreamError imports one page from a PDF stream and returns its
 // imported page ID or an error.
-func (f *Document) ImportPageStreamError(source io.Reader, pageNo int, box string) (int, error) {
+func (f *pdfDocument) ImportPageStreamError(source io.Reader, pageNo int, box string) (int, error) {
 	return f.ImportPageStreamContext(context.Background(), source, pageNo, box)
 }
 
 // ImportPageStreamContext imports one page from a PDF stream and checks ctx
 // before and during bounded source reads.
-func (f *Document) ImportPageStreamContext(ctx context.Context, source io.Reader, pageNo int, box string) (int, error) {
+func (f *pdfDocument) ImportPageStreamContext(ctx context.Context, source io.Reader, pageNo int, box string) (int, error) {
 	if err := f.requireSecurityFeature("PDF import", f.securityPolicy.AllowPDFImport); err != nil {
 		return 0, err
 	}
@@ -90,7 +90,7 @@ func (f *Document) ImportPageStreamContext(ctx context.Context, source io.Reader
 }
 
 // ImportPageSource imports one page from an already parsed PDF source.
-func (f *Document) ImportPageSource(source *importpdf.Source, pageNo int, box string) int {
+func (f *pdfDocument) ImportPageSource(source *importpdf.Source, pageNo int, box string) int {
 	if err := f.requireSecurityFeature("PDF import", f.securityPolicy.AllowPDFImport); err != nil {
 		return 0
 	}
@@ -104,14 +104,14 @@ func (f *Document) ImportPageSource(source *importpdf.Source, pageNo int, box st
 // ImportPagesFromSource imports every page from source and returns the imported
 // page IDs. source may be a file path string, []byte, io.Reader, or
 // *importpdf.Source.
-func (f *Document) ImportPagesFromSource(source any, box string) []int {
+func (f *pdfDocument) ImportPagesFromSource(source any, box string) []int {
 	ids, _ := f.ImportPagesFromSourceContext(context.Background(), source, box)
 	return ids
 }
 
 // ImportPagesFromSourceContext imports every page from source and checks ctx
 // before parsing and between pages.
-func (f *Document) ImportPagesFromSourceContext(ctx context.Context, source any, box string) ([]int, error) {
+func (f *pdfDocument) ImportPagesFromSourceContext(ctx context.Context, source any, box string) ([]int, error) {
 	if err := f.requireSecurityFeature("PDF import", f.securityPolicy.AllowPDFImport); err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func GetPageSizes(source any) (map[int]map[string]Size, error) {
 
 // GetPageSizes returns the available page box sizes for a PDF source and stores
 // any import error on the document. Sizes are reported in PDF points.
-func (f *Document) GetPageSizes(source any) map[int]map[string]Size {
+func (f *pdfDocument) GetPageSizes(source any) map[int]map[string]Size {
 	sourcePDF, err := f.openImportSourceContext(context.Background(), source)
 	if err != nil {
 		f.SetError(err)
@@ -165,16 +165,16 @@ func (f *Document) GetPageSizes(source any) map[int]map[string]Size {
 	return documentPageSizes(sourcePDF.PageSizes())
 }
 
-func (f *Document) importPageFromSource(source *importpdf.Source, pageNo int, box string) int {
+func (f *pdfDocument) importPageFromSource(source *importpdf.Source, pageNo int, box string) int {
 	id, _ := f.importPageFromSourceError(source, pageNo, box)
 	return id
 }
 
-func (f *Document) importPageFromSourceError(source *importpdf.Source, pageNo int, box string) (int, error) {
+func (f *pdfDocument) importPageFromSourceError(source *importpdf.Source, pageNo int, box string) (int, error) {
 	return f.importPageFromSourceErrorContext(context.Background(), source, pageNo, box)
 }
 
-func (f *Document) importPageFromSourceErrorContext(ctx context.Context, source *importpdf.Source, pageNo int, box string) (int, error) {
+func (f *pdfDocument) importPageFromSourceErrorContext(ctx context.Context, source *importpdf.Source, pageNo int, box string) (int, error) {
 	if err := f.requireSecurityFeature("PDF import", f.securityPolicy.AllowPDFImport); err != nil {
 		return 0, err
 	}
@@ -194,7 +194,7 @@ func (f *Document) importPageFromSourceErrorContext(ctx context.Context, source 
 	return f.addImportedPDFPage(page), nil
 }
 
-func (f *Document) openImportSourceContext(ctx context.Context, source any) (*importpdf.Source, error) {
+func (f *pdfDocument) openImportSourceContext(ctx context.Context, source any) (*importpdf.Source, error) {
 	if source == nil {
 		return nil, fmt.Errorf("%w: source is nil", ErrUnsupportedPDFImport)
 	}
@@ -244,7 +244,7 @@ func importContextOutputError(ctx context.Context, err error) error {
 	return err
 }
 
-func (f *Document) checkImportedPDFBytes(size int64) error {
+func (f *pdfDocument) checkImportedPDFBytes(size int64) error {
 	limit := f.importedPDFByteLimit()
 	if limit >= 0 && size > limit {
 		return fmt.Errorf("%w: PDF import source exceeds maximum size", ErrUnsupportedPDFImport)
@@ -252,28 +252,28 @@ func (f *Document) checkImportedPDFBytes(size int64) error {
 	return nil
 }
 
-func (f *Document) importedPDFByteLimit() int64 {
+func (f *pdfDocument) importedPDFByteLimit() int64 {
 	if f.limits.MaxImportedPDFBytes > 0 {
 		return f.limits.MaxImportedPDFBytes
 	}
 	return importpdf.MaxSourceBytes
 }
 
-func (f *Document) importOptions() importpdf.ImportOptions {
+func (f *pdfDocument) importOptions() importpdf.ImportOptions {
 	return importpdf.ImportOptions{
 		MaxSourceBytes:       f.importedPDFByteLimit(),
 		MaxReferencedObjects: f.importedPDFReferencedObjectLimit(),
 	}
 }
 
-func (f *Document) importedPDFReferencedObjectLimit() int {
+func (f *pdfDocument) importedPDFReferencedObjectLimit() int {
 	if f.limits.MaxReferencedObjects > 0 {
 		return f.limits.MaxReferencedObjects
 	}
 	return importpdf.MaxReferencedObjects
 }
 
-func (f *Document) validateImportedPageLimits(page *importpdf.PageRef) error {
+func (f *pdfDocument) validateImportedPageLimits(page *importpdf.PageRef) error {
 	if page == nil {
 		return fmt.Errorf("%w: page is nil", ErrUnsupportedPDFImport)
 	}
@@ -286,7 +286,7 @@ func (f *Document) validateImportedPageLimits(page *importpdf.PageRef) error {
 	return nil
 }
 
-func (f *Document) addImportedPDFPage(page *importpdf.PageRef) int {
+func (f *pdfDocument) addImportedPDFPage(page *importpdf.PageRef) int {
 	f.importedPageSeq++
 	f.ensureResourceStore().addImportedPage(f.importedPageSeq, &importedPDFPage{
 		id:   f.importedPageSeq,
@@ -332,13 +332,13 @@ func (page *importedPDFPage) rewrittenImportDataMatches(baseID int, refs []impor
 // ImportPagesFromSource. Coordinates and dimensions use the document unit.
 // Passing zero for one dimension preserves the imported page aspect ratio;
 // passing zero for both draws the page at its native size.
-func (f *Document) UseImportedPage(pageID int, x, y, w, h float64) {
+func (f *pdfDocument) UseImportedPage(pageID int, x, y, w, h float64) {
 	_ = f.UseImportedPageError(pageID, x, y, w, h)
 }
 
 // UseImportedPageError draws a page imported by ImportPage, ImportPageStream,
 // or ImportPagesFromSource and returns any validation error directly.
-func (f *Document) UseImportedPageError(pageID int, x, y, w, h float64) error {
+func (f *pdfDocument) UseImportedPageError(pageID int, x, y, w, h float64) error {
 	if f.err != nil {
 		return f.err
 	}

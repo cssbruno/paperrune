@@ -40,21 +40,21 @@
     });
   }
 
-  function gridTrackMarks(tracks, page) {
-    return (tracks || []).flatMap((entry) => {
-      const track = entry?.track;
-      const rect = track?.bounds;
-      if (track?.page !== page || !['column', 'row'].includes(track?.axis) || !rect ||
+  function layoutGuideMarks(guides, page) {
+    return (guides || []).flatMap((entry) => {
+      const guide = entry?.track;
+      const rect = guide?.bounds;
+      if (guide?.page !== page || !['column', 'row'].includes(guide?.axis) || !rect ||
           !Number.isFinite(rect.x) || !Number.isFinite(rect.y) ||
           !(rect.width > 0) || !(rect.height > 0)) return [];
       return [{
         index: entry.index,
-        group: track.group,
-        axis: track.axis,
-        trackIndex: track.index,
-        gapAfter: track.gap_after || 0,
+        group: guide.group,
+        axis: guide.axis,
+        guideIndex: guide.index,
+        gapAfter: guide.gap_after || 0,
         rect,
-        label: `${track.axis} track ${track.index + 1} · grid ${track.group}`,
+        label: `${guide.axis} guide ${guide.index + 1} · layout ${guide.group}`,
       }];
     });
   }
@@ -128,5 +128,5 @@
     return marks;
   }
 
-  return {baselineMarks, tableCellMarks, gridTrackMarks, pageRegionMarks, boxModelMarks, issueMarks};
+  return {baselineMarks, tableCellMarks, layoutGuideMarks, pageRegionMarks, boxModelMarks, issueMarks};
 });

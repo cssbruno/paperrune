@@ -6,7 +6,7 @@ package document
 // GetImageInfo returns information about the registered image specified by
 // imageStr. If the image has not been registered, nil is returned. The
 // internal error is not modified by this method.
-func (f *Document) GetImageInfo(imageStr string) (info *ImageInfo) {
+func (f *pdfDocument) GetImageInfo(imageStr string) (info *ImageInfo) {
 	info, _ = f.ensureResourceStore().image(imageStr)
 	if info == nil {
 		return nil
@@ -14,7 +14,7 @@ func (f *Document) GetImageInfo(imageStr string) (info *ImageInfo) {
 	return info.clone()
 }
 
-func (f *Document) newImageInfo() *ImageInfo {
+func (f *pdfDocument) newImageInfo() *ImageInfo {
 	return &ImageInfo{scale: f.k, dpi: 72}
 }
 

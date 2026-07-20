@@ -63,7 +63,7 @@ func TestPlanAndWritePaperScenarioRepeatEndToEnd(t *testing.T) {
 		t.Fatalf("scenario capture does not contain evaluated keyed glyphs: %v\n%s", err, embedded)
 	}
 
-	document, err := NewDocument(WithUnit(UnitPoint), WithDeterministicOutput())
+	document, err := newPDFDocument(WithUnit(UnitPoint), WithDeterministicOutput())
 	if err != nil {
 		t.Fatalf("new document: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestPlanAndWritePaperScenarioBoundedLoopEndToEnd(t *testing.T) {
 	if err != nil || !strings.Contains(json, `"instance":"copies[1]/`) || !strings.Contains(json, `"instance":"copies[2]/`) || strings.Contains(json, `"instance":"copies[3]/`) {
 		t.Fatalf("loop query = %s / %v", json, err)
 	}
-	document := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	document := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	rendered, err := document.WritePaperScenario("loop.paper", source, "preview")
 	if err != nil || !rendered.OK() || rendered.Pages != 1 {
 		t.Fatalf("render = %#v / %v", rendered, err)

@@ -174,7 +174,7 @@ func (r PaperRenderResult) OK() bool {
 // and PDF painter preflight all complete before the target Document is
 // changed. Failures in those stages leave f untouched. An unexpected failure
 // after the preflight-approved paint commit starts may leave an opened target.
-func (f *Document) WritePaper(file, source string) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaper(file, source string) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaper(file, source)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -186,7 +186,7 @@ func (f *Document) WritePaper(file, source string) (PaperRenderResult, error) {
 
 // WritePaperWithAssets is WritePaper with an explicit immutable catalog for
 // human-readable `asset:name` references.
-func (f *Document) WritePaperWithAssets(file, source string, assets PaperAssetCatalog) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperWithAssets(file, source string, assets PaperAssetCatalog) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaperWithAssets(file, source, assets)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -198,7 +198,7 @@ func (f *Document) WritePaperWithAssets(file, source string, assets PaperAssetCa
 
 // WritePaperWithImports is WritePaper with an explicit resolver for reusable
 // themes and styles declared in source-relative files.
-func (f *Document) WritePaperWithImports(file, source string, resolver PaperImportResolver) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperWithImports(file, source string, resolver PaperImportResolver) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaperWithImports(file, source, resolver)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -210,7 +210,7 @@ func (f *Document) WritePaperWithImports(file, source string, resolver PaperImpo
 
 // WritePaperWithAssetsAndImports combines explicit asset and source-import
 // boundaries for direct rendering.
-func (f *Document) WritePaperWithAssetsAndImports(file, source string, assets PaperAssetCatalog, resolver PaperImportResolver) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperWithAssetsAndImports(file, source string, assets PaperAssetCatalog, resolver PaperImportResolver) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaperWithAssetsAndImports(file, source, assets, resolver)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -222,7 +222,7 @@ func (f *Document) WritePaperWithAssetsAndImports(file, source string, assets Pa
 
 // WritePaperScenario is WritePaper with one explicitly selected source
 // scenario. Bounded repeat nodes are expanded before planning.
-func (f *Document) WritePaperScenario(file, source, scenario string) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperScenario(file, source, scenario string) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaperScenario(file, source, scenario)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -232,7 +232,7 @@ func (f *Document) WritePaperScenario(file, source, scenario string) (PaperRende
 	return rendered, err
 }
 
-func (f *Document) WritePaperScenarioWithAssets(file, source, scenario string, assets PaperAssetCatalog) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperScenarioWithAssets(file, source, scenario string, assets PaperAssetCatalog) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaperScenarioWithAssets(file, source, scenario, assets)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -244,7 +244,7 @@ func (f *Document) WritePaperScenarioWithAssets(file, source, scenario string, a
 
 // WritePaperScenarioWithImports renders one selected scenario with reusable
 // themes and styles supplied by an explicit resolver.
-func (f *Document) WritePaperScenarioWithImports(file, source, scenario string, resolver PaperImportResolver) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperScenarioWithImports(file, source, scenario string, resolver PaperImportResolver) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaperScenarioWithImports(file, source, scenario, resolver)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -256,7 +256,7 @@ func (f *Document) WritePaperScenarioWithImports(file, source, scenario string, 
 
 // WritePaperScenarioWithAssetsAndImports combines explicit assets and imports
 // for one selected scenario.
-func (f *Document) WritePaperScenarioWithAssetsAndImports(file, source, scenario string, assets PaperAssetCatalog, resolver PaperImportResolver) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperScenarioWithAssetsAndImports(file, source, scenario string, assets PaperAssetCatalog, resolver PaperImportResolver) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaperScenarioWithAssetsAndImports(file, source, scenario, assets, resolver)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -269,13 +269,13 @@ func (f *Document) WritePaperScenarioWithAssetsAndImports(file, source, scenario
 // WritePaperJSON validates one external JSON object against a declared schema,
 // expands bounded repeats, and paints the resulting plan. It is the concise
 // data-driven path for application-generated documents.
-func (f *Document) WritePaperJSON(file, source string, data []byte) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperJSON(file, source string, data []byte) (PaperRenderResult, error) {
 	return f.WritePaperJSONWithOptions(file, source, data, PaperJSONOptions{})
 }
 
 // WritePaperJSONWithOptions is WritePaperJSON with explicit schema, locale,
 // and fixture identity selection.
-func (f *Document) WritePaperJSONWithOptions(file, source string, data []byte, options PaperJSONOptions) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperJSONWithOptions(file, source string, data []byte, options PaperJSONOptions) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaperJSONWithOptions(file, source, data, options)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -287,7 +287,7 @@ func (f *Document) WritePaperJSONWithOptions(file, source string, data []byte, o
 
 // WritePaperJSONWithAssetsAndImports combines the concise external JSON path
 // with explicit immutable assets and reusable source imports.
-func (f *Document) WritePaperJSONWithAssetsAndImports(file, source string, data []byte, options PaperJSONOptions, assets PaperAssetCatalog, resolver PaperImportResolver) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperJSONWithAssetsAndImports(file, source string, data []byte, options PaperJSONOptions, assets PaperAssetCatalog, resolver PaperImportResolver) (PaperRenderResult, error) {
 	plan, planned, err := PlanPaperJSONWithAssetsAndImports(file, source, data, options, assets, resolver)
 	if err != nil {
 		return PaperRenderResult{Diagnostics: planned.Diagnostics}, err
@@ -500,7 +500,7 @@ func planPaperSourceSelection(ctx context.Context, file, source, scenario string
 	return plan, result, nil
 }
 
-func installPaperCatalogFonts(planner *Document, assets papercompile.AssetCatalog) error {
+func installPaperCatalogFonts(planner *pdfDocument, assets papercompile.AssetCatalog) error {
 	if planner == nil {
 		return errors.New("paper font planner is nil")
 	}
@@ -588,7 +588,7 @@ func paperViewerRevisions(source, scenario string, selected bool) layoutengine.V
 
 // WritePaperPlan preflights and paints an already immutable PaperPlan. It
 // never reparses, recompiles, measures, wraps, or paginates.
-func (f *Document) WritePaperPlan(plan PaperPlan) (PaperRenderResult, error) {
+func (f *pdfDocument) WritePaperPlan(plan PaperPlan) (PaperRenderResult, error) {
 	result := PaperRenderResult{}
 	if plan.hash == "" || plan.PageCount() == 0 {
 		return paperStageFailureWithSpan(result, PaperStagePaint, "PAPER_PLAN_INVALID",
@@ -762,23 +762,23 @@ type paperBodySelector func(page uint32, base layoutengine.Rect) (layoutengine.R
 // planPaperTextBlocks measures each source block through the existing exact
 // core-font line-shadow bridge, then flows all measured lines through one
 // resumable layoutengine plan. It does not paint or mutate either Document.
-func (f *Document) planPaperTextBlocks(doc *layout.LayoutDocument) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planPaperTextBlocks(doc *layout.LayoutDocument) (layoutengine.LayoutPlan, error) {
 	return f.planPaperTextBlocksContext(context.Background(), doc)
 }
 
-func (f *Document) planPaperTextBlocksMapped(doc *layout.LayoutDocument, mapping papercompile.CompileMapping) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planPaperTextBlocksMapped(doc *layout.LayoutDocument, mapping papercompile.CompileMapping) (layoutengine.LayoutPlan, error) {
 	return f.planPaperTextBlocksMappedContext(context.Background(), doc, mapping)
 }
 
-func (f *Document) planPaperTextBlocksContext(ctx context.Context, doc *layout.LayoutDocument) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planPaperTextBlocksContext(ctx context.Context, doc *layout.LayoutDocument) (layoutengine.LayoutPlan, error) {
 	return f.planPaperTextBlocksMappedContext(ctx, doc, papercompile.CompileMapping{})
 }
 
-func (f *Document) planPaperTextBlocksMappedContext(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planPaperTextBlocksMappedContext(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping) (layoutengine.LayoutPlan, error) {
 	return f.planPaperTextBlocksMappedBodiesContext(ctx, doc, mapping, nil)
 }
 
-func (f *Document) planPaperTextBlocksMappedBodiesContext(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1763,7 +1763,7 @@ func (f *Document) planPaperTextBlocksMappedBodiesContext(ctx context.Context, d
 }
 
 type paperBlockMeasurer struct {
-	pdf              *Document
+	pdf              *pdfDocument
 	ctx              context.Context
 	source           *layout.LayoutDocument
 	mapping          papercompile.CompileMapping
@@ -2907,7 +2907,7 @@ func paperRomanCounter(value int) (string, error) {
 	return out.String(), nil
 }
 
-func newPaperPlanner(page papercompile.PageSpec) (*Document, error) {
+func newPaperPlanner(page papercompile.PageSpec) (*pdfDocument, error) {
 	if page.Width <= 0 || page.Height <= 0 || !isFiniteFloat(page.Width) || !isFiniteFloat(page.Height) {
 		return nil, errors.New("compiled page size is invalid")
 	}

@@ -15,7 +15,7 @@ import (
 // SetCatalogSort sets a flag that will be used, if true, to consistently order
 // the document's internal resource catalogs. This method is typically only
 // used for test purposes to facilitate PDF comparison.
-func (f *Document) SetCatalogSort(flag bool) {
+func (f *pdfDocument) SetCatalogSort(flag bool) {
 	f.catalogSort = flag
 }
 
@@ -23,19 +23,19 @@ func (f *Document) SetCatalogSort(flag bool) {
 // default, the time when the document is generated is used for this value.
 // This method is typically only used for testing purposes to facilitate PDF
 // comparison. Specify a zero-value time to revert to the default behavior.
-func (f *Document) SetCreationDate(tm time.Time) {
+func (f *pdfDocument) SetCreationDate(tm time.Time) {
 	f.creationDate = tm
 }
 
 // SetModificationDate fixes the document's internal ModDate value.
 // See SetCreationDate() for more details.
-func (f *Document) SetModificationDate(tm time.Time) {
+func (f *pdfDocument) SetModificationDate(tm time.Time) {
 	f.modDate = tm
 }
 
 // SetJavascriptError rejects embedded PDF JavaScript actions and reports the
 // error directly.
-func (f *Document) SetJavascriptError(script string) error {
+func (f *pdfDocument) SetJavascriptError(script string) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -48,7 +48,7 @@ func (f *Document) SetJavascriptError(script string) error {
 // replace all occurrences of that alias after writing but before the document
 // is closed. Functions ExampleDocument_RegisterAlias() and
 // ExampleDocument_RegisterAlias_utf8() in document_test.go demonstrate this method.
-func (f *Document) RegisterAlias(alias, replacement string) {
+func (f *pdfDocument) RegisterAlias(alias, replacement string) {
 	if current, ok := f.aliasMap[alias]; ok && current == replacement {
 		return
 	}
@@ -58,7 +58,7 @@ func (f *Document) RegisterAlias(alias, replacement string) {
 	f.markPagesContainingAlias(alias)
 }
 
-func (f *Document) putresourcedict() {
+func (f *pdfDocument) putresourcedict() {
 	if !f.omitDeprecatedPDF2Entries() {
 		f.out("/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]")
 	}
@@ -96,7 +96,7 @@ func (f *Document) putresourcedict() {
 	f.putSpotColorResourceDict()
 }
 
-func (f *Document) putresources() {
+func (f *pdfDocument) putresources() {
 	if f.err != nil {
 		return
 	}
@@ -143,7 +143,7 @@ func timeOrNow(tm time.Time) time.Time {
 	return tm
 }
 
-func (f *Document) putinfo() {
+func (f *pdfDocument) putinfo() {
 	if len(f.producer) > 0 {
 		f.outf("/Producer %s", f.textstring(f.producer))
 	}
@@ -168,7 +168,7 @@ func (f *Document) putinfo() {
 	f.outf("/ModDate %s", f.textstring("D:"+mod.Format("20060102150405")))
 }
 
-func (f *Document) putcatalog() {
+func (f *pdfDocument) putcatalog() {
 	f.out("/Type /Catalog")
 	f.out("/Pages 1 0 R")
 	if f.nXmp > 0 {
@@ -226,7 +226,7 @@ func (f *Document) putcatalog() {
 	}
 }
 
-func (f *Document) putheader() {
+func (f *pdfDocument) putheader() {
 	if len(f.blendMap) > 0 {
 		f.setMinimumPDFVersion("1.4")
 	}
@@ -236,7 +236,7 @@ func (f *Document) putheader() {
 	}
 }
 
-func (f *Document) puttrailer() {
+func (f *pdfDocument) puttrailer() {
 	f.outf("/Size %d", f.n+1)
 	f.outf("/Root %d 0 R", f.n)
 	if !f.omitInfoDictionary() {
@@ -251,15 +251,15 @@ func (f *Document) puttrailer() {
 	}
 }
 
-func (f *Document) omitInfoDictionary() bool {
+func (f *pdfDocument) omitInfoDictionary() bool {
 	return f.compliance.PDFA != PDFAModeNone || f.compliance.Arlington
 }
 
-func (f *Document) omitDeprecatedPDF2Entries() bool {
+func (f *pdfDocument) omitDeprecatedPDF2Entries() bool {
 	return f.compliance.PDFA != PDFAModeNone || f.compliance.Arlington
 }
 
-func (f *Document) fileIdentifier() string {
+func (f *pdfDocument) fileIdentifier() string {
 	if f.fileIDHash != nil {
 		return strings.ToUpper(hex.EncodeToString(f.fileIDHash.Sum(nil)[:16]))
 	}
@@ -267,7 +267,7 @@ func (f *Document) fileIdentifier() string {
 	return strings.ToUpper(hex.EncodeToString(sum[:16]))
 }
 
-func (f *Document) putxmp() {
+func (f *pdfDocument) putxmp() {
 	if len(f.xmp) == 0 {
 		return
 	}
@@ -280,7 +280,7 @@ func (f *Document) putxmp() {
 	f.endPDFObject()
 }
 
-func (f *Document) putOutputIntent() {
+func (f *pdfDocument) putOutputIntent() {
 	if len(f.outputIntent.iccProfile) == 0 {
 		return
 	}
@@ -293,7 +293,7 @@ func (f *Document) putOutputIntent() {
 	f.endPDFObject()
 }
 
-func (f *Document) putbookmarks() {
+func (f *pdfDocument) putbookmarks() {
 	nb := len(f.outlines)
 	if nb > 0 {
 		stack := make([]int, 0, nb)
@@ -395,11 +395,11 @@ func appendPDFNamedObjectRef(buf []byte, prefix string, objNum int) []byte {
 	return buf
 }
 
-func (f *Document) enddoc() {
+func (f *pdfDocument) enddoc() {
 	f.enddocContext(context.Background())
 }
 
-func (f *Document) enddocContext(ctx context.Context) {
+func (f *pdfDocument) enddocContext(ctx context.Context) {
 	if f.err != nil {
 		return
 	}
@@ -481,11 +481,11 @@ func (f *Document) enddocContext(ctx context.Context) {
 	f.state = documentStateClosed
 }
 
-func (f *Document) needsFileIDHash() bool {
+func (f *pdfDocument) needsFileIDHash() bool {
 	return f.compliance.PDFA != PDFAModeNone || f.compliance.Arlington
 }
 
-func (f *Document) estimateFinalBufferSize() int {
+func (f *pdfDocument) estimateFinalBufferSize() int {
 	resources := f.ensureResourceStore()
 	size := f.buffer.Len() + 4096
 	if !f.compress {

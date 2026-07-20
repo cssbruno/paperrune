@@ -12,7 +12,7 @@ import (
 
 func TestPaintDisplayLayoutPlanPDFReplaysExactInternalAndExternalLinksWithoutLayout(t *testing.T) {
 	plan := plannedLinkPDFPlan(t)
-	target := MustNew(WithUnit(UnitMillimeter), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitMillimeter), WithNoCompression(), WithDeterministicOutput())
 	if err := target.paintDisplayLayoutPlanPDF(plan, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestInvalidPlannedLinkTargetFailsBeforeDocumentMutation(t *testing.T) {
 	if _, err := layoutengine.AttachLinks(geometry, []layoutengine.PlannedDestination{invalidDestination}, []layoutengine.PlannedLink{link}); err == nil {
 		t.Fatal("invalid destination page unexpectedly produced a paintable plan")
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	before := typedShadowSnapshotOf(target)
 	beforeResources := target.resources
 	if after := typedShadowSnapshotOf(target); after != before || target.PageCount() != 0 || target.resources != beforeResources || len(target.links) != 1 {

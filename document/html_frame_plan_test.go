@@ -12,9 +12,9 @@ import (
 	"github.com/cssbruno/paperrune/inspect"
 )
 
-func newHTMLFrameTestDocument(t *testing.T, height float64) *Document {
+func newHTMLFrameTestDocument(t *testing.T, height float64) *pdfDocument {
 	t.Helper()
-	pdf := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: height}), WithNoCompression(), WithDeterministicOutput())
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: height}), WithNoCompression(), WithDeterministicOutput())
 	pdf.SetMargins(16, 18, 20)
 	pdf.SetAutoPageBreak(true, 22)
 	pdf.AddPage()
@@ -49,11 +49,11 @@ func TestHTMLFragmentPlanningIsAtomicAndReturnsDeterministicExit(t *testing.T) {
 	pdf.Text(16, 28, "manual-before")
 	pdf.SetXY(16, 44)
 	before := append([]byte(nil), pdf.pages[1].Bytes()...)
-	compiled, err := CompileHTML(`<p>planned middle</p><p>second planned line</p>`)
+	compiled, err := compileHTML(`<p>planned middle</p><p>second planned line</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	first, err := html.planCompiledHTMLFragmentContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestHTMLUnifiedFragmentBetweenManualDrawingBeforeAndAfter(t *testing.T) {
 	pdf := newHTMLFrameTestDocument(t, 140)
 	pdf.Text(16, 28, "manual-before")
 	pdf.SetXY(16, 44)
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	if err := html.WriteContext(context.Background(), 12, `<p>planned-middle</p><p>planned-tail</p>`); err != nil {
 		t.Fatal(err)
 	}
@@ -105,11 +105,11 @@ func TestHTMLUnifiedFragmentPreflightFailureDoesNotChangePageOrCursor(t *testing
 	pdf := newHTMLFrameTestDocument(t, 140)
 	pdf.SetXY(16, 44)
 	before := append([]byte(nil), pdf.pages[1].Bytes()...)
-	compiled, err := CompileHTML(`<p>must not paint</p>`)
+	compiled, err := compileHTML(`<p>must not paint</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	html.WriteCompiled(0, compiled)
 	if pdf.Error() == nil {
 		t.Fatal("zero line-height failure = nil")
@@ -122,7 +122,7 @@ func TestHTMLUnifiedFragmentPreflightFailureDoesNotChangePageOrCursor(t *testing
 func TestHTMLUnifiedFragmentContinuationReturnsFinalPageAndCursor(t *testing.T) {
 	pdf := newHTMLFrameTestDocument(t, 82)
 	pdf.SetXY(16, 35)
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	source := strings.Repeat(`<p>one planned continuation line</p>`, 8)
 	if err := html.WriteContext(context.Background(), 11, source); err != nil {
 		t.Fatal(err)

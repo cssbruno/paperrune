@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Removed the public FPDF-style, typed-Go, and HTML-to-PDF authoring surfaces.
+  Paper is now the only public content-authoring format.
+- Added deterministic Paper-to-HTML export through `PaperPlan.ExportHTML` and
+  `paper render --format html`; HTML embeds exact planned page SVG.
+- Removed direct-placement and HTML-input examples; maintained examples and
+  compliance fixtures now author with Paper.
+
 ## v0.16.0-rc.1 - 2026-07-20
 
 First release candidate under the independent PaperRune project identity.

@@ -118,7 +118,7 @@ func attachmentChecksum(data []byte) string {
 
 // writeCompressedFileObject writes a deflate-compressed /EmbeddedFile object
 // with length, compressed length, and MD5 checksum metadata.
-func (f *Document) writeCompressedFileObject(streamKey attachmentStreamKey, content []byte) {
+func (f *pdfDocument) writeCompressedFileObject(streamKey attachmentStreamKey, content []byte) {
 	compressed, ok := f.ensureResourceStore().compressedAttachment(streamKey)
 	if !ok {
 		if content == nil && streamKey.size > 0 {
@@ -146,7 +146,7 @@ func (f *Document) writeCompressedFileObject(streamKey attachmentStreamKey, cont
 	f.endPDFObject()
 }
 
-func (f *Document) putAttachmentStream(stream attachmentStream) {
+func (f *pdfDocument) putAttachmentStream(stream attachmentStream) {
 	if f.err != nil {
 		return
 	}
@@ -182,7 +182,7 @@ type attachmentCompressionTask struct {
 	content    []byte
 }
 
-func (f *Document) prepareAttachmentCompressionContext(ctx context.Context) {
+func (f *pdfDocument) prepareAttachmentCompressionContext(ctx context.Context) {
 	if f.err != nil {
 		return
 	}
@@ -278,7 +278,7 @@ schedule:
 	}
 }
 
-func (f *Document) attachmentCompressionTasksContext(ctx context.Context) []attachmentCompressionTask {
+func (f *pdfDocument) attachmentCompressionTasksContext(ctx context.Context) []attachmentCompressionTask {
 	seen := make(map[*Attachment]bool)
 	tasks := make([]attachmentCompressionTask, 0, len(f.attachments))
 	add := func(a *Attachment) {
@@ -407,7 +407,7 @@ func attachmentShouldReleaseLoadedContent(a *Attachment, size int) bool {
 	return a != nil && (a.FilePath != "" || a.Loader != nil) && size >= attachmentCompressionSpoolThreshold
 }
 
-func (f *Document) embedContext(ctx context.Context, a *Attachment) {
+func (f *pdfDocument) embedContext(ctx context.Context, a *Attachment) {
 	if a == nil {
 		f.SetErrorf("attachment is nil")
 		return
@@ -531,7 +531,7 @@ func attachmentHasInlineContent(a Attachment) bool {
 	return a.Content != nil || (strings.TrimSpace(a.FilePath) == "" && a.Loader == nil)
 }
 
-func (f *Document) loadAttachmentContentContext(ctx context.Context, a *Attachment) bool {
+func (f *pdfDocument) loadAttachmentContentContext(ctx context.Context, a *Attachment) bool {
 	if a == nil {
 		return true
 	}
@@ -606,7 +606,7 @@ func attachmentContentSize(a Attachment) int {
 	return len(a.Content)
 }
 
-func (f *Document) attachmentMaxBytes(a Attachment) int64 {
+func (f *pdfDocument) attachmentMaxBytes(a Attachment) int64 {
 	if a.maxBytes > 0 {
 		return a.maxBytes
 	}
@@ -618,7 +618,7 @@ func (f *Document) attachmentMaxBytes(a Attachment) int64 {
 
 // SetMaxAttachmentBytes sets the maximum content size accepted for attachments
 // embedded by this document. Passing zero restores the package default.
-func (f *Document) SetMaxAttachmentBytes(maxBytes int64) {
+func (f *pdfDocument) SetMaxAttachmentBytes(maxBytes int64) {
 	if maxBytes < 0 {
 		f.SetErrorf("invalid max attachment bytes: %d", maxBytes)
 		return
@@ -650,7 +650,7 @@ func readAttachmentFileLimitContext(ctx context.Context, filename string, limit 
 	return readAttachmentReaderLimitContext(ctx, file, limit)
 }
 
-func (f *Document) readAttachmentFileLimitContext(ctx context.Context, filename string, limit int64) ([]byte, error) {
+func (f *pdfDocument) readAttachmentFileLimitContext(ctx context.Context, filename string, limit int64) ([]byte, error) {
 	if f.resourceLoader == nil {
 		return readAttachmentFileLimitContext(ctx, filename, limit)
 	}
@@ -743,7 +743,7 @@ func escapePDFName(name string) string {
 // calls are discarded. Be aware that not all PDF readers
 // support document attachments. See the SetAttachment example for a
 // demonstration of this method.
-func (f *Document) SetAttachments(as []Attachment) {
+func (f *pdfDocument) SetAttachments(as []Attachment) {
 	f.attachments = make([]Attachment, len(as))
 	for i := range as {
 		f.attachments[i] = cloneAttachment(as[i])
@@ -753,7 +753,7 @@ func (f *Document) SetAttachments(as []Attachment) {
 // SetAttachmentsImmutable writes attachments as embedded files without copying
 // each attachment's content slice. The caller must not mutate attachment content
 // until Output, OutputAndClose, or OutputFileAndClose returns.
-func (f *Document) SetAttachmentsImmutable(as []Attachment) {
+func (f *pdfDocument) SetAttachmentsImmutable(as []Attachment) {
 	f.attachments = make([]Attachment, len(as))
 	for i := range as {
 		f.attachments[i] = cloneAttachmentImmutable(as[i])
@@ -839,7 +839,7 @@ func AttachmentFromLoaderWithOptions(filename string, loader AttachmentLoader, o
 	return attachment, nil
 }
 
-func (f *Document) putAttachmentsContext(ctx context.Context) {
+func (f *pdfDocument) putAttachmentsContext(ctx context.Context) {
 	for i, a := range f.attachments {
 		if err := outputCanceledError(ctx); err != nil {
 			f.SetError(err)
@@ -851,7 +851,7 @@ func (f *Document) putAttachmentsContext(ctx context.Context) {
 }
 
 // getEmbeddedFiles returns the /EmbeddedFiles name-tree catalog entry.
-func (f Document) getEmbeddedFiles() string {
+func (f pdfDocument) getEmbeddedFiles() string {
 	var names strings.Builder
 	for i, as := range f.attachments {
 		if i > 0 {
@@ -881,7 +881,7 @@ type annotationAttach struct {
 // not affect the document. Equivalent attachments are deduplicated during
 // output. Be aware that not all PDF readers support annotated attachments. See
 // the AddAttachmentAnnotation example for a demonstration of this method.
-func (f *Document) AddAttachmentAnnotation(a *Attachment, x, y, w, h float64) {
+func (f *pdfDocument) AddAttachmentAnnotation(a *Attachment, x, y, w, h float64) {
 	if f.err != nil {
 		return
 	}
@@ -919,7 +919,7 @@ func cloneAttachmentImmutable(a Attachment) Attachment {
 	return a
 }
 
-func (f *Document) putAnnotationsAttachmentsContext(ctx context.Context) {
+func (f *pdfDocument) putAnnotationsAttachmentsContext(ctx context.Context) {
 	for _, l := range f.pageAttachments {
 		for _, an := range l {
 			if err := outputCanceledError(ctx); err != nil {
@@ -931,7 +931,7 @@ func (f *Document) putAnnotationsAttachmentsContext(ctx context.Context) {
 	}
 }
 
-func (f *Document) appendAttachmentAnnotationLinks(out []byte, page int) []byte {
+func (f *pdfDocument) appendAttachmentAnnotationLinks(out []byte, page int) []byte {
 	for _, an := range f.pageAttachments[page] {
 		x1, y1, x2, y2 := an.x, an.y, an.x+an.w, an.y-an.h
 		out = append(out, "<< /Type /Annot /Subtype /FileAttachment /Rect ["...)

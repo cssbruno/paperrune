@@ -20,7 +20,7 @@ const htmlUnifiedFlexWrapFixture = `<div style="display:flex;flex-wrap:wrap;heig
 
 func TestHTMLUnifiedFlexWrapExactPlanSemanticsRasterPDFAndCursor(t *testing.T) {
 	requireDarwinRasterBaseline(t)
-	compiled, err := CompileHTML(htmlUnifiedFlexWrapFixture)
+	compiled, err := compileHTML(htmlUnifiedFlexWrapFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestHTMLUnifiedFlexWrapExactPlanSemanticsRasterPDFAndCursor(t *testing.T) {
 		t.Fatalf("wrap lowering=%#v", model.Body[0])
 	}
 
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestHTMLUnifiedFlexWrapExactPlanSemanticsRasterPDFAndCursor(t *testing.T) {
 
 	live := newHTMLFrameTestDocument(t, 160)
 	live.SetXY(16, 42)
-	html := live.HTMLNew()
+	html := live.htmlNew()
 	if err := html.WriteContext(context.Background(), 12, htmlUnifiedFlexWrapFixture); err != nil || live.GetY() <= 42 {
 		t.Fatalf("cursor=%.4f err=%v", live.GetY(), err)
 	}
@@ -97,11 +97,11 @@ func TestHTMLUnifiedFlexWrapReverseAndAlignContentModes(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.align, func(t *testing.T) {
 			source := strings.Replace(htmlUnifiedFlexWrapFixture, "align-content:space-between", "align-content:"+test.align, 1)
-			compiled, err := CompileHTML(source)
+			compiled, err := compileHTML(source)
 			if err != nil {
 				t.Fatal(err)
 			}
-			plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+			plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -113,11 +113,11 @@ func TestHTMLUnifiedFlexWrapReverseAndAlignContentModes(t *testing.T) {
 	}
 
 	reverse := strings.Replace(htmlUnifiedFlexWrapFixture, "flex-wrap:wrap", "flex-wrap:wrap-reverse", 1)
-	compiled, err := CompileHTML(reverse)
+	compiled, err := compileHTML(reverse)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,11 +131,11 @@ func TestHTMLUnifiedFlexWrapReverseAndAlignContentModes(t *testing.T) {
 func TestHTMLUnifiedColumnFlexWrapUsesDefiniteCrossSizes(t *testing.T) {
 	source := `<div style="display:flex;flex-direction:column;flex-wrap:wrap;width:100pt;gap:10pt 5pt;align-content:center;align-items:flex-start">` +
 		`<p style="flex:0 0 50pt;width:30pt">One</p><p style="flex:0 0 50pt;width:40pt">Two</p><p style="flex:0 0 50pt;width:30pt">Three</p></div>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,13 +166,13 @@ func TestHTMLUnifiedFlexWrapRejectsOutsideCohortAtomically(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := CompileHTML(test.source)
+			compiled, err := compileHTML(test.source)
 			if err != nil {
 				t.Fatal(err)
 			}
 			planner := htmlUnifiedFlexTestPlanner()
-			plan, err := planner.PlanCompiledHTML(12, compiled)
-			if !errors.Is(err, ErrHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
+			plan, err := planner.planCompiledHTML(12, compiled)
+			if !errors.Is(err, errHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
 				t.Fatalf("plan=%#v pages=%d err=%v want %q", plan, planner.PageCount(), err, test.diagnostic)
 			}
 		})

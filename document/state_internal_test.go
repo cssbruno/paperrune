@@ -9,7 +9,7 @@ import (
 )
 
 func TestDocumentKeepsSerializationAndResourcesInPrivateOwners(t *testing.T) {
-	typ := reflect.TypeOf(Document{})
+	typ := reflect.TypeOf(pdfDocument{})
 	for _, name := range []string{
 		"pdfSerializationState",
 		"resourceOwnershipState",

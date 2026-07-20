@@ -11,7 +11,7 @@ import (
 // GetAlpha returns the alpha blending channel, which consists of the
 // alpha transparency value and the blend mode. See SetAlpha for more
 // details.
-func (f *Document) GetAlpha() (alpha float64, blendModeStr string) {
+func (f *pdfDocument) GetAlpha() (alpha float64, blendModeStr string) {
 	return f.alpha, f.blendMode
 }
 
@@ -28,7 +28,7 @@ func (f *Document) GetAlpha() (alpha float64, blendModeStr string) {
 //
 // To reset normal rendering after applying a blending mode, call this method
 // with alpha set to 1.0 and blendModeStr set to "Normal".
-func (f *Document) SetAlpha(alpha float64, blendModeStr string) {
+func (f *pdfDocument) SetAlpha(alpha float64, blendModeStr string) {
 	if f.err != nil {
 		return
 	}
@@ -59,12 +59,12 @@ func (f *Document) SetAlpha(alpha float64, blendModeStr string) {
 	f.outf("%s gs", graphicsStatePDFResourceName(pos).String())
 }
 
-func (f *Document) gradientClipStart(x, y, w, h float64) {
+func (f *pdfDocument) gradientClipStart(x, y, w, h float64) {
 	f.outf("q %.2f %.2f %.2f %.2f re W n", x*f.k, (f.h-y)*f.k, w*f.k, -h*f.k)
 	f.outf("%.5f 0 0 %.5f %.5f %.5f cm", w*f.k, h*f.k, x*f.k, (f.h-(y+h))*f.k)
 }
 
-func (f *Document) gradientClipEnd() {
+func (f *pdfDocument) gradientClipEnd() {
 	f.out("Q")
 }
 
@@ -78,13 +78,13 @@ func pdfGradientStopOffset(offset float64) float64 {
 	return offset
 }
 
-func (f *Document) gradient(tp, r1, g1, b1, r2, g2, b2 int, x1, y1, x2, y2, r float64) {
+func (f *pdfDocument) gradient(tp, r1, g1, b1, r2, g2, b2 int, x1, y1, x2, y2, r float64) {
 	clr1 := rgbColorValue(r1, g1, b1, "", "")
 	clr2 := rgbColorValue(r2, g2, b2, "", "")
 	f.gradientWithStops(tp, []gradientStopType{{offset: 0, clrStr: clr1.str}, {offset: 1, clrStr: clr2.str}}, x1, y1, x2, y2, r)
 }
 
-func (f *Document) gradientWithStops(tp int, stops []gradientStopType, x1, y1, x2, y2, r float64) {
+func (f *pdfDocument) gradientWithStops(tp int, stops []gradientStopType, x1, y1, x2, y2, r float64) {
 	pos := len(f.gradientList)
 	if len(stops) < 2 {
 		stops = []gradientStopType{{offset: 0, clrStr: "0 0 0"}, {offset: 1, clrStr: "0 0 0"}}
@@ -118,7 +118,7 @@ func (f *Document) gradientWithStops(tp int, stops []gradientStopType, x1, y1, x
 // anchored on the rectangle edge. Color 1 is used up to the origin of the
 // vector and color 2 is used beyond the vector's end point. Between the points
 // the colors are gradually blended.
-func (f *Document) LinearGradient(x, y, w, h float64, r1, g1, b1, r2, g2, b2 int, x1, y1, x2, y2 float64) {
+func (f *pdfDocument) LinearGradient(x, y, w, h float64, r1, g1, b1, r2, g2, b2 int, x1, y1, x2, y2 float64) {
 	f.gradientClipStart(x, y, w, h)
 	f.gradient(2, r1, g1, b1, r2, g2, b2, x1, y1, x2, y2, 0)
 	f.gradientClipEnd()
@@ -142,13 +142,13 @@ func (f *Document) LinearGradient(x, y, w, h float64, r1, g1, b1, r2, g2, b2 int
 // the circle to avoid rendering problems.
 //
 // The LinearGradient() example demonstrates this method.
-func (f *Document) RadialGradient(x, y, w, h float64, r1, g1, b1, r2, g2, b2 int, x1, y1, x2, y2, r float64) {
+func (f *pdfDocument) RadialGradient(x, y, w, h float64, r1, g1, b1, r2, g2, b2 int, x1, y1, x2, y2, r float64) {
 	f.gradientClipStart(x, y, w, h)
 	f.gradient(3, r1, g1, b1, r2, g2, b2, x1, y1, x2, y2, r)
 	f.gradientClipEnd()
 }
 
-func (f *Document) putBlendModes() {
+func (f *pdfDocument) putBlendModes() {
 	count := len(f.blendList)
 	for j := 1; j < count; j++ {
 		bl := f.blendList[j]
@@ -160,7 +160,7 @@ func (f *Document) putBlendModes() {
 	}
 }
 
-func (f *Document) putGradients() {
+func (f *pdfDocument) putGradients() {
 	count := len(f.gradientList)
 	for j := 1; j < count; j++ {
 		var f1 int
@@ -182,7 +182,7 @@ func (f *Document) putGradients() {
 	}
 }
 
-func (f *Document) putGradientFunction(gr gradientType) int {
+func (f *pdfDocument) putGradientFunction(gr gradientType) int {
 	stops := gr.stops
 	if len(stops) < 2 {
 		stops = []gradientStopType{{offset: 0, clrStr: gr.clr1Str}, {offset: 1, clrStr: gr.clr2Str}}

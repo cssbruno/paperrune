@@ -26,7 +26,7 @@ type htmlUnifiedSVGMeta struct {
 	height   float64
 }
 
-func htmlUnifiedTokenInsideSVG(compiled *CompiledHTML, token int) bool {
+func htmlUnifiedTokenInsideSVG(compiled *compiledHTML, token int) bool {
 	if compiled == nil || token < 0 || token >= len(compiled.tokenNode) {
 		return false
 	}
@@ -38,7 +38,7 @@ func htmlUnifiedTokenInsideSVG(compiled *CompiledHTML, token int) bool {
 	return false
 }
 
-func htmlUnifiedInlineSVGMeta(compiled *CompiledHTML) (htmlUnifiedSVGMeta, error) {
+func htmlUnifiedInlineSVGMeta(compiled *compiledHTML) (htmlUnifiedSVGMeta, error) {
 	if compiled == nil || len(compiled.inlineSVGs) != 1 {
 		return htmlUnifiedSVGMeta{}, htmlPlanUnsupported("svg", 0, "the initial inline SVG cohort requires exactly one SVG")
 	}
@@ -48,7 +48,7 @@ func htmlUnifiedInlineSVGMeta(compiled *CompiledHTML) (htmlUnifiedSVGMeta, error
 	return htmlUnifiedSVGMeta{}, htmlPlanUnsupported("svg", 0, "compiled inline SVG is missing")
 }
 
-func htmlUnifiedInlineSVGMetaAt(compiled *CompiledHTML, svgToken int, allowOutside bool) (htmlUnifiedSVGMeta, error) {
+func htmlUnifiedInlineSVGMetaAt(compiled *compiledHTML, svgToken int, allowOutside bool) (htmlUnifiedSVGMeta, error) {
 	if compiled == nil {
 		return htmlUnifiedSVGMeta{}, htmlPlanUnsupported("svg", svgToken, "compiled inline SVG is missing")
 	}
@@ -199,7 +199,7 @@ func htmlUnifiedInlineSVGMetaAt(compiled *CompiledHTML, svgToken int, allowOutsi
 	return meta, nil
 }
 
-func (f *Document) planCompiledHTMLInlineSVGContext(ctx context.Context, compiled *CompiledHTML) (LayoutDocumentPlan, error) {
+func (f *pdfDocument) planCompiledHTMLInlineSVGContext(ctx context.Context, compiled *compiledHTML) (LayoutDocumentPlan, error) {
 	meta, err := htmlUnifiedInlineSVGMeta(compiled)
 	if err != nil {
 		return LayoutDocumentPlan{}, err
@@ -240,7 +240,7 @@ func (f *Document) planCompiledHTMLInlineSVGContext(ctx context.Context, compile
 	return LayoutDocumentPlan{plan: planned, tree: tree, hash: hash, pages: 1, imageSources: svgDisplayImageSources(meta.svg), envelope: envelope}, nil
 }
 
-func (f *Document) planUnifiedInlineSVGAtBody(ctx context.Context, meta htmlUnifiedSVGMeta, pageSize layoutengine.Size, body layoutengine.Rect) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planUnifiedInlineSVGAtBody(ctx context.Context, meta htmlUnifiedSVGMeta, pageSize layoutengine.Size, body layoutengine.Rect) (layoutengine.LayoutPlan, error) {
 	width, err := layoutengine.FixedFromPoints(meta.width)
 	if err != nil || width <= 0 || width > body.Width {
 		return layoutengine.LayoutPlan{}, htmlPlanUnsupported("svg", meta.token, "SVG width is invalid or exceeds the body")
@@ -292,7 +292,7 @@ func (f *Document) planUnifiedInlineSVGAtBody(ctx context.Context, meta htmlUnif
 	return planned, nil
 }
 
-func (html *HTML) planCompiledInlineSVGFragmentContext(ctx context.Context, compiled *CompiledHTML, frame htmlStartFrame) (htmlFragmentPlan, error) {
+func (html *htmlRenderer) planCompiledInlineSVGFragmentContext(ctx context.Context, compiled *compiledHTML, frame htmlStartFrame) (htmlFragmentPlan, error) {
 	meta, err := htmlUnifiedInlineSVGMeta(compiled)
 	if err != nil {
 		return htmlFragmentPlan{}, err
@@ -349,7 +349,7 @@ func (html *HTML) planCompiledInlineSVGFragmentContext(ctx context.Context, comp
 		return htmlFragmentPlan{}, fmt.Errorf("%w: %d > %d", ErrPageLimitExceeded, frame.pageCount+addedPages, html.pdf.limits.MaxPages)
 	}
 	if addedPages+1 > html.maxGeneratedPages() {
-		return htmlFragmentPlan{}, fmt.Errorf("%w: SVG rendering exceeded maximum generated pages", ErrHTMLLimitExceeded)
+		return htmlFragmentPlan{}, fmt.Errorf("%w: SVG rendering exceeded maximum generated pages", errHTMLLimitExceeded)
 	}
 	bottom, err := body.Y.Add(height)
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 // functions, such as ImageOptions(), for the specified MIME type. For example,
 // "jpg" is returned if mimeStr is "image/jpeg". An error is set if the
 // specified MIME type is not supported.
-func (f *Document) ImageTypeFromMime(mimeStr string) (tp string) {
+func (f *pdfDocument) ImageTypeFromMime(mimeStr string) (tp string) {
 	switch mimeStr {
 	case "image/png":
 		tp = "png"
@@ -72,7 +72,7 @@ func (f *Document) ImageTypeFromMime(mimeStr string) (tp string) {
 // If link refers to an internal page anchor (that is, it is non-zero; see
 // AddLink()), the image will be a clickable internal link. Otherwise, if
 // linkStr specifies a URL, the image will be a clickable external link.
-func (f *Document) ImageOptions(imageNameStr string, x, y, w, h float64, flow bool, options ImageOptions, link int, linkStr string) {
+func (f *pdfDocument) ImageOptions(imageNameStr string, x, y, w, h float64, flow bool, options ImageOptions, link int, linkStr string) {
 	if f.err != nil {
 		return
 	}
@@ -114,7 +114,7 @@ type ImageOptions struct {
 // be specified in this case.
 //
 // See ImageOptions() for restrictions on the image and the options parameters.
-func (f *Document) RegisterImageOptionsReader(imgName string, options ImageOptions, r io.Reader) (info *ImageInfo) {
+func (f *pdfDocument) RegisterImageOptionsReader(imgName string, options ImageOptions, r io.Reader) (info *ImageInfo) {
 	info, err := f.RegisterImageOptionsReaderError(imgName, options, r)
 	if err != nil {
 		f.err = err
@@ -124,13 +124,13 @@ func (f *Document) RegisterImageOptionsReader(imgName string, options ImageOptio
 
 // RegisterImageOptionsReaderError registers an image from r and returns
 // parsing failures directly.
-func (f *Document) RegisterImageOptionsReaderError(imgName string, options ImageOptions, r io.Reader) (*ImageInfo, error) {
+func (f *pdfDocument) RegisterImageOptionsReaderError(imgName string, options ImageOptions, r io.Reader) (*ImageInfo, error) {
 	return f.RegisterImageOptionsReaderContext(context.Background(), imgName, options, r)
 }
 
 // RegisterImageOptionsReaderContext registers an image from r and checks ctx
 // while reading image bytes and around format parsing.
-func (f *Document) RegisterImageOptionsReaderContext(ctx context.Context, imgName string, options ImageOptions, r io.Reader) (*ImageInfo, error) {
+func (f *pdfDocument) RegisterImageOptionsReaderContext(ctx context.Context, imgName string, options ImageOptions, r io.Reader) (*ImageInfo, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -167,7 +167,7 @@ func (f *Document) RegisterImageOptionsReaderContext(ctx context.Context, imgNam
 // function, so this function is only necessary if you need information about
 // the image before placing it. See ImageOptions() for restrictions on the image
 // and options parameters.
-func (f *Document) RegisterImageOptions(fileStr string, options ImageOptions) (info *ImageInfo) {
+func (f *pdfDocument) RegisterImageOptions(fileStr string, options ImageOptions) (info *ImageInfo) {
 	info, err := f.RegisterImageOptionsError(fileStr, options)
 	if err != nil {
 		f.err = err
@@ -177,7 +177,7 @@ func (f *Document) RegisterImageOptions(fileStr string, options ImageOptions) (i
 
 // RegisterImageOptionsError registers an image from fileStr and returns
 // failures directly.
-func (f *Document) RegisterImageOptionsError(fileStr string, options ImageOptions) (*ImageInfo, error) {
+func (f *pdfDocument) RegisterImageOptionsError(fileStr string, options ImageOptions) (*ImageInfo, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -246,7 +246,7 @@ func (f *Document) RegisterImageOptionsError(fileStr string, options ImageOption
 	return registered, nil
 }
 
-func (f *Document) registerImageOptionsResource(ctx context.Context, name string, options ImageOptions) (*ImageInfo, error) {
+func (f *pdfDocument) registerImageOptionsResource(ctx context.Context, name string, options ImageOptions) (*ImageInfo, error) {
 	reader, info, err := f.resourceLoader.OpenResource(ctx, ResourceImage, name)
 	if err != nil {
 		return nil, err
@@ -300,7 +300,7 @@ func (f *Document) registerImageOptionsResource(ctx context.Context, name string
 	return parsed, nil
 }
 
-func (f *Document) checkImageFileSourceLimit(fileStr string) error {
+func (f *pdfDocument) checkImageFileSourceLimit(fileStr string) error {
 	if f.limits.MaxImageSourceBytes <= 0 {
 		return nil
 	}
@@ -312,7 +312,7 @@ func (f *Document) checkImageFileSourceLimit(fileStr string) error {
 	return nil
 }
 
-func (f *Document) validateImageInfoLimits(info *ImageInfo) error {
+func (f *pdfDocument) validateImageInfoLimits(info *ImageInfo) error {
 	if info == nil || f.limits.MaxImageDecodedBytes <= 0 {
 		return nil
 	}
@@ -424,7 +424,7 @@ func inferImageTypeFromPath(path string) (string, bool) {
 }
 
 // ImportObjects imports external template objects into the current document.
-func (f *Document) ImportObjects(objs map[string][]byte) {
+func (f *pdfDocument) ImportObjects(objs map[string][]byte) {
 	resources := f.ensureResourceStore()
 	for name, data := range objs {
 		resources.addImportedObject(name, data)
@@ -432,7 +432,7 @@ func (f *Document) ImportObjects(objs map[string][]byte) {
 }
 
 // ImportObjPos imports external template object hash positions.
-func (f *Document) ImportObjPos(objPos map[string]map[int]string) {
+func (f *pdfDocument) ImportObjPos(objPos map[string]map[int]string) {
 	resources := f.ensureResourceStore()
 	for name, positions := range objPos {
 		resources.addImportedObjectPositions(name, positions)
@@ -440,7 +440,7 @@ func (f *Document) ImportObjPos(objPos map[string]map[int]string) {
 }
 
 // UseImportedTemplate draws an imported PDF template onto the current page.
-func (f *Document) UseImportedTemplate(tplName string, scaleX float64, scaleY float64, tX float64, tY float64) {
+func (f *pdfDocument) UseImportedTemplate(tplName string, scaleX float64, scaleY float64, tX float64, tY float64) {
 	if f.err != nil {
 		return
 	}
@@ -462,7 +462,7 @@ func (f *Document) UseImportedTemplate(tplName string, scaleX float64, scaleY fl
 
 // ImportTemplates imports external template names for inclusion in the ProcSet
 // dictionary.
-func (f *Document) ImportTemplates(tpls map[string]string) {
+func (f *pdfDocument) ImportTemplates(tpls map[string]string) {
 	for tplName := range tpls {
 		if !validPDFResourceName(tplName) {
 			f.SetErrorf("invalid imported template name: %s", tplName)

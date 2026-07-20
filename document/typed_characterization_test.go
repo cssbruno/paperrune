@@ -65,16 +65,11 @@ func TestTypedLayoutInventoryPinsEveryBlockFieldAndType(t *testing.T) {
 
 func TestTypedPublicEntryPointsAndBlockImplementationsASTDoNotDrift(t *testing.T) {
 	wantSignatures := map[string]string{
-		"layout.NewLayoutDocument":                            "func() *LayoutDocument",
-		"layout.NewDocumentModel":                             "func(title string, blocks ...Block) *LayoutDocument",
-		"layout.(*LayoutDocument).AddBlock":                   "func(block Block)",
-		"layout.NormalizeBlock":                               "func(block Block) (_ Block, ok bool)",
-		"layout.NormalizeBlocks":                              "func(blocks []Block) []Block",
-		"document.(*Document).WriteDocument":                  "func(doc *layout.LayoutDocument)",
-		"document.(*Document).PlanLayoutDocument":             "func(doc *layout.LayoutDocument) (LayoutDocumentPlan, error)",
-		"document.(*Document).PlanLayoutDocumentContext":      "func(ctx context.Context, doc *layout.LayoutDocument) (LayoutDocumentPlan, error)",
-		"document.(*Document).WriteLayoutDocumentPlan":        "func(plan LayoutDocumentPlan) (int, error)",
-		"document.(*Document).WriteLayoutDocumentPlanContext": "func(ctx context.Context, plan LayoutDocumentPlan) (int, error)",
+		"layout.NewLayoutDocument":          "func() *LayoutDocument",
+		"layout.NewDocumentModel":           "func(title string, blocks ...Block) *LayoutDocument",
+		"layout.(*LayoutDocument).AddBlock": "func(block Block)",
+		"layout.NormalizeBlock":             "func(block Block) (_ Block, ok bool)",
+		"layout.NormalizeBlocks":            "func(blocks []Block) []Block",
 	}
 	got := parseTypedAPISignatures(t)
 	for name, signature := range wantSignatures {
@@ -121,6 +116,9 @@ func parseTypedAPISignatures(t *testing.T) map[string]string {
 	files := typedCharacterizationSourceFiles(t)
 	selected := map[string]bool{"NewLayoutDocument": true, "NewDocumentModel": true, "AddBlock": true, "NormalizeBlock": true, "NormalizeBlocks": true, "WriteDocument": true, "PlanLayoutDocument": true, "PlanLayoutDocumentContext": true, "WriteLayoutDocumentPlan": true, "WriteLayoutDocumentPlanContext": true}
 	for _, source := range files {
+		if source.pkg == "document" {
+			continue // typed layout is private implementation, not public authoring API
+		}
 		file, err := parser.ParseFile(fset, source.path, nil, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -251,7 +249,7 @@ func TestTypedCharacterizationCorpusIsCompleteBoundedAndDeterministic(t *testing
 		t.Fatalf("runner is nondeterministic:\n%s\n%s", a, b)
 	}
 	digest := sha256.Sum256(a)
-	if got := hex.EncodeToString(digest[:]); got != "0e980d26e744958b49b33ba0bc83d4257be969b9c7e434efff6f7ce35e00b953" {
+	if got := hex.EncodeToString(digest[:]); got != "7ed33e14aa42457a7bc3f8e3b0a9b2b52f55685d47a097f806d1556656fbfd23" {
 		t.Fatalf("typed characterization golden drift: got %s", got)
 	}
 	if len(first.Fixtures) != len(inventory.Fixtures) {

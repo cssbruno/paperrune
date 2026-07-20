@@ -18,7 +18,7 @@ import (
 )
 
 func TestStringWidthCacheUsesBoundedRing(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetFont("Helvetica", "", 12)
 	for i := 0; i < stringWidthCacheLimit+16; i++ {
 		pdf.GetStringSymbolWidth(fmt.Sprintf("cache-key-%03d", i))
@@ -43,7 +43,7 @@ func TestStringWidthCacheUsesBoundedRing(t *testing.T) {
 }
 
 func TestContentCommandBufferReuseIsBounded(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	buffer := pdf.contentCommandBuffer(128)
 	buffer = append(buffer, make([]byte, 128)...)
 	pdf.retainContentCommandBuffer(buffer)
@@ -78,7 +78,7 @@ var (
 )
 
 func BenchmarkPerfTaggedElementKidsLarge(b *testing.B) {
-	pdf := &Document{}
+	pdf := &pdfDocument{}
 	pdf.tagged.pageObjNums = make([]int, 65)
 	for i := range pdf.tagged.pageObjNums {
 		pdf.tagged.pageObjNums[i] = 1000 + i
@@ -170,8 +170,8 @@ func BenchmarkPerfReplaceAliasesNoMatchesManyPages(b *testing.B) {
 	}
 }
 
-func benchmarkAliasPDF(pages, aliases int) *Document {
-	pdf := MustNew()
+func benchmarkAliasPDF(pages, aliases int) *pdfDocument {
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetFont("Helvetica", "", 10)
 	for i := 0; i < aliases; i++ {
@@ -189,8 +189,8 @@ func benchmarkAliasPDF(pages, aliases int) *Document {
 	return pdf
 }
 
-func benchmarkNoMatchAliasPDF(pages, aliases int) *Document {
-	pdf := MustNew()
+func benchmarkNoMatchAliasPDF(pages, aliases int) *pdfDocument {
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetFont("Helvetica", "", 10)
 	for i := 0; i < aliases; i++ {
@@ -213,7 +213,7 @@ func BenchmarkPerfRegisterImageOptionsReaderPNGAlpha(b *testing.B) {
 	b.SetBytes(int64(len(data)))
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		pdf := MustNew()
+		pdf := mustNewPDFDocument()
 		pdf.RegisterImageOptionsReader("alpha.png", options, bytes.NewReader(data))
 		if !pdf.Ok() {
 			b.Fatalf("RegisterImageOptionsReader() error = %v", pdf.Error())
@@ -313,7 +313,7 @@ func BenchmarkPerfAddUTF8FontFromCache(b *testing.B) {
 	b.SetBytes(int64(len(fontBytes)))
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		pdf := MustNew()
+		pdf := mustNewPDFDocument()
 		pdf.AddUTF8FontFromCache("DejaVu", "", cache)
 		if !pdf.Ok() {
 			b.Fatalf("AddUTF8FontFromCache() error = %v", pdf.Error())

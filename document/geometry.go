@@ -7,7 +7,7 @@ package document
 // value expressed in the unit of measure specified in New(). Since font
 // management in Document uses points, this method can help with line height
 // calculations and other methods that require user units.
-func (f *Document) PointConvert(pt float64) (u float64) {
+func (f *pdfDocument) PointConvert(pt float64) (u float64) {
 	return pt / f.k
 }
 
@@ -15,7 +15,7 @@ func (f *Document) PointConvert(pt float64) (u float64) {
 // specified in New(), as a value expressed in points (1/72 inch). Since font
 // management in Document uses points, this method can help with setting font sizes
 // based on the sizes of other non-font page elements.
-func (f *Document) UnitToPointConvert(u float64) (pt float64) {
+func (f *pdfDocument) UnitToPointConvert(u float64) (pt float64) {
 	return u * f.k
 }
 

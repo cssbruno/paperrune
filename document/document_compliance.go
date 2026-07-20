@@ -106,7 +106,7 @@ func (profile ComplianceMetadata) enabled() bool {
 // SetComplianceMetadata enables generated XMP standards identifiers and basic
 // catalog markers for standards-oriented output. It does not replace external
 // validation with veraPDF, a PDF/UA checker, or the Arlington PDF Model checker.
-func (f *Document) SetComplianceMetadata(profile ComplianceMetadata) {
+func (f *pdfDocument) SetComplianceMetadata(profile ComplianceMetadata) {
 	if profile.PDFA != PDFAModeNone {
 		switch profile.PDFA {
 		case PDFAMode4, PDFAMode4F, PDFAMode4E:
@@ -130,7 +130,7 @@ func (f *Document) SetComplianceMetadata(profile ComplianceMetadata) {
 // SetOutputIntent embeds an ICC output profile and references it from the
 // document catalog. PDF/A output requires a real output intent; callers should
 // pass a valid ICC profile, such as an sRGB profile for DeviceRGB workflows.
-func (f *Document) SetOutputIntent(iccProfile []byte, identifier string) error {
+func (f *pdfDocument) SetOutputIntent(iccProfile []byte, identifier string) error {
 	if len(iccProfile) == 0 {
 		err := errors.New("output intent ICC profile is empty")
 		f.SetError(err)
@@ -149,7 +149,7 @@ func (f *Document) SetOutputIntent(iccProfile []byte, identifier string) error {
 	return nil
 }
 
-func (f *Document) setMinimumPDFVersion(version string) {
+func (f *pdfDocument) setMinimumPDFVersion(version string) {
 	if pdfVersionLess(f.pdfVersion, version) {
 		f.pdfVersion = version
 	}
@@ -183,14 +183,14 @@ func parsePDFVersion(version string) (int, int, bool) {
 	return major, minor, true
 }
 
-func (f *Document) ensureComplianceMetadata() {
+func (f *pdfDocument) ensureComplianceMetadata() {
 	if !f.compliance.enabled() || len(f.xmp) > 0 {
 		return
 	}
 	f.xmp = f.buildComplianceXMP()
 }
 
-func (f *Document) validateComplianceMetadata() {
+func (f *pdfDocument) validateComplianceMetadata() {
 	if f.compliance.PDFA != PDFAModeNone {
 		if f.protect.encrypted {
 			f.SetErrorf("PDF/A metadata mode does not allow encrypted output")
@@ -239,11 +239,11 @@ func (f *Document) validateComplianceMetadata() {
 	}
 }
 
-func (f *Document) pdfAAllowsAttachments() bool {
+func (f *pdfDocument) pdfAAllowsAttachments() bool {
 	return f.compliance.PDFA == PDFAMode4F || f.compliance.PDFA == PDFAMode4E
 }
 
-func (f *Document) hasEmbeddedAttachments() bool {
+func (f *pdfDocument) hasEmbeddedAttachments() bool {
 	if len(f.attachments) > 0 {
 		return true
 	}
@@ -255,7 +255,7 @@ func (f *Document) hasEmbeddedAttachments() bool {
 	return false
 }
 
-func (f *Document) buildComplianceXMP() []byte {
+func (f *pdfDocument) buildComplianceXMP() []byte {
 	var out bytes.Buffer
 	creation := timeOrNow(f.creationDate)
 	mod := timeOrNow(f.modDate)
@@ -343,7 +343,7 @@ func (f *Document) buildComplianceXMP() []byte {
 	return out.Bytes()
 }
 
-func (f *Document) estimateComplianceXMPSize(title string) int {
+func (f *pdfDocument) estimateComplianceXMPSize(title string) int {
 	size := 640
 	size += 2 * (len(title) + len(f.author) + len(f.subject) + len(f.keywords) + len(f.producer) + len(f.creator) + len(f.compliance.Identifier))
 	if f.compliance.PDFA != PDFAModeNone {

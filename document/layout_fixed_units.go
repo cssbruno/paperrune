@@ -5,7 +5,7 @@ package document
 
 import "github.com/cssbruno/paperrune/internal/layoutengine"
 
-func fixedFromDocumentUnits(f *Document, value float64) (layoutengine.Fixed, error) {
+func fixedFromDocumentUnits(f *pdfDocument, value float64) (layoutengine.Fixed, error) {
 	unit := layoutengine.DocumentUnit(f.unitStr)
 	switch f.unitStr {
 	case "point":

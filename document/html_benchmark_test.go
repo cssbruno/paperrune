@@ -13,7 +13,7 @@ func BenchmarkHTMLTokenizeSmallAttributes(b *testing.B) {
 	const fragment = `<p id="target" class="note" style="color:#123456">Token text</p>`
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		if tokens := HTMLTokenize(fragment); len(tokens) == 0 {
+		if tokens := htmlTokenize(fragment); len(tokens) == 0 {
 			b.Fatal("HTMLTokenize returned no tokens")
 		}
 	}
@@ -24,7 +24,7 @@ func BenchmarkHTMLTokenizeLargeFragment(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if tokens := HTMLTokenize(fragment); len(tokens) == 0 {
+		if tokens := htmlTokenize(fragment); len(tokens) == 0 {
 			b.Fatal("HTMLTokenize returned no tokens")
 		}
 	}
@@ -35,7 +35,7 @@ func BenchmarkCompileHTMLLargeFragment(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		compiled, err := CompileHTML(fragment)
+		compiled, err := compileHTML(fragment)
 		if err != nil {
 			b.Fatalf("CompileHTML() error = %v", err)
 		}

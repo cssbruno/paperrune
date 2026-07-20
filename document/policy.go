@@ -20,7 +20,7 @@ var (
 	ErrUnsupportedImageType     = errors.New("unsupported image type")
 	ErrUnsupportedPDFImport     = errors.New("unsupported PDF import")
 	ErrImageTooLarge            = errors.New("image too large")
-	ErrHTMLLimitExceeded        = errors.New("HTML input exceeds maximum size")
+	errHTMLLimitExceeded        = errors.New("HTML input exceeds maximum size")
 	ErrPageLimitExceeded        = errors.New("page limit exceeded")
 	ErrOutputCanceled           = errors.New("output canceled")
 	ErrSecurityPolicyDenied     = errors.New("security policy denied feature")
@@ -238,7 +238,7 @@ func validateLimits(limits Limits) error {
 	return nil
 }
 
-func (f *Document) applyLimits(limits Limits) error {
+func (f *pdfDocument) applyLimits(limits Limits) error {
 	if err := validateLimits(limits); err != nil {
 		f.SetError(err)
 		return err
@@ -252,23 +252,23 @@ func (f *Document) applyLimits(limits Limits) error {
 }
 
 // SetLimits sets resource and document limits on an existing Document.
-func (f *Document) SetLimits(limits Limits) error {
+func (f *pdfDocument) SetLimits(limits Limits) error {
 	return f.applyLimits(limits)
 }
 
 // SetSecurityPolicy installs feature gates on an existing Document. A zero
 // SecurityPolicy denies all gated features because it was explicitly installed.
-func (f *Document) SetSecurityPolicy(policy SecurityPolicy) error {
+func (f *pdfDocument) SetSecurityPolicy(policy SecurityPolicy) error {
 	return f.applySecurityPolicy(policy)
 }
 
 // SetHooks installs optional production diagnostics callbacks.
-func (f *Document) SetHooks(hooks Hooks) {
+func (f *pdfDocument) SetHooks(hooks Hooks) {
 	f.hooks = hooks
 }
 
 // SetProductionPolicy applies production controls to an existing Document.
-func (f *Document) SetProductionPolicy(policy ProductionPolicy) error {
+func (f *pdfDocument) SetProductionPolicy(policy ProductionPolicy) error {
 	f.applyRuntimePolicy(runtimePolicyFromProductionPolicy(policy))
 	return f.err
 }
@@ -294,7 +294,7 @@ func runtimePolicyFromProductionPolicy(policy ProductionPolicy) runtimePolicy {
 	}
 }
 
-func (f *Document) imageSourceLimit() int {
+func (f *pdfDocument) imageSourceLimit() int {
 	if f.limits.MaxImageSourceBytes <= 0 {
 		return maxImageSourceBytes
 	}
@@ -304,7 +304,7 @@ func (f *Document) imageSourceLimit() int {
 	return int(f.limits.MaxImageSourceBytes)
 }
 
-func (f *Document) imageDecodedLimit() int {
+func (f *pdfDocument) imageDecodedLimit() int {
 	if f.limits.MaxImageDecodedBytes <= 0 {
 		return maxImageDecodedBytes
 	}
@@ -314,7 +314,7 @@ func (f *Document) imageDecodedLimit() int {
 	return int(f.limits.MaxImageDecodedBytes)
 }
 
-func (f *Document) checkPageLimitForAdd() error {
+func (f *pdfDocument) checkPageLimitForAdd() error {
 	if f.limits.MaxPages <= 0 {
 		return nil
 	}
@@ -326,7 +326,7 @@ func (f *Document) checkPageLimitForAdd() error {
 	return nil
 }
 
-func (f *Document) applySecurityPolicy(policy SecurityPolicy) error {
+func (f *pdfDocument) applySecurityPolicy(policy SecurityPolicy) error {
 	if policy.MaxEmbeddedFileBytes < 0 {
 		err := fmt.Errorf("invalid max embedded file bytes: %d", policy.MaxEmbeddedFileBytes)
 		f.SetError(err)
@@ -344,7 +344,7 @@ func (f *Document) applySecurityPolicy(policy SecurityPolicy) error {
 	return f.err
 }
 
-func (f *Document) applyDeterministicOutput() {
+func (f *pdfDocument) applyDeterministicOutput() {
 	defaults := DeterministicDefaults()
 	f.catalogSort = true
 	if f.creationDate.IsZero() {
@@ -355,13 +355,13 @@ func (f *Document) applyDeterministicOutput() {
 	}
 }
 
-func (f *Document) denyFeature(feature string) error {
+func (f *pdfDocument) denyFeature(feature string) error {
 	err := fmt.Errorf("%w: %s", ErrSecurityPolicyDenied, feature)
 	f.SetError(err)
 	return err
 }
 
-func (f *Document) requireSecurityFeature(feature string, allowed bool) error {
+func (f *pdfDocument) requireSecurityFeature(feature string, allowed bool) error {
 	if f.securityPolicySet && !allowed {
 		return f.denyFeature(feature)
 	}

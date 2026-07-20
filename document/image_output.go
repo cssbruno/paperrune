@@ -15,7 +15,7 @@ type imagePlacement struct {
 	x, y, w, h float64
 }
 
-func (f *Document) resolveImagePlacement(info *ImageInfo, x, y, w, h float64, allowNegativeX, flow bool) (imagePlacement, bool) {
+func (f *pdfDocument) resolveImagePlacement(info *ImageInfo, x, y, w, h float64, allowNegativeX, flow bool) (imagePlacement, bool) {
 	if info == nil {
 		f.SetErrorf("image info is nil")
 		return imagePlacement{}, false
@@ -62,11 +62,11 @@ func (f *Document) resolveImagePlacement(info *ImageInfo, x, y, w, h float64, al
 	return imagePlacement{x: x, y: y, w: w, h: h}, true
 }
 
-func (f *Document) drawImageXObject(imageID string, x, y, w, h float64) {
+func (f *pdfDocument) drawImageXObject(imageID string, x, y, w, h float64) {
 	f.outbytes(f.appendImageXObject(nil, imageID, x, y, w, h))
 }
 
-func (f *Document) appendImageXObject(buf []byte, imageID string, x, y, w, h float64) []byte {
+func (f *pdfDocument) appendImageXObject(buf []byte, imageID string, x, y, w, h float64) []byte {
 	buf = append(buf, "q "...)
 	buf = appendPDFNumberSpace(buf, w*f.k, 5)
 	buf = append(buf, "0 0 "...)
@@ -79,7 +79,7 @@ func (f *Document) appendImageXObject(buf []byte, imageID string, x, y, w, h flo
 	return buf
 }
 
-func (f *Document) imageOut(info *ImageInfo, x, y, w, h float64, allowNegativeX, flow bool, link int, linkStr string, tag taggedContentOptions) {
+func (f *pdfDocument) imageOut(info *ImageInfo, x, y, w, h float64, allowNegativeX, flow bool, link int, linkStr string, tag taggedContentOptions) {
 	if info == nil {
 		f.err = errors.New("missing image info")
 		return
@@ -99,7 +99,7 @@ func (f *Document) imageOut(info *ImageInfo, x, y, w, h float64, allowNegativeX,
 }
 
 // putImportedTemplates writes the imported template objects to the PDF.
-func (f *Document) putImportedTemplates() {
+func (f *pdfDocument) putImportedTemplates() {
 	resources := f.ensureResourceStore()
 	nOffset := f.n + 1
 	objsIDHash := resources.importedObjectHashes(f.catalogSort)
@@ -145,7 +145,7 @@ func writePaddedObjectID(dst []byte, objID int) {
 	copy(dst[len(dst)-len(raw):], raw)
 }
 
-func (f *Document) putImportedPages() {
+func (f *pdfDocument) putImportedPages() {
 	resources := f.ensureResourceStore()
 	if !resources.hasImportedPages() {
 		return
@@ -204,7 +204,7 @@ func (f *Document) putImportedPages() {
 	}
 }
 
-func (f *Document) putimages() {
+func (f *pdfDocument) putimages() {
 	images := f.ensureResourceStore().imagesForOutput(f.catalogSort)
 	insertedImages := make(map[string]int, len(images))
 	for _, image := range images {
@@ -212,7 +212,7 @@ func (f *Document) putimages() {
 	}
 }
 
-func (f *Document) putImageOnce(image *ImageInfo, insertedImages map[string]int) {
+func (f *pdfDocument) putImageOnce(image *ImageInfo, insertedImages map[string]int) {
 	if image == nil {
 		return
 	}
@@ -224,7 +224,7 @@ func (f *Document) putImageOnce(image *ImageInfo, insertedImages map[string]int)
 	insertedImages[image.i] = image.n
 }
 
-func (f *Document) putimage(info *ImageInfo) {
+func (f *pdfDocument) putimage(info *ImageInfo) {
 	if err := info.validForPDF(); err != nil {
 		f.err = err
 		return
@@ -293,7 +293,7 @@ func (f *Document) putimage(info *ImageInfo) {
 	}
 }
 
-func (f *Document) putSoftMaskImage(info *ImageInfo) {
+func (f *pdfDocument) putSoftMaskImage(info *ImageInfo) {
 	f.newPDFDictObject()
 	f.out("/Type /XObject")
 	f.out("/Subtype /Image")
@@ -312,7 +312,7 @@ func (f *Document) putSoftMaskImage(info *ImageInfo) {
 	f.endPDFObject()
 }
 
-func (f *Document) putxobjectdict() {
+func (f *pdfDocument) putxobjectdict() {
 	{
 		for _, image := range f.ensureResourceStore().imagesByResourceID(f.catalogSort) {
 			if image == nil {

@@ -55,7 +55,7 @@ func paperMappingForRegion(mapping papercompile.CompileMapping, region layouteng
 	return filtered
 }
 
-func (f *Document) planTypedPageTemplate(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planTypedPageTemplate(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping) (layoutengine.LayoutPlan, error) {
 	if err := validateTypedPageTemplateContract(doc.PageTemplate); err != nil {
 		return layoutengine.LayoutPlan{}, err
 	}
@@ -264,7 +264,7 @@ func typedBlocksContainText(blocks []layout.Block, text string) bool {
 	return false
 }
 
-func (f *Document) planTypedPageShell(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, page, total uint32) (typedPageShell, error) {
+func (f *pdfDocument) planTypedPageShell(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, page, total uint32) (typedPageShell, error) {
 	template := doc.PageTemplate
 	header := template.HeaderForPage(int(page))
 	footer := template.FooterForPage(int(page))
@@ -314,7 +314,7 @@ func typedPageNumberText(template layout.PageTemplate, page, total uint32) (stri
 	return text, nil
 }
 
-func (f *Document) planTypedPageRegion(ctx context.Context, doc *layout.LayoutDocument, blocks []layout.Block, box layout.BoxStyle, boxPath string, region layoutengine.RegionID, mapping papercompile.CompileMapping, page uint32) (layoutengine.LayoutPlan, layoutengine.Fixed, layoutengine.Fixed, error) {
+func (f *pdfDocument) planTypedPageRegion(ctx context.Context, doc *layout.LayoutDocument, blocks []layout.Block, box layout.BoxStyle, boxPath string, region layoutengine.RegionID, mapping papercompile.CompileMapping, page uint32) (layoutengine.LayoutPlan, layoutengine.Fixed, layoutengine.Fixed, error) {
 	if len(layout.NormalizeBlocks(blocks)) == 0 {
 		return layoutengine.LayoutPlan{}, 0, 0, nil
 	}

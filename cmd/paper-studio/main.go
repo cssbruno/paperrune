@@ -31,6 +31,7 @@ import (
 
 	"github.com/cssbruno/paperrune/document"
 	"github.com/cssbruno/paperrune/internal/paperassets"
+	"github.com/cssbruno/paperrune/internal/paperedit"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 )
 
@@ -95,6 +96,7 @@ type studioServer struct {
 	projectResources []paperassets.ProjectResource
 	resourceManifest string
 	resourceRoot     string
+	history          *paperedit.Journal
 }
 
 type studioPageRailSummary struct {
@@ -286,6 +288,8 @@ func (s *studioServer) routes() http.Handler {
 	mux.HandleFunc("/api/export.pdf", s.handleExportPDF)
 	mux.HandleFunc("/api/export.paperdoc", s.handleExportPaperDocument)
 	mux.HandleFunc("/api/edit", s.handleEdit)
+	mux.HandleFunc("/api/validate-edit", s.handleValidateEdit)
+	mux.HandleFunc("/api/history", s.handleHistory)
 	mux.HandleFunc("/api/resources", s.handleResources)
 	mux.HandleFunc("/api/authoring", s.handleAuthoring)
 	mux.HandleFunc("/api/component-preview.svg", s.handleComponentPreview)

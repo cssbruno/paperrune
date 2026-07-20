@@ -58,7 +58,7 @@ func typedShadowTemplateHasOnlyMargins(template layout.PageTemplate) bool {
 		template.ReserveFooterHeight == 0 && template.EvenPageFooterHeight == 0
 }
 
-func typedShadowMargins(f *Document, override layout.Spacing) (left, top, right, bottom float64) {
+func typedShadowMargins(f *pdfDocument, override layout.Spacing) (left, top, right, bottom float64) {
 	left, top, right, bottom = f.GetMargins()
 	if override.Left > 0 {
 		left = override.Left
@@ -75,7 +75,7 @@ func typedShadowMargins(f *Document, override layout.Spacing) (left, top, right,
 	return left, top, right, bottom
 }
 
-func typedShadowFixedGeometry(f *Document, left, top, width, height float64) (layoutengine.Size, layoutengine.Rect, error) {
+func typedShadowFixedGeometry(f *pdfDocument, left, top, width, height float64) (layoutengine.Size, layoutengine.Rect, error) {
 	toFixed := func(userUnits float64) (layoutengine.Fixed, error) {
 		return fixedFromDocumentUnits(f, userUnits)
 	}

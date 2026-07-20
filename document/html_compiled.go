@@ -16,9 +16,9 @@ import (
 
 // CompiledHTML stores the reusable parse products for an HTML fragment. It is
 // safe to reuse across documents.
-type CompiledHTML struct {
+type compiledHTML struct {
 	sourceBytes       int
-	tokens            []HTMLSegmentType
+	tokens            []htmlSegmentType
 	cssRules          []htmlCSSRule
 	styleDeclarations map[string]map[string]string
 	nodeIndexes       []compiledHTMLNode
@@ -32,7 +32,7 @@ type CompiledHTML struct {
 	tables            map[int]compiledHTMLTable
 	inlineSVGs        map[int]compiledInlineSVG
 	dataImages        map[int]compiledHTMLDataImage
-	recovery          []CompiledHTMLRecoveryIssue
+	recovery          []compiledHTMLRecoveryIssue
 	// unifiedResolved is populated only on the detached snapshot consumed by
 	// the HTML-to-IR adapter. Selector matching and cascade resolution happen
 	// while creating that snapshot; the planner never receives CSS rules.
@@ -71,7 +71,7 @@ type compiledHTMLDataImage struct {
 }
 
 // CompiledHTMLStats summarizes reusable parse products in a compiled fragment.
-type CompiledHTMLStats struct {
+type compiledHTMLStats struct {
 	Tokens       int
 	Nodes        int
 	Tables       int
@@ -86,7 +86,7 @@ type CompiledHTMLStats struct {
 
 // CompiledHTMLRecoveryIssue describes one malformed-fragment recovery decision
 // made while building the compiled node model.
-type CompiledHTMLRecoveryIssue struct {
+type compiledHTMLRecoveryIssue struct {
 	Kind  string
 	Tag   string
 	Token int
@@ -95,28 +95,28 @@ type CompiledHTMLRecoveryIssue struct {
 // CompileHTML tokenizes an HTML fragment, parses CSS rules, records element
 // boundaries, pre-parses tables, and pre-parses inline SVGs for repeated
 // rendering.
-func CompileHTML(htmlStr string) (*CompiledHTML, error) {
-	return CompileHTMLContext(context.Background(), htmlStr)
+func compileHTML(htmlStr string, cacheReusableData ...bool) (*compiledHTML, error) {
+	cache := true
+	if len(cacheReusableData) != 0 {
+		cache = cacheReusableData[0]
+	}
+	return compileHTMLWithDataImageLimitContext(context.Background(), htmlStr, cache, htmlDefaultMaxDataImageBytes)
 }
 
 // CompileHTMLContext tokenizes and compiles an HTML fragment while checking ctx
 // during tokenization, data-image decoding, and inline-SVG parsing.
-func CompileHTMLContext(ctx context.Context, htmlStr string) (*CompiledHTML, error) {
+func compileHTMLContext(ctx context.Context, htmlStr string) (*compiledHTML, error) {
 	if len(htmlStr) > htmlDefaultMaxHTMLBytes {
-		return nil, ErrHTMLLimitExceeded
+		return nil, errHTMLLimitExceeded
 	}
 	return compileHTMLWithDataImageLimitContext(ctx, htmlStr, true, htmlDefaultMaxDataImageBytes)
 }
 
-func compileHTML(htmlStr string, cacheReusableData bool) (*CompiledHTML, error) {
-	return compileHTMLWithDataImageLimitContext(context.Background(), htmlStr, cacheReusableData, htmlDefaultMaxDataImageBytes)
-}
-
-func compileHTMLWithDataImageLimit(htmlStr string, cacheReusableData bool, maxDataImageBytes int) (*CompiledHTML, error) {
+func compileHTMLWithDataImageLimit(htmlStr string, cacheReusableData bool, maxDataImageBytes int) (*compiledHTML, error) {
 	return compileHTMLWithDataImageLimitContext(context.Background(), htmlStr, cacheReusableData, maxDataImageBytes)
 }
 
-func compileHTMLWithDataImageLimitContext(ctx context.Context, htmlStr string, cacheReusableData bool, maxDataImageBytes int) (*CompiledHTML, error) {
+func compileHTMLWithDataImageLimitContext(ctx context.Context, htmlStr string, cacheReusableData bool, maxDataImageBytes int) (*compiledHTML, error) {
 	tokens, err := htmlTokenizeContext(ctx, htmlStr, make(map[string]map[string]string))
 	if err != nil {
 		return nil, err
@@ -135,8 +135,8 @@ func compileHTMLWithDataImageLimitContext(ctx context.Context, htmlStr string, c
 	return compiled, nil
 }
 
-func compileHTMLTokens(tokens []HTMLSegmentType, cacheReusableData bool) *CompiledHTML {
-	compiled := &CompiledHTML{
+func compileHTMLTokens(tokens []htmlSegmentType, cacheReusableData bool) *compiledHTML {
+	compiled := &compiledHTML{
 		tokens:     tokens,
 		cssRules:   htmlCollectCSSRules(tokens),
 		tokenNode:  make([]int, len(tokens)),
@@ -178,7 +178,7 @@ func compileHTMLTokens(tokens []HTMLSegmentType, cacheReusableData bool) *Compil
 	return compiled
 }
 
-func (compiled *CompiledHTML) compileTableStyleKeys() {
+func (compiled *compiledHTML) compileTableStyleKeys() {
 	for tokenIndex, token := range compiled.tokens {
 		if token.Cat != 'O' || (token.Str != "tr" && token.Str != "td" && token.Str != "th") {
 			continue
@@ -187,7 +187,7 @@ func (compiled *CompiledHTML) compileTableStyleKeys() {
 	}
 }
 
-func (compiled *CompiledHTML) buildNodeIndexes() {
+func (compiled *compiledHTML) buildNodeIndexes() {
 	compiled.nodeIndexes = make([]compiledHTMLNode, 0, len(compiled.tokens))
 	stack := make([]int, 0, 16)
 	lastChildByParent := make([]int, 0, len(compiled.tokens))
@@ -233,14 +233,14 @@ func (compiled *CompiledHTML) buildNodeIndexes() {
 				node.EndToken = i
 				compiled.elementEnd[node.Token] = i
 				if open.Str != token.Str {
-					compiled.recovery = append(compiled.recovery, CompiledHTMLRecoveryIssue{Kind: "misnested", Tag: open.Str, Token: node.Token})
+					compiled.recovery = append(compiled.recovery, compiledHTMLRecoveryIssue{Kind: "misnested", Tag: open.Str, Token: node.Token})
 					continue
 				}
 				matched = true
 				break
 			}
 			if !matched {
-				compiled.recovery = append(compiled.recovery, CompiledHTMLRecoveryIssue{Kind: "unexpected-close", Tag: token.Str, Token: i})
+				compiled.recovery = append(compiled.recovery, compiledHTMLRecoveryIssue{Kind: "unexpected-close", Tag: token.Str, Token: i})
 			}
 		}
 	}
@@ -248,12 +248,12 @@ func (compiled *CompiledHTML) buildNodeIndexes() {
 		node := &compiled.nodeIndexes[nodeIndex]
 		node.EndToken = len(compiled.tokens) - 1
 		compiled.elementEnd[node.Token] = node.EndToken
-		compiled.recovery = append(compiled.recovery, CompiledHTMLRecoveryIssue{Kind: "unclosed", Tag: compiled.tokens[node.Token].Str, Token: node.Token})
+		compiled.recovery = append(compiled.recovery, compiledHTMLRecoveryIssue{Kind: "unclosed", Tag: compiled.tokens[node.Token].Str, Token: node.Token})
 	}
 }
 
-func (compiled *CompiledHTML) compileElementDeclarations() {
-	ancestors := make([]HTMLSegmentType, 0, compiled.maxDepth)
+func (compiled *compiledHTML) compileElementDeclarations() {
+	ancestors := make([]htmlSegmentType, 0, compiled.maxDepth)
 	ancestorMeta := make([]htmlElementMetadata, 0, compiled.maxDepth)
 	for i, token := range compiled.tokens {
 		switch token.Cat {
@@ -281,7 +281,7 @@ func (compiled *CompiledHTML) compileElementDeclarations() {
 	}
 }
 
-func (compiled *CompiledHTML) inlineStyleDeclarations(attrs map[string]string) map[string]string {
+func (compiled *compiledHTML) inlineStyleDeclarations(attrs map[string]string) map[string]string {
 	if attrs == nil {
 		return nil
 	}
@@ -300,7 +300,7 @@ func (compiled *CompiledHTML) inlineStyleDeclarations(attrs map[string]string) m
 	return declarations
 }
 
-func (compiled *CompiledHTML) ancestorsForToken(tokenIndex int) []HTMLSegmentType {
+func (compiled *compiledHTML) ancestorsForToken(tokenIndex int) []htmlSegmentType {
 	if compiled == nil || tokenIndex < 0 || tokenIndex >= len(compiled.tokenNode) {
 		return nil
 	}
@@ -308,18 +308,18 @@ func (compiled *CompiledHTML) ancestorsForToken(tokenIndex int) []HTMLSegmentTyp
 	if nodeIndex < 0 || nodeIndex >= len(compiled.nodeIndexes) {
 		return nil
 	}
-	var rev []HTMLSegmentType
+	var rev []htmlSegmentType
 	for parent := compiled.nodeIndexes[nodeIndex].Parent; parent >= 0; parent = compiled.nodeIndexes[parent].Parent {
 		rev = append(rev, compiled.tokens[compiled.nodeIndexes[parent].Token])
 	}
-	ancestors := make([]HTMLSegmentType, len(rev))
+	ancestors := make([]htmlSegmentType, len(rev))
 	for i := range rev {
 		ancestors[i] = rev[len(rev)-1-i]
 	}
 	return ancestors
 }
 
-func (compiled *CompiledHTML) compileElementText(start int, tag string) {
+func (compiled *compiledHTML) compileElementText(start int, tag string) {
 	if !htmlCompiledTextTag(tag) {
 		return
 	}
@@ -338,7 +338,7 @@ func (compiled *CompiledHTML) compileElementText(start int, tag string) {
 	}
 }
 
-func htmlCompiledTextHasNestedBlock(tokens []HTMLSegmentType) bool {
+func htmlCompiledTextHasNestedBlock(tokens []htmlSegmentType) bool {
 	for _, token := range tokens {
 		if token.Cat == 'O' && htmlCompiledNestedTextTag(token.Str) {
 			return true
@@ -366,7 +366,7 @@ func htmlCompiledTextTag(tag string) bool {
 	}
 }
 
-func (compiled *CompiledHTML) compileStyleDeclarations(attrs map[string]string) {
+func (compiled *compiledHTML) compileStyleDeclarations(attrs map[string]string) {
 	if attrs == nil {
 		return
 	}
@@ -380,11 +380,11 @@ func (compiled *CompiledHTML) compileStyleDeclarations(attrs map[string]string) 
 	compiled.styleDeclarations[style] = parseStyleDeclarations(style)
 }
 
-func (compiled *CompiledHTML) compileInlineSVGs() error {
+func (compiled *compiledHTML) compileInlineSVGs() error {
 	return compiled.compileInlineSVGsContext(context.Background())
 }
 
-func (compiled *CompiledHTML) compileInlineSVGsContext(ctx context.Context) error {
+func (compiled *compiledHTML) compileInlineSVGsContext(ctx context.Context) error {
 	var cache map[string]*SVG
 	for i := 0; i < len(compiled.tokens); i++ {
 		if i%128 == 0 {
@@ -422,11 +422,11 @@ func (compiled *CompiledHTML) compileInlineSVGsContext(ctx context.Context) erro
 	return nil
 }
 
-func (compiled *CompiledHTML) compileDataImages(maxBytes int) error {
+func (compiled *compiledHTML) compileDataImages(maxBytes int) error {
 	return compiled.compileDataImagesContext(context.Background(), maxBytes)
 }
 
-func (compiled *CompiledHTML) compileDataImagesContext(ctx context.Context, maxBytes int) error {
+func (compiled *compiledHTML) compileDataImagesContext(ctx context.Context, maxBytes int) error {
 	if compiled == nil {
 		return nil
 	}
@@ -525,7 +525,7 @@ func compiledHTMLDataImageName(data []byte) string {
 	return fmt.Sprintf("html-data-image-%x", sum)
 }
 
-func (compiled *CompiledHTML) styleDeclaration(style string) (map[string]string, bool) {
+func (compiled *compiledHTML) styleDeclaration(style string) (map[string]string, bool) {
 	if compiled == nil {
 		return nil, false
 	}
@@ -533,7 +533,7 @@ func (compiled *CompiledHTML) styleDeclaration(style string) (map[string]string,
 	return declarations, ok
 }
 
-func (compiled *CompiledHTML) declarations(start int) (map[string]string, bool) {
+func (compiled *compiledHTML) declarations(start int) (map[string]string, bool) {
 	if compiled == nil || start < 0 || start >= len(compiled.elementDecl) {
 		return nil, false
 	}
@@ -541,7 +541,7 @@ func (compiled *CompiledHTML) declarations(start int) (map[string]string, bool) 
 	return decl, decl != nil
 }
 
-func (compiled *CompiledHTML) tableStyleKey(start int) (string, bool) {
+func (compiled *compiledHTML) tableStyleKey(start int) (string, bool) {
 	if compiled == nil || start < 0 || start >= len(compiled.tableStyleKeys) {
 		return "", false
 	}
@@ -552,7 +552,7 @@ func (compiled *CompiledHTML) tableStyleKey(start int) (string, bool) {
 	return compiled.tableStyleKeys[start], true
 }
 
-func (compiled *CompiledHTML) text(start int, preserveWhitespace bool) (string, bool) {
+func (compiled *compiledHTML) text(start int, preserveWhitespace bool) (string, bool) {
 	if compiled == nil || start < 0 || start >= len(compiled.elementText) {
 		return "", false
 	}
@@ -567,7 +567,7 @@ func (compiled *CompiledHTML) text(start int, preserveWhitespace bool) (string, 
 }
 
 // Tokens returns a copy of the token stream used by the compiled HTML fragment.
-func (compiled *CompiledHTML) Tokens() []HTMLSegmentType {
+func (compiled *compiledHTML) Tokens() []htmlSegmentType {
 	if compiled == nil {
 		return nil
 	}
@@ -576,11 +576,11 @@ func (compiled *CompiledHTML) Tokens() []HTMLSegmentType {
 
 // Stats returns diagnostics for the reusable parse products stored in the
 // compiled HTML fragment.
-func (compiled *CompiledHTML) Stats() CompiledHTMLStats {
+func (compiled *compiledHTML) Stats() compiledHTMLStats {
 	if compiled == nil {
-		return CompiledHTMLStats{}
+		return compiledHTMLStats{}
 	}
-	stats := CompiledHTMLStats{
+	stats := compiledHTMLStats{
 		Tokens:       len(compiled.tokens),
 		Nodes:        len(compiled.nodeIndexes),
 		Tables:       len(compiled.tables),
@@ -601,17 +601,17 @@ func (compiled *CompiledHTML) Stats() CompiledHTMLStats {
 
 // RecoveryIssues returns malformed-fragment recovery decisions from
 // compilation. The returned slice is a copy.
-func (compiled *CompiledHTML) RecoveryIssues() []CompiledHTMLRecoveryIssue {
+func (compiled *compiledHTML) RecoveryIssues() []compiledHTMLRecoveryIssue {
 	if compiled == nil || len(compiled.recovery) == 0 {
 		return nil
 	}
-	out := make([]CompiledHTMLRecoveryIssue, len(compiled.recovery))
+	out := make([]compiledHTMLRecoveryIssue, len(compiled.recovery))
 	copy(out, compiled.recovery)
 	return out
 }
 
 // DebugDump returns a compact tree dump for diagnostics.
-func (compiled *CompiledHTML) DebugDump() string {
+func (compiled *compiledHTML) DebugDump() string {
 	if compiled == nil {
 		return ""
 	}
@@ -624,7 +624,7 @@ func (compiled *CompiledHTML) DebugDump() string {
 	return out.String()
 }
 
-func (compiled *CompiledHTML) debugDumpNode(out *strings.Builder, nodeIndex, depth int) {
+func (compiled *compiledHTML) debugDumpNode(out *strings.Builder, nodeIndex, depth int) {
 	if nodeIndex < 0 || nodeIndex >= len(compiled.nodeIndexes) {
 		return
 	}
@@ -642,14 +642,14 @@ func (compiled *CompiledHTML) debugDumpNode(out *strings.Builder, nodeIndex, dep
 	}
 }
 
-func (compiled *CompiledHTML) validate() error {
+func (compiled *compiledHTML) validate() error {
 	if compiled == nil {
 		return errors.New("compiled HTML is nil")
 	}
 	return nil
 }
 
-func (compiled *CompiledHTML) collectElementTokens(start int, tag string) ([]HTMLSegmentType, int) {
+func (compiled *compiledHTML) collectElementTokens(start int, tag string) ([]htmlSegmentType, int) {
 	if compiled == nil || start < 0 || start >= len(compiled.tokens) {
 		return nil, 0
 	}
@@ -665,12 +665,12 @@ func (compiled *CompiledHTML) collectElementTokens(start int, tag string) ([]HTM
 	return compiled.tokens[start : end+1], end
 }
 
-func (compiled *CompiledHTML) skipElement(start int, tag string) int {
+func (compiled *compiledHTML) skipElement(start int, tag string) int {
 	_, end := compiled.collectElementTokens(start, tag)
 	return end
 }
 
-func (compiled *CompiledHTML) table(start int) (htmlTableType, int, bool) {
+func (compiled *compiledHTML) table(start int) (htmlTableType, int, bool) {
 	if compiled == nil {
 		return htmlTableType{}, start, false
 	}
@@ -678,7 +678,7 @@ func (compiled *CompiledHTML) table(start int) (htmlTableType, int, bool) {
 	return table.table, table.end, ok
 }
 
-func (compiled *CompiledHTML) inlineSVG(start int) (*SVG, int, bool) {
+func (compiled *compiledHTML) inlineSVG(start int) (*SVG, int, bool) {
 	if compiled == nil {
 		return nil, start, false
 	}
@@ -686,7 +686,7 @@ func (compiled *CompiledHTML) inlineSVG(start int) (*SVG, int, bool) {
 	return svg.svg, svg.end, ok
 }
 
-func (compiled *CompiledHTML) dataImage(start int) (compiledHTMLDataImage, bool) {
+func (compiled *compiledHTML) dataImage(start int) (compiledHTMLDataImage, bool) {
 	if compiled == nil {
 		return compiledHTMLDataImage{}, false
 	}
@@ -694,7 +694,7 @@ func (compiled *CompiledHTML) dataImage(start int) (compiledHTMLDataImage, bool)
 	return img, ok
 }
 
-func (compiled *CompiledHTML) validateDataImageLimit(maxBytes int) error {
+func (compiled *compiledHTML) validateDataImageLimit(maxBytes int) error {
 	if compiled == nil {
 		return nil
 	}
@@ -709,7 +709,7 @@ func (compiled *CompiledHTML) validateDataImageLimit(maxBytes int) error {
 	return nil
 }
 
-func (img compiledHTMLDataImage) register(pdf *Document) (string, ImageOptions, error) {
+func (img compiledHTMLDataImage) register(pdf *pdfDocument) (string, ImageOptions, error) {
 	if pdf == nil {
 		return "", img.options, errors.New("PDF document is nil")
 	}
@@ -738,11 +738,11 @@ func validateHTMLImageSource(src string) error {
 	return nil
 }
 
-func cloneHTMLTokens(tokens []HTMLSegmentType) []HTMLSegmentType {
+func cloneHTMLTokens(tokens []htmlSegmentType) []htmlSegmentType {
 	if len(tokens) == 0 {
 		return nil
 	}
-	out := make([]HTMLSegmentType, len(tokens))
+	out := make([]htmlSegmentType, len(tokens))
 	for i, token := range tokens {
 		out[i] = token
 		if len(token.Attr) == 0 {

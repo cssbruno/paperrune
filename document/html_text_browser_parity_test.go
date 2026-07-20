@@ -16,11 +16,11 @@ import (
 func TestHTMLUnifiedTextWhitespaceAndInlineStylePinnedBrowserOracle(t *testing.T) {
 	const fragment = `<p id="plain">alpha   <strong>beta</strong><br>gamma</p><p id="lines" style="white-space:pre-line">one   two
 three</p>`
-	compiled, err := CompileHTML(`<style>p{font-family:Courier;font-size:10pt;line-height:12pt}</style>` + fragment)
+	compiled, err := compileHTML(`<style>p{font-family:Courier;font-size:10pt;line-height:12pt}</style>` + fragment)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := paginationTestDocument(t, 100).PlanCompiledHTML(12, compiled)
+	plan, err := paginationTestDocument(t, 100).planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,7 @@ import (
 )
 
 func TestCompiledHTMLUnifiedPlanLowersTextHeadingsBreaksAndFlatLists(t *testing.T) {
-	compiled, err := CompileHTML("  <h2>Unified</h2><p>Hello <span>exact</span><br>planner</p><ol><li>First</li><li>Second</li></ol><ul><li>Third</li></ul>")
+	compiled, err := compileHTML("  <h2>Unified</h2><p>Hello <span>exact</span><br>planner</p><ol><li>First</li><li>Second</li></ol><ul><li>Third</li></ul>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,10 +44,10 @@ func TestCompiledHTMLUnifiedPlanLowersTextHeadingsBreaksAndFlatLists(t *testing.
 		t.Fatalf("unordered list = %#v", model.Body[3])
 	}
 
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 180}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 180}), WithNoCompression())
 	planner.SetMargins(18, 18, 18)
 	planner.SetAutoPageBreak(true, 18)
-	plan, err := planner.PlanCompiledHTML(14, compiled)
+	plan, err := planner.planCompiledHTML(14, compiled)
 	if err != nil || plan.Hash() == "" || plan.PageCount() == 0 || planner.PageCount() != 0 {
 		t.Fatalf("PlanCompiledHTML() = %#v, source pages %d, %v", plan, planner.PageCount(), err)
 	}
@@ -64,11 +64,11 @@ func TestCompiledHTMLUnifiedPlanLowersTextHeadingsBreaksAndFlatLists(t *testing.
 }
 
 func TestCompiledHTMLUnifiedPlanPrunesDisplayNoneSubtrees(t *testing.T) {
-	compiled, err := CompileHTML(`<main><p>before <span style="display:none">hidden inline</span>after</p><div style="display:none"><p>hidden block</p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" width="1" height="1"></div><p style="position:static;float:none;clear:both">visible</p></main>`)
+	compiled, err := compileHTML(`<main><p>before <span style="display:none">hidden inline</span>after</p><div style="display:none"><p>hidden block</p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" width="1" height="1"></div><p style="position:static;float:none;clear:both">visible</p></main>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}), WithNoCompression())
 	resolved, err := planner.resolveCompiledHTMLUnifiedSnapshot(context.Background(), compiled, 12)
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestCompiledHTMLUnifiedPlanPrunesDisplayNoneSubtrees(t *testing.T) {
 		}
 	}
 
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || plan.PageCount() == 0 || planner.PageCount() != 0 {
 		t.Fatalf("display:none plan = %#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
@@ -111,7 +111,7 @@ func TestCompiledHTMLUnifiedPlanPrunesDisplayNoneSubtrees(t *testing.T) {
 }
 
 func TestCompiledHTMLUnifiedPlanAppliesInheritedTextTransform(t *testing.T) {
-	compiled, err := CompileHTML(`<div style="text-transform:uppercase"><p>hello <span style="text-transform:lowercase">WORLD</span> café</p><p style="text-transform:capitalize">second line</p></div>`)
+	compiled, err := compileHTML(`<div style="text-transform:uppercase"><p>hello <span style="text-transform:lowercase">WORLD</span> café</p><p style="text-transform:capitalize">second line</p></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,18 +138,18 @@ func TestCompiledHTMLUnifiedPlanAppliesInheritedTextTransform(t *testing.T) {
 }
 
 func TestCompiledHTMLUnifiedPlanRejectsUnsupportedTextTransformAtomically(t *testing.T) {
-	compiled, err := CompileHTML(`<p style="text-transform:full-width">text</p>`)
+	compiled, err := compileHTML(`<p style="text-transform:full-width">text</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	if _, err := planner.PlanCompiledHTML(12, compiled); err == nil || !strings.Contains(err.Error(), `text-transform value "full-width" is unsupported`) {
+	if _, err := planner.planCompiledHTML(12, compiled); err == nil || !strings.Contains(err.Error(), `text-transform value "full-width" is unsupported`) {
 		t.Fatalf("unsupported text-transform error = %v", err)
 	}
 }
 
 func TestCompiledHTMLUnifiedPlanPrunesDisplayNoneFlexItems(t *testing.T) {
-	compiled, err := CompileHTML(`<div style="display:flex;gap:4pt"><p style="display:none;flex:0 0 20pt;line-height:12pt">hidden</p><p style="flex:0 0 30pt;line-height:12pt">shown</p></div>`)
+	compiled, err := compileHTML(`<div style="display:flex;gap:4pt"><p style="display:none;flex:0 0 20pt;line-height:12pt">hidden</p><p style="flex:0 0 30pt;line-height:12pt">shown</p></div>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestCompiledHTMLUnifiedPlanPrunesDisplayNoneFlexItems(t *testing.T) {
 	if !ok || len(container.Items) != 1 {
 		t.Fatalf("hidden flex item lowered model = %#v", model.Body[0])
 	}
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || plan.PageCount() == 0 {
 		t.Fatalf("hidden flex item plan=%#v pages=%d err=%v", plan, plan.PageCount(), err)
 	}
@@ -185,14 +185,14 @@ func TestCompiledHTMLUnifiedPlanPrunesDisplayNoneFlexItems(t *testing.T) {
 }
 
 func TestCompiledHTMLUnifiedPlanAcceptsOrdinaryDisplayModes(t *testing.T) {
-	compiled, err := CompileHTML(`<header><p>Header</p></header>` +
+	compiled, err := compileHTML(`<header><p>Header</p></header>` +
 		`<span style="display:block;margin:2pt;padding:1pt;background:#eef4fa">Block span</span>` +
 		`<span style="display:inline-block">Inline block span</span><footer><p>Footer</p></footer>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestCompiledHTMLUnifiedPlanAcceptsOrdinaryDisplayModes(t *testing.T) {
 }
 
 func TestCompiledHTMLUnifiedPlanLowersStrictTableThroughExactPlanner(t *testing.T) {
-	compiled, err := CompileHTML(`<table><caption>Quarterly report</caption><thead><tr><th colspan="2">Heading</th></tr></thead><tbody>` +
+	compiled, err := compileHTML(`<table><caption>Quarterly report</caption><thead><tr><th colspan="2">Heading</th></tr></thead><tbody>` +
 		`<tr><th rowspan="2">North</th><td><a href="https://example.test/value">10</a></td></tr><tr><td>11</td></tr>` +
 		`</tbody><tfoot><tr><th>Total</th><td>21</td></tr></tfoot></table>`)
 	if err != nil {
@@ -231,7 +231,7 @@ func TestCompiledHTMLUnifiedPlanLowersStrictTableThroughExactPlanner(t *testing.
 		t.Fatalf("lowered header/spans = %#v %#v", table.Header, table.Body)
 	}
 	planner := typedTableTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || plan.PageCount() == 0 || planner.PageCount() != 0 {
 		t.Fatalf("planned table = %#v pages %d, %v", plan, planner.PageCount(), err)
 	}
@@ -271,20 +271,20 @@ func TestCompiledHTMLUnifiedPlanRejectsUnsupportedTableContractsAtomically(t *te
 		`<table><tbody><tr><td style="background-color:not-a-color">x</td></tr></tbody></table>`,
 	}
 	for _, source := range tests {
-		compiled, err := CompileHTML(source)
+		compiled, err := compileHTML(source)
 		if err != nil {
 			t.Fatal(err)
 		}
 		planner := typedTableTestPlanner()
-		plan, err := planner.PlanCompiledHTML(12, compiled)
-		if !errors.Is(err, ErrHTMLPlanUnsupported) || plan.Hash() != "" || planner.PageCount() != 0 {
+		plan, err := planner.planCompiledHTML(12, compiled)
+		if !errors.Is(err, errHTMLPlanUnsupported) || plan.Hash() != "" || planner.PageCount() != 0 {
 			t.Fatalf("source %q: plan %#v pages %d err %v", source, plan, planner.PageCount(), err)
 		}
 	}
 }
 
 func TestCompiledHTMLUnifiedPlanKeepsEmptyTableCells(t *testing.T) {
-	compiled, err := CompileHTML(`<table><tbody><tr><th></th><td>value</td></tr><tr><td>label</td><td></td></tr></tbody></table>`)
+	compiled, err := compileHTML(`<table><tbody><tr><th></th><td>value</td></tr><tr><td>label</td><td></td></tr></tbody></table>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestCompiledHTMLUnifiedPlanKeepsEmptyTableCells(t *testing.T) {
 		len(table.Body[0].Cells[0].Blocks) != 0 || len(table.Body[1].Cells[1].Blocks) != 0 {
 		t.Fatalf("empty-cell table = %#v", model.Body)
 	}
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || plan.PageCount() != 1 || planner.PageCount() != 0 {
 		t.Fatalf("empty-cell plan = %#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
@@ -318,7 +318,7 @@ func TestCompiledHTMLUnifiedPlanKeepsEmptyTableCells(t *testing.T) {
 }
 
 func TestCompiledHTMLUnifiedPlanStrictTableDecorations(t *testing.T) {
-	compiled, err := CompileHTML(`<table style="background-color:#eeeeee;border-collapse:collapse"><thead><tr><th style="background-color:#102030;padding:2pt;border:1px solid #405060;border-right:2pt solid red;text-align:right;vertical-align:bottom">Head</th></tr></thead><tbody><tr><td style="padding-left:4pt;border-top-width:1px;border-top-style:solid;border-top-color:blue">Body</td></tr></tbody></table>`)
+	compiled, err := compileHTML(`<table style="background-color:#eeeeee;border-collapse:collapse"><thead><tr><th style="background-color:#102030;padding:2pt;border:1px solid #405060;border-right:2pt solid red;text-align:right;vertical-align:bottom">Head</th></tr></thead><tbody><tr><td style="padding-left:4pt;border-top-width:1px;border-top-style:solid;border-top-color:blue">Body</td></tr></tbody></table>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +332,7 @@ func TestCompiledHTMLUnifiedPlanStrictTableDecorations(t *testing.T) {
 		t.Fatalf("strict decorations=%#v %#v", table.Box, cell)
 	}
 	planner := typedTableTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || planner.PageCount() != 0 {
 		t.Fatalf("decorated HTML plan=%#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
@@ -369,13 +369,13 @@ func TestCompiledHTMLUnifiedPlanRejectsWholeUnsupportedFragmentAtomically(t *tes
 	}
 	for _, test := range tests {
 		t.Run(test.want+test.html[:2], func(t *testing.T) {
-			compiled, err := CompileHTML(test.html)
+			compiled, err := compileHTML(test.html)
 			if err != nil {
 				t.Fatal(err)
 			}
-			planner := MustNew(WithUnit(UnitPoint))
-			plan, err := planner.PlanCompiledHTML(12, compiled)
-			if !errors.Is(err, ErrHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.want) || plan.Hash() != "" || planner.PageCount() != 0 {
+			planner := mustNewPDFDocument(WithUnit(UnitPoint))
+			plan, err := planner.planCompiledHTML(12, compiled)
+			if !errors.Is(err, errHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.want) || plan.Hash() != "" || planner.PageCount() != 0 {
 				t.Fatalf("unsupported plan = %#v pages %d error %v", plan, planner.PageCount(), err)
 			}
 		})
@@ -383,26 +383,26 @@ func TestCompiledHTMLUnifiedPlanRejectsWholeUnsupportedFragmentAtomically(t *tes
 }
 
 func TestCompiledHTMLUnifiedPlanCancellationAndInputValidation(t *testing.T) {
-	compiled, err := CompileHTML("<p>content</p>")
+	compiled, err := compileHTML("<p>content</p>")
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint))
+	planner := mustNewPDFDocument(WithUnit(UnitPoint))
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := planner.PlanCompiledHTMLContext(canceled, 12, compiled); !errors.Is(err, context.Canceled) {
+	if _, err := planner.planCompiledHTMLContext(canceled, 12, compiled); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled plan = %v", err)
 	}
-	if _, err := planner.PlanCompiledHTML(0, compiled); err == nil {
+	if _, err := planner.planCompiledHTML(0, compiled); err == nil {
 		t.Fatal("zero line height was accepted")
 	}
-	if _, err := planner.PlanCompiledHTML(12, nil); err == nil {
+	if _, err := planner.planCompiledHTML(12, nil); err == nil {
 		t.Fatal("nil compiled HTML was accepted")
 	}
 }
 
 func TestCompiledHTMLTextCohortPreservesHrefSegmentBoundariesAndWhitespace(t *testing.T) {
-	compiled, err := CompileHTML(`<p>before<a href="https://example.test/exact">linked <span>words</span></a>after and <a href="mailto:paper@example.test">mail</a></p>`)
+	compiled, err := compileHTML(`<p>before<a href="https://example.test/exact">linked <span>words</span></a>after and <a href="mailto:paper@example.test">mail</a></p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,14 +423,14 @@ func TestCompiledHTMLTextCohortPreservesHrefSegmentBoundariesAndWhitespace(t *te
 }
 
 func TestCompiledHTMLUnifiedPlanPreservesExactExternalLinksThroughPDF(t *testing.T) {
-	compiled, err := CompileHTML(`<p>Read <a href="https://example.test/paper">the exact Paper plan</a> now.</p>`)
+	compiled, err := compileHTML(`<p>Read <a href="https://example.test/paper">the exact Paper plan</a> now.</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}), WithNoCompression())
 	planner.SetMargins(15, 15, 15)
 	planner.SetAutoPageBreak(true, 15)
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || planner.PageCount() != 0 {
 		t.Fatalf("linked HTML plan = %#v source pages %d, %v", plan, planner.PageCount(), err)
 	}
@@ -443,7 +443,7 @@ func TestCompiledHTMLUnifiedPlanPreservesExactExternalLinksThroughPDF(t *testing
 			t.Fatalf("planned link = %#v", link)
 		}
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -455,23 +455,23 @@ func TestCompiledHTMLUnifiedPlanPreservesExactExternalLinksThroughPDF(t *testing
 		t.Fatalf("PDF link annotations = %d, want %d", got, len(projection.Links))
 	}
 
-	unsafe, err := CompileHTML(`<p><a href="javascript:alert(1)">unsafe</a></p>`)
+	unsafe, err := compileHTML(`<p><a href="javascript:alert(1)">unsafe</a></p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bad, err := planner.PlanCompiledHTML(12, unsafe)
+	bad, err := planner.planCompiledHTML(12, unsafe)
 	if err == nil || bad.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("unsafe HTML link = plan %#v source pages %d, %v", bad, planner.PageCount(), err)
 	}
 }
 
 func TestCompiledHTMLUnifiedPlanResolvesInternalAnchorsAndLinks(t *testing.T) {
-	compiled, err := CompileHTML(`<p><span id="top">Target</span> and <a href="#top">jump back</a></p>`)
+	compiled, err := compileHTML(`<p><span id="top">Target</span> and <a href="#top">jump back</a></p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}), WithNoCompression(), WithDeterministicOutput())
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}), WithNoCompression(), WithDeterministicOutput())
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || planner.PageCount() != 0 {
 		t.Fatalf("internal-link plan = %#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
@@ -482,7 +482,7 @@ func TestCompiledHTMLUnifiedPlanResolvesInternalAnchorsAndLinks(t *testing.T) {
 	if projection.Destinations[0].Point.X < 0 || projection.Links[0].Bounds.Width <= 0 {
 		t.Fatalf("internal geometry = %#v/%#v", projection.Destinations[0], projection.Links[0].Bounds)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -496,17 +496,17 @@ func TestCompiledHTMLUnifiedPlanResolvesInternalAnchorsAndLinks(t *testing.T) {
 }
 
 func TestCompiledHTMLUnifiedPlanLowersStructuralWrappersDefinitionsAndPageBreaks(t *testing.T) {
-	compiled, err := CompileHTML(`<main><section><h3>Wrapped heading</h3><p>Wrapped body</p></section>` +
+	compiled, err := compileHTML(`<main><section><h3>Wrapped heading</h3><p>Wrapped body</p></section>` +
 		`<dl><dt>Term</dt><dd>Definition</dd><dd>Second definition</dd></dl></main>` +
 		`<p style="break-before:page">Second page</p>` +
 		`<div style="page-break-after:always"><p>Still second</p></div><p>Third page</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 180}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 180}), WithNoCompression())
 	planner.SetMargins(15, 15, 15)
 	planner.SetAutoPageBreak(true, 15)
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.PageCount() != 3 || planner.PageCount() != 0 {
 		t.Fatalf("structural HTML plan = pages %d source pages %d, %v", plan.PageCount(), planner.PageCount(), err)
 	}
@@ -531,12 +531,12 @@ func TestCompiledHTMLUnifiedPlanLowersStructuralWrappersDefinitionsAndPageBreaks
 		`<p style="break-before:sometimes">unsupported</p>`,
 		`<dl><dd>orphan definition</dd></dl>`,
 	} {
-		candidate, compileErr := CompileHTML(source)
+		candidate, compileErr := compileHTML(source)
 		if compileErr != nil {
 			t.Fatal(compileErr)
 		}
-		bad, planErr := planner.PlanCompiledHTML(12, candidate)
-		if !errors.Is(planErr, ErrHTMLPlanUnsupported) || bad.Hash() != "" || planner.PageCount() != 0 {
+		bad, planErr := planner.planCompiledHTML(12, candidate)
+		if !errors.Is(planErr, errHTMLPlanUnsupported) || bad.Hash() != "" || planner.PageCount() != 0 {
 			t.Fatalf("unsupported structural HTML %q = plan %#v pages %d, %v", source, bad, planner.PageCount(), planErr)
 		}
 	}
@@ -544,12 +544,12 @@ func TestCompiledHTMLUnifiedPlanLowersStructuralWrappersDefinitionsAndPageBreaks
 
 func TestCompiledHTMLUnifiedPlanLowersBoundedDataImagesToExactDisplayAndPDF(t *testing.T) {
 	const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-	compiled, err := CompileHTML(`<p>Before image</p><img src="data:image/png;base64,` + pixel + `" alt="One pixel" width="24px" height="18"><p>After image</p>`)
+	compiled, err := compileHTML(`<p>Before image</p><img src="data:image/png;base64,` + pixel + `" alt="One pixel" width="24px" height="18"><p>After image</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -574,7 +574,7 @@ func TestCompiledHTMLUnifiedPlanLowersBoundedDataImagesToExactDisplayAndPDF(t *t
 	if err != nil || !bytes.Contains(capture.SVG(), []byte("data:image/png;base64,")) {
 		t.Fatalf("HTML data image capture = %v, %s", err, capture.SVG())
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -588,12 +588,12 @@ func TestCompiledHTMLUnifiedPlanLowersBoundedDataImagesToExactDisplayAndPDF(t *t
 		`<img src="data:image/png;base64,` + pixel + `" width="10" height="10" loading="lazy">`,
 		`<img src="data:image/png;base64,` + pixel + `" width="nope" height="10">`,
 	} {
-		candidate, compileErr := CompileHTML(source)
+		candidate, compileErr := compileHTML(source)
 		if compileErr != nil {
 			t.Fatal(compileErr)
 		}
-		bad, planErr := planner.PlanCompiledHTML(12, candidate)
-		if !errors.Is(planErr, ErrHTMLPlanUnsupported) || bad.Hash() != "" || planner.PageCount() != 0 {
+		bad, planErr := planner.planCompiledHTML(12, candidate)
+		if !errors.Is(planErr, errHTMLPlanUnsupported) || bad.Hash() != "" || planner.PageCount() != 0 {
 			t.Fatalf("unsupported HTML image %q = plan %#v pages %d, %v", source, bad, planner.PageCount(), planErr)
 		}
 	}
@@ -601,12 +601,12 @@ func TestCompiledHTMLUnifiedPlanLowersBoundedDataImagesToExactDisplayAndPDF(t *t
 
 func TestCompiledHTMLUnifiedPlanLowersKeepGroupedFigureAndCaption(t *testing.T) {
 	const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-	compiled, err := CompileHTML(`<figure><img src="data:image/png;base64,` + pixel + `" alt="Diagram" width="30" height="20"><figcaption>Exact <a href="https://example.test/caption">caption</a></figcaption></figure>`)
+	compiled, err := compileHTML(`<figure><img src="data:image/png;base64,` + pixel + `" alt="Diagram" width="30" height="20"><figcaption>Exact <a href="https://example.test/caption">caption</a></figcaption></figure>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithNoCompression())
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -632,12 +632,12 @@ func TestCompiledHTMLUnifiedPlanLowersKeepGroupedFigureAndCaption(t *testing.T) 
 		`<figure><img src="data:image/png;base64,` + pixel + `" width="10" height="10"><p>not caption</p></figure>`,
 		`<figure></figure>`,
 	} {
-		candidate, compileErr := CompileHTML(source)
+		candidate, compileErr := compileHTML(source)
 		if compileErr != nil {
 			t.Fatal(compileErr)
 		}
-		bad, planErr := planner.PlanCompiledHTML(12, candidate)
-		if !errors.Is(planErr, ErrHTMLPlanUnsupported) || bad.Hash() != "" || planner.PageCount() != 0 {
+		bad, planErr := planner.planCompiledHTML(12, candidate)
+		if !errors.Is(planErr, errHTMLPlanUnsupported) || bad.Hash() != "" || planner.PageCount() != 0 {
 			t.Fatalf("invalid figure %q = plan %#v pages %d, %v", source, bad, planner.PageCount(), planErr)
 		}
 	}

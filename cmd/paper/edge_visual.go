@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cssbruno/paperrune/document"
@@ -171,20 +172,6 @@ func writeEdgeVisualReview(outputDir string, report edgeCheckResult) error {
 	if err != nil {
 		return fmt.Errorf("create edge visual review: %w", err)
 	}
-	pdf.SetTitle("PaperRune edge-case visual review", false)
-	pdf.SetCreator("PaperRune paper check", false)
-	pdf.SetMargins(12, 12, 12)
-	pdf.AddPage()
-	pdf.SetFillColor(20, 50, 62)
-	pdf.Rect(0, 0, 210, 44, "F")
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFont("Helvetica", "B", 22)
-	pdf.Text(14, 22, "PaperRune visual review")
-	pdf.SetFont("Helvetica", "", 10)
-	pdf.Text(14, 32, "Raster evidence from the final generated PDF files")
-	pdf.SetTextColor(20, 35, 42)
-	pdf.SetFont("Helvetica", "B", 13)
-	pdf.Text(14, 62, fmt.Sprintf("Schema %s", report.Schema))
 	passed := 0
 	pageCount := 0
 	for _, item := range report.Cases {
@@ -193,34 +180,76 @@ func writeEdgeVisualReview(outputDir string, report edgeCheckResult) error {
 		}
 		pageCount += len(item.RasterPages)
 	}
-	pdf.SetFont("Helvetica", "", 11)
-	pdf.SetXY(14, 72)
-	pdf.MultiCell(182, 7, fmt.Sprintf(
-		"Cases: %d\nPassed: %d\nFailed: %d\nRaster pages: %d\nMax layout issues: %d\nMinimum text runes: %d\nMaximum PDF pages: %d",
-		len(report.Cases), passed, len(report.Cases)-passed, pageCount,
-		report.Thresholds.MaxPageIssues, report.Thresholds.MinTextRunes, report.Thresholds.MaxPages,
-	), "", "L", false)
-
+	var source strings.Builder
+	source.WriteString("document @edge-visual-review:\n" +
+		"  title: \"PaperRune visual review\"\n" +
+		"  language: \"en\"\n" +
+		"  style @review-base:\n" +
+		"    font: \"Helvetica\"\n" +
+		"    size: 11pt\n" +
+		"    line-height: 15pt\n" +
+		"    color: \"#14232A\"\n" +
+		"  style @review-title:\n" +
+		"    style: \"@review-base\"\n" +
+		"    size: 22pt\n" +
+		"    line-height: 28pt\n" +
+		"    bold: true\n" +
+		"    color: \"#14323E\"\n" +
+		"  style @review-pass:\n" +
+		"    style: \"@review-base\"\n" +
+		"    bold: true\n" +
+		"    color: \"#16846F\"\n" +
+		"  style @review-fail:\n" +
+		"    style: \"@review-base\"\n" +
+		"    bold: true\n" +
+		"    color: \"#B94141\"\n" +
+		"  page @review-page:\n" +
+		"    size: \"A4\"\n" +
+		"    margin: 24pt\n" +
+		"    body @review-body:\n" +
+		"      heading @review-heading:\n" +
+		"        level: 1\n" +
+		"        style: \"@review-title\"\n" +
+		"        text: \"PaperRune visual review\"\n" +
+		"      paragraph @review-subtitle:\n" +
+		"        style: \"@review-base\"\n" +
+		"        text: \"Raster evidence from the final generated PDF files\"\n")
+	fmt.Fprintf(&source, "      paragraph @review-schema:\n        style: \"@review-base\"\n        text: %s\n", strconv.Quote("Schema: "+report.Schema))
+	summary := fmt.Sprintf("Cases: %d | Passed: %d | Failed: %d | Raster pages: %d | Max layout issues: %d | Minimum text runes: %d | Maximum PDF pages: %d",
+		len(report.Cases), passed, len(report.Cases)-passed, pageCount, report.Thresholds.MaxPageIssues,
+		report.Thresholds.MinTextRunes, report.Thresholds.MaxPages)
+	fmt.Fprintf(&source, "      paragraph @review-summary:\n        style: \"@review-base\"\n        text: %s\n", strconv.Quote(summary))
+	resources := make([]document.PaperAssetResource, 0, pageCount)
+	resourceIndex := 0
 	for _, item := range report.Cases {
 		for _, raster := range item.RasterPages {
-			pdf.AddPage()
+			width, height := fitEdgeRaster(raster.Width, raster.Height, 547, 720)
+			statusStyle := "@review-fail"
 			if item.OK {
-				pdf.SetFillColor(22, 132, 111)
-			} else {
-				pdf.SetFillColor(185, 65, 65)
+				statusStyle = "@review-pass"
 			}
-			pdf.Rect(0, 0, 210, 18, "F")
-			pdf.SetTextColor(255, 255, 255)
-			pdf.SetFont("Helvetica", "B", 10)
-			pdf.Text(12, 11, fmt.Sprintf("%s  |  PDF page %d of %d", item.Name, raster.Page, item.Pages))
-			width, height := fitEdgeRaster(raster.Width, raster.Height, 186, 265)
-			x := (210 - width) / 2
-			y := 23 + (265-height)/2
-			pdf.ImageOptions(filepath.Join(outputDir, raster.File), x, y, width, height, false, document.ImageOptions{ImageType: "PNG", AltText: fmt.Sprintf("Rendered PDF page %d for edge case %s", raster.Page, item.Name)}, 0, "")
+			label := fmt.Sprintf("%s | PDF page %d of %d", item.Name, raster.Page, item.Pages)
+			path := filepath.Join(outputDir, raster.File)
+			payload, readErr := readBoundedRaster(path)
+			if readErr != nil {
+				return fmt.Errorf("read edge visual review raster %s: %w", raster.File, readErr)
+			}
+			resourceIndex++
+			name := fmt.Sprintf("edge-raster-%03d", resourceIndex)
+			resources = append(resources, document.PaperAssetResource{Name: name, MediaType: "image/png", Digest: edgeSHA256(payload), Data: payload})
+			fmt.Fprintf(&source, "      page-break @review-break-%03d:\n", resourceIndex)
+			fmt.Fprintf(&source, "      paragraph @review-label-%03d:\n        style: %s\n        text: %s\n", resourceIndex, strconv.Quote(statusStyle), strconv.Quote(label))
+			fmt.Fprintf(&source, "      image @review-image-%03d:\n        source: %s\n        width: %.3fpt\n        height: %.3fpt\n        fit: \"contain\"\n        alt: %s\n",
+				resourceIndex, strconv.Quote("asset:"+name), width, height,
+				strconv.Quote(fmt.Sprintf("Rendered PDF page %d for edge case %s", raster.Page, item.Name)))
 		}
 	}
-	if pdf.Err() {
-		return fmt.Errorf("compose edge visual review: %w", pdf.Error())
+	catalog, err := document.NewPaperAssetCatalog(resources)
+	if err != nil {
+		return fmt.Errorf("create edge visual review assets: %w", err)
+	}
+	if rendered, renderErr := pdf.WritePaperWithAssets("edge-visual-review.paper", source.String(), catalog); renderErr != nil || !rendered.OK() {
+		return fmt.Errorf("compose edge visual review with Paper: %w", renderErr)
 	}
 	var encoded bytes.Buffer
 	limited := &limitWriter{w: &encoded, remaining: maxPDFBytes}

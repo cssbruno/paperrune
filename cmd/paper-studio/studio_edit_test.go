@@ -16,18 +16,16 @@ import (
 	"github.com/cssbruno/paperrune/internal/paperlang"
 )
 
-const studioGridFixture = "document @report:\n" +
+const studioLayoutFixture = "document @report:\n" +
 	"  page @sheet:\n" +
 	"    body @body:\n" +
 	"      row @grid:\n" +
 	"        gap: 4pt\n" +
 	"        paragraph @left:\n" +
-	"          track: \"fixed\"\n" +
-	"          track-size: 40pt\n" +
+	"          width: 40pt\n" +
 	"          text @left-copy: \"Left\"\n" +
 	"        paragraph @right:\n" +
-	"          track: \"fraction\"\n" +
-	"          track-weight: 1\n" +
+	"          width: 1fr\n" +
 	"          text @right-copy: \"Right\"\n"
 
 const studioBoxFixture = "document @report:\n  page @sheet:\n    width: 160pt\n    height: 100pt\n    margin: 10pt\n    body @content:\n      paragraph @message:\n        text: \"Box\"\n"
@@ -92,8 +90,8 @@ const studioImageFixture = "document @report:\n  page @sheet:\n    body @body:\n
 	"        width: 40pt\n        height: 24pt\n        fit: \"cover\"\n        alt: \"Pixel\"\n"
 
 const studioTableFixture = "document @report:\n  language: \"en\"\n  page @sheet:\n    width: 200pt\n    height: 120pt\n    margin: 8pt\n    body @body:\n      table @ledger:\n" +
-	"        repeat-header: true\n        split: \"rows\"\n        table-track @name-track:\n          width: 100pt\n" +
-	"        table-track @value-track:\n          width: 84pt\n" +
+	"        repeat-header: true\n        split: \"rows\"\n        table-column @name-column:\n          width: 100pt\n" +
+	"        table-column @value-column:\n          width: 84pt\n" +
 	"        table-header @head:\n          table-row @head-row:\n            cell @name-head:\n              text: \"Name\"\n            cell @value-head:\n              text: \"Value\"\n" +
 	"        table-row @body-row:\n          cell @name:\n            text: \"Alpha\"\n          cell @value:\n            text: \"10\"\n"
 
@@ -626,9 +624,9 @@ func TestPaperStudioBoxEditBindsExactRevisionsAndKeepsCapabilitiesServerSide(t *
 	}
 }
 
-func TestPaperStudioGridEditAuthorizesAndGuardsTransitiveParent(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "grid.paper")
-	if err := os.WriteFile(file, []byte(studioGridFixture), 0o600); err != nil {
+func TestPaperStudioLayoutItemEditAuthorizesAndGuardsTransitiveParent(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "layout.paper")
+	if err := os.WriteFile(file, []byte(studioLayoutFixture), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	studio, err := newStudioServer(file, "")
@@ -641,13 +639,13 @@ func TestPaperStudioGridEditAuthorizesAndGuardsTransitiveParent(t *testing.T) {
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
 		"source_revision": before.SourceRevision,
 		"plan_revision":   before.Revision,
-		"operation":       "grid",
+		"operation":       "layout-item",
 		"target":          "@left",
-		"property":        "track-size",
+		"property":        "width",
 		"points":          48,
 	})
 	if response.StatusCode != http.StatusOK {
-		t.Fatalf("grid edit = %d %s", response.StatusCode, response.Body)
+		t.Fatalf("layout edit = %d %s", response.StatusCode, response.Body)
 	}
 	var result studioEditResponse
 	if err := json.Unmarshal([]byte(response.Body), &result); err != nil {
@@ -661,11 +659,39 @@ func TestPaperStudioGridEditAuthorizesAndGuardsTransitiveParent(t *testing.T) {
 		t.Fatalf("transitive authorization = %+v", result.Authorization)
 	}
 	if afterCapture := studioPageCapture(t, handler, result.PlanRevision); bytes.Equal(beforeCapture, afterCapture) {
-		t.Fatal("grid edit did not change the exact page SVG capture")
+		t.Fatal("layout edit did not change the exact page SVG capture")
 	}
 	written, _ := os.ReadFile(file)
-	if !strings.Contains(string(written), "track-size: 48pt") {
-		t.Fatalf("grid source = %s", written)
+	if !strings.Contains(string(written), "width: 48pt") {
+		t.Fatalf("layout source = %s", written)
+	}
+}
+
+func TestPaperStudioLayoutContainerEditUsesReadableProperty(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "layout-container.paper")
+	if err := os.WriteFile(file, []byte(studioLayoutFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	studio, err := newStudioServer(file, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := studio.routes()
+	before := fetchStudioWorkspace(t, handler)
+	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
+		"source_revision": before.SourceRevision,
+		"plan_revision":   before.Revision,
+		"operation":       "layout-container",
+		"target":          "@grid",
+		"property":        "justify-content",
+		"kind":            "space-between",
+	})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("layout container edit = %d %s", response.StatusCode, response.Body)
+	}
+	written, _ := os.ReadFile(file)
+	if !strings.Contains(string(written), `justify-content: "space-between"`) {
+		t.Fatalf("layout container source = %s", written)
 	}
 }
 
@@ -745,7 +771,11 @@ func TestPaperStudioImageAndTableEditsUseClosedPrivateAuthorities(t *testing.T) 
 		visual     bool
 	}{
 		{"image width", studioImageFixture, map[string]any{"operation": "image", "target": "@hero", "property": "width", "points": 48}, "width: 48pt", "@hero", true},
-		{"table track", studioTableFixture, map[string]any{"operation": "table", "target": "@name-track", "property": "min-width", "points": 40}, "min-width: 40pt", "@ledger", false},
+		{"table column", studioTableFixture, map[string]any{"operation": "table", "target": "@name-column", "property": "min-width", "points": 40}, "min-width: 40pt", "@ledger", false},
+		{"table caption", studioTableFixture, map[string]any{"operation": "table", "target": "@ledger", "property": "caption", "text": "Quarterly results"}, "caption: \"Quarterly results\"", "@ledger", true},
+		{"cell alignment", studioTableFixture, map[string]any{"operation": "table", "target": "@name", "property": "vertical-align", "kind": "middle"}, "vertical-align: \"middle\"", "@ledger", false},
+		{"row orphans", studioTableFixture, map[string]any{"operation": "table", "target": "@body-row", "property": "orphans", "count": 2}, "orphans: 2", "@ledger", false},
+		{"cell colspan", studioTableFixture, map[string]any{"operation": "table", "target": "@name", "property": "colspan", "count": 2}, "colspan: 2", "@ledger", false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -793,6 +823,72 @@ func TestPaperStudioImageAndTableEditsUseClosedPrivateAuthorities(t *testing.T) 
 	}
 }
 
+const studioAuthoringPropertiesFixture = `document @report:
+  title: "Draft"
+  language: "en"
+  style @body-style:
+    font: "Helvetica"
+  page @sheet:
+    width: 200pt
+    height: 140pt
+    body @body:
+      heading @title:
+        level: 1
+        text: "Report"
+      canvas @diagram:
+        width: 120pt
+        height: 60pt
+        anchor @badge:
+          width: 20pt
+          height: 10pt
+          left: "canvas.left"
+          top: "canvas.top"
+`
+
+func TestPaperStudioRoutesMissingAttributesThroughClosedMutations(t *testing.T) {
+	tests := []struct {
+		name, target, operation, property, want string
+		value                                   map[string]any
+	}{
+		{"document title", "@report", "document", "title", `title: "Final"`, map[string]any{"text": "Final"}},
+		{"page numbers", "@sheet", "page", "page-numbers", "page-numbers: true", map[string]any{"bool": true}},
+		{"canvas default", "@diagram", "canvas-container", "default-horizontal", `default-horizontal: "center-x"`, map[string]any{"kind": "center-x"}},
+		{"canvas alt", "@badge", "canvas", "alt", `alt: "Badge"`, map[string]any{"text": "Badge"}},
+		{"heading level", "@title", "text", "level", "level: 4", map[string]any{"count": 4}},
+		{"named style", "@title", "appearance", "style", `style: "@body-style"`, map[string]any{"text": "@body-style"}},
+		{"condition", "@title", "condition", "when", `when: "patient.active == true"`, map[string]any{"text": "patient.active == true"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "properties.paper")
+			if err := os.WriteFile(file, []byte(studioAuthoringPropertiesFixture), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			studio, err := newStudioServer(file, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler := studio.routes()
+			before := fetchStudioWorkspace(t, handler)
+			request := map[string]any{
+				"source_revision": before.SourceRevision, "plan_revision": before.Revision,
+				"operation": test.operation, "target": test.target, "property": test.property,
+			}
+			for key, value := range test.value {
+				request[key] = value
+			}
+			response := postStudioJSON(t, handler, "/api/edit", request)
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("edit = %d %s", response.StatusCode, response.Body)
+			}
+			written, err := os.ReadFile(file)
+			if err != nil || !strings.Contains(string(written), test.want) {
+				t.Fatalf("source = %s, %v", written, err)
+			}
+		})
+	}
+}
+
 func TestPaperStudioPageMarginEditsGoverningPageMaster(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "page.paper")
 	if err := os.WriteFile(file, []byte(studioBoxFixture), 0o600); err != nil {
@@ -825,6 +921,77 @@ func TestPaperStudioPageMarginEditsGoverningPageMaster(t *testing.T) {
 	written, _ := os.ReadFile(file)
 	if !strings.Contains(string(written), "margin-left: 20pt") {
 		t.Fatalf("page source = %s", written)
+	}
+}
+
+func TestPaperStudioResetUndoAndRedoRemainExact(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "history.paper")
+	if err := os.WriteFile(file, []byte(studioBoxFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	studio, err := newStudioServer(file, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := studio.routes()
+	before := fetchStudioWorkspace(t, handler)
+	set := postStudioJSON(t, handler, "/api/edit", map[string]any{
+		"source_revision": before.SourceRevision, "plan_revision": before.Revision,
+		"operation": "page", "target": "@sheet", "property": "margin-left", "points": 20,
+	})
+	if set.StatusCode != http.StatusOK {
+		t.Fatalf("set margin = %d %s", set.StatusCode, set.Body)
+	}
+	authored := fetchStudioWorkspace(t, handler)
+	reset := postStudioJSON(t, handler, "/api/edit", map[string]any{
+		"source_revision": authored.SourceRevision, "plan_revision": authored.Revision,
+		"operation": "page", "target": "@sheet", "property": "margin-left", "reset": true,
+	})
+	if reset.StatusCode != http.StatusOK {
+		t.Fatalf("reset margin = %d %s", reset.StatusCode, reset.Body)
+	}
+	resetWorkspace := fetchStudioWorkspace(t, handler)
+	if strings.Contains(resetWorkspace.Source, "margin-left:") {
+		t.Fatalf("reset retained explicit override: %s", resetWorkspace.Source)
+	}
+	undo := postStudioJSON(t, handler, "/api/history", map[string]any{
+		"source_revision": resetWorkspace.SourceRevision, "plan_revision": resetWorkspace.Revision, "action": "undo",
+	})
+	if undo.StatusCode != http.StatusOK {
+		t.Fatalf("undo = %d %s", undo.StatusCode, undo.Body)
+	}
+	undone := fetchStudioWorkspace(t, handler)
+	if !strings.Contains(undone.Source, "margin-left: 20pt") {
+		t.Fatalf("undo source = %s", undone.Source)
+	}
+	redo := postStudioJSON(t, handler, "/api/history", map[string]any{
+		"source_revision": undone.SourceRevision, "plan_revision": undone.Revision, "action": "redo",
+	})
+	if redo.StatusCode != http.StatusOK {
+		t.Fatalf("redo = %d %s", redo.StatusCode, redo.Body)
+	}
+	redone := fetchStudioWorkspace(t, handler)
+	if strings.Contains(redone.Source, "margin-left:") {
+		t.Fatalf("redo retained override: %s", redone.Source)
+	}
+}
+
+func TestPaperStudioResetRejectsUnavailableProperty(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "reset.paper")
+	if err := os.WriteFile(file, []byte(studioBoxFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	studio, err := newStudioServer(file, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := fetchStudioWorkspace(t, studio.routes())
+	response := postStudioJSON(t, studio.routes(), "/api/edit", map[string]any{
+		"source_revision": before.SourceRevision, "plan_revision": before.Revision,
+		"operation": "page", "target": "@sheet", "property": "margin-left", "reset": true,
+	})
+	if response.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("missing reset = %d %s", response.StatusCode, response.Body)
 	}
 }
 

@@ -20,7 +20,7 @@ type layerRecType struct {
 	openLayerPane bool
 }
 
-func (f *Document) layerInit() {
+func (f *pdfDocument) layerInit() {
 	f.layer.list = make([]layerType, 0)
 	f.layer.currentLayer = -1
 	f.layer.openLayerPane = false
@@ -30,7 +30,7 @@ func (f *Document) layerInit() {
 // displayed. name specifies the layer name that the document reader will
 // display in the layer list. visible specifies whether the layer will be
 // initially visible. The returned integer ID is used in a call to BeginLayer.
-func (f *Document) AddLayer(name string, visible bool) (layerID int) {
+func (f *pdfDocument) AddLayer(name string, visible bool) (layerID int) {
 	layerID = len(f.layer.list)
 	f.layer.list = append(f.layer.list, layerType{name: name, visible: visible})
 	return
@@ -39,7 +39,7 @@ func (f *Document) AddLayer(name string, visible bool) (layerID int) {
 // BeginLayer is called to begin adding content to the specified layer. All
 // content added to the page between BeginLayer and EndLayer is added to the
 // layer specified by id. See AddLayer for more details.
-func (f *Document) BeginLayer(id int) {
+func (f *pdfDocument) BeginLayer(id int) {
 	f.EndLayer()
 	if id >= 0 && id < len(f.layer.list) {
 		f.outf("/OC %s BDC", optionalContentPDFResourceName(id).String())
@@ -49,7 +49,7 @@ func (f *Document) BeginLayer(id int) {
 
 // EndLayer is called to stop adding content to the currently active layer. See
 // BeginLayer for more details.
-func (f *Document) EndLayer() {
+func (f *pdfDocument) EndLayer() {
 	if f.layer.currentLayer >= 0 {
 		f.out("EMC")
 		f.layer.currentLayer = -1
@@ -58,17 +58,17 @@ func (f *Document) EndLayer() {
 
 // OpenLayerPane advises the document reader to open the layer pane when the
 // document is initially displayed.
-func (f *Document) OpenLayerPane() {
+func (f *pdfDocument) OpenLayerPane() {
 	f.layer.openLayerPane = true
 }
 
-func (f *Document) layerEndDoc() {
+func (f *pdfDocument) layerEndDoc() {
 	if len(f.layer.list) > 0 {
 		f.setMinimumPDFVersion("1.5")
 	}
 }
 
-func (f *Document) layerPutLayers() {
+func (f *pdfDocument) layerPutLayers() {
 	for j, l := range f.layer.list {
 		f.newPDFDictObject()
 		f.layer.list[j].objNum = f.n
@@ -81,7 +81,7 @@ func (f *Document) layerPutLayers() {
 	}
 }
 
-func (f *Document) layerPutResourceDict() {
+func (f *pdfDocument) layerPutResourceDict() {
 	if len(f.layer.list) > 0 {
 		f.out("/Properties")
 		f.beginPDFDict()
@@ -92,7 +92,7 @@ func (f *Document) layerPutResourceDict() {
 	}
 }
 
-func (f *Document) layerPutCatalog() {
+func (f *pdfDocument) layerPutCatalog() {
 	if len(f.layer.list) > 0 {
 		onStr := ""
 		var offStr strings.Builder

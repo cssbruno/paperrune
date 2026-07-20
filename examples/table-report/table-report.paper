@@ -1,0 +1,109 @@
+document @customer-status-report:
+  title: "Customer status report"
+  language: "en"
+
+  schema report:
+    string generated
+    list object rows:
+      max-items: 100
+      string number
+      string customer
+      string status
+      string note
+
+  style @report-base-style:
+    font: "Helvetica"
+    size: 9pt
+    line-height: 18pt
+    color: "#344451"
+
+  style @report-title-style:
+    style: "@report-base-style"
+    size: 18pt
+    line-height: 24pt
+    bold: true
+    color: "#203D5C"
+
+  style @report-label-style:
+    style: "@report-base-style"
+    size: 8pt
+    line-height: 11pt
+    bold: true
+    color: "#627486"
+
+  page @report-page:
+    size: "A5"
+    margin: 28pt
+    page-numbers: true
+    page-number-format: "Customer status report | Page %d of {pages}"
+    page-total-alias: "{pages}"
+
+    header @report-header:
+      heading @report-heading:
+        level: 1
+        style: "@report-title-style"
+        text: "CUSTOMER STATUS REPORT"
+      paragraph @report-generated:
+        style: "@report-label-style"
+        bind: "generated"
+        text: "Generated"
+
+    body @report-content:
+      table @report-table:
+        repeat-header: true
+        split: "rows"
+
+        table-column @report-number-column:
+          width: 10%
+        table-column @report-customer-column:
+          width: 30%
+        table-column @report-status-column:
+          width: 18%
+        table-column @report-note-column:
+          width: 42%
+
+        table-header @report-table-header:
+          table-row @report-table-header-row:
+            cell @report-number-heading-cell:
+              paragraph:
+                style: "@report-label-style"
+                text: "#"
+            cell @report-customer-heading-cell:
+              paragraph:
+                style: "@report-label-style"
+                text: "CUSTOMER"
+            cell @report-status-heading-cell:
+              paragraph:
+                style: "@report-label-style"
+                text: "STATUS"
+            cell @report-note-heading-cell:
+              paragraph:
+                style: "@report-label-style"
+                text: "NOTE"
+
+        repeat @report-rows:
+          source: "rows"
+          instance-prefix: "rows"
+          max-items: 100
+
+          table-row @report-row:
+            cell @report-number-cell:
+              paragraph:
+                style: "@report-base-style"
+                bind: "number"
+                text: "000"
+            cell @report-customer-cell:
+              paragraph:
+                style: "@report-base-style"
+                bind: "customer"
+                text: "Customer"
+            cell @report-status-cell:
+              paragraph:
+                style: "@report-base-style"
+                bind: "status"
+                text: "Status"
+            cell @report-note-cell:
+              paragraph:
+                style: "@report-base-style"
+                bind: "note"
+                text: "Note"

@@ -9,7 +9,7 @@ import (
 )
 
 func TestCoreMultiCellWrapOwnsNormalizedTextAndTrailingLF(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint))
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint))
 	pdf.SetFont("Courier", "", 10)
 	tests := []struct {
 		name        string
@@ -52,7 +52,7 @@ func TestCoreMultiCellWrapOwnsNormalizedTextAndTrailingLF(t *testing.T) {
 }
 
 func TestWrappedTextStrictWidthAndConsumedSpaceBoundary(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint))
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint))
 	pdf.SetFont("Courier", "", 10)
 	collect := func(maxWidth float64) ([]string, []wrappedTextLine) {
 		text := "AA BB"
@@ -83,7 +83,7 @@ func TestWrappedTextStrictWidthAndConsumedSpaceBoundary(t *testing.T) {
 }
 
 func TestCoreMultiCellWrapAlignmentControlsConfiguredWordSpacing(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint))
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint))
 	pdf.SetFont("Courier", "", 10)
 	pdf.ws = pdf.fontSize * 600 / 1000
 	width := float64(1800)*pdf.fontSize/1000 + 2*pdf.cMargin
@@ -102,7 +102,7 @@ func TestCoreMultiCellWrapAlignmentControlsConfiguredWordSpacing(t *testing.T) {
 }
 
 func TestSharedSplitScannerCountAndCollectionStayEquivalent(t *testing.T) {
-	pdf := MustNew(WithUnit(UnitPoint))
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint))
 	pdf.SetFont("Courier", "", 10)
 	texts := []string{"", "A", "AA BB", "A\n\nB", " leading", "trailing ", "中 文", string([]byte{'A', 0xff, 'B'})}
 	for _, text := range texts {

@@ -85,13 +85,13 @@ document @lab-report:
         repeat-header: true
         split: "rows"
 
-        table-track @name-track:
+        table-column @name-column:
           width: 42%
-        table-track @value-track:
+        table-column @value-column:
           width: 15%
-        table-track @unit-track:
+        table-column @unit-column:
           width: 15%
-        table-track @reference-track:
+        table-column @reference-column:
           width: 28%
 
         table-header @results-header:

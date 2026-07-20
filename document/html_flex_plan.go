@@ -65,7 +65,7 @@ type htmlUnifiedFlexItem struct {
 // htmlPlanFlexBlock consumes only the selector-free metadata produced by the
 // capability scan. Direct children were already proven to be exact element
 // boundaries, so lowering cannot accidentally create legacy layout islands.
-func htmlPlanFlexBlock(ctx context.Context, compiled *CompiledHTML, token int, lineHeight float64, textBytes *int, pointsToUnits func(float64) float64, state *htmlPlanLoweringState) (layout.RowColumnBlock, error) {
+func htmlPlanFlexBlock(ctx context.Context, compiled *compiledHTML, token int, lineHeight float64, textBytes *int, pointsToUnits func(float64) float64, state *htmlPlanLoweringState) (layout.RowColumnBlock, error) {
 	resolved := compiled.unifiedResolved[token]
 	if resolved.flexContainer == nil {
 		return layout.RowColumnBlock{}, htmlPlanUnsupported(compiled.tokens[token].Str, token, "resolved flex metadata is unavailable")
@@ -138,7 +138,7 @@ func htmlPlanFlexBlock(ctx context.Context, compiled *CompiledHTML, token int, l
 // before any layout call. The initial cohort deliberately accepts one line,
 // direct paragraph/heading items, exact or weighted basis, main-axis gap, and
 // cross-axis alignment. Every other flex contract fails the whole fragment.
-func htmlUnifiedResolveFlexCohort(ctx context.Context, compiled *CompiledHTML) error {
+func htmlUnifiedResolveFlexCohort(ctx context.Context, compiled *compiledHTML) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -387,7 +387,7 @@ func htmlUnifiedFlexGapLength(value string) (float64, bool) {
 	return htmlUnifiedFixedCSSLength(value, true)
 }
 
-func htmlUnifiedResolveFlexChildren(ctx context.Context, compiled *CompiledHTML, containerNode int) error {
+func htmlUnifiedResolveFlexChildren(ctx context.Context, compiled *compiledHTML, containerNode int) error {
 	container := compiled.nodeIndexes[containerNode]
 	tag, token := compiled.tokens[container.Token].Str, container.Token
 	if len(compiled.tokens[token].Attr) != 0 {
@@ -462,7 +462,7 @@ func htmlUnifiedResolveFlexChildren(ctx context.Context, compiled *CompiledHTML,
 	return nil
 }
 
-func htmlUnifiedFlexWhitespace(ctx context.Context, compiled *CompiledHTML, tag string, token, start, end int) error {
+func htmlUnifiedFlexWhitespace(ctx context.Context, compiled *compiledHTML, tag string, token, start, end int) error {
 	for index := start; index < end; index++ {
 		if index&255 == 0 {
 			if err := ctx.Err(); err != nil {

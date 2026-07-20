@@ -13,7 +13,7 @@ import (
 )
 
 func TestDocumentStatsSummarizeResources(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
 	pdf.Cell(20, 5, "stats")
@@ -43,7 +43,7 @@ func TestDocumentStatsSummarizeResources(t *testing.T) {
 }
 
 func TestResourceStoreOwnsDocumentResources(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	resources := pdf.ensureResourceStore()
 	if resources == nil {
 		t.Fatal("resources store is nil")
@@ -67,7 +67,7 @@ func TestResourceStoreOwnsDocumentResources(t *testing.T) {
 }
 
 func TestResourceStoreReceivesRegisteredResourceWrites(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 
 	info, err := pdf.RegisterImageOptionsReaderContext(t.Context(), "pixel", ImageOptions{ImageType: "png"}, bytes.NewReader(decodeTinyPNG(t)))
 	if err != nil {
@@ -104,7 +104,7 @@ func TestResourceStoreReceivesRegisteredResourceWrites(t *testing.T) {
 }
 
 func TestResourceStoreReceivesAttachmentCacheWrites(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.SetAttachments([]Attachment{{
 		Content:     []byte("attachment payload"),
@@ -128,7 +128,7 @@ func TestResourceStoreReceivesAttachmentCacheWrites(t *testing.T) {
 }
 
 func TestResourceStoreReceivesFontWrites(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetFont("Helvetica", "", 12)
 	if _, ok := pdf.resources.font("helvetica"); !ok {
 		t.Fatal("core font was not stored in resourceStore")
@@ -139,7 +139,7 @@ func TestResourceStoreReceivesFontWrites(t *testing.T) {
 		def:  fontDefinition{Tp: "UTF8", Name: "cached", Cw: []int{0, 500}},
 		data: []byte("font-data"),
 	}
-	pdf = MustNew()
+	pdf = mustNewPDFDocument()
 	if err := pdf.AddUTF8FontFromCacheError("cached", "", cache); err != nil {
 		t.Fatalf("AddUTF8FontFromCacheError() error = %v", err)
 	}
@@ -223,7 +223,7 @@ func TestResourceLoaderRegistersImages(t *testing.T) {
 		data := decodeTinyPNG(t)
 		return io.NopCloser(bytes.NewReader(data)), ResourceInfo{Size: int64(len(data)), StableID: "tiny"}, nil
 	})
-	pdf, err := NewDocument(WithResourceLoader(loader))
+	pdf, err := newPDFDocument(WithResourceLoader(loader))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -260,7 +260,7 @@ func TestResourceLoaderStableIDCachesImages(t *testing.T) {
 		}, ResourceInfo{Size: int64(len(data)), StableID: "tiny-image-v1"}, nil
 	})
 
-	first, err := NewDocument(WithResourceLoader(loader), WithImageCache(cache))
+	first, err := newPDFDocument(WithResourceLoader(loader), WithImageCache(cache))
 	if err != nil {
 		t.Fatalf("NewDocument(first) error = %v", err)
 	}
@@ -272,7 +272,7 @@ func TestResourceLoaderStableIDCachesImages(t *testing.T) {
 		t.Fatal("first resource-loaded image was not read")
 	}
 
-	second, err := NewDocument(WithResourceLoader(loader), WithImageCache(cache))
+	second, err := newPDFDocument(WithResourceLoader(loader), WithImageCache(cache))
 	if err != nil {
 		t.Fatalf("NewDocument(second) error = %v", err)
 	}
@@ -291,7 +291,7 @@ func TestResourceLoaderImageSourceLimit(t *testing.T) {
 	loader := ResourceLoaderFunc(func(context.Context, ResourceKind, string) (io.ReadCloser, ResourceInfo, error) {
 		return io.NopCloser(bytes.NewReader(nil)), ResourceInfo{Size: 128}, nil
 	})
-	pdf, err := NewDocument(
+	pdf, err := newPDFDocument(
 		WithResourceLoader(loader),
 		WithLimits(Limits{MaxImageSourceBytes: 16}),
 	)
@@ -316,7 +316,7 @@ func TestResourceLoaderLoadsFileBackedAttachments(t *testing.T) {
 		data := []byte("loaded attachment")
 		return io.NopCloser(bytes.NewReader(data)), ResourceInfo{Size: int64(len(data))}, nil
 	})
-	pdf, err := NewDocument(WithResourceLoader(loader))
+	pdf, err := newPDFDocument(WithResourceLoader(loader))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -347,7 +347,7 @@ func TestResourceLoaderLoadsUTF8Fonts(t *testing.T) {
 		gotName = name
 		return io.NopCloser(bytes.NewReader(fontBytes)), ResourceInfo{Size: int64(len(fontBytes)), StableID: "dejavu"}, nil
 	})
-	pdf, err := NewDocument(WithResourceLoader(loader))
+	pdf, err := newPDFDocument(WithResourceLoader(loader))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -389,7 +389,7 @@ func TestResourceLoaderStableIDCachesSharedUTF8Fonts(t *testing.T) {
 	})
 
 	for i := 0; i < 2; i++ {
-		pdf, err := NewDocument(
+		pdf, err := newPDFDocument(
 			WithResourceCachePolicy(ResourceCacheShared),
 			WithResourceLoader(loader),
 		)
@@ -412,7 +412,7 @@ func TestResourceLoaderStableIDCachesSharedUTF8Fonts(t *testing.T) {
 }
 
 func TestResourceLoaderImportsPDFs(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint))
+	source := mustNewPDFDocument(WithUnit(UnitPoint))
 	source.AddPage()
 	source.SetFont("Helvetica", "", 12)
 	source.Text(72, 96, "resource-loaded import")
@@ -432,7 +432,7 @@ func TestResourceLoaderImportsPDFs(t *testing.T) {
 		data := sourceBytes.Bytes()
 		return io.NopCloser(bytes.NewReader(data)), ResourceInfo{Size: int64(len(data))}, nil
 	})
-	pdf, err := NewDocument(WithResourceLoader(loader))
+	pdf, err := newPDFDocument(WithResourceLoader(loader))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -470,7 +470,7 @@ func (r countingReadCloser) Close() error {
 }
 
 func TestStatsInitializesResourceStoreForBareDocument(t *testing.T) {
-	pdf := &Document{}
+	pdf := &pdfDocument{}
 	stats := pdf.Stats()
 	if stats != (DocumentStats{}) {
 		t.Fatalf("Stats() for bare document = %#v, want zero stats", stats)
@@ -534,7 +534,7 @@ func TestImageCacheStatsDeduplicateFileAliases(t *testing.T) {
 
 func TestClearSharedCaches(t *testing.T) {
 	ClearSharedCaches()
-	if stats := SharedCacheStats(); stats.Images.Entries != 0 || stats.Fonts.Entries != 0 || stats.HTML.Entries != 0 {
+	if stats := SharedCacheStats(); stats.Images.Entries != 0 || stats.Fonts.Entries != 0 || stats.htmlRenderer.Entries != 0 {
 		t.Fatalf("SharedCacheStats() = %#v, want empty shared caches", stats)
 	}
 }

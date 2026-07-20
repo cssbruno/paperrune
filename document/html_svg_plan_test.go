@@ -19,12 +19,12 @@ const htmlUnifiedSVGFixture = `<a href="https://example.test/svg"><svg width="40
 	`<path d="M20 4 Q28 4 28 12 Z" fill="#abcdef" fill-rule="evenodd" stroke="none"/></svg></a>`
 
 func TestHTMLUnifiedInlineSVGPlanCaptureRasterPDFLinkSemanticsAndCursor(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedSVGFixture)
+	compiled, err := compileHTML(htmlUnifiedSVGFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,12 +52,12 @@ func TestHTMLUnifiedInlineSVGPlanCaptureRasterPDFLinkSemanticsAndCursor(t *testi
 	// The characterization rasterizer intentionally excludes annotations and
 	// even-odd fills. Pin the supported opaque nonzero-fill visual cohort here;
 	// the linked/even-odd plan above remains covered by capture and PDF evidence.
-	unlinkedCompiled, err := CompileHTML(`<svg width="40" height="30" viewBox="0 0 40 30" aria-label="Status icon">` +
+	unlinkedCompiled, err := compileHTML(`<svg width="40" height="30" viewBox="0 0 40 30" aria-label="Status icon">` +
 		`<rect x="1" y="2" width="12" height="8" fill="#112233" stroke="none"/></svg>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	unlinkedPlan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, unlinkedCompiled)
+	unlinkedPlan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, unlinkedCompiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,18 +81,18 @@ func TestHTMLUnifiedInlineSVGPlanCaptureRasterPDFLinkSemanticsAndCursor(t *testi
 
 	live := newHTMLFrameTestDocument(t, 160)
 	live.SetXY(16, 42)
-	html := live.HTMLNew()
+	html := live.htmlNew()
 	if err := html.WriteContext(context.Background(), 12, htmlUnifiedSVGFixture); err != nil || live.GetY() <= 42 || live.PageCount() != 1 {
 		t.Fatalf("SVG live cursor=%.4f pages=%d err=%v", live.GetY(), live.PageCount(), err)
 	}
 }
 
 func TestHTMLUnifiedInlineSVGDecorativeSemantics(t *testing.T) {
-	compiled, err := CompileHTML(`<svg width="10" height="10" role="presentation" aria-hidden="true"><rect width="10" height="10" fill="red" stroke="none"/></svg>`)
+	compiled, err := compileHTML(`<svg width="10" height="10" role="presentation" aria-hidden="true"><rect width="10" height="10" fill="red" stroke="none"/></svg>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,16 +109,16 @@ func TestHTMLUnifiedMultipleSVGAndMixedFlowPlanCaptureRasterPDFAndCursor(t *test
 		`<p>Between</p>` +
 		`<svg width="16" height="10" viewBox="0 0 16 10" role="presentation" aria-hidden="true"><circle cx="8" cy="5" r="4" fill="#2050cc" stroke="none"/></svg>` +
 		`<p>After</p>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := planner.PlanCompiledHTML(12, compiled)
+	again, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || again.Hash() != plan.Hash() {
 		t.Fatalf("mixed SVG deterministic hash=%q/%q err=%v", plan.Hash(), again.Hash(), err)
 	}
@@ -159,7 +159,7 @@ func TestHTMLUnifiedMultipleSVGAndMixedFlowPlanCaptureRasterPDFAndCursor(t *test
 
 	live := newHTMLFrameTestDocument(t, 160)
 	live.SetXY(16, 32)
-	html := live.HTMLNew()
+	html := live.htmlNew()
 	if err := html.WriteContext(t.Context(), 12, source); err != nil || live.PageCount() != 1 || live.GetY() <= 32 {
 		t.Fatalf("mixed SVG live pages=%d y=%.4f err=%v", live.PageCount(), live.GetY(), err)
 	}
@@ -167,13 +167,13 @@ func TestHTMLUnifiedMultipleSVGAndMixedFlowPlanCaptureRasterPDFAndCursor(t *test
 
 func TestHTMLUnifiedMixedSVGPreservesOrdinaryImageResources(t *testing.T) {
 	const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-	compiled, err := CompileHTML(`<p>Mixed resources</p>` +
+	compiled, err := compileHTML(`<p>Mixed resources</p>` +
 		`<svg width="12" height="8" aria-label="Vector mark"><rect width="12" height="8" fill="#408020" stroke="none"/></svg>` +
 		`<img src="data:image/png;base64,` + pixel + `" width="8" height="6" alt="Raster mark">`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestHTMLUnifiedInlineSVGRejectsUnsupportedSubsetAtomically(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := CompileHTML(test.source)
+			compiled, err := compileHTML(test.source)
 			if err != nil {
 				if test.name == "unsafe-link" {
 					return
@@ -211,8 +211,8 @@ func TestHTMLUnifiedInlineSVGRejectsUnsupportedSubsetAtomically(t *testing.T) {
 				t.Fatal(err)
 			}
 			planner := htmlUnifiedFlexTestPlanner()
-			plan, err := planner.PlanCompiledHTML(12, compiled)
-			if !errors.Is(err, ErrHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
+			plan, err := planner.planCompiledHTML(12, compiled)
+			if !errors.Is(err, errHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
 				t.Fatalf("plan=%#v pages=%d err=%v want %q", plan, planner.PageCount(), err, test.diagnostic)
 			}
 		})
@@ -220,11 +220,11 @@ func TestHTMLUnifiedInlineSVGRejectsUnsupportedSubsetAtomically(t *testing.T) {
 }
 
 func TestHTMLUnifiedInlineSVGOpacityParity(t *testing.T) {
-	compiled, err := CompileHTML(`<svg width="18" height="12" aria-label="Translucent status"><rect x="1" y="1" width="16" height="10" fill="#204080" fill-opacity=".5"/></svg>`)
+	compiled, err := compileHTML(`<svg width="18" height="12" aria-label="Translucent status"><rect x="1" y="1" width="16" height="10" fill="#204080" fill-opacity=".5"/></svg>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,12 +250,12 @@ func TestHTMLUnifiedInlineSVGOpacityParity(t *testing.T) {
 }
 
 func TestHTMLUnifiedInlineSVGDiagonalTranslucentGradient(t *testing.T) {
-	compiled, err := CompileHTML(`<svg width="32" height="20" aria-label="Diagonal status"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0" stop-color="#ff2000" stop-opacity=".3"/><stop offset="1" stop-color="#2040ff" stop-opacity=".85"/></linearGradient></defs><rect x="2" y="2" width="28" height="16" fill="url(#g)"/></svg>`)
+	compiled, err := compileHTML(`<svg width="32" height="20" aria-label="Diagonal status"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0" stop-color="#ff2000" stop-opacity=".3"/><stop offset="1" stop-color="#2040ff" stop-opacity=".85"/></linearGradient></defs><rect x="2" y="2" width="28" height="16" fill="url(#g)"/></svg>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,11 +284,11 @@ func TestHTMLUnifiedInlineSVGDiagonalTranslucentGradient(t *testing.T) {
 }
 
 func TestHTMLUnifiedInlineSVGCenteredRadialGradient(t *testing.T) {
-	compiled, err := CompileHTML(`<svg width="30" height="20" aria-label="Radial status"><defs><radialGradient id="g"><stop offset="0" stop-color="#fff080" stop-opacity=".9"/><stop offset="1" stop-color="#202060" stop-opacity=".4"/></radialGradient></defs><rect x="2" y="2" width="26" height="16" fill="url(#g)"/></svg>`)
+	compiled, err := compileHTML(`<svg width="30" height="20" aria-label="Radial status"><defs><radialGradient id="g"><stop offset="0" stop-color="#fff080" stop-opacity=".9"/><stop offset="1" stop-color="#202060" stop-opacity=".4"/></radialGradient></defs><rect x="2" y="2" width="26" height="16" fill="url(#g)"/></svg>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,14 +307,14 @@ func TestHTMLUnifiedInlineSVGCenteredRadialGradient(t *testing.T) {
 }
 
 func TestHTMLUnifiedInlineSVGRichContentAndInternalLink(t *testing.T) {
-	compiled, err := CompileHTML(`<svg width="48" height="24" aria-label="Rich icon"><a href="https://example.test/rich">` +
+	compiled, err := compileHTML(`<svg width="48" height="24" aria-label="Rich icon"><a href="https://example.test/rich">` +
 		`<rect width="18" height="14" fill="#336699"/><text x="20" y="10" font-size="8" fill="#112233">OK</text>` +
 		`<image x="20" y="12" width="8" height="8" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="/>` +
 		`</a></svg>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +334,7 @@ func TestHTMLUnifiedInlineSVGRichContentAndInternalLink(t *testing.T) {
 }
 
 func TestHTMLUnifiedInlineSVGTextAndImageOpacityParity(t *testing.T) {
-	compiled, err := CompileHTML(`<svg width="44" height="22" aria-label="Translucent content">` +
+	compiled, err := compileHTML(`<svg width="44" height="22" aria-label="Translucent content">` +
 		`<rect width="44" height="22" fill="#ffffff"/>` +
 		`<text x="2" y="10" font-size="8" fill="#204080" opacity=".5">soft</text>` +
 		`<image x="24" y="4" width="12" height="12" opacity=".375" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="/>` +
@@ -342,7 +342,7 @@ func TestHTMLUnifiedInlineSVGTextAndImageOpacityParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,14 +368,14 @@ func TestHTMLUnifiedInlineSVGTextAndImageOpacityParity(t *testing.T) {
 }
 
 func TestHTMLUnifiedInlineSVGCancellationAndConcurrentReuse(t *testing.T) {
-	compiled, err := CompileHTML(`<svg width="30" height="16" aria-label="Concurrent"><text x="2" y="11" font-size="9" fill="#112233">safe</text></svg>`)
+	compiled, err := compileHTML(`<svg width="30" height="16" aria-label="Concurrent"><text x="2" y="11" font-size="9" fill="#112233">safe</text></svg>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(canceled, 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(canceled, 12, compiled)
 	if !errors.Is(err, context.Canceled) || plan.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("canceled plan hash=%q pages=%d err=%v", plan.Hash(), planner.PageCount(), err)
 	}
@@ -388,7 +388,7 @@ func TestHTMLUnifiedInlineSVGCancellationAndConcurrentReuse(t *testing.T) {
 	for index := 0; index < workers; index++ {
 		go func(index int) {
 			defer group.Done()
-			candidate, candidateErr := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+			candidate, candidateErr := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 			errorsByWorker[index] = candidateErr
 			hashes[index] = candidate.Hash()
 		}(index)

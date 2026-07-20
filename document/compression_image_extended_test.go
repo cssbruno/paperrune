@@ -19,8 +19,8 @@ import (
 )
 
 func TestCompressionLevelControlsPageCompression(t *testing.T) {
-	build := func(configure func(*document.Document)) []byte {
-		pdf := document.MustNew()
+	build := func(configure func(*document.TestPDFDocument)) []byte {
+		pdf := document.MustNewTestPDFDocument()
 		configure(pdf)
 		pdf.AddPage()
 		pdf.SetFont("Helvetica", "", 10)
@@ -34,10 +34,10 @@ func TestCompressionLevelControlsPageCompression(t *testing.T) {
 		return out.Bytes()
 	}
 
-	uncompressed := build(func(pdf *document.Document) {
+	uncompressed := build(func(pdf *document.TestPDFDocument) {
 		pdf.SetNoCompression()
 	})
-	compressed := build(func(pdf *document.Document) {
+	compressed := build(func(pdf *document.TestPDFDocument) {
 		pdf.SetCompressionLevel(zlib.BestCompression)
 	})
 	if !bytes.Contains(compressed, []byte("/Filter /FlateDecode")) {
@@ -47,7 +47,7 @@ func TestCompressionLevelControlsPageCompression(t *testing.T) {
 		t.Fatalf("compressed PDF size = %d, want smaller than uncompressed %d", len(compressed), len(uncompressed))
 	}
 
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompressionLevel(zlib.BestCompression + 1)
 	if pdf.Ok() {
 		t.Fatal("SetCompressionLevel accepted invalid level")
@@ -56,7 +56,7 @@ func TestCompressionLevelControlsPageCompression(t *testing.T) {
 
 func TestImageOptionsExtendedCropRotateFlipAndMask(t *testing.T) {
 	maskPath := testMaskForImage(t, example.ImageFile("logo.png"))
-	pdf := document.MustNew()
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.AddPage()
 	pdf.ImageOptionsExtended(example.ImageFile("logo.png"), document.ExtendedImageOptions{

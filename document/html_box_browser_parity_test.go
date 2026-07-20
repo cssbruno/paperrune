@@ -17,11 +17,11 @@ import (
 )
 
 func TestHTMLUnifiedRoundedShadowPinnedBrowserGeometryAndPixels(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedRoundedShadowFixture)
+	compiled, err := compileHTML(htmlUnifiedRoundedShadowFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,11 +67,11 @@ func TestHTMLUnifiedRoundedShadowPinnedBrowserGeometryAndPixels(t *testing.T) {
 
 func TestHTMLUnifiedBoxModelPinnedBrowserGeometry(t *testing.T) {
 	const paperStyle = `margin:5%;padding:5%;border:1pt solid #445566;width:50%;min-width:40%;max-width:60%;height:40pt;min-height:30pt;max-height:50pt;box-sizing:border-box;overflow:hidden;background-color:#ddeeff`
-	compiled, err := CompileHTML(`<p style="` + paperStyle + `">Box</p>`)
+	compiled, err := compileHTML(`<p style="` + paperStyle + `">Box</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTML(12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}

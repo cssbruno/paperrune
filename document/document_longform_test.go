@@ -10,7 +10,7 @@ import (
 )
 
 func TestLongFormHTMLDocumentModel(t *testing.T) {
-	doc, messages := LongFormHTMLDocumentModel("Long Form", `
+	doc, messages := longFormHTMLDocumentModel("Long Form", `
 		<h2>Clause One</h2>
 		<p>Body text</p>
 		<ol><li>First</li><li>Second</li></ol>
@@ -32,14 +32,14 @@ func TestLongFormHTMLDocumentModel(t *testing.T) {
 }
 
 func TestLongFormHTMLDocumentModelReportsUnsupportedHTML(t *testing.T) {
-	_, messages := LongFormHTMLDocumentModel("Long Form", `<p>Body</p><video>clip</video>`)
+	_, messages := longFormHTMLDocumentModel("Long Form", `<p>Body</p><video>clip</video>`)
 	if len(messages) == 0 {
 		t.Fatal("messages = none, want unsupported video diagnostic")
 	}
 }
 
 func TestWriteDocumentRendersLongFormHTMLDocumentModel(t *testing.T) {
-	doc, messages := LongFormHTMLDocumentModel("Long Form", `
+	doc, messages := longFormHTMLDocumentModel("Long Form", `
 		<h2>Clause One</h2>
 		<p>Body text</p>
 		<ul><li>First</li><li>Second</li></ul>
@@ -48,7 +48,7 @@ func TestWriteDocumentRendersLongFormHTMLDocumentModel(t *testing.T) {
 	if len(messages) != 0 {
 		t.Fatalf("messages = %#v, want none", messages)
 	}
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.WriteDocument(doc)
 	var out bytes.Buffer

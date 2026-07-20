@@ -13,7 +13,7 @@ import (
 // pages. Allowable types are trim, trimbox, crop, cropbox, bleed, bleedbox,
 // art and artbox box types are case insensitive. See SetPageBox() for a method
 // that specifies the coordinates and extent of the page box individually.
-func (f *Document) SetPageBoxRec(t string, pb PageBox) {
+func (f *pdfDocument) SetPageBoxRec(t string, pb PageBox) {
 	if f.err != nil {
 		return
 	}
@@ -58,6 +58,6 @@ func (f *Document) SetPageBoxRec(t string, pb PageBox) {
 // SetPageBox sets the page box for the current page, and any following pages.
 // Allowable types are trim, trimbox, crop, cropbox, bleed, bleedbox, art and
 // artbox box types are case insensitive.
-func (f *Document) SetPageBox(t string, x, y, wd, ht float64) {
+func (f *pdfDocument) SetPageBox(t string, x, y, wd, ht float64) {
 	f.SetPageBoxRec(t, PageBox{Size{Wd: wd, Ht: ht}, Point{X: x, Y: y}})
 }

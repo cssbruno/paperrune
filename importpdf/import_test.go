@@ -289,10 +289,18 @@ func (r byteReaderAt) ReadAt(p []byte, off int64) (int, error) {
 func importSourcePDF(t *testing.T) []byte {
 	t.Helper()
 	pdf := document.MustNew(document.WithUnit(document.UnitPoint))
-	pdf.SetCompression(true)
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 16)
-	pdf.Text(72, 96, "Imported PDF source page")
+	source := "document @import-source:\n" +
+		"  page @sheet:\n" +
+		"    width: 595.28pt\n" +
+		"    height: 841.89pt\n" +
+		"    margin: 20pt\n" +
+		"    body @body:\n" +
+		"      paragraph @copy:\n" +
+		"        size: 16pt\n" +
+		"        text: \"Imported PDF source page\"\n"
+	if rendered, err := pdf.WritePaper("import-source.paper", source); err != nil || !rendered.OK() {
+		t.Fatalf("source WritePaper() = %#v, %v", rendered, err)
+	}
 	var out bytes.Buffer
 	if err := pdf.Output(&out); err != nil {
 		t.Fatalf("source Output() error = %v", err)

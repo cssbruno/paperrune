@@ -23,11 +23,11 @@ func TestHTMLUnifiedWhitespacePinnedBrowserLineGeometry(t *testing.T) {
 		`<p class="nw">NOWRAP alpha beta gamma delta epsilon zeta eta theta iota kappa lambda</p>` +
 		`<p class="bs">BREAK A&#9;B
 C   D</p>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ ul.clean{list-style-type:none}
 C   D</p><p class="nowrap">nowrap words stay on one authored line</p>`
 
 func TestHTMLUnifiedNestedListsCountersWhitespaceLinksAndSemantics(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedNestedListFixture)
+	compiled, err := compileHTML(htmlUnifiedNestedListFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestHTMLUnifiedNestedListsCountersWhitespaceLinksAndSemantics(t *testing.T)
 		t.Fatalf("nowrap style = %+v", nowrap.Style)
 	}
 
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,23 +176,23 @@ func TestHTMLUnifiedNestedListAtomicLimitsCancellationAndConcurrentReuse(t *test
 		`<p style="tab-size:0">bad tab</p>`,
 	}
 	for _, source := range invalid {
-		compiled, compileErr := CompileHTML(source)
+		compiled, compileErr := compileHTML(source)
 		if compileErr != nil {
 			continue
 		}
 		planner := htmlUnifiedFlexTestPlanner()
-		plan, planErr := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+		plan, planErr := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 		if planErr == nil || plan.Hash() != "" || planner.PageCount() != 0 || planner.Error() != nil {
 			t.Fatalf("invalid nested-list source=%q hash=%q pages=%d documentErr=%v err=%v", source, plan.Hash(), planner.PageCount(), planner.Error(), planErr)
 		}
 	}
-	compiled, err := CompileHTML(htmlUnifiedNestedListFixture)
+	compiled, err := compileHTML(htmlUnifiedNestedListFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	failed, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(canceled, 12, compiled)
+	failed, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(canceled, 12, compiled)
 	if !errors.Is(err, context.Canceled) || failed.Hash() != "" {
 		t.Fatalf("nested list cancellation hash=%q err=%v", failed.Hash(), err)
 	}
@@ -204,7 +204,7 @@ func TestHTMLUnifiedNestedListAtomicLimitsCancellationAndConcurrentReuse(t *test
 		group.Add(1)
 		go func(index int) {
 			defer group.Done()
-			plan, planErr := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			plan, planErr := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			hashes[index], errs[index] = plan.Hash(), planErr
 		}(index)
 	}
@@ -217,11 +217,11 @@ func TestHTMLUnifiedNestedListAtomicLimitsCancellationAndConcurrentReuse(t *test
 }
 
 func TestHTMLUnifiedNestedListOuterPageBreaksRemainCausal(t *testing.T) {
-	compiled, err := CompileHTML(`<p>before</p><ol style="break-before:page;break-after:page"><li><a href="https://example.test/break-list">linked item</a><ul><li>nested item</li></ul></li></ol><p>after</p>`)
+	compiled, err := compileHTML(`<p>before</p><ol style="break-before:page;break-after:page"><li><a href="https://example.test/break-list">linked item</a><ul><li>nested item</li></ul></li></ol><p>after</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,13 +241,13 @@ func TestHTMLUnifiedNestedListOuterPageBreaksRemainCausal(t *testing.T) {
 }
 
 func BenchmarkHTMLUnifiedNestedListWhitespacePlanning(b *testing.B) {
-	compiled, err := CompileHTML(htmlUnifiedNestedListFixture)
+	compiled, err := compileHTML(htmlUnifiedNestedListFixture)
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()
 	for index := 0; index < b.N; index++ {
-		if _, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
+		if _, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
 			b.Fatal(err)
 		}
 	}

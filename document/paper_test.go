@@ -29,7 +29,7 @@ const paperPipelineFixture = "document @report:\n" +
 	"        text @copy: \"A\\nB\\nC\\nD\\nE\"\n"
 
 func TestWritePaperRunsParseCompilePlanAndCorePaintWithoutHTML(t *testing.T) {
-	target := MustNew(WithUnit(UnitMillimeter), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitMillimeter), WithNoCompression())
 	result, err := target.WritePaper("report.paper", paperPipelineFixture)
 	if err != nil || !result.OK() {
 		t.Fatalf("WritePaper() = %#v, %v", result, err)
@@ -90,7 +90,7 @@ func TestWritePaperFlowsMultipleStyledBlocksInSourceOrderThroughOnePlan(t *testi
 		"        line-height: 10pt\n" +
 		"        text: \"C\\nD\"\n"
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	result, err := target.WritePaper("blocks.paper", source)
 	if err != nil || !result.OK() {
 		t.Fatalf("WritePaper() = %#v, %v", result, err)
@@ -154,7 +154,7 @@ func TestWritePaperPlansStyledListsWithMarkersInSourceOrderAcrossPages(t *testin
 		"        item @echo:\n" +
 		"          text: \"Echo\"\n"
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	result, err := target.WritePaper("lists.paper", source)
 	if err != nil || !result.OK() {
 		t.Fatalf("WritePaper() = %#v, %v", result, err)
@@ -249,7 +249,7 @@ func TestWritePaperFailuresAreAtomicAndStructured(t *testing.T) {
 	tests := []struct {
 		name      string
 		source    string
-		configure func(*Document)
+		configure func(*pdfDocument)
 		stage     PaperRenderStage
 		code      string
 	}{
@@ -274,7 +274,7 @@ func TestWritePaperFailuresAreAtomicAndStructured(t *testing.T) {
 		{
 			name:   "paint preflight",
 			source: paperPipelineFixture,
-			configure: func(pdf *Document) {
+			configure: func(pdf *pdfDocument) {
 				pdf.limits.MaxPages = 1
 			},
 			stage: PaperStagePaint,
@@ -283,7 +283,7 @@ func TestWritePaperFailuresAreAtomicAndStructured(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+			target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 			if test.configure != nil {
 				test.configure(target)
 			}
@@ -324,7 +324,7 @@ type paperAtomicSnapshot struct {
 	language    string
 }
 
-func paperAtomicSnapshotOf(pdf *Document) paperAtomicSnapshot {
+func paperAtomicSnapshotOf(pdf *pdfDocument) paperAtomicSnapshot {
 	return paperAtomicSnapshot{
 		typedShadowSnapshot: typedShadowSnapshotOf(pdf),
 		pageBuffers:         len(pdf.pages),

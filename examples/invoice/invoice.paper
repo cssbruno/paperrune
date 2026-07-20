@@ -1,0 +1,187 @@
+document @invoice:
+  title: "Invoice"
+  language: "en"
+
+  schema billing:
+    string invoiceNumber
+    string issued
+    string due
+    string seller
+    string sellerContact
+    string customer
+    string customerAddress
+    string total
+    list object items:
+      max-items: 100
+      string description
+      string quantity
+      string rate
+      string amount
+
+  style @invoice-base-style:
+    font: "Helvetica"
+    size: 10pt
+    line-height: 14pt
+    color: "#344451"
+
+  style @invoice-title-style:
+    style: "@invoice-base-style"
+    size: 24pt
+    line-height: 30pt
+    bold: true
+    color: "#173F5F"
+
+  style @invoice-label-style:
+    style: "@invoice-base-style"
+    size: 8pt
+    line-height: 11pt
+    bold: true
+    color: "#687887"
+
+  style @invoice-total-style:
+    style: "@invoice-base-style"
+    size: 17pt
+    line-height: 22pt
+    bold: true
+    color: "#176B49"
+
+  page @invoice-page:
+    size: "A4"
+    margin: 34pt
+    page-numbers: true
+    page-number-format: "Invoice | Page %d of {pages}"
+    page-total-alias: "{pages}"
+
+    header @invoice-header:
+      heading @invoice-heading:
+        level: 1
+        style: "@invoice-title-style"
+        text: "INVOICE"
+
+      paragraph @invoice-number-label:
+        style: "@invoice-label-style"
+        text: "INVOICE NUMBER"
+
+      paragraph @invoice-number-value:
+        style: "@invoice-base-style"
+        bind: "invoiceNumber"
+        text: "INV-0000"
+
+    body @invoice-content:
+      paragraph @seller-label:
+        style: "@invoice-label-style"
+        text: "FROM"
+
+      paragraph @seller-name:
+        style: "@invoice-base-style"
+        bind: "seller"
+        text: "Seller"
+
+      paragraph @seller-contact:
+        style: "@invoice-base-style"
+        bind: "sellerContact"
+        text: "Contact"
+
+      paragraph @customer-label:
+        style: "@invoice-label-style"
+        text: "BILL TO"
+
+      paragraph @customer-name:
+        style: "@invoice-base-style"
+        bind: "customer"
+        text: "Customer"
+
+      paragraph @customer-address:
+        style: "@invoice-base-style"
+        bind: "customerAddress"
+        text: "Address"
+
+      paragraph @issued-label:
+        style: "@invoice-label-style"
+        text: "ISSUED"
+
+      paragraph @issued-value:
+        style: "@invoice-base-style"
+        bind: "issued"
+        text: "Issue date"
+
+      paragraph @due-label:
+        style: "@invoice-label-style"
+        text: "DUE"
+
+      paragraph @due-value:
+        style: "@invoice-base-style"
+        bind: "due"
+        text: "Due date"
+
+      table @invoice-items-table:
+        repeat-header: true
+        split: "rows"
+
+        table-column @invoice-description-column:
+          width: 52%
+        table-column @invoice-quantity-column:
+          width: 12%
+        table-column @invoice-rate-column:
+          width: 18%
+        table-column @invoice-amount-column:
+          width: 18%
+
+        table-header @invoice-items-header:
+          table-row @invoice-items-header-row:
+            cell @invoice-description-heading-cell:
+              paragraph:
+                style: "@invoice-label-style"
+                text: "DESCRIPTION"
+            cell @invoice-quantity-heading-cell:
+              paragraph:
+                style: "@invoice-label-style"
+                text: "QTY"
+            cell @invoice-rate-heading-cell:
+              paragraph:
+                style: "@invoice-label-style"
+                text: "RATE"
+            cell @invoice-amount-heading-cell:
+              paragraph:
+                style: "@invoice-label-style"
+                text: "AMOUNT"
+
+        repeat @invoice-item-rows:
+          source: "items"
+          instance-prefix: "items"
+          max-items: 100
+
+          table-row @invoice-item-row:
+            cell @invoice-description-cell:
+              paragraph:
+                style: "@invoice-base-style"
+                bind: "description"
+                text: "Item"
+            cell @invoice-quantity-cell:
+              paragraph:
+                style: "@invoice-base-style"
+                bind: "quantity"
+                text: "1"
+            cell @invoice-rate-cell:
+              paragraph:
+                style: "@invoice-base-style"
+                bind: "rate"
+                text: "$0.00"
+            cell @invoice-amount-cell:
+              paragraph:
+                style: "@invoice-base-style"
+                bind: "amount"
+                text: "$0.00"
+
+      paragraph @invoice-total-label:
+        style: "@invoice-label-style"
+        text: "AMOUNT DUE"
+
+      paragraph @invoice-total-value:
+        style: "@invoice-total-style"
+        bind: "total"
+        text: "$0.00"
+
+      paragraph @invoice-note:
+        style: "@invoice-base-style"
+        text: "Thank you. Include the invoice number with your remittance."

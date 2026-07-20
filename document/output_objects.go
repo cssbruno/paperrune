@@ -3,7 +3,7 @@
 
 package document
 
-func (f *Document) newobj() {
+func (f *pdfDocument) newobj() {
 	objectNumber := f.allocateObject(f.finalOutputOffset())
 	if f.hooks.OnOutputObject != nil {
 		f.hooks.OnOutputObject(objectNumber, "object")
@@ -11,37 +11,37 @@ func (f *Document) newobj() {
 	f.outPDFObjHeader(objectNumber)
 }
 
-func (f *Document) beginPDFObject(objNum int) {
+func (f *pdfDocument) beginPDFObject(objNum int) {
 	f.recordObject(objNum, f.finalOutputOffset())
 	f.outPDFObjHeader(objNum)
 }
 
-func (f *Document) newPDFDictObject() {
+func (f *pdfDocument) newPDFDictObject() {
 	f.newobj()
 	f.beginPDFDict()
 }
 
-func (f *Document) beginPDFDict() {
+func (f *pdfDocument) beginPDFDict() {
 	f.out("<<")
 }
 
-func (f *Document) endPDFDict() {
+func (f *pdfDocument) endPDFDict() {
 	f.out(">>")
 }
 
-func (f *Document) endPDFObject() {
+func (f *pdfDocument) endPDFObject() {
 	f.out("endobj")
 }
 
-func (f *Document) beginPDFStream() {
+func (f *pdfDocument) beginPDFStream() {
 	f.out("stream")
 }
 
-func (f *Document) endPDFStream() {
+func (f *pdfDocument) endPDFStream() {
 	f.out("endstream")
 }
 
-func (f *Document) putstream(b []byte) {
+func (f *pdfDocument) putstream(b []byte) {
 	if f.protect.encrypted {
 		encrypted := append([]byte(nil), b...)
 		if err := f.protect.rc4(f.n, &encrypted); err != nil {

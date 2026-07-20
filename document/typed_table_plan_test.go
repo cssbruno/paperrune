@@ -94,7 +94,7 @@ func TestLayoutDocumentPlanTableSpansHeadersPaginationCaptureAndPDF(t *testing.T
 		t.Fatalf("table capture lacks planned header/body text: %v\n%s", err, embedded)
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	pages, err := target.WriteLayoutDocumentPlan(plan)
 	if err != nil || pages != 2 || target.PageCount() != 2 {
 		t.Fatalf("WriteLayoutDocumentPlan(table) = %d target pages %d, %v", pages, target.PageCount(), err)
@@ -143,7 +143,7 @@ func TestTypedTableComposesVariablePageTemplateCountersCaptureAndPDF(t *testing.
 			pageShellParagraph(label),
 		}
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 120}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 120}), WithNoCompression())
 	planner.SetMargins(10, 10, 10)
 	planner.SetAutoPageBreak(true, 10)
 	template := layout.PageTemplate{
@@ -212,7 +212,7 @@ func TestTypedTableComposesVariablePageTemplateCountersCaptureAndPDF(t *testing.
 	if err != nil || !bytes.Contains(capture.SVG(), []byte(`data-format="display-plan-preview"`)) || !bytes.Contains(capture.SVG(), []byte("data:image/png;base64,")) {
 		t.Fatalf("capture = %d, %v", len(capture.SVG()), err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	pages, err := target.WriteLayoutDocumentPlan(plan)
 	if err != nil || pages != plan.PageCount() {
 		t.Fatalf("table shell paint = %d, %v", pages, err)
@@ -231,7 +231,7 @@ func TestTypedMixedParagraphTableParagraphFlowsThroughVariablePageShells(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 120}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 120}), WithNoCompression())
 	planner.SetMargins(10, 10, 10)
 	planner.SetAutoPageBreak(true, 10)
 	template := layout.PageTemplate{
@@ -291,7 +291,7 @@ func TestTypedMixedParagraphTableParagraphFlowsThroughVariablePageShells(t *test
 	if err != nil || !bytes.Contains(capture.SVG(), []byte("data:image/png;base64,")) {
 		t.Fatalf("mixed capture = %v, %s", err, capture.SVG())
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if pages, err := target.WriteLayoutDocumentPlan(plan); err != nil || pages != plan.PageCount() {
 		t.Fatalf("mixed paint = pages %d, %v", pages, err)
 	}
@@ -320,7 +320,7 @@ func TestTypedMixedTableFlowCancellationAndGlobalPageLimitAreAtomic(t *testing.T
 	if !errors.Is(err, context.Canceled) || plan.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("canceled mixed table = hash %q pages %d, %v", plan.Hash(), planner.PageCount(), err)
 	}
-	limited := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 80}), WithLimits(Limits{MaxPages: 1}))
+	limited := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 80}), WithLimits(Limits{MaxPages: 1}))
 	limited.SetMargins(10, 10, 10)
 	limited.SetAutoPageBreak(true, 10)
 	plan, err = limited.PlanLayoutDocument(&layout.LayoutDocument{PageTemplate: template, Body: body})
@@ -339,7 +339,7 @@ func TestTypedMixedTableFlowCancellationAndGlobalPageLimitAreAtomic(t *testing.T
 }
 
 func TestTypedNestedContainersAndRowColumnSiblingComposeWithTable(t *testing.T) {
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 140}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 140}), WithNoCompression())
 	planner.SetMargins(10, 10, 10)
 	planner.SetAutoPageBreak(true, 10)
 	rowColumn := layout.RowColumnBlock{Direction: layout.RowDirection, Gap: 20, Items: []layout.RowColumnItem{
@@ -400,7 +400,7 @@ func TestTypedNestedContainersAndRowColumnSiblingComposeWithTable(t *testing.T) 
 	if err != nil || !bytes.Contains(capture.SVG(), []byte(`data-format="display-plan-preview"`)) {
 		t.Fatalf("nested capture = %v, %s", err, capture.SVG())
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if pages, err := target.WriteLayoutDocumentPlan(plan); err != nil || pages != plan.PageCount() {
 		t.Fatalf("nested paint = pages %d, %v", pages, err)
 	}
@@ -410,7 +410,7 @@ func TestTypedNestedContainersAndRowColumnSiblingComposeWithTable(t *testing.T) 
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	atomic := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 140}))
+	atomic := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 140}))
 	atomic.SetMargins(10, 10, 10)
 	if zero, err := atomic.PlanLayoutDocumentContext(canceled, source); !errors.Is(err, context.Canceled) || zero.Hash() != "" || atomic.PageCount() != 0 {
 		t.Fatalf("nested cancellation = hash %q pages %d, %v", zero.Hash(), atomic.PageCount(), err)
@@ -433,7 +433,7 @@ func TestTypedTablePageTemplateLimitsCancellationAndImpossibleRegionsAreAtomic(t
 	if _, err := planner.PlanLayoutDocumentContext(canceled, &layout.LayoutDocument{PageTemplate: template, Body: []layout.Block{typedTableTestBlock(true)}}); !errors.Is(err, context.Canceled) || planner.PageCount() != 0 {
 		t.Fatalf("canceled table shell = %v pages %d", err, planner.PageCount())
 	}
-	limited := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 100}), WithLimits(Limits{MaxPages: 1}))
+	limited := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 100}), WithLimits(Limits{MaxPages: 1}))
 	limited.SetMargins(10, 10, 10)
 	limited.SetAutoPageBreak(true, 10)
 	if _, err := limited.PlanLayoutDocument(&layout.LayoutDocument{PageTemplate: template, Body: []layout.Block{typedTableTestBlock(true)}}); !errors.Is(err, layoutengine.ErrTablePageLimit) || limited.PageCount() != 0 {
@@ -467,7 +467,7 @@ func TestLayoutDocumentPlanTableRepeatHeaderIsExplicit(t *testing.T) {
 
 func TestLayoutDocumentPlanTableLimitsCancellationAndFailuresAreAtomic(t *testing.T) {
 	table := typedTableTestBlock(true)
-	limited := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 80}), WithLimits(Limits{MaxPages: 1}))
+	limited := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 80}), WithLimits(Limits{MaxPages: 1}))
 	limited.SetMargins(10, 10, 10)
 	limited.SetAutoPageBreak(true, 10)
 	plan, err := limited.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{table}})
@@ -483,7 +483,7 @@ func TestLayoutDocumentPlanTableLimitsCancellationAndFailuresAreAtomic(t *testin
 		t.Fatalf("canceled table = plan %#v pages %d, %v", plan, planner.PageCount(), err)
 	}
 
-	target := MustNew(WithUnit(UnitPoint))
+	target := mustNewPDFDocument(WithUnit(UnitPoint))
 	pages, paintErr := target.WriteLayoutDocumentPlan(plan)
 	if paintErr == nil || pages != 0 || target.PageCount() != 0 {
 		t.Fatalf("zero table plan paint = %d pages %d, %v", pages, target.PageCount(), paintErr)
@@ -522,7 +522,7 @@ func TestTypedTableIntrinsicMinMaxMixedTracksSpansPaginationCaptureRasterAndPDF(
 			{Blocks: paragraph("value")},
 		}})
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 140}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 140}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(10, 10, 10)
 	planner.SetAutoPageBreak(true, 10)
 	doc := &layout.LayoutDocument{Language: "en-US", PageTemplate: layout.PageTemplate{Margins: layout.Spacing{Left: 10, Top: 10, Right: 10, Bottom: 10}}, Body: []layout.Block{table}}
@@ -578,7 +578,7 @@ func TestTypedTableIntrinsicMinMaxMixedTracksSpansPaginationCaptureRasterAndPDF(
 	if plan.plan.Projection().Fragments[1].BorderBox.Width.Points() != 60 {
 		t.Fatal("intrinsic table plan aliases authored column constraints")
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if pages, err := target.WriteLayoutDocumentPlan(plan); err != nil || pages != plan.PageCount() {
 		t.Fatalf("intrinsic table PDF replay = pages %d, %v", pages, err)
 	}
@@ -603,7 +603,7 @@ func TestTypedTableIntrinsicBoundsAndSpanningMinimumFailuresAreAtomic(t *testing
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}))
+			planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}))
 			planner.SetMargins(10, 10, 10)
 			table := layout.TableBlock{Columns: test.columns, Body: []layout.TableRow{{Cells: []layout.TableCell{cell(test.text, 2)}}}}
 			plan, err := planner.PlanLayoutDocument(&layout.LayoutDocument{PageTemplate: layout.PageTemplate{Margins: layout.Spacing{Left: 10, Top: 10, Right: 10, Bottom: 10}}, Body: []layout.Block{table}})
@@ -714,7 +714,7 @@ func TestTypedTableDecorationsPaddingAlignmentAndCommandOrder(t *testing.T) {
 	if err != nil || !bytes.Contains(capture.SVG(), []byte("<path")) {
 		t.Fatalf("display capture=%v", err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -779,8 +779,8 @@ func TestTypedTableCollapsedBorderResolutionCancellation(t *testing.T) {
 	}
 }
 
-func typedTableTestPlanner() *Document {
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 80}), WithNoCompression())
+func typedTableTestPlanner() *pdfDocument {
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 80}), WithNoCompression())
 	planner.SetMargins(10, 10, 10)
 	planner.SetAutoPageBreak(true, 10)
 	return planner

@@ -79,9 +79,9 @@ func TestGenerateImageIDIncludesDPI(t *testing.T) {
 }
 
 func TestRegisteredImageIDStableAcrossUnitsAndOutputState(t *testing.T) {
-	register := func(unit string) (*Document, *ImageInfo) {
+	register := func(unit string) (*pdfDocument, *ImageInfo) {
 		t.Helper()
-		pdf := MustNew(WithUnit(Unit(unit)))
+		pdf := mustNewPDFDocument(WithUnit(Unit(unit)))
 		info, err := pdf.RegisterImageOptionsReaderError("pixel", ImageOptions{ImageType: "png"}, bytes.NewReader(decodeTinyPNG(t)))
 		if err != nil {
 			t.Fatalf("RegisterImageOptionsReaderError(%s) error = %v", unit, err)
@@ -125,7 +125,7 @@ func TestRegisteredImageIDsUseSHA256AcrossFormats(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			pdf := MustNew()
+			pdf := mustNewPDFDocument()
 			info, err := pdf.RegisterImageOptionsReaderError(tc.name, ImageOptions{ImageType: tc.imageType}, bytes.NewReader(tc.data))
 			if err != nil {
 				t.Fatalf("RegisterImageOptionsReaderError() error = %v", err)
@@ -138,14 +138,14 @@ func TestRegisteredImageIDsUseSHA256AcrossFormats(t *testing.T) {
 }
 
 func TestImageTypeFromMimeSupportsWebP(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if got := pdf.ImageTypeFromMime("image/webp"); got != "webp" {
 		t.Fatalf("ImageTypeFromMime(image/webp) = %q, want webp", got)
 	}
 }
 
 func TestRegisterImageOptionsReaderSupportsWebP(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.AddPage()
 
@@ -180,7 +180,7 @@ func TestImageCacheRegistersImageAcrossDocuments(t *testing.T) {
 	}
 
 	for i := 0; i < 2; i++ {
-		pdf := MustNew()
+		pdf := mustNewPDFDocument()
 		pdf.SetCompression(false)
 		pdf.AddPage()
 		pdf.ImageFromCache("pixel", cache, 10, 10, 5, 5, false, ImageOptions{}, 0, "")
@@ -239,7 +239,7 @@ func TestRegisterImageOptionsUsesSharedFileCacheByDefault(t *testing.T) {
 	}
 
 	for i, path := range []string{imagePath, relPath} {
-		pdf := MustNew()
+		pdf := mustNewPDFDocument()
 		pdf.SetCompression(false)
 		pdf.AddPage()
 		pdf.ImageOptions(path, 10, 10, 5, 5, false, ImageOptions{}, 0, "")
@@ -274,7 +274,7 @@ func TestRegisterImageOptionsCanDisableSharedFileCache(t *testing.T) {
 		t.Fatalf("write image fixture: %v", err)
 	}
 
-	pdf := MustNew(WithResourceCachePolicy(ResourceCacheDisabled))
+	pdf := mustNewPDFDocument(WithResourceCachePolicy(ResourceCacheDisabled))
 	pdf.SetCompression(false)
 	pdf.AddPage()
 	if _, err := pdf.RegisterImageOptionsError(imagePath, ImageOptions{}); err != nil {
@@ -300,7 +300,7 @@ func TestImageFromCacheWithAlphaPromotesPDFVersion(t *testing.T) {
 		t.Fatalf("RegisterImageOptionsReader(cache) error = %v", err)
 	}
 
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.AddPage()
 	pdf.ImageFromCache("alpha", cache, 10, 10, 5, 5, false, ImageOptions{}, 0, "")
@@ -314,7 +314,7 @@ func TestImageFromCacheWithAlphaPromotesPDFVersion(t *testing.T) {
 }
 
 func TestImageFromCacheMissingEntrySetsDocumentError(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.ImageFromCache("missing", NewImageCache(), 0, 0, 1, 1, false, ImageOptions{}, 0, "")
 	if err := pdf.Error(); err == nil {
 		t.Fatal("ImageFromCache missing entry error = nil")

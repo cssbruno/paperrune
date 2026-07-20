@@ -14,7 +14,7 @@ import (
 )
 
 func TestHTMLUnifiedResolvedCSSCascadeInheritanceAndSelectorFreeBoundary(t *testing.T) {
-	compiled, err := CompileHTML(`<style>
+	compiled, err := compileHTML(`<style>
 		p { color: red; font-family: serif; font-size: 9pt; line-height: 11pt }
 		.wrap p.note { color: #123456 }
 		#target { color: #abcdef }
@@ -22,7 +22,7 @@ func TestHTMLUnifiedResolvedCSSCascadeInheritanceAndSelectorFreeBoundary(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 140}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 140}), WithNoCompression())
 	resolved, err := planner.resolveCompiledHTMLUnifiedSnapshot(context.Background(), compiled, 12)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestHTMLUnifiedResolvedCSSCascadeInheritanceAndSelectorFreeBoundary(t *test
 	if len(paragraph.Segments) != 1 || paragraph.Segments[0].Text != "Alpha Beta Gamma" {
 		t.Fatalf("resolved inline segments = %#v", paragraph.Segments)
 	}
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil || plan.Hash() == "" || planner.PageCount() != 0 {
 		t.Fatalf("plan = %#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
@@ -63,7 +63,7 @@ func TestHTMLUnifiedResolvedCSSCascadeInheritanceAndSelectorFreeBoundary(t *test
 		t.Fatal("resolved display style lacks cascaded color")
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	pages, err := target.WriteLayoutDocumentPlan(plan)
 	if err != nil || pages == 0 {
 		t.Fatalf("write pages=%d err=%v", pages, err)
@@ -78,8 +78,8 @@ func TestHTMLUnifiedResolvedCSSCascadeInheritanceAndSelectorFreeBoundary(t *test
 }
 
 func TestHTMLCSSCascadeScanFallback(t *testing.T) {
-	el := HTMLSegmentType{Str: "span", Attr: map[string]string{"class": "note"}}
-	ancestors := []HTMLSegmentType{{Str: "section", Attr: map[string]string{"class": "body"}}}
+	el := htmlSegmentType{Str: "span", Attr: map[string]string{"class": "note"}}
+	ancestors := []htmlSegmentType{{Str: "section", Attr: map[string]string{"class": "body"}}}
 	rules := []htmlCSSRule{
 		{selectors: parseHTMLCSSSelectors("span"), declarations: map[string]string{"color": "red"}},
 		{selectors: parseHTMLCSSSelectors("section > span.note"), declarations: map[string]string{"font-weight": "bold"}},
@@ -91,11 +91,11 @@ func TestHTMLCSSCascadeScanFallback(t *testing.T) {
 }
 
 func TestHTMLUnifiedHeadingDefaultsMatchBrowserUserAgentSubset(t *testing.T) {
-	compiled, err := CompileHTML(`<h1>Title</h1><h2>Subhead</h2>`)
+	compiled, err := compileHTML(`<h1>Title</h1><h2>Subhead</h2>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 140}), WithNoCompression())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 140}), WithNoCompression())
 	resolved, err := planner.resolveCompiledHTMLUnifiedSnapshot(context.Background(), compiled, 12)
 	if err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestHTMLUnifiedHeadingDefaultsMatchBrowserUserAgentSubset(t *testing.T) {
 }
 
 func TestHTMLUnifiedResolvedTableBoxSubsetFromSelectors(t *testing.T) {
-	compiled, err := CompileHTML(`<style>
+	compiled, err := compileHTML(`<style>
 		table.report { background-color:#eeeeee; border-collapse:collapse }
 		table.report td.value { background-color:#102030; padding:2pt; border:1pt solid #405060; text-align:right; vertical-align:bottom }
 	</style><table class="report"><tbody><tr><td class="value">42</td></tr></tbody></table>`)
@@ -140,7 +140,7 @@ func TestHTMLUnifiedResolvedTableBoxSubsetFromSelectors(t *testing.T) {
 		cell.Box.Padding != (layout.Spacing{Top: 2, Right: 2, Bottom: 2, Left: 2}) || cell.Box.Border.Top.Width != 1 || cell.Align != "right" || cell.VerticalAlign != "bottom" {
 		t.Fatalf("resolved table/cell box = %#v / %#v", table, cell)
 	}
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,13 +151,13 @@ func TestHTMLUnifiedResolvedTableBoxSubsetFromSelectors(t *testing.T) {
 }
 
 func TestHTMLUnifiedCapabilityScanRejectsWholeFragmentBeforePlanning(t *testing.T) {
-	compiled, err := CompileHTML(`<p class="ok">Supported first</p><style>.bad{float:left}</style><p class="bad">Unsupported later</p>`)
+	compiled, err := compileHTML(`<p class="ok">Supported first</p><style>.bad{float:left}</style><p class="bad">Unsupported later</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint))
-	plan, err := planner.PlanCompiledHTML(12, compiled)
-	if !errors.Is(err, ErrHTMLPlanUnsupported) || !strings.Contains(err.Error(), `resolved CSS property "float"`) || plan.Hash() != "" || planner.PageCount() != 0 {
+	planner := mustNewPDFDocument(WithUnit(UnitPoint))
+	plan, err := planner.planCompiledHTML(12, compiled)
+	if !errors.Is(err, errHTMLPlanUnsupported) || !strings.Contains(err.Error(), `resolved CSS property "float"`) || plan.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("atomic capability scan plan=%#v pages=%d err=%v", plan, planner.PageCount(), err)
 	}
 }
@@ -190,7 +190,7 @@ func TestHTMLUnifiedResolvedDeclarationPropertyCohorts(t *testing.T) {
 }
 
 func TestHTMLUnifiedResolvedWhitespaceAndBenchmarkCohort(t *testing.T) {
-	compiled, err := CompileHTML(`<style>.code{white-space:pre;font-family:monospace}</style><p class="code">A  B
+	compiled, err := compileHTML(`<style>.code{white-space:pre;font-family:monospace}</style><p class="code">A  B
  C</p>`)
 	if err != nil {
 		t.Fatal(err)
@@ -209,11 +209,11 @@ func TestHTMLUnifiedResolvedWhitespaceAndBenchmarkCohort(t *testing.T) {
 		t.Fatalf("preserved whitespace = %q", got)
 	}
 
-	benchmarkCompiled, err := CompileHTML(paperEngineBenchmarkHTMLFixture())
+	benchmarkCompiled, err := compileHTML(paperEngineBenchmarkHTMLFixture())
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := paperEngineBenchmarkDocument().PlanCompiledHTML(12, benchmarkCompiled)
+	plan, err := paperEngineBenchmarkDocument().planCompiledHTML(12, benchmarkCompiled)
 	if err != nil || plan.PageCount() == 0 {
 		t.Fatalf("benchmark cohort pages=%d err=%v", plan.PageCount(), err)
 	}

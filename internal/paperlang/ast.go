@@ -53,7 +53,7 @@ const (
 	NodeTableRow    NodeKind = "table-row"
 	NodeTableCell   NodeKind = "cell"
 	NodeTableHeader NodeKind = "table-header"
-	NodeTableTrack  NodeKind = "table-track"
+	NodeTableColumn NodeKind = "table-column"
 	NodeComponent   NodeKind = "component"
 	NodeProp        NodeKind = "prop"
 	NodeSlot        NodeKind = "slot"
@@ -83,7 +83,7 @@ const (
 func parseNodeKind(value string) (NodeKind, bool) {
 	kind := NodeKind(value)
 	switch kind {
-	case NodeDocument, NodePage, NodeBody, NodeHeader, NodeFooter, NodeCanvas, NodeAnchor, NodeHeading, NodeText, NodeParagraph, NodeList, NodeItem, NodePageBreak, NodeRow, NodeColumn, NodeImage, NodeTable, NodeTableRow, NodeTableCell, NodeTableHeader, NodeTableTrack, NodeComponent, NodeProp, NodeSlot, NodeUse, NodeArg, NodeFill, NodeRepeat, NodeLoop, NodeSchema, NodeScenario, NodeValue, NodeObject, NodeKeyedList, NodeTheme, NodeStyle, NodeToken, NodeScope:
+	case NodeDocument, NodePage, NodeBody, NodeHeader, NodeFooter, NodeCanvas, NodeAnchor, NodeHeading, NodeText, NodeParagraph, NodeList, NodeItem, NodePageBreak, NodeRow, NodeColumn, NodeImage, NodeTable, NodeTableRow, NodeTableCell, NodeTableHeader, NodeTableColumn, NodeComponent, NodeProp, NodeSlot, NodeUse, NodeArg, NodeFill, NodeRepeat, NodeLoop, NodeSchema, NodeScenario, NodeValue, NodeObject, NodeKeyedList, NodeTheme, NodeStyle, NodeToken, NodeScope:
 		return kind, true
 	default:
 		return "", false

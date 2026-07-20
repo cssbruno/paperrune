@@ -13,7 +13,7 @@ import (
 // cells of width w and line height h. Each line is bordered according to
 // borderStr, aligned according to alignStr, and optionally filled when fill is
 // true. When w is 0, the cell extends to the right margin.
-func (f *Document) MultiCell(w, h float64, txtStr, borderStr, alignStr string, fill bool) {
+func (f *pdfDocument) MultiCell(w, h float64, txtStr, borderStr, alignStr string, fill bool) {
 	if !f.requireCurrentFont("rendering text") {
 		return
 	}

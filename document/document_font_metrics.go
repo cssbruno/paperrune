@@ -7,7 +7,7 @@ import "github.com/cssbruno/paperrune/layout"
 
 // plannerDefaultTextStyle snapshots the receiver's current text defaults for
 // immutable lowering. It does not estimate a block or choose page geometry.
-func plannerDefaultTextStyle(pdf *Document) layout.TextStyle {
+func plannerDefaultTextStyle(pdf *pdfDocument) layout.TextStyle {
 	fontSize := 12.0
 	lineHeight := 5.0
 	fontFamily := "Helvetica"
@@ -37,7 +37,7 @@ type pdfTextStyleState struct {
 
 // applyPlannerTextStyle selects the exact font metrics needed while lowering
 // a text run. It never writes a font-selection operator into page content.
-func applyPlannerTextStyle(pdf *Document, style layout.TextStyle) pdfTextStyleState {
+func applyPlannerTextStyle(pdf *pdfDocument, style layout.TextStyle) pdfTextStyleState {
 	state := pdfTextStyleState{
 		family: pdf.fontFamily, style: pdf.fontStyle, sizePt: pdf.fontSizePt,
 		underline: pdf.underline, strikeout: pdf.strikeout,
@@ -71,7 +71,7 @@ func applyPlannerTextStyle(pdf *Document, style layout.TextStyle) pdfTextStyleSt
 	return state
 }
 
-func setFontForPlannerMetrics(pdf *Document, family, style string, size float64) {
+func setFontForPlannerMetrics(pdf *pdfDocument, family, style string, size float64) {
 	page := pdf.page
 	pdf.page = 0
 	defer func() { pdf.page = page }()

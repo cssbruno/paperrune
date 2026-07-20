@@ -26,18 +26,16 @@ document @prescription:
 
       row @clinic-brand-row:
         gap: 20pt
-        cross-align: "center"
+        align-items: "center"
 
         heading @clinic-name:
-          track: "fraction"
-          track-weight: 2
+          width: 2fr
           level: 2
           style: "@brand-name"
           text: "HARBOR HEALTH\nPRIVATE CLINIC"
 
         paragraph @clinic-contact:
-          track: "fraction"
-          track-weight: 1
+          width: 1fr
           style: "@header-meta"
           text: "+1 415 555 0142\ncare@harborhealth.example\n120 Harbor Way, San Francisco, CA"
     footer @legal-footer:
@@ -48,18 +46,16 @@ document @prescription:
     body @prescription-body:
       row @title-row:
         gap: 18pt
-        cross-align: "center"
+        align-items: "center"
 
         heading @prescription-title:
-          track: "fraction"
-          track-weight: 3
+          width: 3fr
           level: 1
           style: "@title"
           text: "Prescription"
 
         paragraph @document-status:
-          track: "fixed"
-          track-size: 158pt
+          width: 158pt
           style: "@status-card"
           text: "ELECTRONIC PRESCRIPTION\n17 JUL 2026  |  RX-0042"
 
@@ -68,13 +64,13 @@ document @prescription:
         text: "01   PATIENT"
 
       table @patient-details:
-        table-track @patient-label-one:
+        table-column @patient-label-one:
           width: 72pt
-        table-track @patient-value-one:
+        table-column @patient-value-one:
           width: 191pt
-        table-track @patient-label-two:
+        table-column @patient-label-two:
           width: 72pt
-        table-track @patient-value-two:
+        table-column @patient-value-two:
           width: 192pt
 
         table-row @patient-row-one:
@@ -113,13 +109,13 @@ document @prescription:
         repeat-header: true
         split: "rows"
 
-        table-track @medication-name-track:
+        table-column @medication-name-column:
           width: 178pt
-        table-track @medication-dose-track:
+        table-column @medication-dose-column:
           width: 78pt
-        table-track @medication-directions-track:
+        table-column @medication-directions-column:
           width: 199pt
-        table-track @medication-duration-track:
+        table-column @medication-duration-column:
           width: 72pt
 
         table-header @medication-header:
@@ -216,11 +212,11 @@ document @prescription:
         text: "03   CLINICAL NOTES"
 
       table @clinical-details:
-        table-track @clinical-track-one:
+        table-column @clinical-column-one:
           width: 174pt
-        table-track @clinical-track-two:
+        table-column @clinical-column-two:
           width: 174pt
-        table-track @clinical-track-three:
+        table-column @clinical-column-three:
           width: 179pt
 
         table-row @clinical-details-row:
@@ -239,9 +235,9 @@ document @prescription:
         text: "04   PRESCRIBER AUTHORIZATION"
 
       table @authorization:
-        table-track @signature-track:
+        table-column @signature-column:
           width: 357pt
-        table-track @verification-track:
+        table-column @verification-column:
           width: 170pt
 
         table-row @authorization-row:

@@ -98,7 +98,7 @@ func TestCompileJSONDataExpandsRepeatedTableRows(t *testing.T) {
       table @results-table:
         repeat-header: true
         split: "rows"
-        table-track:
+        table-column:
           width: 100%
         table-header:
           table-row:

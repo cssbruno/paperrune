@@ -52,6 +52,8 @@ func TestPaperSetImagePropertyWritesTypedMinimalPatches(t *testing.T) {
 		{"dimension", PaperSetImagePropertyRequest{Property: PaperImageWidth, Points: 48}, "width: 48pt", 1},
 		{"responsive dimension", PaperSetImagePropertyRequest{Property: PaperImageWidth, Length: "50%"}, "width: 50%", 1},
 		{"automatic height", PaperSetImagePropertyRequest{Property: PaperImageHeight, Length: "auto"}, `height: "auto"`, 1},
+		{"alignment", PaperSetImagePropertyRequest{Property: PaperImageAlign, Fit: "center"}, `align: "center"`, 1},
+		{"caption", PaperSetImagePropertyRequest{Property: PaperImageCaption, Text: "Clinical evidence"}, `caption: "Clinical evidence"`, 1},
 		{"alt", PaperSetImagePropertyRequest{Property: PaperImageAlt, Text: "Updated evidence"}, `alt: "Updated evidence"`, 1},
 		{"decorative", PaperSetImagePropertyRequest{Property: PaperImageDecorative, Bool: true}, "decorative: true", 2},
 	}

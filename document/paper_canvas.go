@@ -48,12 +48,12 @@ func paperCanvasMappingForBody(mapping papercompile.CompileMapping, bodyIndex in
 	return result
 }
 
-func layoutFixedFromDocumentUnits(f *Document, value float64) layoutengine.Fixed {
+func layoutFixedFromDocumentUnits(f *pdfDocument, value float64) layoutengine.Fixed {
 	fixed, _ := layoutengine.FixedFromPoints(f.UnitToPointConvert(value))
 	return fixed
 }
 
-func (f *Document) planPaperCanvas(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, block layout.CanvasBlock) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planPaperCanvas(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, block layout.CanvasBlock) (layoutengine.LayoutPlan, error) {
 	left, top, right, bottom := typedShadowMargins(f, doc.PageTemplate.Margins)
 	pageSize, body, err := typedShadowFixedGeometry(f, left, top, f.w-left-right, f.h-top-bottom)
 	if err != nil {

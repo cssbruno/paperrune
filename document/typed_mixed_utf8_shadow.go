@@ -18,7 +18,7 @@ import (
 // paragraph before the core-only shadow is selected. A paragraph with only
 // one UTF-8 style remains on the existing plain UTF-8 path; this detector is
 // for metric-changing mixed runs that need one display list.
-func (f *Document) mixedParagraphUsesEmbeddedFont(paragraph layout.ParagraphBlock) (bool, error) {
+func (f *pdfDocument) mixedParagraphUsesEmbeddedFont(paragraph layout.ParagraphBlock) (bool, error) {
 	base := layout.MergedTextStyle(layout.TextStyle{FontFamily: f.fontFamily, FontSize: f.fontSizePt}, paragraph.EffectiveStyle())
 	seen := make(map[layout.TextStyle]struct{}, len(paragraph.Segments)+1)
 	styles := make([]layout.TextStyle, 0, len(paragraph.Segments)+1)
@@ -42,7 +42,7 @@ func (f *Document) mixedParagraphUsesEmbeddedFont(paragraph layout.ParagraphBloc
 	return false, nil
 }
 
-func (f *Document) mixedTextFontMetrics(style layout.TextStyle) (*mixedTextFontMetrics, error) {
+func (f *pdfDocument) mixedTextFontMetrics(style layout.TextStyle) (*mixedTextFontMetrics, error) {
 	scratch := f.acquireTypedMeasurementScratch()
 	defer f.releaseTypedMeasurementScratch(scratch)
 	requestedFamily := strings.ToLower(fontFamilyEscape(firstNonEmpty(style.FontFamily, f.fontFamily, "Helvetica")))
@@ -112,7 +112,7 @@ func (f *Document) mixedTextFontMetrics(style layout.TextStyle) (*mixedTextFontM
 	return metric, nil
 }
 
-func (f *Document) planTypedParagraphMixedTextShadowContext(ctx context.Context, doc *layout.LayoutDocument, paragraph layout.ParagraphBlock) (typedLineShadowResult, error) {
+func (f *pdfDocument) planTypedParagraphMixedTextShadowContext(ctx context.Context, doc *layout.LayoutDocument, paragraph layout.ParagraphBlock) (typedLineShadowResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

@@ -14,7 +14,7 @@ import (
 )
 
 func TestPaintCoreLayoutPlanPDFEmitsOnlyPlannedPagesAndPositionedText(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 72, Ht: 40}))
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 72, Ht: 40}))
 	source.SetMargins(8, 8, 8)
 	source.SetAutoPageBreak(true, 8)
 	source.SetFont("Courier", "", 10)
@@ -30,7 +30,7 @@ func TestPaintCoreLayoutPlanPDFEmitsOnlyPlannedPagesAndPositionedText(t *testing
 	}
 	projection := shadow.Plan.Projection()
 
-	target := MustNew(WithUnit(UnitMillimeter), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitMillimeter), WithNoCompression())
 	if err := target.paintCoreLayoutPlanPDF(shadow.Plan); err != nil {
 		t.Fatalf("paintCoreLayoutPlanPDF() = %v", err)
 	}
@@ -66,7 +66,7 @@ func TestPaintCoreLayoutPlanPDFEmitsOnlyPlannedPagesAndPositionedText(t *testing
 }
 
 func TestPaintCoreLayoutPlanPDFPreflightFailureDoesNotMutateDocument(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 80, Ht: 80}))
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 80, Ht: 80}))
 	source.SetMargins(10, 10, 10)
 	source.SetAutoPageBreak(true, 10)
 	doc := layout.NewLayoutDocument()
@@ -89,7 +89,7 @@ func TestPaintCoreLayoutPlanPDFPreflightFailureDoesNotMutateDocument(t *testing.
 		t.Fatalf("NewLayoutPlan(wrong metrics) = %v", err)
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
 	before := typedShadowSnapshotOf(target)
 	err = target.paintCoreLayoutPlanPDF(wrongMetrics)
 	if !errors.Is(err, errCoreLayoutPlanPaintUnsupported) {

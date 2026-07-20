@@ -310,63 +310,63 @@ document @controle-especial:
     body @body:
       row @pharmacy-header:
         gap: 14pt
-        cross-size: 78pt
+        height: 78pt
 
         column @pharmacy-issuer-block:
-          track-size: 62%
+          width: 62%
           gap: 0pt
 
           paragraph @pharmacy-issuer-label:
-            track-size: 9pt
+            height: 9pt
             style: "@micro-label"
             text: "EMITENTE"
 
           paragraph @pharmacy-clinic:
-            track-size: 15pt
+            height: 15pt
             style: "@issuer-name"
             bind: "clinic"
             text: "Clínica"
 
           paragraph @pharmacy-issuer:
-            track-size: 13pt
+            height: 13pt
             style: "@issuer-detail"
             bind: "issuer"
             text: "Profissional e registro"
 
           paragraph @pharmacy-clinic-address:
-            track-size: 13pt
+            height: 13pt
             style: "@issuer-detail"
             bind: "clinicAddress"
             text: "Endereço"
 
           paragraph @pharmacy-contact:
-            track-size: 17pt
+            height: 17pt
             style: "@issuer-detail"
             bind: "contact"
             text: "Contato"
 
         column @pharmacy-document-block:
-          track-size: 38%
+          width: 38%
           gap: 0pt
 
           paragraph @pharmacy-document-kicker:
-            track-size: 12pt
+            height: 12pt
             style: "@micro-label"
             align: "right"
             text: "RECEITUÁRIO"
 
           paragraph @pharmacy-document-title:
-            track-size: 30pt
+            height: 30pt
             style: "@form-title"
             text: "CONTROLE\nESPECIAL"
 
           paragraph @pharmacy-document-via:
-            track-size: 14pt
+            height: 14pt
             style: "@via"
             text: "1ª VIA - FARMÁCIA"
 
           paragraph @pharmacy-document-warning:
-            track-size: 22pt
+            height: 22pt
             style: "@warning"
             text: "MODELO FICTÍCIO\nSEM VALIDADE"
 
@@ -387,12 +387,12 @@ document @controle-especial:
         gap: 12pt
 
         paragraph @pharmacy-patient-label:
-          track-size: 70%
+          width: 70%
           style: "@micro-label"
           text: "PACIENTE"
 
         paragraph @pharmacy-patient-document-label:
-          track-size: 30%
+          width: 30%
           style: "@micro-label"
           align: "right"
           text: "CPF / PASSAPORTE"
@@ -401,13 +401,13 @@ document @controle-especial:
         gap: 12pt
 
         paragraph @pharmacy-patient-name:
-          track-size: 70%
+          width: 70%
           style: "@value"
           bind: "patient.name"
           text: "Nome do paciente"
 
         paragraph @pharmacy-patient-document:
-          track-size: 30%
+          width: 30%
           style: "@value"
           align: "right"
           bind: "patient.document"
@@ -417,12 +417,12 @@ document @controle-especial:
         gap: 8pt
 
         paragraph @pharmacy-patient-address-label:
-          track-size: 18%
+          width: 18%
           style: "@micro-label"
           text: "ENDEREÇO"
 
         paragraph @pharmacy-patient-address:
-          track-size: 82%
+          width: 82%
           style: "@value"
           bind: "patient.address"
           text: "Endereço do paciente"
@@ -445,13 +445,13 @@ document @controle-especial:
         gap: 12pt
 
         paragraph @pharmacy-medication-name:
-          track-size: 74%
+          width: 74%
           style: "@medication-name-style"
           bind: "medication.name"
           text: "Produto demonstrativo"
 
         paragraph @pharmacy-medication-quantity:
-          track-size: 26%
+          width: 26%
           style: "@medication-quantity-style"
           bind: "medication.quantity"
           text: "Quantidade"
@@ -469,10 +469,10 @@ document @controle-especial:
         text: "Nota demonstrativa"
 
       row @pharmacy-open-prescription-space:
-        cross-size: 210pt
+        height: 210pt
 
         paragraph @pharmacy-open-space:
-          track-size: 100%
+          width: 100%
           text: ""
 
       paragraph @pharmacy-signature-rule:
@@ -487,13 +487,13 @@ document @controle-especial:
         gap: 18pt
 
         paragraph @pharmacy-issue-date:
-          track-size: 38%
+          width: 38%
           style: "@value"
           bind: "issuedAt"
           text: "Data"
 
         paragraph @pharmacy-prescriber-name:
-          track-size: 62%
+          width: 62%
           style: "@value"
           align: "right"
           bind: "prescriber.name"
@@ -513,17 +513,17 @@ document @controle-especial:
 
       row @pharmacy-dispensing-identification:
         gap: 16pt
-        cross-size: 70pt
+        height: 70pt
 
         paragraph @pharmacy-buyer:
-          track-size: 50%
-          cross-size: 100%
+          width: 50%
+          height: 100%
           style: "@dispensing-copy"
           text: "IDENTIFICAÇÃO DO COMPRADOR\nNome\nDocumento\nEndereço e telefone"
 
         paragraph @pharmacy-supplier:
-          track-size: 50%
-          cross-size: 100%
+          width: 50%
+          height: 100%
           style: "@dispensing-copy"
           text: "IDENTIFICAÇÃO DO FORNECEDOR\nEstabelecimento\nResponsável\nData e assinatura"
 
@@ -537,63 +537,63 @@ document @controle-especial:
 
       row @patient-header:
         gap: 14pt
-        cross-size: 78pt
+        height: 78pt
 
         column @patient-issuer-block:
-          track-size: 62%
+          width: 62%
           gap: 0pt
 
           paragraph @patient-issuer-label:
-            track-size: 9pt
+            height: 9pt
             style: "@micro-label"
             text: "EMITENTE"
 
           paragraph @patient-clinic:
-            track-size: 15pt
+            height: 15pt
             style: "@issuer-name"
             bind: "clinic"
             text: "Clínica"
 
           paragraph @patient-issuer:
-            track-size: 13pt
+            height: 13pt
             style: "@issuer-detail"
             bind: "issuer"
             text: "Profissional e registro"
 
           paragraph @patient-clinic-address:
-            track-size: 13pt
+            height: 13pt
             style: "@issuer-detail"
             bind: "clinicAddress"
             text: "Endereço"
 
           paragraph @patient-contact:
-            track-size: 17pt
+            height: 17pt
             style: "@issuer-detail"
             bind: "contact"
             text: "Contato"
 
         column @patient-document-block:
-          track-size: 38%
+          width: 38%
           gap: 0pt
 
           paragraph @patient-document-kicker:
-            track-size: 12pt
+            height: 12pt
             style: "@micro-label"
             align: "right"
             text: "RECEITUÁRIO"
 
           paragraph @patient-document-title:
-            track-size: 30pt
+            height: 30pt
             style: "@form-title"
             text: "CONTROLE\nESPECIAL"
 
           paragraph @patient-document-via:
-            track-size: 14pt
+            height: 14pt
             style: "@via"
             text: "2ª VIA - PACIENTE"
 
           paragraph @patient-document-warning:
-            track-size: 22pt
+            height: 22pt
             style: "@warning"
             text: "MODELO FICTÍCIO\nSEM VALIDADE"
 
@@ -614,12 +614,12 @@ document @controle-especial:
         gap: 12pt
 
         paragraph @patient-patient-label:
-          track-size: 70%
+          width: 70%
           style: "@micro-label"
           text: "PACIENTE"
 
         paragraph @patient-patient-document-label:
-          track-size: 30%
+          width: 30%
           style: "@micro-label"
           align: "right"
           text: "CPF / PASSAPORTE"
@@ -628,13 +628,13 @@ document @controle-especial:
         gap: 12pt
 
         paragraph @patient-patient-name:
-          track-size: 70%
+          width: 70%
           style: "@value"
           bind: "patient.name"
           text: "Nome do paciente"
 
         paragraph @patient-patient-document:
-          track-size: 30%
+          width: 30%
           style: "@value"
           align: "right"
           bind: "patient.document"
@@ -644,12 +644,12 @@ document @controle-especial:
         gap: 8pt
 
         paragraph @patient-patient-address-label:
-          track-size: 18%
+          width: 18%
           style: "@micro-label"
           text: "ENDEREÇO"
 
         paragraph @patient-patient-address:
-          track-size: 82%
+          width: 82%
           style: "@value"
           bind: "patient.address"
           text: "Endereço do paciente"
@@ -672,13 +672,13 @@ document @controle-especial:
         gap: 12pt
 
         paragraph @patient-medication-name:
-          track-size: 74%
+          width: 74%
           style: "@medication-name-style"
           bind: "medication.name"
           text: "Produto demonstrativo"
 
         paragraph @patient-medication-quantity:
-          track-size: 26%
+          width: 26%
           style: "@medication-quantity-style"
           bind: "medication.quantity"
           text: "Quantidade"
@@ -696,10 +696,10 @@ document @controle-especial:
         text: "Nota demonstrativa"
 
       row @patient-open-prescription-space:
-        cross-size: 210pt
+        height: 210pt
 
         paragraph @patient-open-space:
-          track-size: 100%
+          width: 100%
           text: ""
 
       paragraph @patient-signature-rule:
@@ -714,13 +714,13 @@ document @controle-especial:
         gap: 18pt
 
         paragraph @patient-issue-date:
-          track-size: 38%
+          width: 38%
           style: "@value"
           bind: "issuedAt"
           text: "Data"
 
         paragraph @patient-prescriber-name:
-          track-size: 62%
+          width: 62%
           style: "@value"
           align: "right"
           bind: "prescriber.name"
@@ -740,17 +740,17 @@ document @controle-especial:
 
       row @patient-dispensing-identification:
         gap: 16pt
-        cross-size: 70pt
+        height: 70pt
 
         paragraph @patient-buyer:
-          track-size: 50%
-          cross-size: 100%
+          width: 50%
+          height: 100%
           style: "@dispensing-copy"
           text: "IDENTIFICAÇÃO DO COMPRADOR\nNome\nDocumento\nEndereço e telefone"
 
         paragraph @patient-supplier:
-          track-size: 50%
-          cross-size: 100%
+          width: 50%
+          height: 100%
           style: "@dispensing-copy"
           text: "IDENTIFICAÇÃO DO FORNECEDOR\nEstabelecimento\nResponsável\nData e assinatura"
 

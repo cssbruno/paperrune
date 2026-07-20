@@ -22,7 +22,7 @@ import (
 )
 
 func TestLayoutDocumentPlanLowersNestedSectionClauseAndNoteToExactPDF(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 160}), WithNoCompression())
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 160}), WithNoCompression())
 	source.SetMargins(18, 18, 18)
 	source.SetAutoPageBreak(true, 18)
 	doc := &layout.LayoutDocument{
@@ -52,7 +52,7 @@ func TestLayoutDocumentPlanLowersNestedSectionClauseAndNoteToExactPDF(t *testing
 	if err != nil || plan.PageCount() != 2 || plan.Hash() == "" || source.PageCount() != 0 {
 		t.Fatalf("PlanLayoutDocument() = pages %d hash %q source pages %d, %v", plan.PageCount(), plan.Hash(), source.PageCount(), err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	pages, err := target.WriteLayoutDocumentPlan(plan)
 	if err != nil || pages != 2 || target.PageCount() != 2 {
 		t.Fatalf("WriteLayoutDocumentPlan() = %d, pages %d, %v", pages, target.PageCount(), err)
@@ -81,7 +81,7 @@ func TestLayoutDocumentPlanLowersNestedSectionClauseAndNoteToExactPDF(t *testing
 }
 
 func TestLayoutDocumentPlanBindsDeterministicInputManifest(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 160}), WithNoCompression())
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 160}), WithNoCompression())
 	doc := &layout.LayoutDocument{Language: "en-US", Body: []layout.Block{
 		layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "stable typed identity"}}},
 	}}
@@ -111,12 +111,12 @@ func TestLayoutDocumentPlanBindsDeterministicInputManifest(t *testing.T) {
 }
 
 func TestUnifiedHTMLSVGPlansBindDeterministicInputManifest(t *testing.T) {
-	compiled, err := CompileHTML(`<p>before</p><svg width="18" height="12" aria-label="Vector mark"><rect width="18" height="12" fill="#408020" stroke="none"/></svg><p>after</p>`)
+	compiled, err := compileHTML(`<p>before</p><svg width="18" height="12" aria-label="Vector mark"><rect width="18" height="12" fill="#408020" stroke="none"/></svg><p>after</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 180}), WithNoCompression(), WithDeterministicOutput())
-	plan, err := planner.PlanCompiledHTML(12, compiled)
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 180}), WithNoCompression(), WithDeterministicOutput())
+	plan, err := planner.planCompiledHTML(12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,11 +125,11 @@ func TestUnifiedHTMLSVGPlansBindDeterministicInputManifest(t *testing.T) {
 		t.Fatalf("mixed HTML/SVG deterministic manifest = %#v, bound=%t", manifest, ok)
 	}
 
-	sole, err := CompileHTML(`<svg width="18" height="12" aria-label="Sole vector"><rect width="18" height="12" fill="#408020" stroke="none"/></svg>`)
+	sole, err := compileHTML(`<svg width="18" height="12" aria-label="Sole vector"><rect width="18" height="12" fill="#408020" stroke="none"/></svg>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	solePlan, err := planner.PlanCompiledHTML(12, sole)
+	solePlan, err := planner.planCompiledHTML(12, sole)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestUnifiedHTMLSVGPlansBindDeterministicInputManifest(t *testing.T) {
 }
 
 func TestTypedPlanPDFReusesSemanticStructureAcrossGlyphRuns(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 150, Ht: 220}), WithNoCompression())
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 150, Ht: 220}), WithNoCompression())
 	source.SetMargins(12, 12, 12)
 	source.SetComplianceMetadata(ComplianceMetadata{PDFUA2: true, Title: "Semantic reuse", Lang: "en-US"})
 	text := strings.Repeat("semantic text stays in one tagged paragraph ", 8)
@@ -162,7 +162,7 @@ func TestTypedPlanPDFReusesSemanticStructureAcrossGlyphRuns(t *testing.T) {
 		t.Fatalf("semantic paragraph/runs = %d/%d, want one paragraph across multiple runs", paragraphs, len(projection.GlyphRuns))
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestTypedPlanPDFReusesSemanticStructureAcrossGlyphRuns(t *testing.T) {
 }
 
 func TestLayoutDocumentPlanUnsupportedContainerDiagnosticIsStableAndAtomic(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}))
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}))
 	doc := &layout.LayoutDocument{Body: []layout.Block{
 		layout.SectionBlock{Blocks: []layout.Block{
 			layout.NoteBoxBlock{Body: []layout.Block{layout.TableBlock{Caption: "not yet"}}},
@@ -191,7 +191,7 @@ func TestLayoutDocumentPlanUnsupportedContainerDiagnosticIsStableAndAtomic(t *te
 		t.Fatalf("unsupported = plan %#v, pages %d, %q; want %q", plan, source.PageCount(), err, want)
 	}
 
-	target := MustNew(WithUnit(UnitPoint))
+	target := mustNewPDFDocument(WithUnit(UnitPoint))
 	pages, paintErr := target.WriteLayoutDocumentPlan(plan)
 	if paintErr == nil || pages != 0 || target.PageCount() != 0 || !strings.Contains(paintErr.Error(), "plan is empty") {
 		t.Fatalf("zero plan paint = %d, pages %d, %v", pages, target.PageCount(), paintErr)
@@ -199,7 +199,7 @@ func TestLayoutDocumentPlanUnsupportedContainerDiagnosticIsStableAndAtomic(t *te
 }
 
 func TestLayoutDocumentPlanRetainsCanonicalTypedTreeBeforePainting(t *testing.T) {
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}))
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 120}))
 	doc := &layout.LayoutDocument{Title: "Tree", Body: []layout.Block{layout.SectionBlock{Title: "Section", Blocks: []layout.Block{
 		layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "body"}}, Style: layout.TextStyle{FontFamily: "Helvetica", FontSize: 9, LineHeight: 10}},
 	}}}}
@@ -228,7 +228,7 @@ func TestLayoutDocumentPlanRejectsUnrepresentedContainerPolicies(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			source := MustNew(WithUnit(UnitPoint))
+			source := mustNewPDFDocument(WithUnit(UnitPoint))
 			_, err := source.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{test.body}})
 			if !errors.Is(err, ErrLayoutDocumentPlanUnsupported) || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want unsupported containing %q", err, test.want)
@@ -238,7 +238,7 @@ func TestLayoutDocumentPlanRejectsUnrepresentedContainerPolicies(t *testing.T) {
 }
 
 func TestLayoutDocumentPlanReportsCustomBlockDeterministically(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint))
+	source := mustNewPDFDocument(WithUnit(UnitPoint))
 	_, err := source.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{
 		layout.SectionBlock{Blocks: []layout.Block{typedPlanCustomBlock{}}},
 	}})
@@ -249,7 +249,7 @@ func TestLayoutDocumentPlanReportsCustomBlockDeterministically(t *testing.T) {
 }
 
 func TestLayoutDocumentPlanMetadataAndSignaturePreserveOrderedSemanticsCaptureAndPDF(t *testing.T) {
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 220}), WithNoCompression())
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 220}), WithNoCompression())
 	source.SetMargins(20, 20, 20)
 	doc := &layout.LayoutDocument{
 		Body: []layout.Block{layout.MetadataGridBlock{
@@ -289,7 +289,7 @@ func TestLayoutDocumentPlanMetadataAndSignaturePreserveOrderedSemanticsCaptureAn
 		t.Fatalf("typed capture lacks metadata/signature display commands: %v\n%s", err, svg)
 	}
 
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	pages, err := target.WriteLayoutDocumentPlan(plan)
 	if err != nil || pages != 1 || target.signatureFieldName != "ApprovalSignature" {
 		t.Fatalf("WriteLayoutDocumentPlan() = pages %d field %q, %v", pages, target.signatureFieldName, err)
@@ -305,7 +305,7 @@ func TestLayoutDocumentPlanImagesUseExactDisplayPlanCaptureAndResourceReuse(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 180}), WithNoCompression())
+	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 180}), WithNoCompression())
 	source.SetMargins(20, 20, 20)
 	doc := &layout.LayoutDocument{Body: []layout.Block{
 		layout.ImageBlock{Data: data, Format: "png", Alt: "Red status pixel", Width: 60, Height: 30, Fit: layout.ImageFitContain, Align: "center",
@@ -376,7 +376,7 @@ func TestLayoutDocumentPlanImagesUseExactDisplayPlanCaptureAndResourceReuse(t *t
 	}
 
 	data[0] ^= 0xff // The immutable plan owns a detached source-byte snapshot.
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	pages, err := target.WriteLayoutDocumentPlan(plan)
 	if err != nil || pages != 1 || target.PageCount() != 1 {
 		t.Fatalf("WriteLayoutDocumentPlan(images) = %d pages %d, %v", pages, target.PageCount(), err)
@@ -403,7 +403,7 @@ func TestLayoutDocumentPlanStyledImageBoxHasExactGeometryGraphicsSemanticsAndPDF
 			Left:   layout.BorderSide{Width: 3, Style: "solid", Color: blue},
 		},
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 140}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 140}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(20, 20, 20)
 	plan, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{layout.ImageBlock{
 		Data: data, Format: "png", Alt: "Decorated proof", Width: 60, Height: 30,
@@ -446,7 +446,7 @@ func TestLayoutDocumentPlanStyledImageBoxHasExactGeometryGraphicsSemanticsAndPDF
 	if plan.Hash() != before || plan.plan.Projection().Fragments[0].ContentBox != fragment.ContentBox {
 		t.Fatal("styled image plan aliases BoxRef")
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if pages, err := target.WriteLayoutDocumentPlan(plan); err != nil || pages != 1 {
 		t.Fatalf("WriteLayoutDocumentPlan(styled image) = %d, %v", pages, err)
 	}
@@ -460,18 +460,18 @@ func TestLayoutDocumentPlanStyledImageBoxHasExactGeometryGraphicsSemanticsAndPDF
 func TestLayoutDocumentPlanImageLimitsAndUnsupportedInputsAreAtomic(t *testing.T) {
 	data, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
 	doc := &layout.LayoutDocument{Body: []layout.Block{layout.ImageBlock{Data: data, Format: "png", Width: 20, Height: 20}}}
-	limited := MustNew(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: 8}))
+	limited := mustNewPDFDocument(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: 8}))
 	plan, err := limited.PlanLayoutDocument(doc)
 	if err == nil || plan.Hash() != "" || limited.PageCount() != 0 {
 		t.Fatalf("source-limit plan = %#v pages %d, %v", plan, limited.PageCount(), err)
 	}
 
-	source := MustNew(WithUnit(UnitPoint))
+	source := mustNewPDFDocument(WithUnit(UnitPoint))
 	plan, err = source.PlanLayoutDocument(doc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: 8}))
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: 8}))
 	pages, err := target.WriteLayoutDocumentPlan(plan)
 	if err == nil || pages != 0 || target.PageCount() != 0 {
 		t.Fatalf("target-limit paint = pages %d target pages %d, %v", pages, target.PageCount(), err)
@@ -491,7 +491,7 @@ func TestLayoutDocumentPlanImageLimitsAndUnsupportedInputsAreAtomic(t *testing.T
 	}
 	for _, test := range unsupported {
 		t.Run(test.name, func(t *testing.T) {
-			planner := MustNew(WithUnit(UnitPoint))
+			planner := mustNewPDFDocument(WithUnit(UnitPoint))
 			_, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{test.image}})
 			if !errors.Is(err, ErrLayoutDocumentPlanUnsupported) || !strings.Contains(err.Error(), test.want) || planner.PageCount() != 0 {
 				t.Fatalf("unsupported image = pages %d, %v, want %q", planner.PageCount(), err, test.want)
@@ -504,7 +504,7 @@ func TestLayoutDocumentPlanSnapshotsNoteTitleStyleReferences(t *testing.T) {
 	shared := layout.TextStyle{FontFamily: "Courier", FontSize: 11, Bold: true, LineHeight: 13}
 	doc := &layout.LayoutDocument{Body: []layout.Block{layout.NoteBoxBlock{Title: "Notice", StyleRef: &shared,
 		Body: []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "Body"}}}}}}}
-	planner := MustNew(WithUnit(UnitPoint))
+	planner := mustNewPDFDocument(WithUnit(UnitPoint))
 	plan, err := planner.PlanLayoutDocument(doc)
 	if err != nil || plan.Hash() == "" || plan.PageCount() != 1 {
 		t.Fatalf("note style plan = %#v, %v", plan, err)
@@ -531,7 +531,7 @@ func TestLayoutDocumentPlanResourceResolutionContextAndCumulativeBounds(t *testi
 		return out.Bytes()
 	}
 	first, second := encode(color.NRGBA{R: 255, A: 255}), encode(color.NRGBA{B: 255, A: 255})
-	source := MustNew(WithUnit(UnitPoint))
+	source := mustNewPDFDocument(WithUnit(UnitPoint))
 	plan, err := source.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{layout.ImageBlock{Data: first, Format: "png", Width: 10, Height: 10}, layout.ImageBlock{Data: second, Format: "png", Width: 10, Height: 10}}})
 	if err != nil {
 		t.Fatal(err)
@@ -541,7 +541,7 @@ func TestLayoutDocumentPlanResourceResolutionContextAndCumulativeBounds(t *testi
 	if capture, err := plan.CaptureDisplayPageContext(canceled, 1); !errors.Is(err, context.Canceled) || len(capture.SVG()) != 0 {
 		t.Fatalf("canceled display capture=%d err=%v", len(capture.SVG()), err)
 	}
-	target := MustNew(WithUnit(UnitPoint))
+	target := mustNewPDFDocument(WithUnit(UnitPoint))
 	if pages, err := target.WriteLayoutDocumentPlanContext(canceled, plan); !errors.Is(err, context.Canceled) || pages != 0 || target.PageCount() != 0 {
 		t.Fatalf("canceled write pages=%d target=%d err=%v", pages, target.PageCount(), err)
 	}
@@ -549,7 +549,7 @@ func TestLayoutDocumentPlanResourceResolutionContextAndCumulativeBounds(t *testi
 	if limit >= len(first)+len(second) {
 		t.Fatalf("fixture cannot distinguish cumulative limit")
 	}
-	bounded := MustNew(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: int64(limit)}))
+	bounded := mustNewPDFDocument(WithUnit(UnitPoint), WithLimits(Limits{MaxImageSourceBytes: int64(limit)}))
 	beforeResources := bounded.resources
 	pages, err := bounded.WriteLayoutDocumentPlan(plan)
 	if err == nil || pages != 0 || bounded.PageCount() != 0 || bounded.resources != beforeResources || !strings.Contains(err.Error(), "cumulative planned image source") {

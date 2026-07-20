@@ -33,9 +33,10 @@ func TestBaseDocumentProducesDeterministicUnsignedBytes(t *testing.T) {
 	render := func() []byte {
 		pdf := baseDocument(fontPath, boldFontPath)
 		pdf.SetTitle("deterministic compliance fixture", false)
-		pdf.AddPage()
-		pdf.SetFont("DejaVu", "", 12)
-		pdf.Write(6, "stable content")
+		source := "document @stable:\n  page @sheet:\n    body @body:\n      paragraph @copy:\n        text: \"stable content\"\n"
+		if rendered, err := pdf.WritePaper("stable.paper", source); err != nil || !rendered.OK() {
+			t.Fatalf("WritePaper() = %#v, %v", rendered, err)
+		}
 		var output bytes.Buffer
 		if err := pdf.Output(&output); err != nil {
 			t.Fatalf("Output() error = %v", err)
@@ -116,10 +117,10 @@ func TestUnsignedComplianceFixturesHaveDeterministicCharacterization(t *testing.
 	}
 	byName := make(map[string]characterize.FixtureEvidence, len(report.Fixtures))
 	wantSHA256 := map[string]string{
-		"pdfa4-metadata.pdf":                       "bd25d09c3c3e163b564aa0147150fccdf624937004d9c8f4348c04f56230752e",
-		"pdfa4e-attachment-metadata.pdf":           "fd47bc71f178e9a6735e23a8e1a4d3de159e518e714eb97c7b072a03da6c21a4",
-		"pdfa4f-attachment-metadata.pdf":           "5524d63395c9eb2b5e90fdb9992a9e5e854291cd727c0e1979624ea87dc6649c",
-		"pdfua2-arlington-metadata-foundation.pdf": "b6e0720e3831837f57c3516801c9fad5e8b2a8622036d693d8ccec9b2486b68f",
+		"pdfa4-metadata.pdf":                       "4c1faeae60c8074a748201b88a1b9c864dc0b0467369aa7126c73130b31124f4",
+		"pdfa4e-attachment-metadata.pdf":           "91a26e43625d09810fd8115c1b964d2b6782cab5c75a9cf7870ef311c8c8f036",
+		"pdfa4f-attachment-metadata.pdf":           "ca658c1a284b10d4592b6665e34291fbf51e0ffff8ef16d4897df0c8d1a002e6",
+		"pdfua2-arlington-metadata-foundation.pdf": "90919287495125623842877a607cc0265fce109eb910a069efe630e7e114cc80",
 	}
 	for _, fixture := range report.Fixtures {
 		byName[fixture.Name] = fixture
@@ -135,7 +136,7 @@ func TestUnsignedComplianceFixturesHaveDeterministicCharacterization(t *testing.
 	if !ua.Structure.PDFUA2 || !ua.Structure.ArlingtonRequired || !ua.Structure.HasTagMarkInfo ||
 		!ua.Structure.HasLanguage || !ua.Structure.DisplaysTitle || ua.Structure.StructureTrees == 0 ||
 		ua.Structure.StructureElements == 0 || ua.Structure.ParentTrees == 0 || ua.Structure.MarkedContent == 0 ||
-		ua.Structure.LinkAnnotations == 0 || ua.Structure.URIActions == 0 || ua.Structure.PDFA4 {
+		ua.Structure.LinkAnnotations != 0 || ua.Structure.URIActions != 0 || ua.Structure.PDFA4 {
 		t.Errorf("PDF/UA structural baseline = %#v", ua.Structure)
 	}
 	for name, conformance := range map[string]string{
@@ -183,7 +184,7 @@ func TestPDFUAComplianceStructuredTableCellRasterIsPinned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := fmt.Sprintf("%x", sha256.Sum256(pngBytes)); got != "9f1fbfcbda9f91541aa843b9501bd67c685720ee1d7ea2429f7cc9096ef48237" {
+	if got := fmt.Sprintf("%x", sha256.Sum256(pngBytes)); got != "af97b84fc27e5c75751858ab40e31ab44fca9223aa3d835ae7ddd4889d8b6944" {
 		t.Fatalf("structured-cell raster drift = %s", got)
 	}
 	raster, err := png.Decode(bytes.NewReader(pngBytes))

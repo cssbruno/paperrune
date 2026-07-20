@@ -31,6 +31,47 @@
       </div>
     </header>
 
+    <nav class="insertbar" aria-label="Insert document content">
+      <span class="insertbar-label">Insert</span>
+      <div class="insert-group" aria-label="Page regions">
+        <button class="insert-tool" type="button" data-template="header" title="Add a repeating page header" disabled>
+          <span class="insert-tool-icon region-top" aria-hidden="true"></span><span>Header</span>
+        </button>
+        <button class="insert-tool" type="button" data-template="footer" title="Add a repeating page footer" disabled>
+          <span class="insert-tool-icon region-bottom" aria-hidden="true"></span><span>Footer</span>
+        </button>
+      </div>
+      <div class="insert-group" aria-label="Content blocks">
+        <button class="insert-tool" type="button" data-template="heading" title="Add a heading" disabled>
+          <span class="insert-tool-letter" aria-hidden="true">H</span><span>Heading</span>
+        </button>
+        <button class="insert-tool" type="button" data-template="paragraph" title="Add a text paragraph" disabled>
+          <span class="insert-tool-letter" aria-hidden="true">T</span><span>Text</span>
+        </button>
+        <button class="insert-tool" type="button" data-template="image" title="Add an image block" disabled>
+          <span class="insert-tool-icon image-block" aria-hidden="true"></span><span>Image</span>
+        </button>
+        <button class="insert-tool" type="button" data-template="table" title="Add a table" disabled>
+          <span class="insert-tool-icon table-block" aria-hidden="true"></span><span>Table</span>
+        </button>
+        <button class="insert-tool" type="button" data-template="section" title="Add a semantic section" disabled>
+          <span class="insert-tool-icon section-block" aria-hidden="true"></span><span>Section</span>
+        </button>
+        <button class="insert-tool" type="button" data-template="page-break" title="Add an explicit page break" disabled>
+          <span class="insert-tool-icon break-block" aria-hidden="true"></span><span>Break</span>
+        </button>
+      </div>
+      <div class="insert-group insert-group-more" aria-label="Advanced authoring">
+        <button class="insert-tool" type="button" data-authoring-operation="binding" title="Bind content to document data" disabled>
+          <span class="insert-tool-letter data-letter" aria-hidden="true">{ }</span><span>Data</span>
+        </button>
+        <button class="insert-tool" type="button" data-open-authoring title="Open all authoring tools">
+          <span class="insert-tool-letter more-letter" aria-hidden="true">•••</span><span>More</span>
+        </button>
+      </div>
+      <output id="insert-context" class="insert-context" aria-live="polite">Select an addressed parent to see available tools.</output>
+    </nav>
+
     <main class="workspace">
       <aside id="left-panel" class="left-panel" aria-label="Document outline">
         <div class="panel-heading">
@@ -92,7 +133,12 @@
       <aside id="inspector" class="inspector" aria-label="Selection inspector">
         <div class="panel-heading">
           <span>Inspector</span>
-          <span id="selection-kind" class="quiet">Nothing selected</span>
+          <span class="inspector-heading-actions">
+            <button id="inspector-close" class="inspector-close" type="button" aria-label="Close inspector">×</button>
+            <button id="history-undo" class="history-action" type="button" title="Nothing to undo" disabled aria-label="Undo last edit">↶</button>
+            <button id="history-redo" class="history-action" type="button" title="Nothing to redo" disabled aria-label="Redo last undone edit">↷</button>
+            <span id="selection-kind" class="quiet">Nothing selected</span>
+          </span>
         </div>
         <details class="inspector-disclosure overlay-disclosure">
           <summary><span>Overlays</span><span class="quiet">Exact plan</span></summary>
@@ -104,7 +150,7 @@
             <button class="inspection-toggle" data-overlay="regions" aria-pressed="false">Regions</button>
             <button class="inspection-toggle" data-overlay="instances" aria-pressed="false">Instances</button>
             <button class="inspection-toggle" data-overlay="baselines" aria-pressed="false">Baselines</button>
-            <button class="inspection-toggle" data-overlay="tracks" aria-pressed="false">Tracks</button>
+            <button class="inspection-toggle" data-overlay="guides" aria-pressed="false">Guides</button>
             <button class="inspection-toggle" data-overlay="cells" aria-pressed="false">Cells</button>
             <button class="inspection-toggle" data-overlay="overflow" aria-pressed="false">Overflow</button>
             <button class="inspection-toggle" data-overlay="clips" aria-pressed="false">Clips</button>
@@ -166,6 +212,7 @@
   <script src="/edit-model.js" defer></script>
   <script src="/resource-model.js" defer></script>
   <script src="/authoring-model.js" defer></script>
+  <script src="/tooling-model.js" defer></script>
   <script src="/instance-model.js" defer></script>
   <script src="/inspection-model.js" defer></script>
   <script src="/provenance-model.js" defer></script>

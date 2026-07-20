@@ -45,11 +45,11 @@ const paperRowColumnMaxNesting = 64
 // planPaperRowColumnMapped is the initial authored-container compositor. It
 // uses the same exact core-font line shadow and immutable display-plan painter
 // as ordinary .paper text; only geometry comes from PlanRowColumn.
-func (f *Document) planPaperRowColumnMapped(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, bodyIndex int, container layout.RowColumnBlock, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planPaperRowColumnMapped(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, bodyIndex int, container layout.RowColumnBlock, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
 	return f.planPaperRowColumnMappedDepth(ctx, doc, mapping, bodyIndex, container, selectBody, 0)
 }
 
-func (f *Document) planPaperRowColumnMappedDepth(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, bodyIndex int, container layout.RowColumnBlock, selectBody paperBodySelector, depth uint32) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planPaperRowColumnMappedDepth(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, bodyIndex int, container layout.RowColumnBlock, selectBody paperBodySelector, depth uint32) (layoutengine.LayoutPlan, error) {
 	if depth > paperRowColumnMaxNesting {
 		return layoutengine.LayoutPlan{}, newTypedShadowUnsupported(typedShadowGeometry, "row/column nesting exceeds the deterministic depth limit")
 	}
@@ -386,7 +386,7 @@ func (f *Document) planPaperRowColumnMappedDepth(ctx context.Context, doc *layou
 	return composePaperRowColumnPlan(planned.Plan, measurements)
 }
 
-func (f *Document) measurePaperNestedRowColumn(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, bodyIndex int, nested layout.RowColumnBlock, body layoutengine.Rect, width layoutengine.Fixed, depth uint32) (paperRowColumnMeasurement, error) {
+func (f *pdfDocument) measurePaperNestedRowColumn(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, bodyIndex int, nested layout.RowColumnBlock, body layoutengine.Rect, width layoutengine.Fixed, depth uint32) (paperRowColumnMeasurement, error) {
 	if width <= 0 || width > body.Width {
 		return paperRowColumnMeasurement{}, newTypedShadowUnsupported(typedShadowGeometry, "nested row/column width is outside its parent track")
 	}
@@ -427,7 +427,7 @@ func (f *Document) measurePaperNestedRowColumn(ctx context.Context, doc *layout.
 	}, nil
 }
 
-func (f *Document) measurePaperRowColumnTable(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string, body layoutengine.Rect, width layoutengine.Fixed, selectBody paperBodySelector) (paperRowColumnMeasurement, error) {
+func (f *pdfDocument) measurePaperRowColumnTable(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string, body layoutengine.Rect, width layoutengine.Fixed, selectBody paperBodySelector) (paperRowColumnMeasurement, error) {
 	widthUser := f.PointConvert(width.Points())
 	left := f.PointConvert(body.X.Points())
 	top := f.PointConvert(body.Y.Points())
@@ -528,7 +528,7 @@ func paperRowColumnAuthoredMainMinimum(children []layoutengine.RowColumnChild, g
 	return required.Add(gaps)
 }
 
-func (f *Document) measurePaperRowColumnChild(ctx context.Context, doc *layout.LayoutDocument, paragraph layout.ParagraphBlock, left, top, right, bottom float64, width layoutengine.Fixed) (paperRowColumnMeasurement, error) {
+func (f *pdfDocument) measurePaperRowColumnChild(ctx context.Context, doc *layout.LayoutDocument, paragraph layout.ParagraphBlock, left, top, right, bottom float64, width layoutengine.Fixed) (paperRowColumnMeasurement, error) {
 	widthUser := f.PointConvert(width.Points())
 	maximumWidth := f.w - left - right
 	if widthUser > maximumWidth && widthUser-maximumWidth <= f.PointConvert(1.0/1024.0) {
@@ -562,7 +562,7 @@ func (f *Document) measurePaperRowColumnChild(ctx context.Context, doc *layout.L
 	return paperRowColumnMeasurement{plan: projection, body: measureBody, height: height}, nil
 }
 
-func (f *Document) measurePaperRowColumnTextIntrinsic(ctx context.Context, paragraph layout.ParagraphBlock) (layoutengine.Fixed, layoutengine.Fixed, error) {
+func (f *pdfDocument) measurePaperRowColumnTextIntrinsic(ctx context.Context, paragraph layout.ParagraphBlock) (layoutengine.Fixed, layoutengine.Fixed, error) {
 	if err := layoutengine.ChargePlanningWork(ctx, "row or column intrinsic text measurement", 1); err != nil {
 		return 0, 0, err
 	}
@@ -1225,19 +1225,19 @@ func paperRowColumnDirection(direction layout.RowColumnDirection) (layoutengine.
 func paperRowColumnTrack(track layout.RowColumnTrack) (layoutengine.RowColumnTrack, error) {
 	size, err := layoutengine.FixedFromPoints(track.Size)
 	if err != nil {
-		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowGeometry, "row/column track size is invalid")
+		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowGeometry, "row/column item size is invalid")
 	}
 	minimum, err := layoutengine.FixedFromPoints(track.Min)
 	if err != nil {
-		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowGeometry, "row/column track minimum is invalid")
+		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowGeometry, "row/column item minimum is invalid")
 	}
 	maximum, err := layoutengine.FixedFromPoints(track.Max)
 	if err != nil {
-		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowGeometry, "row/column track maximum is invalid")
+		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowGeometry, "row/column item maximum is invalid")
 	}
 	basis, err := layoutengine.FixedFromPoints(track.Basis)
 	if err != nil {
-		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowGeometry, "row/column track flex basis is invalid")
+		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowGeometry, "row/column item flex basis is invalid")
 	}
 	result := layoutengine.RowColumnTrack{Size: size, Min: minimum, Max: maximum, Weight: track.Weight, Basis: basis,
 		BasisPercent: track.BasisPercent, Grow: track.Grow, Shrink: track.Shrink, GrowFactor: track.GrowFactor, ShrinkFactor: track.ShrinkFactor,
@@ -1262,7 +1262,7 @@ func paperRowColumnTrack(track layout.RowColumnTrack) (layoutengine.RowColumnTra
 			return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowBlockKind, "row/column flex basis kind is invalid")
 		}
 	default:
-		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowBlockKind, "row/column track kind is invalid")
+		return layoutengine.RowColumnTrack{}, newTypedShadowUnsupported(typedShadowBlockKind, "row/column item kind is invalid")
 	}
 	return result, nil
 }

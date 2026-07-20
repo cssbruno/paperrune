@@ -176,7 +176,6 @@ test-paper-studio-wasm : paper-studio-wasm
 characterize-paper-engine :
 	mkdir -p artifacts/characterization
 	go run ./cmd/paper-characterize -builtin typed > artifacts/characterization/typed.json
-	go run ./cmd/paper-characterize -builtin html > artifacts/characterization/html.json
 
 verify-clean-checkout :
 	sh tools/verify-clean-checkout.sh

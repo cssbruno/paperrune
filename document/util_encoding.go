@@ -199,7 +199,7 @@ func UnicodeTranslatorFromFile(fileStr string) (f func(string) string, err error
 // but does not perform any rune translation.
 //
 // The CellFormat_codepage example demonstrates this method.
-func (f *Document) UnicodeTranslatorFromDescriptor(cpStr string) (rep func(string) string) {
+func (f *pdfDocument) UnicodeTranslatorFromDescriptor(cpStr string) (rep func(string) string) {
 	var str string
 	var ok bool
 	if f.err == nil {

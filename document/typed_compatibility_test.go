@@ -96,8 +96,8 @@ func compatibilityPageTemplate() layout.PageTemplate {
 	return layout.PageTemplate{Margins: layout.Spacing{Top: 12, Right: 12, Bottom: 12, Left: 12}}
 }
 
-func newTypedCompatibilityPDF() *Document {
-	return MustNew(
+func newTypedCompatibilityPDF() *pdfDocument {
+	return mustNewPDFDocument(
 		WithUnit(UnitPoint),
 		WithCustomPageSize(Size{Wd: 220, Ht: 160}),
 		WithNoCompression(),
@@ -136,7 +136,7 @@ func renderPlannedTypedCompatibilityPDF(t *testing.T, model *layout.LayoutDocume
 	return outputTypedCompatibilityPDF(t, target), plan.PageCount()
 }
 
-func outputTypedCompatibilityPDF(t *testing.T, pdf *Document) []byte {
+func outputTypedCompatibilityPDF(t *testing.T, pdf *pdfDocument) []byte {
 	t.Helper()
 	var output bytes.Buffer
 	if err := pdf.OutputWithOptions(&output, OutputOptions{Deterministic: true}); err != nil {

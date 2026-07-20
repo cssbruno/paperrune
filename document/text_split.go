@@ -17,7 +17,7 @@ import (
 //
 // You can use MultiCell if you want to print text on several lines in a
 // simple way.
-func (f *Document) SplitLines(txt []byte, w float64) [][]byte {
+func (f *pdfDocument) SplitLines(txt []byte, w float64) [][]byte {
 	if !f.requireCurrentFont("measuring text") {
 		return nil
 	}
@@ -43,7 +43,7 @@ func (f *Document) SplitLines(txt []byte, w float64) [][]byte {
 // font. Each line has its length limited to a maximum width given by w. This
 // function can be used to determine the total height of wrapped text for
 // vertical placement purposes.
-func (f *Document) SplitText(txt string, w float64) (lines []string) {
+func (f *pdfDocument) SplitText(txt string, w float64) (lines []string) {
 	if !f.requireCurrentFont("measuring text") {
 		return nil
 	}
@@ -59,7 +59,7 @@ func (f *Document) SplitText(txt string, w float64) (lines []string) {
 
 // SplitTextCount returns the number of lines SplitText would produce without
 // allocating the line strings.
-func (f *Document) SplitTextCount(txt string, w float64) int {
+func (f *pdfDocument) SplitTextCount(txt string, w float64) int {
 	if !f.requireCurrentFont("measuring text") {
 		return 0
 	}
@@ -71,7 +71,7 @@ func (f *Document) SplitTextCount(txt string, w float64) int {
 
 // SplitLineCount returns the number of lines SplitLines would produce without
 // allocating a slice of line spans.
-func (f *Document) SplitLineCount(txt []byte, w float64) int {
+func (f *pdfDocument) SplitLineCount(txt []byte, w float64) int {
 	if !f.requireCurrentFont("measuring text") {
 		return 0
 	}

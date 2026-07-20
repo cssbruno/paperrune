@@ -56,8 +56,8 @@ func TestExactTypedAdapterMapsEveryLayoutDocumentField(t *testing.T) {
 			Body:         []layout.Block{paragraph("baseline body")},
 		}
 	}
-	newPlanner := func() *Document {
-		return MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 220}), WithNoCompression(), WithDeterministicOutput())
+	newPlanner := func() *pdfDocument {
+		return mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 220}), WithNoCompression(), WithDeterministicOutput())
 	}
 	baseline, err := newPlanner().PlanLayoutDocument(newModel())
 	if err != nil {

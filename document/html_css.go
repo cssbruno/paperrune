@@ -42,9 +42,9 @@ type htmlElementMetadata struct {
 	classes []string
 }
 
-func htmlElementDeclarationsWithStyle(el HTMLSegmentType, cssRules []htmlCSSRule, style map[string]string, ancestors ...HTMLSegmentType) map[string]string {
+func htmlElementDeclarationsWithStyle(el htmlSegmentType, cssRules []htmlCSSRule, style map[string]string, ancestors ...htmlSegmentType) map[string]string {
 	if ancestors == nil {
-		ancestors = []HTMLSegmentType{}
+		ancestors = []htmlSegmentType{}
 	}
 	if len(cssRules) == 0 {
 		return style
@@ -55,7 +55,7 @@ func htmlElementDeclarationsWithStyle(el HTMLSegmentType, cssRules []htmlCSSRule
 	return htmlElementDeclarationsWithStyleScan(el, cssRules, style, ancestors)
 }
 
-func htmlElementDeclarationsWithStyleMeta(el HTMLSegmentType, meta htmlElementMetadata, cssRules []htmlCSSRule, style map[string]string, ancestors []HTMLSegmentType, ancestorMeta []htmlElementMetadata) map[string]string {
+func htmlElementDeclarationsWithStyleMeta(el htmlSegmentType, meta htmlElementMetadata, cssRules []htmlCSSRule, style map[string]string, ancestors []htmlSegmentType, ancestorMeta []htmlElementMetadata) map[string]string {
 	if len(cssRules) == 0 {
 		return style
 	}
@@ -65,7 +65,7 @@ func htmlElementDeclarationsWithStyleMeta(el HTMLSegmentType, meta htmlElementMe
 	return htmlElementDeclarationsWithStyleScan(el, cssRules, style, ancestors)
 }
 
-func htmlElementDeclarationsWithStyleScan(el HTMLSegmentType, cssRules []htmlCSSRule, style map[string]string, ancestors []HTMLSegmentType) map[string]string {
+func htmlElementDeclarationsWithStyleScan(el htmlSegmentType, cssRules []htmlCSSRule, style map[string]string, ancestors []htmlSegmentType) map[string]string {
 	type appliedDeclaration struct {
 		value       string
 		specificity int
@@ -134,7 +134,7 @@ func htmlElementDeclarationsWithStyleMetaIndex(cssRules []htmlCSSRule, style map
 	return htmlElementDeclarationsFromRuleSpecificities(cssRules, style, ruleSpecificities, matched)
 }
 
-func htmlElementDeclarationsWithStyleIndex(el HTMLSegmentType, cssRules []htmlCSSRule, style map[string]string, ancestors []HTMLSegmentType, index *htmlCSSRuleIndex) map[string]string {
+func htmlElementDeclarationsWithStyleIndex(el htmlSegmentType, cssRules []htmlCSSRule, style map[string]string, ancestors []htmlSegmentType, index *htmlCSSRuleIndex) map[string]string {
 	if index == nil || len(index.buckets) == 0 {
 		return style
 	}
@@ -375,7 +375,7 @@ func htmlCSSSelectorBucketKey(part htmlCSSSelectorPart) string {
 	return "*"
 }
 
-func (index *htmlCSSRuleIndex) visitSelectorsForElement(el HTMLSegmentType, visit func(htmlCSSSelectorRef)) {
+func (index *htmlCSSRuleIndex) visitSelectorsForElement(el htmlSegmentType, visit func(htmlCSSSelectorRef)) {
 	if index == nil || len(index.buckets) == 0 {
 		return
 	}
@@ -553,9 +553,9 @@ func parseHTMLCSSSelectorPart(value string) (htmlCSSSelectorPart, bool) {
 	return part, part.tag != "" || part.id != "" || part.class != ""
 }
 
-func htmlCSSSelectorMatches(selector htmlCSSSelector, el HTMLSegmentType, ancestors []HTMLSegmentType) bool {
+func htmlCSSSelectorMatches(selector htmlCSSSelector, el htmlSegmentType, ancestors []htmlSegmentType) bool {
 	if ancestors == nil {
-		ancestors = []HTMLSegmentType{}
+		ancestors = []htmlSegmentType{}
 	}
 	if len(selector.parts) == 0 {
 		return false
@@ -638,7 +638,7 @@ func htmlCSSSelectorSpecificity(selector htmlCSSSelector) int {
 	return specificity
 }
 
-func htmlCSSSelectorPartMatches(part htmlCSSSelectorPart, el HTMLSegmentType) bool {
+func htmlCSSSelectorPartMatches(part htmlCSSSelectorPart, el htmlSegmentType) bool {
 	if part.tag != "" && part.tag != el.Str {
 		return false
 	}
@@ -651,7 +651,7 @@ func htmlCSSSelectorPartMatches(part htmlCSSSelectorPart, el HTMLSegmentType) bo
 	return true
 }
 
-func htmlElementMetadataFromSegment(el HTMLSegmentType) htmlElementMetadata {
+func htmlElementMetadataFromSegment(el htmlSegmentType) htmlElementMetadata {
 	return htmlElementMetadata{
 		tag:     el.Str,
 		id:      strings.ToLower(strings.TrimSpace(el.Attr["id"])),
@@ -762,7 +762,7 @@ func htmlListStyleToken(token string) string {
 	}
 }
 
-func applyHTMLStyleDeclarations(st *htmlTextStyle, style map[string]string, baseFontSize, baseLineHeight float64, pdf *Document) {
+func applyHTMLStyleDeclarations(st *htmlTextStyle, style map[string]string, baseFontSize, baseLineHeight float64, pdf *pdfDocument) {
 	if color, ok := parseCSSColor(style["color"]); ok {
 		st.color = color
 	}
@@ -856,7 +856,7 @@ func parseHTMLFontSize(value string, base float64) (float64, bool) {
 	return n, err == nil && n > 0
 }
 
-func parseHTMLLineHeight(value string, base float64, pdf *Document) (float64, bool) {
+func parseHTMLLineHeight(value string, base float64, pdf *pdfDocument) (float64, bool) {
 	value = strings.TrimSpace(strings.ToLower(value))
 	if value == "" || value == "normal" {
 		return 0, false

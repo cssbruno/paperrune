@@ -22,7 +22,7 @@ func TestRunRejectsMissingAndCanceledInput(t *testing.T) {
 }
 
 func TestBuiltinCharacterizationIsDeterministicBoundedAndCancelable(t *testing.T) {
-	for _, kind := range []string{"typed", "html"} {
+	for _, kind := range []string{"typed"} {
 		first, err := builtinCharacterization(t.Context(), kind)
 		if err != nil {
 			t.Fatalf("%s: %v", kind, err)

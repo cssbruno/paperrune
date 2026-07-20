@@ -20,28 +20,28 @@ import (
 )
 
 func TestHTMLCharacterizationBaselineProjection(t *testing.T) {
-	first, err := HTMLCharacterizationJSON()
+	first, err := htmlCharacterizationJSON()
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, _ := HTMLCharacterizationJSON()
+	second, _ := htmlCharacterizationJSON()
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("inventory JSON is nondeterministic")
 	}
 	sum := sha256.Sum256(first)
 	got := hex.EncodeToString(sum[:])
-	const want = "2a011d15f60857ac8d988f182a31a413ec6ea575e3416eb699dec369e14a6bf2"
+	const want = "fdbf8dff0c7c046ad844636622b8de7e2dcc5e72c024d24da095d1a504e7b340"
 	if got != want {
 		t.Fatalf("HTML characterization drift: hash=%s\n%s", got, first)
 	}
-	inventory := HTMLCharacterization()
+	inventory := htmlCharacterization()
 	if !sort.StringsAreSorted(inventory.EntryPoints) || !sort.StringsAreSorted(inventory.RecognizedTags) || !sort.StringsAreSorted(inventory.RecognizedCSSProperties) {
 		t.Fatal("inventory slices are not canonical")
 	}
 }
 
 func TestHTMLCharacterizationPublicEntryPointsMatchAST(t *testing.T) {
-	want := HTMLCharacterization().EntryPoints
+	want := htmlCharacterization().EntryPoints
 	set := token.NewFileSet()
 	entries, err := os.ReadDir(".")
 	if err != nil {
@@ -49,7 +49,7 @@ func TestHTMLCharacterizationPublicEntryPointsMatchAST(t *testing.T) {
 	}
 	files := make([]*ast.File, 0)
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "html") || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+		if entry.IsDir() || (!strings.HasPrefix(entry.Name(), "html") && entry.Name() != "facade.go") || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
 		}
 		file, err := parser.ParseFile(set, entry.Name(), nil, 0)
@@ -100,12 +100,12 @@ func htmlCharacterizationReceiver(expr ast.Expr) string {
 
 func TestHTMLCharacterizationFixturesExerciseEveryClassification(t *testing.T) {
 	seen := map[string]bool{}
-	for _, fixture := range HTMLCharacterization().Fixtures {
+	for _, fixture := range htmlCharacterization().Fixtures {
 		if len(fixture.Source) > 4096 {
 			t.Fatalf("fixture %s is unbounded", fixture.Name)
 		}
 		seen[fixture.Classification] = true
-		compiled, err := CompileHTML(fixture.Source)
+		compiled, err := compileHTML(fixture.Source)
 		if err != nil {
 			t.Fatalf("%s compile: %v", fixture.Name, err)
 		}
@@ -115,37 +115,37 @@ func TestHTMLCharacterizationFixturesExerciseEveryClassification(t *testing.T) {
 				t.Fatalf("%s has no recovery evidence", fixture.Name)
 			}
 			pdf := characterizationPDF()
-			html := pdf.HTMLNew()
+			html := pdf.htmlNew()
 			if err := html.WriteContext(context.Background(), 10, fixture.Source); err == nil || !strings.Contains(err.Error(), "recovered HTML") {
 				t.Fatalf("%s recovery handling = %v, want strict unified rejection", fixture.Name, err)
 			}
 		case "diagnostic-unsupported":
 			pdf := characterizationPDF()
-			html := pdf.HTMLNew()
-			messages := html.ValidateHTML(fixture.Source)
+			html := pdf.htmlNew()
+			messages := html.validateHTML(fixture.Source)
 			if len(messages) == 0 {
 				t.Fatalf("%s has no unsupported diagnostic", fixture.Name)
 			}
 		case "rejected-by-policy":
 			pdf := characterizationPDF()
-			html := pdf.HTMLNew()
+			html := pdf.htmlNew()
 			if err := html.WriteContext(context.Background(), 10, fixture.Source); err == nil {
 				t.Fatalf("%s was not rejected", fixture.Name)
 			}
 		case "strict-unified-plannable":
-			planner := MustNew(WithUnit(UnitPoint))
-			if plan, err := planner.PlanCompiledHTML(10, compiled); err != nil || plan.Hash() == "" {
+			planner := mustNewPDFDocument(WithUnit(UnitPoint))
+			if plan, err := planner.planCompiledHTML(10, compiled); err != nil || plan.Hash() == "" {
 				t.Fatalf("%s strict plan=%q %v", fixture.Name, plan.Hash(), err)
 			}
 		default:
 			pdf := characterizationPDF()
-			html := pdf.HTMLNew()
+			html := pdf.htmlNew()
 			if err := html.WriteContext(context.Background(), 10, fixture.Source); err != nil {
 				t.Fatalf("%s render: %v", fixture.Name, err)
 			}
 		}
 	}
-	for _, class := range HTMLCharacterization().BehaviorClasses {
+	for _, class := range htmlCharacterization().BehaviorClasses {
 		if !seen[class] {
 			t.Fatalf("classification %q has no fixture", class)
 		}
@@ -153,17 +153,17 @@ func TestHTMLCharacterizationFixturesExerciseEveryClassification(t *testing.T) {
 }
 
 func TestRunHTMLCharacterizationRecordsDeterministicPDFEvidence(t *testing.T) {
-	first, err := RunHTMLCharacterization(t.Context())
+	first, err := runHTMLCharacterization(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := RunHTMLCharacterization(t.Context())
+	second, err := runHTMLCharacterization(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	a, _ := first.CanonicalJSON()
 	b, _ := second.CanonicalJSON()
-	if !reflect.DeepEqual(a, b) || len(first.Fixtures) != len(HTMLCharacterization().Fixtures) {
+	if !reflect.DeepEqual(a, b) || len(first.Fixtures) != len(htmlCharacterization().Fixtures) {
 		t.Fatalf("HTML evidence is incomplete or nondeterministic:\n%s\n%s", a, b)
 	}
 	for _, fixture := range first.Fixtures {
@@ -181,7 +181,7 @@ func TestRunHTMLCharacterizationRecordsDeterministicPDFEvidence(t *testing.T) {
 	}
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := RunHTMLCharacterization(canceled); !errors.Is(err, context.Canceled) {
+	if _, err := runHTMLCharacterization(canceled); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled HTML characterization = %v", err)
 	}
 }
@@ -190,34 +190,34 @@ func TestHTMLCharacterizationCursorLimitsCancellationAndConcurrentReuse(t *testi
 	pdf := characterizationPDF()
 	pdf.SetXY(24, 30)
 	startPage, startY := pdf.PageCount(), pdf.GetY()
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	if err := html.WriteContext(context.Background(), 10, "<p>cursor integration</p>"); err != nil || pdf.PageCount() < startPage || pdf.GetY() == startY {
 		t.Fatalf("cursor pages=%d y=%g err=%v", pdf.PageCount(), pdf.GetY(), err)
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	other := characterizationPDF()
-	otherHTML := other.HTMLNew()
+	otherHTML := other.htmlNew()
 	if err := otherHTML.WriteContext(canceled, 10, "<p>cancel</p>"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation=%v", err)
 	}
 	limited := characterizationPDF()
-	limitedHTML := limited.HTMLNew()
+	limitedHTML := limited.htmlNew()
 	limitedHTML.MaxHTMLBytes = 8
-	if err := limitedHTML.WriteContext(context.Background(), 10, "<p>too much content</p>"); !errors.Is(err, ErrHTMLLimitExceeded) {
+	if err := limitedHTML.WriteContext(context.Background(), 10, "<p>too much content</p>"); !errors.Is(err, errHTMLLimitExceeded) {
 		t.Fatalf("limit=%v", err)
 	}
 	tableLimited := characterizationPDF()
-	tableHTML := tableLimited.HTMLNew()
+	tableHTML := tableLimited.htmlNew()
 	tableHTML.MaxTableRows = 1
 	if err := tableHTML.WriteContext(context.Background(), 10, "<table><tr><td>1</td></tr><tr><td>2</td></tr></table>"); err == nil || !strings.Contains(err.Error(), "row count exceeds") {
 		t.Fatalf("table limit=%v", err)
 	}
-	compiled, err := CompileHTML("<section><p>concurrent compiled reuse</p></section>")
+	compiled, err := compileHTML("<section><p>concurrent compiled reuse</p></section>")
 	if err != nil {
 		t.Fatal(err)
 	}
-	template, err := CompileHTMLTemplate("<p>Hello {{name}}</p>")
+	template, err := compileHTMLTemplate("<p>Hello {{name}}</p>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,9 +228,9 @@ func TestHTMLCharacterizationCursorLimitsCancellationAndConcurrentReuse(t *testi
 		go func(index int) {
 			defer wait.Done()
 			target := characterizationPDF()
-			renderer := target.HTMLNew()
+			renderer := target.htmlNew()
 			renderer.WriteCompiled(10, compiled)
-			if err := renderer.WriteTemplateContext(context.Background(), 10, template, HTMLTemplateValues{"name": string(rune('A' + index%26))}); err != nil {
+			if err := renderer.WriteTemplateContext(context.Background(), 10, template, htmlTemplateValues{"name": string(rune('A' + index%26))}); err != nil {
 				failures <- err
 				return
 			}
@@ -252,12 +252,12 @@ func TestHTMLCharacterizationRenderedCohortsMatchExplicitPlanCursor(t *testing.T
 			continue
 		}
 		t.Run(fixture.Name, func(t *testing.T) {
-			compiled, err := CompileHTML(fixture.Source)
+			compiled, err := compileHTML(fixture.Source)
 			if err != nil {
 				t.Fatal(err)
 			}
 			planner := newHTMLCharacterizationDocument(true)
-			plannerHTML := planner.HTMLNew()
+			plannerHTML := planner.htmlNew()
 			fragment, err := plannerHTML.planCompiledHTMLFragmentContext(t.Context(), 10, compiled)
 			if err != nil {
 				t.Fatal(err)
@@ -266,7 +266,7 @@ func TestHTMLCharacterizationRenderedCohortsMatchExplicitPlanCursor(t *testing.T
 				t.Fatalf("characterization fragment plan is incomplete: hash=%q pages=%d", fragment.plan.Hash(), fragment.plan.PageCount())
 			}
 			direct := newHTMLCharacterizationDocument(true)
-			renderer := direct.HTMLNew()
+			renderer := direct.htmlNew()
 			renderer.WriteCompiled(10, compiled)
 			if err := direct.Error(); err != nil {
 				t.Fatal(err)
@@ -281,8 +281,8 @@ func TestHTMLCharacterizationRenderedCohortsMatchExplicitPlanCursor(t *testing.T
 	}
 }
 
-func characterizationPDF() *Document {
-	pdf := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 160}), WithNoCompression())
+func characterizationPDF() *pdfDocument {
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 160}), WithNoCompression())
 	pdf.SetMargins(18, 18, 18)
 	pdf.SetAutoPageBreak(true, 18)
 	pdf.AddPage()

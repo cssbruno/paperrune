@@ -11,14 +11,14 @@ import (
 	"testing"
 )
 
-func htmlCutoverDocument(observed *[]typedRouteObservation) *Document {
+func htmlCutoverDocument(observed *[]typedRouteObservation) *pdfDocument {
 	options := []Option{WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 160}), WithNoCompression(), WithDeterministicOutput()}
 	if observed != nil {
 		options = append(options, WithHooks(Hooks{OnLayoutEngineRoute: func(entryPoint, engine, reason string) {
 			*observed = append(*observed, typedRouteObservation{entryPoint: entryPoint, engine: engine, reason: reason})
 		}}))
 	}
-	pdf := MustNew(options...)
+	pdf := mustNewPDFDocument(options...)
 	pdf.SetMargins(18, 18, 18)
 	pdf.SetAutoPageBreak(true, 18)
 	pdf.AddPage()
@@ -27,35 +27,35 @@ func htmlCutoverDocument(observed *[]typedRouteObservation) *Document {
 }
 
 func TestHTMLDefaultCutoverRoutesEveryRenderingEntryPoint(t *testing.T) {
-	compiled, err := CompileHTML(`<table><tr><td>planned table</td></tr></table>`)
+	compiled, err := compileHTML(`<table><tr><td>planned table</td></tr></table>`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	template, err := CompileHTMLTemplate(`<p>hello {{name}}</p>`)
+	template, err := compileHTMLTemplate(`<p>hello {{name}}</p>`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tests := []struct {
 		name  string
 		entry string
-		write func(*HTML) error
+		write func(*htmlRenderer) error
 	}{
-		{"write", "HTML.Write", func(html *HTML) error { html.Write(10, `<p>write</p>`); return html.pdf.Error() }},
-		{"context", "HTML.WriteContext", func(html *HTML) error { return html.WriteContext(t.Context(), 10, `<p>context</p>`) }},
-		{"compiled-table", "HTML.WriteCompiled", func(html *HTML) error { html.WriteCompiled(10, compiled); return html.pdf.Error() }},
-		{"template", "HTML.WriteTemplate", func(html *HTML) error {
-			html.WriteTemplate(10, template, HTMLTemplateValues{"name": "template"})
+		{"write", "HTML.Write", func(html *htmlRenderer) error { html.Write(10, `<p>write</p>`); return html.pdf.Error() }},
+		{"context", "HTML.WriteContext", func(html *htmlRenderer) error { return html.WriteContext(t.Context(), 10, `<p>context</p>`) }},
+		{"compiled-table", "HTML.WriteCompiled", func(html *htmlRenderer) error { html.WriteCompiled(10, compiled); return html.pdf.Error() }},
+		{"template", "HTML.WriteTemplate", func(html *htmlRenderer) error {
+			html.WriteTemplate(10, template, htmlTemplateValues{"name": "template"})
 			return html.pdf.Error()
 		}},
-		{"template-context", "HTML.WriteTemplateContext", func(html *HTML) error {
-			return html.WriteTemplateContext(t.Context(), 10, template, HTMLTemplateValues{"name": "context"})
+		{"template-context", "HTML.WriteTemplateContext", func(html *htmlRenderer) error {
+			return html.WriteTemplateContext(t.Context(), 10, template, htmlTemplateValues{"name": "context"})
 		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var observed []typedRouteObservation
 			pdf := htmlCutoverDocument(&observed)
-			html := pdf.HTMLNew()
+			html := pdf.htmlNew()
 			startY := pdf.GetY()
 			if err := test.write(&html); err != nil {
 				t.Fatal(err)
@@ -78,7 +78,7 @@ func TestHTMLCharacterizationCorpusUsesUnifiedRoute(t *testing.T) {
 		t.Run(fixture.Name, func(t *testing.T) {
 			var observed []typedRouteObservation
 			pdf := htmlCutoverDocument(&observed)
-			html := pdf.HTMLNew()
+			html := pdf.htmlNew()
 			if err := html.WriteContext(t.Context(), 10, fixture.Source); err != nil {
 				t.Fatal(err)
 			}
@@ -94,7 +94,7 @@ func TestHTMLDefaultCutoverFallbackCategoriesArePrivateAndRateReady(t *testing.T
 	var observed []typedRouteObservation
 	write := func(source string) error {
 		pdf := htmlCutoverDocument(&observed)
-		html := pdf.HTMLNew()
+		html := pdf.htmlNew()
 		return html.WriteContext(context.Background(), 10, source)
 	}
 	if err := write(`<p>unified one</p>`); err != nil {
@@ -127,13 +127,13 @@ func TestHTMLDefaultCutoverMatchesExplicitWholePlanCorpus(t *testing.T) {
 	}
 	for name, source := range corpus {
 		t.Run(name, func(t *testing.T) {
-			compiled, err := CompileHTML(source)
+			compiled, err := compileHTML(source)
 			if err != nil {
 				t.Fatal(err)
 			}
-			planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
+			planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
 			planner.SetMargins(18, 18, 18)
-			plan, err := planner.PlanCompiledHTML(10, compiled)
+			plan, err := planner.planCompiledHTML(10, compiled)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -141,12 +141,12 @@ func TestHTMLDefaultCutoverMatchesExplicitWholePlanCorpus(t *testing.T) {
 				t.Fatal("explicit whole-fragment plan has no hash")
 			}
 			explicit := htmlCutoverDocument(nil)
-			explicitHTML := explicit.HTMLNew()
+			explicitHTML := explicit.htmlNew()
 			if handled, err := explicitHTML.writeCompiledUnifiedFragmentContext(t.Context(), 10, compiled); err != nil || !handled {
 				t.Fatalf("explicit unified fragment route handled=%t err=%v", handled, err)
 			}
 			direct := htmlCutoverDocument(nil)
-			html := direct.HTMLNew()
+			html := direct.htmlNew()
 			if err := html.WriteContext(t.Context(), 10, source); err != nil {
 				t.Fatal(err)
 			}
@@ -161,7 +161,7 @@ func TestHTMLDefaultCutoverPolicyAndCancellationFailWithoutFallback(t *testing.T
 	var observed []typedRouteObservation
 	pdf := htmlCutoverDocument(&observed)
 	before := append([]byte(nil), pdf.pages[1].Bytes()...)
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	if err := html.WriteContext(t.Context(), 10, `<a href="javascript:alert(1)">unsafe</a>`); err == nil {
 		t.Fatalf("policy error = %v", err)
 	}
@@ -172,7 +172,7 @@ func TestHTMLDefaultCutoverPolicyAndCancellationFailWithoutFallback(t *testing.T
 	var canceledObserved []typedRouteObservation
 	canceledPDF := htmlCutoverDocument(&canceledObserved)
 	canceledBefore := append([]byte(nil), canceledPDF.pages[1].Bytes()...)
-	canceledHTML := canceledPDF.HTMLNew()
+	canceledHTML := canceledPDF.htmlNew()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := canceledHTML.WriteContext(ctx, 10, `<p>cancel</p>`); !errors.Is(err, context.Canceled) {
@@ -184,7 +184,7 @@ func TestHTMLDefaultCutoverPolicyAndCancellationFailWithoutFallback(t *testing.T
 }
 
 func BenchmarkHTMLUnifiedDefaultWriteCompiled(b *testing.B) {
-	compiled, err := CompileHTML(`<style>.row{display:flex;gap:6pt}.grow{flex:1}</style><div class="row"><p>Default route</p><p class="grow">Reusable compiled fragment</p></div>`)
+	compiled, err := compileHTML(`<style>.row{display:flex;gap:6pt}.grow{flex:1}</style><div class="row"><p>Default route</p><p class="grow">Reusable compiled fragment</p></div>`)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func BenchmarkHTMLUnifiedDefaultWriteCompiled(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		pdf := htmlCutoverDocument(nil)
-		html := pdf.HTMLNew()
+		html := pdf.htmlNew()
 		html.WriteCompiled(12, compiled)
 		if pdf.Error() != nil {
 			b.Fatal(pdf.Error())

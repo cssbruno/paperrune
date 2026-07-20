@@ -18,7 +18,7 @@ import (
 )
 
 func TestBookmarkDestinationsUseActualPageObjectNumbers(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetAttachments([]Attachment{{Content: []byte("payload"), Filename: "payload.txt"}})
 	pdf.AddPage()
 	pdf.Bookmark("start", 0, -1)
@@ -37,20 +37,20 @@ func TestBookmarkDestinationsUseActualPageObjectNumbers(t *testing.T) {
 }
 
 func TestBookmarkValidationRejectsInvalidLevelsAndMissingPage(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.Bookmark("missing page", 0, -1)
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "active page") {
 		t.Fatalf("Bookmark before AddPage error = %v, want active page error", pdf.Error())
 	}
 
-	pdf = MustNew()
+	pdf = mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.Bookmark("bad first", 1, -1)
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "first bookmark level") {
 		t.Fatalf("first bookmark level error = %v", pdf.Error())
 	}
 
-	pdf = MustNew()
+	pdf = mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.Bookmark("root", 0, -1)
 	pdf.Bookmark("skip", 2, -1)
@@ -60,7 +60,7 @@ func TestBookmarkValidationRejectsInvalidLevelsAndMissingPage(t *testing.T) {
 }
 
 func TestSplitTextPreservesCJKCharacters(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetFont("Helvetica", "", 12)
 
 	const text = "中文かな한글"
@@ -71,7 +71,7 @@ func TestSplitTextPreservesCJKCharacters(t *testing.T) {
 }
 
 func TestAddPageFormatRejectsInvalidOrientationAndSize(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPageFormat("banana", Size{Wd: 100, Ht: 100})
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "incorrect orientation") {
 		t.Fatalf("invalid orientation error = %v", pdf.Error())
@@ -80,7 +80,7 @@ func TestAddPageFormatRejectsInvalidOrientationAndSize(t *testing.T) {
 		t.Fatalf("invalid AddPageFormat added page %d", pdf.PageNo())
 	}
 
-	pdf = MustNew()
+	pdf = mustNewPDFDocument()
 	pdf.AddPageFormat("P", Size{Wd: math.NaN(), Ht: 100})
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "invalid page size") {
 		t.Fatalf("invalid page size error = %v", pdf.Error())
@@ -91,7 +91,7 @@ func TestAddPageFormatRejectsInvalidOrientationAndSize(t *testing.T) {
 }
 
 func TestGridRestoresAutoPageBreak(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
 	pdf.SetAutoPageBreak(true, 17)
@@ -106,7 +106,7 @@ func TestGridRestoresAutoPageBreak(t *testing.T) {
 }
 
 func TestClipPolygonRejectsInvalidPointCountWithoutEnteringClipState(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 
 	pdf.ClipPolygon([]Point{{X: 1, Y: 1}, {X: 2, Y: 2}}, false)
@@ -119,7 +119,7 @@ func TestClipPolygonRejectsInvalidPointCountWithoutEnteringClipState(t *testing.
 }
 
 func TestGetStringWidthWithoutFontSetsError(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if width := pdf.GetStringWidth("abc"); width != 0 {
 		t.Fatalf("GetStringWidth without font = %.2f, want 0", width)
 	}
@@ -131,20 +131,20 @@ func TestGetStringWidthWithoutFontSetsError(t *testing.T) {
 func TestTextAPIsWithoutFontReturnErrorsInsteadOfPanicking(t *testing.T) {
 	tests := []struct {
 		name string
-		run  func(*Document)
+		run  func(*pdfDocument)
 	}{
-		{name: "Text", run: func(pdf *Document) { pdf.Text(10, 10, "abc") }},
-		{name: "Write", run: func(pdf *Document) { pdf.Write(6, "abc") }},
-		{name: "MultiCell", run: func(pdf *Document) { pdf.MultiCell(20, 6, "abc", "", "", false) }},
-		{name: "SplitLines", run: func(pdf *Document) { pdf.SplitLines([]byte("abc"), 20) }},
-		{name: "SplitLineCount", run: func(pdf *Document) { pdf.SplitLineCount([]byte("abc"), 20) }},
-		{name: "SplitText", run: func(pdf *Document) { pdf.SplitText("abc", 20) }},
-		{name: "SplitTextCount", run: func(pdf *Document) { pdf.SplitTextCount("abc", 20) }},
+		{name: "Text", run: func(pdf *pdfDocument) { pdf.Text(10, 10, "abc") }},
+		{name: "Write", run: func(pdf *pdfDocument) { pdf.Write(6, "abc") }},
+		{name: "MultiCell", run: func(pdf *pdfDocument) { pdf.MultiCell(20, 6, "abc", "", "", false) }},
+		{name: "SplitLines", run: func(pdf *pdfDocument) { pdf.SplitLines([]byte("abc"), 20) }},
+		{name: "SplitLineCount", run: func(pdf *pdfDocument) { pdf.SplitLineCount([]byte("abc"), 20) }},
+		{name: "SplitText", run: func(pdf *pdfDocument) { pdf.SplitText("abc", 20) }},
+		{name: "SplitTextCount", run: func(pdf *pdfDocument) { pdf.SplitTextCount("abc", 20) }},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pdf := MustNew()
+			pdf := mustNewPDFDocument()
 			pdf.AddPage()
 			test.run(pdf)
 			if err := pdf.Error(); err == nil || !strings.Contains(err.Error(), "font must be selected") {
@@ -155,7 +155,7 @@ func TestTextAPIsWithoutFontReturnErrorsInsteadOfPanicking(t *testing.T) {
 }
 
 func TestTextMeasurementToleratesShortFontWidthTables(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
 	pdf.currentFont.Cw = pdf.currentFont.Cw[:32]
@@ -174,13 +174,13 @@ func TestTextMeasurementToleratesShortFontWidthTables(t *testing.T) {
 }
 
 func TestHTMLWriteWithoutExplicitFontUsesHelvetica(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(true)
 	pdf.SetMargins(36, 36, 36)
 	pdf.SetAutoPageBreak(true, 36)
 	pdf.AddPage()
 
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 	html.Write(12, `<h1>Comparable HTML</h1><p>This fragment uses headings, paragraphs, lists, and a simple table.</p><ul><li>Item 01</li></ul><table border="1"><tr><th>Code</th><th>Status</th></tr><tr><td>HTML-01</td><td>Ready</td></tr></table>`)
 
 	if err := pdf.Error(); err != nil {
@@ -199,7 +199,7 @@ func TestHTMLWriteWithoutExplicitFontUsesHelvetica(t *testing.T) {
 }
 
 func TestImageAndAttachmentBoundaryValidation(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if info := pdf.RegisterImageOptionsReader("", ImageOptions{ImageType: "png"}, bytes.NewReader(nil)); info != nil {
 		t.Fatal("RegisterImageOptionsReader with blank name returned image info")
 	}
@@ -207,7 +207,7 @@ func TestImageAndAttachmentBoundaryValidation(t *testing.T) {
 		t.Fatalf("blank image name error = %v", pdf.Error())
 	}
 
-	pdf = MustNew()
+	pdf = mustNewPDFDocument()
 	pdf.AddAttachmentAnnotation(nil, 1, 1, 1, 1)
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "requires an attachment") {
 		t.Fatalf("nil attachment annotation error = %v", pdf.Error())
@@ -215,7 +215,7 @@ func TestImageAndAttachmentBoundaryValidation(t *testing.T) {
 }
 
 func TestSetAttachmentsCopiesContent(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	content := []byte("original")
 	attachments := []Attachment{{Content: content, Filename: "a.txt"}}
 	pdf.SetAttachments(attachments)
@@ -231,7 +231,7 @@ func TestSetAttachmentsCopiesContent(t *testing.T) {
 }
 
 func TestSetAttachmentsImmutableSharesContent(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	content := []byte("original")
 	pdf.SetAttachmentsImmutable([]Attachment{{Content: content, Filename: "a.txt", MIMEType: " text/plain ", AFRelationship: " Source "}})
 	content[0] = 'X'
@@ -253,7 +253,7 @@ func TestAttachmentFromFileLoadsDuringOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetAttachments([]Attachment{AttachmentFromFile(fileStr)})
 	if len(pdf.attachments[0].Content) != 0 {
@@ -292,7 +292,7 @@ func TestAttachmentFromFileRejectsOversizeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetAttachments([]Attachment{AttachmentFromFile(fileStr)})
 	pdf.AddPage()
 
@@ -331,7 +331,7 @@ func TestAttachmentFromLoaderLoadsDuringOutput(t *testing.T) {
 		return io.NopCloser(strings.NewReader("loader payload")), int64(len("loader payload")), nil
 	})
 
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetAttachments([]Attachment{AttachmentFromLoader("loader.txt", loader)})
 	if len(pdf.attachments[0].Content) != 0 {
@@ -361,7 +361,7 @@ func TestAttachmentEmptyContentTakesPrecedenceOverLoader(t *testing.T) {
 		return io.NopCloser(strings.NewReader("loader payload")), int64(len("loader payload")), nil
 	})
 
-	pdf, err := NewDocument(WithSecurityPolicy(SecurityPolicy{}))
+	pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -436,16 +436,16 @@ func TestParserContextAPIsCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if _, err := HTMLTokenizeContext(ctx, "<p>hello</p>"); !errors.Is(err, context.Canceled) {
+	if _, err := htmlTokenizeContext(ctx, "<p>hello</p>"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("HTMLTokenizeContext() error = %v, want context.Canceled", err)
 	}
-	if _, err := CompileHTMLContext(ctx, "<p>hello</p>"); !errors.Is(err, context.Canceled) {
+	if _, err := compileHTMLContext(ctx, "<p>hello</p>"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("CompileHTMLContext() error = %v, want context.Canceled", err)
 	}
 	if _, err := SVGParseContext(ctx, []byte(`<svg width="1" height="1"/>`)); !errors.Is(err, context.Canceled) {
 		t.Fatalf("SVGParseContext() error = %v, want context.Canceled", err)
 	}
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if _, err := pdf.RegisterImageOptionsReaderContext(ctx, "img", ImageOptions{ImageType: "png"}, strings.NewReader("")); !errors.Is(err, context.Canceled) {
 		t.Fatalf("RegisterImageOptionsReaderContext() error = %v, want context.Canceled", err)
 	}
@@ -455,7 +455,7 @@ func TestSecurityPolicyGatesAttachmentLoaders(t *testing.T) {
 	loader := AttachmentLoaderFunc(func(context.Context) (io.ReadCloser, int64, error) {
 		return io.NopCloser(strings.NewReader("payload")), int64(len("payload")), nil
 	})
-	pdf, err := NewDocument(WithSecurityPolicy(SecurityPolicy{}))
+	pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -475,7 +475,7 @@ func TestSetMaxAttachmentBytesAppliesDocumentLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetMaxAttachmentBytes(3)
 	pdf.SetAttachments([]Attachment{AttachmentFromFile(fileStr)})
 	pdf.AddPage()
@@ -488,7 +488,7 @@ func TestSetMaxAttachmentBytesAppliesDocumentLimit(t *testing.T) {
 }
 
 func TestAttachmentOutputDedupesEquivalentFiles(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	a1 := Attachment{Content: []byte("same attachment"), Filename: "a.txt", Description: "same"}
 	a2 := Attachment{Content: []byte("same attachment"), Filename: "a.txt", Description: "same"}
@@ -509,7 +509,7 @@ func TestAttachmentOutputDedupesEquivalentFiles(t *testing.T) {
 }
 
 func TestEmbeddedFileNamesUseAttachmentSpelling(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetAttachments([]Attachment{{Content: []byte("payload"), Filename: "payload.txt"}})
 	pdf.attachments[0].objectNumber = 42
 
@@ -523,7 +523,7 @@ func TestEmbeddedFileNamesUseAttachmentSpelling(t *testing.T) {
 }
 
 func TestAddAttachmentAnnotationCopiesInput(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	content := []byte("original")
 	attachment := Attachment{Content: content, Filename: "a.txt", MIMEType: " text/plain ", AFRelationship: " Source "}
@@ -550,7 +550,7 @@ func TestAddAttachmentAnnotationCopiesInput(t *testing.T) {
 }
 
 func TestCatalogOmitsNamesWhenUnused(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
@@ -569,7 +569,7 @@ func TestCatalogOmitsNamesWhenUnused(t *testing.T) {
 }
 
 func TestSetJavascriptIsUnsupported(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if err := pdf.SetJavascriptError("app.alert('blocked')"); !errors.Is(err, ErrJavaScriptUnsupported) {
 		t.Fatalf("SetJavascriptError() error = %v, want ErrJavaScriptUnsupported", err)
 	}
@@ -587,7 +587,7 @@ func TestSetJavascriptIsUnsupported(t *testing.T) {
 }
 
 func TestSetAESProtectionIsUnsupported(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if err := pdf.SetAESProtection(CnProtectPrint, "reader", "owner"); !errors.Is(err, ErrAESProtectionUnsupported) {
 		t.Fatalf("SetAESProtection() error = %v, want ErrAESProtectionUnsupported", err)
 	}
@@ -628,7 +628,7 @@ func TestDeterministicOutputSortsPageBoxes(t *testing.T) {
 
 func deterministicPageBoxOutput(t *testing.T, boxOrder []string) []byte {
 	t.Helper()
-	pdf, err := NewDocument(WithDeterministicOutput())
+	pdf, err := newPDFDocument(WithDeterministicOutput())
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -658,7 +658,7 @@ func TestDeterministicOutputSortsSpotColorResourceDictionaries(t *testing.T) {
 
 func deterministicSpotColorOutput(t *testing.T, reverse bool) []byte {
 	t.Helper()
-	pdf, err := NewDocument(WithDeterministicOutput())
+	pdf, err := newPDFDocument(WithDeterministicOutput())
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -701,7 +701,7 @@ func TestDeterministicOutputSortsImportedTemplateMaps(t *testing.T) {
 
 func deterministicImportedTemplateOutput(t *testing.T, reverse bool) []byte {
 	t.Helper()
-	pdf, err := NewDocument(WithDeterministicOutput())
+	pdf, err := newPDFDocument(WithDeterministicOutput())
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -748,7 +748,7 @@ func TestDeterministicOutputSortsTemplateImageResourceNames(t *testing.T) {
 
 func deterministicTemplateImageOutput(t *testing.T, reverse bool) []byte {
 	t.Helper()
-	pdf, err := NewDocument(WithDeterministicOutput())
+	pdf, err := newPDFDocument(WithDeterministicOutput())
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -800,7 +800,7 @@ func assertOutputOrder(t *testing.T, output []byte, ordered ...string) {
 }
 
 func TestDeterministicOutputSortsMapBackedResourceKeys(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCatalogSort(true)
 	pdf.AddSpotColor("Zeta", 1, 2, 3, 4)
 	pdf.AddSpotColor("Alpha", 5, 6, 7, 8)
@@ -857,7 +857,7 @@ func assertIntSlice(t *testing.T, got, want []int) {
 
 func TestRawWriteBufLatchesReaderErrors(t *testing.T) {
 	want := errors.New("reader failed")
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if err := pdf.RawWriteBufError(errReader{err: want}); !errors.Is(err, want) {
 		t.Fatalf("RawWriteBufError() error = %v, want %v", err, want)
 	}
@@ -868,7 +868,7 @@ func TestRawWriteBufLatchesReaderErrors(t *testing.T) {
 
 func TestRawWriteArtifactBufLatchesReaderErrors(t *testing.T) {
 	want := errors.New("artifact reader failed")
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if err := pdf.RawWriteArtifactBufError(errReader{err: want}); !errors.Is(err, want) {
 		t.Fatalf("RawWriteArtifactBufError() error = %v, want %v", err, want)
 	}
@@ -878,7 +878,7 @@ func TestRawWriteArtifactBufLatchesReaderErrors(t *testing.T) {
 }
 
 func TestRawWriteStrErrorReturnsTaggedRestriction(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetComplianceMetadata(ComplianceMetadata{PDFUA2: true, Title: "Raw"})
 	err := pdf.RawWriteStrError("0 0 m")
 	if err == nil || !strings.Contains(err.Error(), "tagged PDF raw writes") {
@@ -887,7 +887,7 @@ func TestRawWriteStrErrorReturnsTaggedRestriction(t *testing.T) {
 }
 
 func TestRawWriteArtifactStrErrorAllowsTaggedArtifacts(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetComplianceMetadata(ComplianceMetadata{PDFUA2: true, Title: "Artifact"})
 	if err := pdf.RawWriteArtifactStrError("0 0 m"); err != nil {
 		t.Fatalf("RawWriteArtifactStrError() error = %v", err)
@@ -970,7 +970,7 @@ func (w *specializedOutputWriter) WriteByte(b byte) error {
 }
 
 func TestPDFSyntaxBoundaryHelpersWriteExpectedTokens(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.beginPDFDict()
 	pdf.endPDFDict()
 	pdf.beginPDFStream()
@@ -1044,7 +1044,7 @@ func TestPDFResourceNameHelpersWriteExpectedReferences(t *testing.T) {
 }
 
 func TestOutputStreamContextDoesNotRetainFinalBuffer(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
 	pdf.Cell(20, 10, "streamed")
@@ -1075,7 +1075,7 @@ func TestOutputStreamContextDoesNotRetainFinalBuffer(t *testing.T) {
 func TestOutputFileStreamWritesPDFWithoutRetainingFinalBuffer(t *testing.T) {
 	fileStr := filepath.Join(t.TempDir(), "out.pdf")
 
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
 	pdf.Cell(20, 10, "streamed file")
@@ -1096,7 +1096,7 @@ func TestOutputFileStreamWritesPDFWithoutRetainingFinalBuffer(t *testing.T) {
 }
 
 func TestOutputOptionsStreamFinalRoutesNormalOutput(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
 	pdf.Cell(20, 10, "option streamed")
@@ -1127,7 +1127,7 @@ func TestOutputOptionsStreamFinalRoutesNormalOutput(t *testing.T) {
 func TestOutputPolicyStreamFinalRoutesOutputFile(t *testing.T) {
 	fileStr := filepath.Join(t.TempDir(), "out.pdf")
 
-	pdf, err := NewDocument(WithOutputPolicy(OutputPolicy{StreamFinal: true}))
+	pdf, err := newPDFDocument(WithOutputPolicy(OutputPolicy{StreamFinal: true}))
 	if err != nil {
 		t.Fatalf("NewDocument() error = %v", err)
 	}
@@ -1176,7 +1176,7 @@ func TestSetLegacyProtectionLatchesRandomOwnerPasswordError(t *testing.T) {
 	crand.Reader = errReader{err: want}
 	defer func() { crand.Reader = original }()
 
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if err := pdf.SetLegacyProtection(CnProtectPrint, "reader", ""); !errors.Is(err, want) {
 		t.Fatalf("SetLegacyProtection() error = %v, want %v", err, want)
 	}
@@ -1194,7 +1194,7 @@ func (r errReader) Read([]byte) (int, error) {
 }
 
 func TestGetImageInfoReturnsClone(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	info := pdf.newImageInfo()
 	info.w = 72
 	info.h = 72
@@ -1210,7 +1210,7 @@ func TestGetImageInfoReturnsClone(t *testing.T) {
 }
 
 func TestLinkRequiresActivePage(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.LinkString(1, 1, 10, 10, "https://example.com")
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "active page") {
 		t.Fatalf("LinkString error = %v, want active page error", pdf.Error())
@@ -1218,7 +1218,7 @@ func TestLinkRequiresActivePage(t *testing.T) {
 }
 
 func TestSetPageRejectsInvalidPageNumber(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.SetPage(2)
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "invalid page number") {
@@ -1230,7 +1230,7 @@ func TestSetPageRejectsInvalidPageNumber(t *testing.T) {
 }
 
 func TestSetDpiRejectsInvalidValues(t *testing.T) {
-	info := (&Document{pageGeometryState: pageGeometryState{k: 1}}).newImageInfo()
+	info := (&pdfDocument{pageGeometryState: pageGeometryState{k: 1}}).newImageInfo()
 	info.SetDpi(0)
 	if info.dpi != 72 {
 		t.Fatalf("SetDpi(0) changed dpi to %.2f", info.dpi)
@@ -1246,10 +1246,10 @@ func TestSetDpiRejectsInvalidValues(t *testing.T) {
 }
 
 func TestHTMLFragmentLinksAreRejected(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNew()
+	html := pdf.htmlNew()
 
 	html.Write(5, `<a href="#section">section</a>`)
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "HTML unified plan unsupported") {
@@ -1272,7 +1272,7 @@ func TestRemoveReturnsUnchangedWhenKeyMissing(t *testing.T) {
 }
 
 func TestSetPageBoxRejectsInvalidExtent(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetPageBox("crop", 1, 1, 0, 10)
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "invalid page box") {
 		t.Fatalf("SetPageBox error = %v", pdf.Error())
@@ -1280,7 +1280,7 @@ func TestSetPageBoxRejectsInvalidExtent(t *testing.T) {
 }
 
 func TestTemplateGeometryValidation(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	if tpl := pdf.CreateTemplateCustom(Point{}, Size{Wd: -1, Ht: 10}, nil); tpl != nil {
 		t.Fatal("CreateTemplateCustom returned template for invalid size")
 	}
@@ -1294,7 +1294,7 @@ func TestTemplateGeometryValidation(t *testing.T) {
 }
 
 func TestUseTemplateScaledRejectsInvalidPlacement(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	tpl := CreateTpl(Point{}, Size{Wd: 10, Ht: 10}, "P", "mm", "", nil)
 	pdf.AddPage()
 
@@ -1310,7 +1310,7 @@ func TestTemplateViewChildDependenciesDoNotRequireSerializableTemplate(t *testin
 		size: Size{Wd: 8, Ht: 8},
 		data: []byte("0 0 m"),
 	}
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	parent := pdf.CreateTemplateCustom(Point{}, Size{Wd: 20, Ht: 20}, func(tpl *Tpl) {
 		tpl.UseTemplateView(child)
 	})
@@ -1363,7 +1363,7 @@ func TestNestedTemplateViewDependenciesDoNotRequireSerializableTemplate(t *testi
 		t.Fatalf("collectTemplates() = [%s, %s], want [child, grandchild]", templates[0].ID(), templates[1].ID())
 	}
 
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.UseTemplateView(child)
 	var out bytes.Buffer
@@ -1399,7 +1399,7 @@ func (t renderOnlyTemplateView) TemplateViews() []TemplateView {
 }
 
 func TestSetMinimumPDFVersionUsesNumericOrdering(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.pdfVersion = "1.10"
 	pdf.setMinimumPDFVersion("1.9")
 	if got := pdf.pdfVersion; got != "1.10" {
@@ -1478,7 +1478,7 @@ func TestTemplateAccessorsReturnCopies(t *testing.T) {
 }
 
 func TestCompiledHTMLTokensReturnsCopy(t *testing.T) {
-	compiled, err := CompileHTML(`<p class="a">Hello</p>`)
+	compiled, err := compileHTML(`<p class="a">Hello</p>`)
 	if err != nil {
 		t.Fatalf("CompileHTML() error = %v", err)
 	}
@@ -1496,13 +1496,13 @@ func TestCompiledHTMLTokensReturnsCopy(t *testing.T) {
 }
 
 func TestImportedPageAndTemplateRequireActivePage(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.UseImportedPage(1, 1, 1, 1, 1)
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "without first adding a page") {
 		t.Fatalf("UseImportedPage error = %v", pdf.Error())
 	}
 
-	pdf = MustNew()
+	pdf = mustNewPDFDocument()
 	pdf.UseImportedTemplate("/Tpl1", 1, 1, 0, 0)
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "without first adding a page") {
 		t.Fatalf("UseImportedTemplate error = %v", pdf.Error())
@@ -1510,7 +1510,7 @@ func TestImportedPageAndTemplateRequireActivePage(t *testing.T) {
 }
 
 func TestUseImportedTemplateRejectsInvalidTransform(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.AddPage()
 	pdf.UseImportedTemplate("/Tpl1", 0, 1, 0, 0)
 	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "invalid imported template placement") {
@@ -1519,7 +1519,7 @@ func TestUseImportedTemplateRejectsInvalidTransform(t *testing.T) {
 }
 
 func TestImportObjectsCopiesInputMaps(t *testing.T) {
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	objs := map[string][]byte{"a": []byte("object")}
 	pos := map[string]map[int]string{"a": {1: "old"}}
 	pdf.ImportObjects(objs)

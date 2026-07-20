@@ -19,7 +19,7 @@ import (
 	"github.com/cssbruno/paperrune/layout"
 )
 
-func htmlUnifiedMixedSVGMetas(compiled *CompiledHTML) ([]htmlUnifiedSVGMeta, error) {
+func htmlUnifiedMixedSVGMetas(compiled *compiledHTML) ([]htmlUnifiedSVGMeta, error) {
 	if compiled == nil || len(compiled.inlineSVGs) == 0 {
 		return nil, nil
 	}
@@ -70,7 +70,7 @@ func htmlUnifiedSVGPlaceholder() ([]byte, layoutengine.ImageContentDigest, error
 	return data, layoutengine.ImageContentDigest(hex.EncodeToString(digest[:])), nil
 }
 
-func lowerCompiledHTMLMixedSVGUnitsBounds(ctx context.Context, compiled *CompiledHTML, lineHeight float64, pointsToUnits func(float64) float64, availableWidth, availableHeight float64, metas []htmlUnifiedSVGMeta) (*layout.LayoutDocument, layoutengine.ImageContentDigest, error) {
+func lowerCompiledHTMLMixedSVGUnitsBounds(ctx context.Context, compiled *compiledHTML, lineHeight float64, pointsToUnits func(float64) float64, availableWidth, availableHeight float64, metas []htmlUnifiedSVGMeta) (*layout.LayoutDocument, layoutengine.ImageContentDigest, error) {
 	data, digest, err := htmlUnifiedSVGPlaceholder()
 	if err != nil {
 		return nil, "", err

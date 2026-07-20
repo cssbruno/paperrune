@@ -76,11 +76,11 @@ type typedTableBorder struct {
 	color layoutengine.CoreRGBColor
 }
 
-func (f *Document) planTypedTable(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planTypedTable(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string) (layoutengine.LayoutPlan, error) {
 	return f.planTypedTableBodies(ctx, doc, table, path, nil)
 }
 
-func (f *Document) planTypedTableBodiesMapped(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string, mapping papercompile.CompileMapping, bodyIndex int, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planTypedTableBodiesMapped(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string, mapping papercompile.CompileMapping, bodyIndex int, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
 	planned, err := f.planTypedTableBodies(ctx, doc, table, path, selectBody)
 	if err != nil {
 		return layoutengine.LayoutPlan{}, err
@@ -119,7 +119,7 @@ func (f *Document) planTypedTableBodiesMapped(ctx context.Context, doc *layout.L
 	return layoutengine.ReplaceSemantics(planned, nodes, projection.SemanticFragments, projection.ReadingOrder)
 }
 
-func (f *Document) planTypedTableBodies(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
+func (f *pdfDocument) planTypedTableBodies(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
 	table = typedTableWithInferredColumns(table)
 	if err := validateTypedTableSurface(table, path); err != nil {
 		return layoutengine.LayoutPlan{}, err
@@ -447,7 +447,7 @@ func typedTableWithInferredColumns(table layout.TableBlock) layout.TableBlock {
 	return table
 }
 
-func (f *Document) measureTypedTableCellIntrinsic(ctx context.Context, doc *layout.LayoutDocument, placement typedTablePlacement, metricsByStyle map[layout.TextStyle]*mixedTextFontMetrics) (layoutengine.Fixed, layoutengine.Fixed, error) {
+func (f *pdfDocument) measureTypedTableCellIntrinsic(ctx context.Context, doc *layout.LayoutDocument, placement typedTablePlacement, metricsByStyle map[layout.TextStyle]*mixedTextFontMetrics) (layoutengine.Fixed, layoutengine.Fixed, error) {
 	if err := layoutengine.ChargePlanningWork(ctx, "typed table intrinsic measurement", 1); err != nil {
 		return 0, 0, err
 	}
@@ -596,7 +596,7 @@ func typedTableIntrinsicTextWidth(metrics *mixedTextFontMetrics, text string, wo
 	return width, nil
 }
 
-func (f *Document) measureTypedTableCell(ctx context.Context, doc *layout.LayoutDocument, placement typedTablePlacement, width layoutengine.Fixed, tableBackground layout.DocumentColor) (typedTableCellMeasurement, error) {
+func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.LayoutDocument, placement typedTablePlacement, width layoutengine.Fixed, tableBackground layout.DocumentColor) (typedTableCellMeasurement, error) {
 	cell := placement.cell
 	cell.Box = cell.EffectiveBox()
 	cell.BoxRef = nil
@@ -865,7 +865,7 @@ func validDocumentColor(color layout.DocumentColor) bool {
 // authored segment boundaries. Only geometry-compatible inline overrides are
 // accepted: color and core face variants whose natural advance equals the
 // measured slice. This keeps line breaking and annotation geometry causal.
-func (f *Document) restylePaperMeasurement(measurement paperRowColumnMeasurement, base layout.TextStyle, segments []layout.TextSegment) (paperRowColumnMeasurement, error) {
+func (f *pdfDocument) restylePaperMeasurement(measurement paperRowColumnMeasurement, base layout.TextStyle, segments []layout.TextSegment) (paperRowColumnMeasurement, error) {
 	styled := false
 	for _, segment := range segments {
 		styled = styled || segment.StyleRef != nil || segment.Style != (layout.TextStyle{})
@@ -1162,7 +1162,7 @@ func typedTableValidateStructuredBox(box layout.BoxStyle, path string) error {
 	return nil
 }
 
-func typedNestedTableIntrinsicWidth(f *Document, table layout.TableBlock, base float64) (float64, float64, error) {
+func typedNestedTableIntrinsicWidth(f *pdfDocument, table layout.TableBlock, base float64) (float64, float64, error) {
 	table = typedTableWithInferredColumns(table)
 	if err := validateTypedTableSurface(table, "nested_table"); err != nil {
 		return 0, 0, err
@@ -1243,7 +1243,7 @@ func typedNestedDecoratedBlockIntrinsicWidth(box layout.BoxStyle, base float64) 
 	return minimum, preferred, nil
 }
 
-func (f *Document) measureTypedNestedTable(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string, width layoutengine.Fixed) (paperRowColumnMeasurement, error) {
+func (f *pdfDocument) measureTypedNestedTable(ctx context.Context, doc *layout.LayoutDocument, table layout.TableBlock, path string, width layoutengine.Fixed) (paperRowColumnMeasurement, error) {
 	if width <= 0 {
 		return paperRowColumnMeasurement{}, typedTableUnsupported(path, "nested table width must be positive")
 	}
@@ -1311,7 +1311,7 @@ func (f *Document) measureTypedNestedTable(ctx context.Context, doc *layout.Layo
 	return paperRowColumnMeasurement{plan: projection, body: body, height: height}, nil
 }
 
-func (f *Document) measureTypedNestedRowColumn(ctx context.Context, doc *layout.LayoutDocument, container layout.RowColumnBlock, path string, width layoutengine.Fixed) (paperRowColumnMeasurement, error) {
+func (f *pdfDocument) measureTypedNestedRowColumn(ctx context.Context, doc *layout.LayoutDocument, container layout.RowColumnBlock, path string, width layoutengine.Fixed) (paperRowColumnMeasurement, error) {
 	if width <= 0 {
 		return paperRowColumnMeasurement{}, typedTableUnsupported(path, "nested row-column width must be positive")
 	}
@@ -1334,7 +1334,7 @@ func (f *Document) measureTypedNestedRowColumn(ctx context.Context, doc *layout.
 	return measurement, nil
 }
 
-func (f *Document) measureTypedNestedDecoratedBlock(ctx context.Context, doc *layout.LayoutDocument, block layout.SectionBlock, path string, width layoutengine.Fixed) (paperRowColumnMeasurement, error) {
+func (f *pdfDocument) measureTypedNestedDecoratedBlock(ctx context.Context, doc *layout.LayoutDocument, block layout.SectionBlock, path string, width layoutengine.Fixed) (paperRowColumnMeasurement, error) {
 	if width <= 0 {
 		return paperRowColumnMeasurement{}, typedTableUnsupported(path, "nested decorated block width must be positive")
 	}
@@ -1386,7 +1386,7 @@ func (f *Document) measureTypedNestedDecoratedBlock(ctx context.Context, doc *la
 // below; keeping it as one value avoids duplicating margin resolution logic.
 type typedCellMargins struct{ left, top, right, bottom float64 }
 
-func typedShadowMarginsForCell(f *Document, doc *layout.LayoutDocument) typedCellMargins {
+func typedShadowMarginsForCell(f *pdfDocument, doc *layout.LayoutDocument) typedCellMargins {
 	l, t, r, b := typedShadowMargins(f, doc.PageTemplate.Margins)
 	return typedCellMargins{l, t, r, b}
 }

@@ -30,14 +30,14 @@ type CacheStats struct {
 
 // SharedCachesStats summarizes package-level resource caches.
 type SharedCachesStats struct {
-	Images CacheStats
-	Fonts  CacheStats
-	HTML   CacheStats
+	Images       CacheStats
+	Fonts        CacheStats
+	htmlRenderer CacheStats
 }
 
 // Stats returns a best-effort snapshot of the document's current resource
 // counts and buffered data size.
-func (f *Document) Stats() DocumentStats {
+func (f *pdfDocument) Stats() DocumentStats {
 	if f == nil {
 		return DocumentStats{}
 	}
@@ -66,7 +66,7 @@ func countAnnotationAttachments(pageAttachments [][]annotationAttach) int {
 	return count
 }
 
-func (f *Document) estimatedMemoryBytes() int64 {
+func (f *pdfDocument) estimatedMemoryBytes() int64 {
 	if f == nil {
 		return 0
 	}
@@ -202,9 +202,9 @@ func (c *FontCache) Clear() {
 // compiled HTML caches.
 func SharedCacheStats() SharedCachesStats {
 	return SharedCachesStats{
-		Images: sharedImageCacheStats(),
-		Fonts:  sharedFontCacheStats(),
-		HTML:   sharedCompiledHTMLCacheStats(),
+		Images:       sharedImageCacheStats(),
+		Fonts:        sharedFontCacheStats(),
+		htmlRenderer: sharedCompiledHTMLCacheStats(),
 	}
 }
 

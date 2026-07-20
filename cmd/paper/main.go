@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -290,7 +291,8 @@ func runCheck(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	set := flags("render", stderr)
-	output := set.String("o", "", "write PDF atomically to FILE (default: stdout)")
+	output := set.String("o", "", "write output atomically to FILE (default: stdout)")
+	format := set.String("format", "pdf", "output format: pdf or html")
 	jsonMode := set.Bool("json", false, "write a JSON result; requires -o")
 	scenario := set.String("scenario", "", "plan with the selected scenario")
 	data := addDataFlags(set)
@@ -300,7 +302,10 @@ func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return code
 	}
 	if *jsonMode && *output == "" {
-		return commandError(true, stdout, stderr, "render", errors.New("--json requires -o so JSON and PDF do not share stdout"))
+		return commandError(true, stdout, stderr, "render", errors.New("--json requires -o so JSON and rendered output do not share stdout"))
+	}
+	if *format != "pdf" && *format != "html" {
+		return commandError(*jsonMode, stdout, stderr, "render", errors.New("--format must be pdf or html"))
 	}
 	catalog, err := assets.load()
 	if err != nil {
@@ -327,35 +332,46 @@ func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err != nil {
 		return paperDiagnostics(*jsonMode, stdout, stderr, "render", planned.Diagnostics)
 	}
-	pdf, err := document.NewDocument(document.WithUnit(document.UnitPoint), document.WithDeterministicOutput())
-	if err != nil {
-		return commandError(*jsonMode, stdout, stderr, "render", err)
-	}
-	painted, err := pdf.WritePaperPlan(plan)
-	if err != nil {
-		return paperDiagnostics(*jsonMode, stdout, stderr, "render", painted.Diagnostics)
-	}
-	var encoded bytes.Buffer
-	limited := &limitWriter{w: &encoded, remaining: maxPDFBytes}
-	if err := pdf.OutputWithOptions(limited, document.OutputOptions{Deterministic: true}); err != nil {
-		return commandError(*jsonMode, stdout, stderr, "render", err)
-	}
-	if *output != "" {
-		if err := atomicWrite(*output, encoded.Bytes(), 0o644); err != nil {
+	var encoded []byte
+	pages := plan.PageCount()
+	if *format == "html" {
+		encoded, err = plan.ExportHTMLContext(context.Background())
+		if err != nil {
 			return commandError(*jsonMode, stdout, stderr, "render", err)
 		}
-	} else if _, err := stdout.Write(encoded.Bytes()); err != nil {
+	} else {
+		pdf, createErr := document.NewDocument(document.WithUnit(document.UnitPoint), document.WithDeterministicOutput())
+		if createErr != nil {
+			return commandError(*jsonMode, stdout, stderr, "render", createErr)
+		}
+		painted, paintErr := pdf.WritePaperPlan(plan)
+		if paintErr != nil {
+			return paperDiagnostics(*jsonMode, stdout, stderr, "render", painted.Diagnostics)
+		}
+		var output bytes.Buffer
+		limited := &limitWriter{w: &output, remaining: maxPDFBytes}
+		if outputErr := pdf.OutputWithOptions(limited, document.OutputOptions{Deterministic: true}); outputErr != nil {
+			return commandError(*jsonMode, stdout, stderr, "render", outputErr)
+		}
+		encoded = append([]byte(nil), output.Bytes()...)
+	}
+	if *output != "" {
+		if err := atomicWrite(*output, encoded, 0o644); err != nil {
+			return commandError(*jsonMode, stdout, stderr, "render", err)
+		}
+	} else if _, err := stdout.Write(encoded); err != nil {
 		_, _ = fmt.Fprintf(stderr, "paper render: %v\n", err)
 		return exitFailure
 	}
 	if *jsonMode {
 		return writeJSON(stdout, stderr, struct {
-			OK    bool   `json:"ok"`
-			Pages int    `json:"pages"`
-			Hash  string `json:"hash"`
-			Bytes int    `json:"bytes"`
-			File  string `json:"file"`
-		}{true, painted.Pages, plan.Hash(), encoded.Len(), *output})
+			OK     bool   `json:"ok"`
+			Format string `json:"format"`
+			Pages  int    `json:"pages"`
+			Hash   string `json:"hash"`
+			Bytes  int    `json:"bytes"`
+			File   string `json:"file"`
+		}{true, *format, pages, plan.Hash(), len(encoded), *output})
 	}
 	return exitOK
 }

@@ -1,27 +1,28 @@
 # Architecture
 
 PaperRune has one high-level facade: `document.Document`. New applications
-construct it through `document.NewDocument` or `document.MustNew`. The module
-root intentionally contains no facade package.
+construct it through `document.NewDocument` or `document.MustNew` and author
+content exclusively through Paper. The module root
+intentionally contains no facade package.
 
 ## Package boundaries
 
-- `document` owns PDF construction and the compatibility facade.
+- `document` owns the Paper facade, immutable plan exports, and private PDF construction engine.
 - `layout` owns renderer-independent public document models and measurement.
 - `importpdf` owns the bounded classic-xref parser and imported-page model.
 - `inspect` and `pdfcdr` consume `importpdf`; inspection reports source
   structure, while CDR creates a new document from a constrained safe subset.
 - `sign` owns classic-xref incremental signing and CMS verification, and
   `font` owns standalone font-definition generation.
-- `internal/layoutgeom` owns pure geometry shared by typed and HTML renderers.
+- `internal/layoutgeom` owns pure geometry used by private layout machinery.
 
 Lower-level packages must not import `document`. This keeps the dependency graph
 acyclic and lets them be used without the high-level renderer.
 
 ## Document ownership
 
-`Document` preserves its public FPDF-style methods, but private state has
-concrete owners:
+`Document` deliberately does not expose the private serializer's page, text,
+cell, image-placement, or drawing methods. Private state has concrete owners:
 
 - `pdfSerializationState` allocates and records PDF object numbers.
 - `resourceOwnershipState` initializes the document resource registry.
@@ -38,8 +39,7 @@ lifetime.
 
 A `Document` is a mutable, single-owner build session and is not safe for
 concurrent calls. Create one document per independently generated PDF.
-`CompiledHTML`, `ImageCache`, and `FontCache` are the reusable cross-document
-inputs and carry their own concurrency guarantees.
+Immutable `PaperPlan` values are reusable across PDF and HTML output.
 
 An opened `importpdf.Source` is immutable after parsing. Concurrent page
 resolution is supported and serialized around its bounded object cache;
@@ -47,27 +47,20 @@ resolution is supported and serialized around its bounded object cache;
 poison later retries. Package-level inspection, CDR, and signing operations do
 not share mutable document state between calls.
 
-Each compiled HTML render creates a private render session that owns its style,
-element, and list stacks. Render-local state must not be added to `CompiledHTML`
-or retained by `HTML` after the call completes.
-
 ## Layout invariants
 
-Typed layout measurement and rendering must consume the same geometry rules.
-HTML may retain CSS-specific parsing and styling, but track offsets, spans,
-column constraints, image fitting, and pagination comparisons belong in pure
-shared geometry. Any change to those rules requires typed-versus-HTML parity
-coverage.
+Paper measurement owns track offsets, spans, column constraints, image fitting,
+and pagination comparisons in pure shared geometry.
 
 Public layout fields are behavioral contracts. A field must not be added until
 measurement, rendering, pagination, and regression tests implement it.
 
-PaperRune is migrating automatic layout to one private planner shared by typed,
-HTML, and future human-readable frontends. During the migration, new automatic
-layout behavior belongs in the unified planner rather than a third renderer.
-Frontends resolve syntax-specific rules and lower content; the final painter
+PaperRune uses one private planner behind Paper. New automatic layout behavior
+belongs in that planner rather than a second public frontend. Paper resolves
+syntax-specific rules and lowers content; the final painter
 must consume positioned plan commands without measuring, wrapping, or
-paginating. See [ADR 0001](docs/adr/0001-unified-automatic-layout-engine.md).
+paginating. See
+[ADR 0003](docs/adr/0003-paper-only-authoring.md).
 
 Plan font resources are immutable identities, not live `Document` lookups.
 Standard 14 resources pin canonical metrics. Embedded UTF-8 resources pin the
@@ -98,6 +91,10 @@ or renderer mismatches, stale/tampered plan hashes, invalid blobs, and resource
 budget violations before painting. It invokes the same rasterizer used by
 headless review evidence and therefore is a deployment of the shared renderer,
 not a second browser layout implementation.
+
+Standalone HTML export follows the same boundary: each planned page is emitted
+as exact inline SVG. HTML/CSS may arrange those page artifacts but never
+re-measures or reflows Paper content.
 
 Every Studio page, overlay, hit, and explanation request is bound to the exact
 plan revision. A revision mismatch fails instead of mixing evidence, and the

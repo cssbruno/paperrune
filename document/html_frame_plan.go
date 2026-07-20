@@ -44,7 +44,7 @@ type htmlFragmentPlan struct {
 	appendTrailingPage bool
 }
 
-func (f *Document) captureHTMLStartFrame() (htmlStartFrame, error) {
+func (f *pdfDocument) captureHTMLStartFrame() (htmlStartFrame, error) {
 	if f == nil || f.err != nil || f.page <= 0 || f.state != documentStatePageOpen {
 		return htmlStartFrame{}, htmlPlanUnsupported("frame", 0, "requires an open, error-free current page")
 	}
@@ -89,15 +89,15 @@ func (f *Document) captureHTMLStartFrame() (htmlStartFrame, error) {
 	}, nil
 }
 
-func (html *HTML) planCompiledHTMLFragmentContext(ctx context.Context, lineHeight float64, compiled *CompiledHTML) (htmlFragmentPlan, error) {
+func (html *htmlRenderer) planCompiledHTMLFragmentContext(ctx context.Context, lineHeight float64, compiled *compiledHTML) (htmlFragmentPlan, error) {
 	return html.planCompiledHTMLFragment(ctx, lineHeight, compiled, true)
 }
 
-func (html *HTML) planCompiledHTMLFragmentForWriteContext(ctx context.Context, lineHeight float64, compiled *CompiledHTML) (htmlFragmentPlan, error) {
+func (html *htmlRenderer) planCompiledHTMLFragmentForWriteContext(ctx context.Context, lineHeight float64, compiled *compiledHTML) (htmlFragmentPlan, error) {
 	return html.planCompiledHTMLFragment(ctx, lineHeight, compiled, false)
 }
 
-func (html *HTML) planCompiledHTMLFragment(ctx context.Context, lineHeight float64, compiled *CompiledHTML, retainIdentity bool) (htmlFragmentPlan, error) {
+func (html *htmlRenderer) planCompiledHTMLFragment(ctx context.Context, lineHeight float64, compiled *compiledHTML, retainIdentity bool) (htmlFragmentPlan, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -225,7 +225,7 @@ func (html *HTML) planCompiledHTMLFragment(ctx context.Context, lineHeight float
 	}
 	if err != nil {
 		if errors.Is(err, ErrLayoutDocumentPlanUnsupported) || errors.Is(err, errTypedShadowUnsupported) {
-			return htmlFragmentPlan{}, fmt.Errorf("%w: frame planning: %w", ErrHTMLPlanUnsupported, err)
+			return htmlFragmentPlan{}, fmt.Errorf("%w: frame planning: %w", errHTMLPlanUnsupported, err)
 		}
 		return htmlFragmentPlan{}, err
 	}
@@ -242,7 +242,7 @@ func (html *HTML) planCompiledHTMLFragment(ctx context.Context, lineHeight float
 	}
 	projection := planned.ReadOnlyProjection()
 	if compiledHTMLTableRowCount(compiled) == 1 && len(projection.Pages) > 1 {
-		return htmlFragmentPlan{}, fmt.Errorf("%w: structured HTML table row exceeds one page body", ErrHTMLLimitExceeded)
+		return htmlFragmentPlan{}, fmt.Errorf("%w: structured HTML table row exceeds one page body", errHTMLLimitExceeded)
 	}
 	if !leadingBreak {
 		bodyBottom, _ := frame.body.Bottom()
@@ -282,7 +282,7 @@ func (html *HTML) planCompiledHTMLFragment(ctx context.Context, lineHeight float
 	}
 	projection = planned.ReadOnlyProjection()
 	if htmlPlanHasOversizedTableRow(compiled, projection) {
-		return htmlFragmentPlan{}, fmt.Errorf("%w: structured HTML table row exceeds one page body", ErrHTMLLimitExceeded)
+		return htmlFragmentPlan{}, fmt.Errorf("%w: structured HTML table row exceeds one page body", errHTMLLimitExceeded)
 	}
 	hash := layoutengine.PlanHash{}
 	if retainIdentity {
@@ -307,7 +307,7 @@ func (html *HTML) planCompiledHTMLFragment(ctx context.Context, lineHeight float
 	}
 	generatedPages := addedPages + 1
 	if generatedPages > html.maxGeneratedPages() {
-		return htmlFragmentPlan{}, fmt.Errorf("%w: HTML rendering exceeded maximum generated pages: %d > %d", ErrHTMLLimitExceeded, generatedPages, html.maxGeneratedPages())
+		return htmlFragmentPlan{}, fmt.Errorf("%w: HTML rendering exceeded maximum generated pages: %d > %d", errHTMLLimitExceeded, generatedPages, html.maxGeneratedPages())
 	}
 	lastPage := uint32(len(projection.Pages)) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 	finalY := layoutengine.Fixed(0)
@@ -367,7 +367,7 @@ func htmlBlocksContainKeptTable(blocks []layout.Block) bool {
 	return false
 }
 
-func htmlPlanHasOversizedTableRow(compiled *CompiledHTML, projection layoutengine.LayoutPlanProjection) bool {
+func htmlPlanHasOversizedTableRow(compiled *compiledHTML, projection layoutengine.LayoutPlanProjection) bool {
 	if !compiledHTMLContainsTable(compiled) {
 		return false
 	}
@@ -405,7 +405,7 @@ func htmlFirstPageBodyExtent(plan layoutengine.LayoutPlan) layoutengine.Fixed {
 	return bottom - top
 }
 
-func compiledHTMLTableRowCount(compiled *CompiledHTML) int {
+func compiledHTMLTableRowCount(compiled *compiledHTML) int {
 	if compiled == nil {
 		return 0
 	}
@@ -418,10 +418,10 @@ func compiledHTMLTableRowCount(compiled *CompiledHTML) int {
 	return count
 }
 
-func (html *HTML) writeCompiledUnifiedFragmentContext(ctx context.Context, lineHeight float64, compiled *CompiledHTML) (bool, error) {
+func (html *htmlRenderer) writeCompiledUnifiedFragmentContext(ctx context.Context, lineHeight float64, compiled *compiledHTML) (bool, error) {
 	fragment, err := html.planCompiledHTMLFragmentForWriteContext(ctx, lineHeight, compiled)
 	if err != nil {
-		if errors.Is(err, ErrHTMLPlanUnsupported) {
+		if errors.Is(err, errHTMLPlanUnsupported) {
 			return false, err
 		}
 		return true, err
@@ -485,7 +485,7 @@ func (html *HTML) writeCompiledUnifiedFragmentContext(ctx context.Context, lineH
 	return true, html.pdf.Error()
 }
 
-func compiledHTMLContainsTable(compiled *CompiledHTML) bool {
+func compiledHTMLContainsTable(compiled *compiledHTML) bool {
 	if compiled == nil {
 		return false
 	}
@@ -497,7 +497,7 @@ func compiledHTMLContainsTable(compiled *CompiledHTML) bool {
 	return false
 }
 
-func compiledHTMLContainsImageInTable(compiled *CompiledHTML) bool {
+func compiledHTMLContainsImageInTable(compiled *compiledHTML) bool {
 	if compiled == nil {
 		return false
 	}

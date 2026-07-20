@@ -19,7 +19,7 @@ import (
 
 // SetFontLocation sets the filesystem location of the font and font
 // definition files.
-func (f *Document) SetFontLocation(fontDirStr string) {
+func (f *pdfDocument) SetFontLocation(fontDirStr string) {
 	f.fontpath = fontDirStr
 	f.utf8FontPathCache = make(map[string]utf8FontPathInfo)
 }
@@ -31,7 +31,7 @@ func (f *Document) SetFontLocation(fontDirStr string) {
 // (see SetFontLocation()).
 //
 // Deprecated: use SetResourceLoader with a ResourceLoader implementation.
-func (f *Document) SetFontLoader(loader FontLoader) {
+func (f *pdfDocument) SetFontLoader(loader FontLoader) {
 	f.fontLoader = loader
 }
 
@@ -55,13 +55,13 @@ func (f *Document) SetFontLoader(loader FontLoader) {
 // fileStr specifies the base name with ".json" extension of the font
 // definition file to be added. The file will be loaded from the font directory
 // specified in the call to New() or SetFontLocation().
-func (f *Document) AddFont(familyStr, styleStr, fileStr string) {
+func (f *pdfDocument) AddFont(familyStr, styleStr, fileStr string) {
 	_ = f.AddFontError(familyStr, styleStr, fileStr)
 }
 
 // AddFontError imports a TrueType, OpenType or Type1 font and returns failures
 // directly.
-func (f *Document) AddFontError(familyStr, styleStr, fileStr string) error {
+func (f *pdfDocument) AddFontError(familyStr, styleStr, fileStr string) error {
 	f.addFont(fontFamilyEscape(familyStr), styleStr, fileStr, false)
 	return f.err
 }
@@ -87,18 +87,18 @@ func (f *Document) AddFontError(familyStr, styleStr, fileStr string) error {
 // file to be added. OpenType files with TrueType outlines are supported. CFF
 // OpenType files are supported by font.Make/AddFont for single-byte
 // encodings, not by this UTF-8 subsetting path.
-func (f *Document) AddUTF8Font(familyStr, styleStr, fileStr string) {
+func (f *pdfDocument) AddUTF8Font(familyStr, styleStr, fileStr string) {
 	_ = f.AddUTF8FontError(familyStr, styleStr, fileStr)
 }
 
 // AddUTF8FontError imports a TrueType font with UTF-8 symbols and returns
 // failures directly.
-func (f *Document) AddUTF8FontError(familyStr, styleStr, fileStr string) error {
+func (f *pdfDocument) AddUTF8FontError(familyStr, styleStr, fileStr string) error {
 	f.addFont(fontFamilyEscape(familyStr), styleStr, fileStr, true)
 	return f.err
 }
 
-func (f *Document) addFont(familyStr, styleStr, fileStr string, isUTF8 bool) {
+func (f *pdfDocument) addFont(familyStr, styleStr, fileStr string, isUTF8 bool) {
 	if fileStr == "" {
 		if isUTF8 {
 			fileStr = strings.ReplaceAll(familyStr, " ", "") + strings.ToLower(styleStr) + ".ttf"
@@ -195,7 +195,7 @@ func (f *Document) addFont(familyStr, styleStr, fileStr string, isUTF8 bool) {
 	}
 }
 
-func (f *Document) cachedUTF8FontFromResource(ctx context.Context, fontKey, name string) (cachedUTF8Font, int64, error) {
+func (f *pdfDocument) cachedUTF8FontFromResource(ctx context.Context, fontKey, name string) (cachedUTF8Font, int64, error) {
 	reader, info, err := f.openFontResourceInfo(ctx, name, maxFontSourceBytes, "font data")
 	if err != nil {
 		return cachedUTF8Font{}, 0, err
@@ -249,12 +249,12 @@ func (f *Document) cachedUTF8FontFromResource(ctx context.Context, fontKey, name
 	return cached, int64(len(data)), nil
 }
 
-func (f *Document) openFontResource(ctx context.Context, name string, limit int, label string) (io.ReadCloser, error) {
+func (f *pdfDocument) openFontResource(ctx context.Context, name string, limit int, label string) (io.ReadCloser, error) {
 	reader, _, err := f.openFontResourceInfo(ctx, name, limit, label)
 	return reader, err
 }
 
-func (f *Document) openFontResourceInfo(ctx context.Context, name string, limit int, label string) (io.ReadCloser, ResourceInfo, error) {
+func (f *pdfDocument) openFontResourceInfo(ctx context.Context, name string, limit int, label string) (io.ReadCloser, ResourceInfo, error) {
 	if f.resourceLoader == nil {
 		return nil, ResourceInfo{}, fmt.Errorf("resource loader is nil")
 	}
@@ -294,7 +294,7 @@ func fontResourceOriginalSize(info ResourceInfo, cached cachedUTF8Font) int64 {
 	return int64(len(cached.data))
 }
 
-func (f *Document) cachedUTF8FontFromFile(fontKey, fontPath string, size, modTime int64) (cachedUTF8Font, error) {
+func (f *pdfDocument) cachedUTF8FontFromFile(fontKey, fontPath string, size, modTime int64) (cachedUTF8Font, error) {
 	switch f.resourceCachePolicy {
 	case ResourceCacheShared:
 		key := sharedUTF8FontFileCacheKey{path: fontPath, size: size, modTime: modTime, fontKey: fontKey}
@@ -361,7 +361,7 @@ type utf8FontPathInfo struct {
 	err     error
 }
 
-func (f *Document) resolveUTF8FontPath(fileStr string) (string, int64, int64, error) {
+func (f *pdfDocument) resolveUTF8FontPath(fileStr string) (string, int64, int64, error) {
 	key := f.fontpath + "\x00" + fileStr
 	if f.utf8FontPathCache == nil {
 		f.utf8FontPathCache = make(map[string]utf8FontPathInfo)
@@ -563,13 +563,13 @@ func defaultUTF8UsedRunes(alias string) map[int]int {
 // jsonFileBytes contains all bytes of the JSON definition file.
 //
 // zFileBytes contains all bytes of the zlib-compressed font file.
-func (f *Document) AddFontFromBytes(familyStr, styleStr string, jsonFileBytes, zFileBytes []byte) {
+func (f *pdfDocument) AddFontFromBytes(familyStr, styleStr string, jsonFileBytes, zFileBytes []byte) {
 	_ = f.AddFontFromBytesError(familyStr, styleStr, jsonFileBytes, zFileBytes)
 }
 
 // AddFontFromBytesError imports a TrueType, OpenType or Type1 font from static
 // bytes and returns failures directly.
-func (f *Document) AddFontFromBytesError(familyStr, styleStr string, jsonFileBytes, zFileBytes []byte) error {
+func (f *pdfDocument) AddFontFromBytesError(familyStr, styleStr string, jsonFileBytes, zFileBytes []byte) error {
 	f.addFontFromBytes(fontFamilyEscape(familyStr), styleStr, jsonFileBytes, zFileBytes, nil)
 	return f.err
 }
@@ -587,18 +587,18 @@ func (f *Document) AddFontFromBytesError(familyStr, styleStr string, jsonFileByt
 // "IB" for bold and italic combined.
 //
 // utf8Bytes contains all bytes of the UTF-8 font file.
-func (f *Document) AddUTF8FontFromBytes(familyStr, styleStr string, utf8Bytes []byte) {
+func (f *pdfDocument) AddUTF8FontFromBytes(familyStr, styleStr string, utf8Bytes []byte) {
 	_ = f.AddUTF8FontFromBytesError(familyStr, styleStr, utf8Bytes)
 }
 
 // AddUTF8FontFromBytesError imports a TrueType font with UTF-8 symbols from
 // static bytes and returns failures directly.
-func (f *Document) AddUTF8FontFromBytesError(familyStr, styleStr string, utf8Bytes []byte) error {
+func (f *pdfDocument) AddUTF8FontFromBytesError(familyStr, styleStr string, utf8Bytes []byte) error {
 	f.addFontFromBytes(fontFamilyEscape(familyStr), styleStr, nil, nil, utf8Bytes)
 	return f.err
 }
 
-func (f *Document) addFontFromBytes(familyStr, styleStr string, jsonFileBytes, zFileBytes, utf8Bytes []byte) {
+func (f *pdfDocument) addFontFromBytes(familyStr, styleStr string, jsonFileBytes, zFileBytes, utf8Bytes []byte) {
 	if f.err != nil {
 		return
 	}
@@ -682,13 +682,13 @@ func (f *Document) addFontFromBytes(familyStr, styleStr string, jsonFileBytes, z
 // AddFontFromReader imports a TrueType, OpenType or Type1 font and makes it
 // available using a reader that satisfies the io.Reader interface. See AddFont()
 // for details about familyStr and styleStr.
-func (f *Document) AddFontFromReader(familyStr, styleStr string, r io.Reader) {
+func (f *pdfDocument) AddFontFromReader(familyStr, styleStr string, r io.Reader) {
 	_ = f.AddFontFromReaderError(familyStr, styleStr, r)
 }
 
 // AddFontFromReaderError imports a TrueType, OpenType or Type1 font from r and
 // returns failures directly.
-func (f *Document) AddFontFromReaderError(familyStr, styleStr string, r io.Reader) error {
+func (f *pdfDocument) AddFontFromReaderError(familyStr, styleStr string, r io.Reader) error {
 	if f.err != nil {
 		return f.err
 	}
@@ -737,7 +737,7 @@ func (f *Document) AddFontFromReaderError(familyStr, styleStr string, r io.Reade
 }
 
 // loadfont loads a font definition file from the given reader.
-func (f *Document) loadfont(r io.Reader) (def fontDefinition) {
+func (f *pdfDocument) loadfont(r io.Reader) (def fontDefinition) {
 	if f.err != nil {
 		return
 	}
@@ -757,7 +757,7 @@ func (f *Document) loadfont(r io.Reader) (def fontDefinition) {
 	return
 }
 
-func (f *Document) putfonts() {
+func (f *pdfDocument) putfonts() {
 	if f.err != nil {
 		return
 	}
@@ -1008,7 +1008,7 @@ func (f *Document) putfonts() {
 	}
 }
 
-func (f *Document) generateCIDFontMap(font *fontDefinition, lastRune int) {
+func (f *pdfDocument) generateCIDFontMap(font *fontDefinition, lastRune int) {
 	if font == nil {
 		f.err = errors.New("missing font definition")
 		return
@@ -1096,7 +1096,7 @@ func appendCIDWidthRun(dst []byte, startCID int, widths []int) []byte {
 	return append(dst, " ]\n"...)
 }
 
-func (f *Document) loadFontFile(name string) ([]byte, error) {
+func (f *pdfDocument) loadFontFile(name string) ([]byte, error) {
 	if !validFontResourceName(name) {
 		return nil, fmt.Errorf("invalid font resource name: %s", name)
 	}

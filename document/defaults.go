@@ -11,7 +11,7 @@ func DefaultSettings() Defaults {
 	}
 }
 
-func (f *Document) applyDefaults(defaults Defaults) {
+func (f *pdfDocument) applyDefaults(defaults Defaults) {
 	f.SetCompression(defaults.Compression)
 	f.catalogSort = defaults.CatalogSort
 	f.creationDate = defaults.CreationDate

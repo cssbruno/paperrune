@@ -14,8 +14,8 @@ type documentPlanningCacheState struct {
 // owning document. Table planning can measure hundreds of cells, and creating
 // a complete PDF document (resource stores, page maps, caches, and policy
 // state) for every cell was both unnecessary and allocation-heavy.
-func (f *Document) acquireTypedMeasurementScratch() *Document {
-	scratch, _ := f.measurementScratch.Get().(*Document)
+func (f *pdfDocument) acquireTypedMeasurementScratch() *pdfDocument {
+	scratch, _ := f.measurementScratch.Get().(*pdfDocument)
 	if scratch == nil {
 		scratch = documentNew("P", f.unitStr, "", f.fontDirStr, Size{Wd: f.w, Ht: f.h})
 	}
@@ -30,7 +30,7 @@ func (f *Document) acquireTypedMeasurementScratch() *Document {
 	return scratch
 }
 
-func (f *Document) releaseTypedMeasurementScratch(scratch *Document) {
+func (f *pdfDocument) releaseTypedMeasurementScratch(scratch *pdfDocument) {
 	if scratch != nil && scratch.err == nil {
 		f.measurementScratch.Put(scratch)
 	}

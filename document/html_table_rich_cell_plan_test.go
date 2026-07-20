@@ -29,7 +29,7 @@ td{padding:2pt;border:1pt solid #405060}
 </td><td width="60pt">side</td></tr></table>`
 
 func TestHTMLUnifiedTableCellLowersWrappedFlexAndDecoratedBox(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedTableRichCellFixture)
+	compiled, err := compileHTML(htmlUnifiedTableRichCellFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestHTMLUnifiedTableCellLowersWrappedFlexAndDecoratedBox(t *testing.T) {
 	if !ok || box.Box.Padding.Left != 2 || box.Box.Border.Left.Width != 1 || !box.Box.BackgroundColor.Set || !box.Box.KeepTogether {
 		t.Fatalf("cell decorated box = %#v", blocks[1])
 	}
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 10, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 10, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestHTMLUnifiedTableCellLowersWrappedFlexAndDecoratedBox(t *testing.T) {
 	taggedPlanner := htmlUnifiedFlexTestPlanner()
 	taggedPlanner.EnableTaggedPDF()
 	taggedPlanner.SetComplianceMetadata(ComplianceMetadata{PDFUA2: true, Title: "Rich HTML table cell", Lang: "en-US"})
-	taggedPlan, err := taggedPlanner.PlanCompiledHTMLContext(context.Background(), 10, compiled)
+	taggedPlan, err := taggedPlanner.planCompiledHTMLContext(context.Background(), 10, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,11 +100,11 @@ func TestHTMLUnifiedTableCellLowersWrappedFlexAndDecoratedBox(t *testing.T) {
 }
 
 func TestHTMLUnifiedTableRichCellPinnedBrowserWrappedGeometry(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedTableRichCellFixture)
+	compiled, err := compileHTML(htmlUnifiedTableRichCellFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 10, compiled)
+	plan, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 10, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,14 +158,14 @@ func TestHTMLUnifiedTableRichCellPinnedBrowserWrappedGeometry(t *testing.T) {
 }
 
 func BenchmarkHTMLUnifiedTableRichCellPlanning(b *testing.B) {
-	compiled, err := CompileHTML(htmlUnifiedTableRichCellFixture)
+	compiled, err := compileHTML(htmlUnifiedTableRichCellFixture)
 	if err != nil {
 		b.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
 	b.ReportAllocs()
 	for index := 0; index < b.N; index++ {
-		if _, err := planner.PlanCompiledHTMLContext(context.Background(), 10, compiled); err != nil {
+		if _, err := planner.planCompiledHTMLContext(context.Background(), 10, compiled); err != nil {
 			b.Fatal(err)
 		}
 	}

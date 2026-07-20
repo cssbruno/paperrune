@@ -28,7 +28,7 @@ func TestNewDocumentModel(t *testing.T) {
 		t.Fatalf("heading = %#v, want title heading", heading)
 	}
 
-	pdf := MustNew()
+	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	pdf.WriteDocument(doc)
 	var out bytes.Buffer

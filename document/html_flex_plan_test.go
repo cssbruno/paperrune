@@ -23,7 +23,7 @@ const htmlUnifiedFlexRowFixture = `<style>
 </style><div class="row"><p class="fixed">Fixed item</p><h2 class="weighted">Weighted item</h2></div>`
 
 func TestHTMLUnifiedFlexResolvedRowColumnTracksAndSelectorFreeLowering(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedFlexRowFixture)
+	compiled, err := compileHTML(htmlUnifiedFlexRowFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,16 +77,16 @@ func TestHTMLUnifiedFlexRowAndColumnPlansAreDeterministic(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := CompileHTML(test.source)
+			compiled, err := compileHTML(test.source)
 			if err != nil {
 				t.Fatal(err)
 			}
 			planner := htmlUnifiedFlexTestPlanner()
-			first, err := planner.PlanCompiledHTML(12, compiled)
+			first, err := planner.planCompiledHTML(12, compiled)
 			if err != nil {
 				t.Fatal(err)
 			}
-			second, err := planner.PlanCompiledHTML(12, compiled)
+			second, err := planner.planCompiledHTML(12, compiled)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -131,7 +131,7 @@ func TestHTMLUnifiedFlexResolvesDirectionalAndTwoValueGaps(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := CompileHTML(test.source)
+			compiled, err := compileHTML(test.source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -169,12 +169,12 @@ func TestHTMLUnifiedFlexJustificationHasExactPlanCursorRasterAndSemantics(t *tes
 		t.Run(test.justify, func(t *testing.T) {
 			source := `<div style="display:flex;justify-content:` + test.justify + `;gap:10pt">` +
 				`<p style="flex:0 0 40pt">One</p><h2 style="flex:0 0 40pt">Two</h2></div>`
-			compiled, err := CompileHTML(source)
+			compiled, err := compileHTML(source)
 			if err != nil {
 				t.Fatal(err)
 			}
 			planner := htmlUnifiedFlexTestPlanner()
-			plan, err := planner.PlanCompiledHTML(12, compiled)
+			plan, err := planner.planCompiledHTML(12, compiled)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -197,7 +197,7 @@ func TestHTMLUnifiedFlexJustificationHasExactPlanCursorRasterAndSemantics(t *tes
 				}
 				pdf := newHTMLFrameTestDocument(t, 160)
 				pdf.SetXY(16, 42)
-				html := pdf.HTMLNew()
+				html := pdf.htmlNew()
 				if err := html.WriteContext(context.Background(), 12, source); err != nil || pdf.GetY() <= 42 {
 					t.Fatalf("space-evenly cursor=%.4f err=%v", pdf.GetY(), err)
 				}
@@ -207,7 +207,7 @@ func TestHTMLUnifiedFlexJustificationHasExactPlanCursorRasterAndSemantics(t *tes
 }
 
 func TestHTMLUnifiedFlexMainAndCrossAxisDimensions(t *testing.T) {
-	compiled, err := CompileHTML(`<div style="display:flex;gap:4pt;align-items:center">
+	compiled, err := compileHTML(`<div style="display:flex;gap:4pt;align-items:center">
 		<p style="width:30pt;min-width:50pt;height:20pt">Sized</p><p style="flex:1 1 0;min-width:25pt">Flexible</p></div>`)
 	if err != nil {
 		t.Fatal(err)
@@ -229,11 +229,11 @@ func TestHTMLUnifiedFlexMainAndCrossAxisDimensions(t *testing.T) {
 
 	columnSource := `<div style="display:flex;flex-direction:column;justify-content:center;gap:4pt;align-items:stretch">` +
 		`<p style="height:20pt;width:60pt;align-self:center">One</p><p style="height:20pt;width:40pt;align-self:flex-end">Two</p></div>`
-	column, err := CompileHTML(columnSource)
+	column, err := compileHTML(columnSource)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := planner.PlanCompiledHTML(12, column)
+	plan, err := planner.planCompiledHTML(12, column)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,13 +262,13 @@ func TestHTMLUnifiedFlexCapabilityScanRejectsWholeFragment(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			compiled, err := CompileHTML(test.source)
+			compiled, err := compileHTML(test.source)
 			if err != nil {
 				t.Fatal(err)
 			}
 			planner := htmlUnifiedFlexTestPlanner()
-			plan, err := planner.PlanCompiledHTML(12, compiled)
-			if !errors.Is(err, ErrHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
+			plan, err := planner.planCompiledHTML(12, compiled)
+			if !errors.Is(err, errHTMLPlanUnsupported) || !strings.Contains(err.Error(), test.diagnostic) || plan.Hash() != "" || planner.PageCount() != 0 {
 				t.Fatalf("plan=%#v pages=%d err=%v, want diagnostic %q", plan, planner.PageCount(), err, test.diagnostic)
 			}
 		})
@@ -279,7 +279,7 @@ func TestHTMLUnifiedFlexFragmentCursorAndDeterministicPDF(t *testing.T) {
 	render := func() ([]byte, float64) {
 		pdf := newHTMLFrameTestDocument(t, 160)
 		pdf.SetXY(16, 42)
-		html := pdf.HTMLNew()
+		html := pdf.htmlNew()
 		if err := html.WriteContext(context.Background(), 12, htmlUnifiedFlexRowFixture); err != nil {
 			t.Fatal(err)
 		}
@@ -310,7 +310,7 @@ func TestHTMLUnifiedFlexFragmentCursorAndDeterministicPDF(t *testing.T) {
 }
 
 func TestHTMLUnifiedFlexCompiledFragmentConcurrentReuse(t *testing.T) {
-	compiled, err := CompileHTML(htmlUnifiedFlexRowFixture)
+	compiled, err := compileHTML(htmlUnifiedFlexRowFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +322,7 @@ func TestHTMLUnifiedFlexCompiledFragmentConcurrentReuse(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			plan, planErr := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			plan, planErr := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			if planErr != nil {
 				errorsFound <- planErr
 				return
@@ -349,8 +349,8 @@ func TestHTMLUnifiedFlexCompiledFragmentConcurrentReuse(t *testing.T) {
 	}
 }
 
-func htmlUnifiedFlexTestPlanner() *Document {
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
+func htmlUnifiedFlexTestPlanner() *pdfDocument {
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 160}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(20, 20, 20)
 	planner.SetAutoPageBreak(true, 20)
 	return planner

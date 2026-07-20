@@ -6,26 +6,21 @@
 
 <img src="https://raw.githubusercontent.com/cssbruno/paperrune/main/assets/static/image/gopher_pdf.png" alt="PaperRune gopher" width="160">
 
-PaperRune is a pure-Go PDF toolkit for Go applications that need to generate,
-inspect, sign, import, or sanitize PDF documents without depending on a
-browser. It keeps an FPDF-style API for familiar page, text, and drawing
-workflows, while also providing bounded HTML/CSS rendering and typed document
-models.
+PaperRune is a pure-Go document toolkit for applications that generate PDF or
+standalone HTML from human-readable Paper source. Paper is the only public
+authoring format. The PDF serializer is private, and HTML is an output artifact
+rather than an input language.
 
 ## Highlights
 
-- Generate PDFs with text, tables, images, SVG, forms, templates, and metadata.
-- Render controlled HTML/CSS fragments or compile reusable HTML templates.
-- Import, merge, split, reorder, rotate, overlay, and watermark PDF pages.
+- Generate PDF and standalone HTML from the same immutable `.paper` plan.
+- Use schemas, JSON data, themes, reusable components, and exact pagination.
 - Sign and verify PDFs with CMS, inspect PDF structure, and sanitize uploads
   through a PDF Content Disarm and Reconstruction boundary.
-- Use optional typed Go document models for applications that prefer structured
-  data over HTML strings.
 
-The main API is `github.com/cssbruno/paperrune/document`. The optional typed
-model and measurement primitives live in
-`github.com/cssbruno/paperrune/layout`. Ownership rules and public-surface
-policy are documented in [`ARCHITECTURE.md`](ARCHITECTURE.md).
+The main API is `github.com/cssbruno/paperrune/document`. Ownership rules and
+the Paper-only public-surface policy is documented in
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Contents
 
@@ -35,7 +30,7 @@ policy are documented in [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - [Features](#features)
 - [Limitations](#limitations)
 - [Examples](#examples)
-- [HTML support](#html-support)
+- [Paper to HTML](#paper-to-html)
 - [Advanced workflows](#advanced-workflows)
 - [Packages and development](#packages-and-development)
 - [License](#license)
@@ -64,9 +59,16 @@ func main() {
 		panic(err)
 	}
 
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "B", 16)
-	pdf.Cell(40, 10, "Hello, world")
+	source := `document @hello:
+  page @sheet:
+    body @body:
+      heading @title:
+        level: 1
+        text: "Hello, world"`
+
+	if result, err := pdf.WritePaper("hello.paper", source); err != nil || !result.OK() {
+		panic(err)
+	}
 
 	if err := pdf.OutputFile("hello.pdf"); err != nil {
 		panic(err)
@@ -93,39 +95,32 @@ object streams, or existing PDFs.
 
 | Need | Recommended API |
 | --- | --- |
-| Precise drawing, custom pagination, or FPDF-style control | `Document` drawing, text, and table methods |
-| Report-like documents with changing values | `document.CompileHTMLTemplate` and `HTML.WriteTemplate` |
-| One-off HTML fragments or rich text sections | `pdf.HTMLNew().Write` |
-| Typed Go blocks without HTML strings | `layout.NewDocumentModel` and `Document.WriteDocument` |
+| Human-readable document source, themes, and data | `WritePaper`, `PlanPaper`, or `cmd/paper` |
+| Report-like documents with changing values | Paper schemas with `WritePaperJSON` or `--data` |
+| Browser-viewable output | `PaperPlan.ExportHTML` or `paper render --format html` |
 | Large unsigned output with lower peak memory | `OutputFileStream` or `OutputOptions{StreamFinal: true}` |
 
 ## Features
 
-- Pages, margins, headers, footers, page boxes, aliases, links, bookmarks, and
-  page breaks.
+- Paper documents, reusable styles/components, themes, data schemas, scenarios,
+  headers, footers, page regions, and explicit page breaks.
 - Standard PDF fonts and UTF-8 TrueType fonts, including OpenType files with
   TrueType outlines.
-- Text, cells, multicells, aligned writing, styled paragraphs, tables, and
-  static filled-form documents.
-- Lines, rectangles, rounded rectangles, arcs, Bezier curves, polygons, paths,
-  clipping, transforms, transparency, gradients, spot colors, and layers.
-- JPEG, PNG, GIF, WebP, SVG, data images, QR-code PNG generation, and
-  thumbnails.
-- Reusable PDF templates and imported-page workflows for merging, splitting,
-  reordering, rotating, 4-up layout, overlays, and watermarks.
-- Attachments, document metadata, XMP metadata, legacy PDF standard-security
-  protection, PDF signing, CMS verification, and lightweight inspection.
+- Paper text, lists, tables, images, page regions, positioned canvas content,
+  and deterministic rows and columns.
+- Document metadata, output intents, attachments, PDF signing, CMS verification,
+  and lightweight inspection.
 - PDF Content Disarm and Reconstruction through the `pdfcdr` package.
 
 ## Limitations
 
 The following are intentionally not general-purpose features:
 
-- Full browser-compatible HTML/CSS layout or JavaScript page rendering.
-- PDF JavaScript actions. `SetJavascriptError` returns
-  `ErrJavaScriptUnsupported`, and `javascript:` links are rejected.
-- AES-based PDF document encryption. `SetAESProtection` returns
-  `ErrAESProtectionUnsupported` instead of emitting partial encryption syntax.
+- HTML/CSS input or browser-owned layout. HTML export embeds exact Paper page
+  SVG and does not ask the browser to reflow or paginate content.
+- Direct page/text/cell/drawing placement or mixed imperative/declarative
+  authoring.
+- PDF JavaScript actions; `javascript:` links are rejected.
 - DOCX conversion or interactive AcroForm field creation.
 - Filling, flattening, or FDF-merging existing interactive forms.
 - Unlocking, decrypting, or removing passwords from existing PDFs.
@@ -139,12 +134,11 @@ lengths fail closed.
 Password protection applies to newly generated output. Permission flags are
 advisory because PDF readers decide how strictly to enforce them.
 
-## Paper Engine preview
+## Paper Engine
 
-The repository includes an experimental human-readable `.paper` compiler and a
-read-first Paper Studio workspace. Studio displays SVG pages captured from the
-immutable display plan; it is not a browser-layout replacement and is not yet
-the default document frontend.
+The repository includes the human-readable `.paper` compiler and a read-first
+Paper Studio workspace. Studio displays pages captured from the immutable
+display plan; it is not a browser-layout replacement.
 
 ```shell
 go run ./cmd/paper check testdata/paper/studio-demo.paper
@@ -168,26 +162,37 @@ not change document geometry.
 ```text
 row @cards:
   gap: 3mm
-  cross-size: 45mm
-  cross-gap: 3mm
+  height: 45mm
+  line-gap: 3mm
   wrap: "wrap"
-  main-align: "space-between"
-  cross-align: "stretch"
+  justify-content: "space-between"
+  align-items: "stretch"
   align-content: "space-around"
   paragraph @primary:
-    track: "flex"
-    track-size: 50%
-    track-grow: 1
-    track-shrink: 1
-    track-min: 30%
+    width: 50%
+    flex-grow: 1
+    flex-shrink: 1
+    min-width: 30%
     text: "Primary"
   paragraph @secondary:
-    track: "flex"
-    track-size: "auto"
-    track-grow: 1.5
-    track-shrink: 1
-    cross-align: "center"
+    width: "auto"
+    flex-grow: 1.5
+    flex-shrink: 1
+    align-self: "center"
     text: "Secondary"
+```
+
+Use `width` for children inside a row and `height` for children inside a
+column. A whole-number `fr` value divides the remaining space proportionally:
+
+```paper
+row @summary:
+  paragraph @main:
+    width: 2fr
+    text: "Main"
+  paragraph @aside:
+    width: 1fr
+    text: "Aside"
 ```
 
 `wrap` accepts `nowrap`, `wrap`, and `wrap-reverse`. Main alignment accepts
@@ -287,119 +292,32 @@ locale. See the [Brazilian lab example](examples/paper-lab-report/README.md).
 
 ## Examples
 
-Runnable examples live under [`examples/`][examples]. They write generated PDFs
-to `assets/generated/pdf/examples`.
+Paper examples live under [`examples/`][examples].
 
 | Workflow | Command | Output |
 | --- | --- | --- |
-| Hello world | `go run ./examples/hello-world` | `hello-world.pdf` |
-| Drawing primitives | `go run ./examples/drawing` | `drawing.pdf` |
-| Report | `go run ./examples/report` | `paperrune-report.pdf` |
-| Structured report | `go run ./examples/structured-report` | `generated PDF` |
-| Table report | `go run ./examples/table-report` | `paperrune-tables.pdf` |
-| HTML fragment | `go run ./examples/html-fragment` | generated PDF |
-| HTML template | `go run ./examples/html-template` | generated PDF |
-| Images and SVG | `go run ./examples/html-images` | generated PDF |
-| Import pages | `go run ./examples/import-page` | generated PDF |
-| Merge and reorder | `go run ./examples/merge-pdf-pages` | generated PDF |
-| Password protection | `go run ./examples/protect-pdf` | generated PDF |
-| Signing | `go run ./examples/sign-pdf` | `signed.pdf` |
+| Paper lab report | `go run ./cmd/paper render --assets examples/paper-lab-report/assets.json --data examples/paper-lab-report/example.json -o output.pdf examples/paper-lab-report/lab-report.paper` | `output.pdf` |
+| Paper invoice | `go run ./cmd/paper render --data examples/invoice/example.json -o invoice.pdf examples/invoice/invoice.paper` | `invoice.pdf` |
+| Paper to HTML | `go run ./cmd/paper render --format html --data examples/invoice/example.json -o invoice.html examples/invoice/invoice.paper` | `invoice.html` |
 
-Use `Document.RegisterQRCodePNG` for QR-code verification blocks.
+## Paper to HTML
 
-## HTML support
-
-`HTMLNew()` renders a bounded HTML/CSS subset, not browser layout. `Write` uses
-a shared compiled-plan cache under the default resource policy; applications
-that need explicit plan ownership can use `CompileHTML` and `WriteCompiled`.
-
-Public compilation and tokenization accept at most 4 MiB and 100,000 HTML
-tokens. Rendering a compiled plan still applies the destination
-`HTML.MaxHTMLBytes`; compiled template values are also size-checked before
-replacement.
-
-Choose the API by what changes:
-
-| Use case | API |
-| --- | --- |
-| Normal fragment | `pdf.HTMLNew().Write` |
-| Explicit plan lifetime or diagnostics | `document.CompileHTML` and `html.WriteCompiled` |
-| One-off template with trusted raw HTML | `document.RenderHTMLTemplate` |
-| Same HTML shape with changing values | `document.CompileHTMLTemplate` and `html.WriteTemplate` |
-
-Compiled template slots are allowed in text and safe attributes such as
-`href`, `src`, `alt`, `width`, and `height`. They are rejected in tags, CSS,
-raw HTML, event attributes, and `class`/`style`/`id`.
+HTML is a deterministic output format, not an authoring frontend. Plan Paper
+once and export its exact display-list pages as inline SVG:
 
 ```go
-template, err := document.CompileHTMLTemplate(`
-    <h1>{{title}}</h1>
-    <p>Customer: {{customer}}</p>
-    <p><a href="{{url}}">{{url_text}}</a></p>
-    <img src="{{logo}}" alt="{{logo_alt}}" width="55mm">
-`)
-if err != nil {
+plan, result, err := document.PlanPaper("invoice.paper", source)
+if err != nil || !result.OK() {
 	return err
 }
-
-html := pdf.HTMLNew()
-html.AllowLocalImages = true
-err = html.WriteTemplateContext(ctx, 6, template, document.HTMLTemplateValues{
-	"title":    "Invoice A-100",
-	"customer": "Northwind",
-	"url":      "https://example.com/invoices/A-100",
-	"url_text": "Open invoice",
-	"logo":     "/absolute/path/logo.png",
-	"logo_alt": "Company logo",
-})
-if err != nil {
-	return err
-}
+html, err := plan.ExportHTML()
 ```
 
-Supported content includes text styling, links, paragraphs, headings, lists,
-tables, images, inline SVG, boxes, borders, spacing, colors, page breaks, and
-a bounded flexbox subset for direct child blocks.
-
-Compiled fragments expose lightweight diagnostics:
-
-```go
-compiled, err := document.CompileHTML(fragment)
-if err != nil {
-	return err
-}
-
-stats := compiled.Stats()
-issues := compiled.RecoveryIssues()
-dump := compiled.DebugDump()
-_, _, _ = stats, issues, dump
-```
-
-`Stats` reports reusable parse-product counts. `RecoveryIssues` reports
-unclosed, misnested, or unexpected closing tags. `DebugDump` is for human
-diagnostics and is not a stable wire format.
+Each HTML page contains the same immutable SVG display commands used by Paper
+Studio. Browser CSS only arranges page sheets; it does not measure text, wrap,
+position, or paginate authored content.
 
 ## Advanced workflows
-
-### Typed document models
-
-Use `layout.NewDocumentModel` when an application wants typed Go blocks instead
-of HTML templates. The `document` package renders the model with
-`WriteDocument` without duplicating the layout API.
-
-```go
-model := layout.NewDocumentModel(
-	"Receipt A-100",
-	layout.ParagraphBlock{
-		Segments: []layout.TextSegment{{Text: "Thank you for your purchase."}},
-	},
-)
-
-pdf.WriteDocument(model)
-```
-
-Keep product-specific document names and builders in the application rather
-than adding business-specific concepts to the shared library.
 
 ### Large PDF output
 
@@ -418,12 +336,14 @@ is disabled for signed output because signing needs the complete byte range.
 
 Standard PDF fonts require no setup:
 
-```go
-pdf.SetFont("Helvetica", "", 12)
+```paper
+style @body:
+  font: "Helvetica"
+  size: 12pt
 ```
 
-Use `AddUTF8Font` or `AddUTF8FontFromBytes` for UTF-8 TrueType fonts. Use
-`RTL()` and `LTR()` to switch right-to-left rendering mode.
+Register UTF-8 TrueType resources through an explicit Paper asset manifest or
+`PaperAssetCatalog`, then select the declared family from Paper styles.
 
 For non-UTF-8 TrueType, OpenType/CFF, or Type1 fonts, generate a JSON font
 definition with `font.Make` or `cmd/fontmaker`:
@@ -494,7 +414,7 @@ workflow.
 | Package | Purpose |
 | --- | --- |
 | `document` | Main PDF generation and rendering API |
-| `layout` | Typed block model, geometry, pagination, and measurement primitives |
+| `layout` | Internal shared layout model and measurement primitives |
 | `font` | Font parsing and JSON font definition generation |
 | `importpdf` | Bounded classic-xref parser and imported-page resolver |
 | `inspect` | Lightweight PDF structure, stream, page, and text inspection |
@@ -529,13 +449,9 @@ test suite does not remove or overwrite repository assets. See
 
 ## Errors
 
-Most `Document` methods record errors on the document instead of returning
-errors directly. Once an error is set, later methods usually return without
-changing the PDF. Check `Ok()`, `Err()`, or `Error()` after generation,
-especially before trusting output.
-
-Applications can transfer their own failures into the PDF object with
-`SetError()` or `SetErrorf()`.
+Paper entry points return errors for compilation or rendering failure.
+Once an error is recorded, later operations do not change the PDF. Check
+`Ok()`, `Err()`, or `Error()` before trusting output.
 
 ## License
 
@@ -553,6 +469,5 @@ maintainers through the repository's normal project contact channel.
 [badge-license]: https://img.shields.io/badge/license-custom-orange.svg
 [ci]: https://github.com/cssbruno/paperrune/actions/workflows/ci.yml
 [examples]: examples
-[fpdf-site]: http://www.fpdf.org/
 [godoc]: https://pkg.go.dev/github.com/cssbruno/paperrune
 [license]: https://raw.githubusercontent.com/cssbruno/paperrune/main/LICENSE

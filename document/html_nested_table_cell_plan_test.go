@@ -20,12 +20,12 @@ import (
 func TestHTMLUnifiedNestedTableCellPreservesImageDisplayResource(t *testing.T) {
 	image := "data:image/png;base64," + base64.StdEncoding.EncodeToString(htmlImagePlanFixturePNG(t))
 	source := `<table><tr><td width="200pt"><table><tr><td width="200pt"><figure><img src="` + image + `" alt="nested swatch" width="24" height="12"><figcaption>Nested image</figcaption></figure></td></tr></table></td></tr></table>`
-	compiled, err := CompileHTML(source)
+	compiled, err := compileHTML(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ table{border-collapse:collapse} .outer{width:100%;break-inside:avoid}
 </td></tr></tbody></table>`
 
 func TestHTMLUnifiedNestedTableCellGeometrySemanticsLinksAndPDF(t *testing.T) {
-	compiled, err := CompileHTML(htmlNestedTableCellFixture)
+	compiled, err := compileHTML(htmlNestedTableCellFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestHTMLUnifiedNestedTableCellGeometrySemanticsLinksAndPDF(t *testing.T) {
 		t.Fatalf("nested table geometry = %#v", outer.Body[0].Cells[0].Blocks[1])
 	}
 
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestHTMLUnifiedNestedTableCellGeometrySemanticsLinksAndPDF(t *testing.T) {
 	tagged := htmlUnifiedFlexTestPlanner()
 	tagged.EnableTaggedPDF()
 	tagged.SetComplianceMetadata(ComplianceMetadata{PDFUA2: true, Title: "Nested HTML table", Lang: "en-US"})
-	taggedPlan, err := tagged.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	taggedPlan, err := tagged.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,24 +133,24 @@ func TestHTMLUnifiedNestedTableCellLimitsCancellationAndConcurrentReuse(t *testi
 	for index := 0; index < htmlUnifiedMaxNestedTableDepth+1; index++ {
 		deep = `<table><tr><td>` + deep + `</td></tr></table>`
 	}
-	compiled, err := CompileHTML(deep)
+	compiled, err := compileHTML(deep)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	failed, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
-	if !errors.Is(err, ErrHTMLLimitExceeded) || failed.Hash() != "" || planner.PageCount() != 0 || planner.Error() != nil {
+	failed, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
+	if !errors.Is(err, errHTMLLimitExceeded) || failed.Hash() != "" || planner.PageCount() != 0 || planner.Error() != nil {
 		t.Fatalf("nested depth failure plan=%q pages=%d documentErr=%v err=%v", failed.Hash(), planner.PageCount(), planner.Error(), err)
 	}
 
-	compiled, err = CompileHTML(htmlNestedTableCellFixture)
+	compiled, err = compileHTML(htmlNestedTableCellFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	planner = htmlUnifiedFlexTestPlanner()
-	failed, err = planner.PlanCompiledHTMLContext(canceled, 12, compiled)
+	failed, err = planner.planCompiledHTMLContext(canceled, 12, compiled)
 	if !errors.Is(err, context.Canceled) || failed.Hash() != "" || planner.PageCount() != 0 {
 		t.Fatalf("nested cancellation plan=%q pages=%d err=%v", failed.Hash(), planner.PageCount(), err)
 	}
@@ -163,7 +163,7 @@ func TestHTMLUnifiedNestedTableCellLimitsCancellationAndConcurrentReuse(t *testi
 		group.Add(1)
 		go func(index int) {
 			defer group.Done()
-			plan, planErr := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled)
+			plan, planErr := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled)
 			hashes[index], errs[index] = plan.Hash(), planErr
 		}(index)
 	}
@@ -180,12 +180,12 @@ func TestHTMLUnifiedNestedTableCellVisualFixture(t *testing.T) {
 	if destination == "" {
 		t.Skip("set PAPERRUNE_NESTED_TABLE_FIXTURE_PDF to write the reviewed nested-table PDF")
 	}
-	compiled, err := CompileHTML(htmlNestedTableCellFixture)
+	compiled, err := compileHTML(htmlNestedTableCellFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
 	planner := htmlUnifiedFlexTestPlanner()
-	plan, err := planner.PlanCompiledHTMLContext(context.Background(), 12, compiled)
+	plan, err := planner.planCompiledHTMLContext(context.Background(), 12, compiled)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestHTMLUnifiedNestedTableCellVisualFixture(t *testing.T) {
 	}
 }
 
-func mustResolveHTMLUnifiedForNestedTableTest(t *testing.T, planner *Document, compiled *CompiledHTML) *CompiledHTML {
+func mustResolveHTMLUnifiedForNestedTableTest(t *testing.T, planner *pdfDocument, compiled *compiledHTML) *compiledHTML {
 	t.Helper()
 	resolved, err := planner.resolveCompiledHTMLUnifiedSnapshot(context.Background(), compiled, 12)
 	if err != nil {
@@ -216,13 +216,13 @@ func mustResolveHTMLUnifiedForNestedTableTest(t *testing.T, planner *Document, c
 }
 
 func BenchmarkHTMLUnifiedNestedTableCellPlanning(b *testing.B) {
-	compiled, err := CompileHTML(strings.TrimSpace(htmlNestedTableCellFixture))
+	compiled, err := compileHTML(strings.TrimSpace(htmlNestedTableCellFixture))
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()
 	for index := 0; index < b.N; index++ {
-		if _, err := htmlUnifiedFlexTestPlanner().PlanCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
+		if _, err := htmlUnifiedFlexTestPlanner().planCompiledHTMLContext(context.Background(), 12, compiled); err != nil {
 			b.Fatal(err)
 		}
 	}

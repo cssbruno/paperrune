@@ -22,7 +22,7 @@ import (
 // resolveCompiledHTMLImageSources snapshots every non-data image before
 // lowering. The detached CompiledHTML clone owns the bytes, so planning and
 // later painting never reopen a path or consult ambient state.
-func (f *Document) resolveCompiledHTMLImageSources(ctx context.Context, compiled *CompiledHTML) (*CompiledHTML, error) {
+func (f *pdfDocument) resolveCompiledHTMLImageSources(ctx context.Context, compiled *compiledHTML) (*compiledHTML, error) {
 	if compiled == nil {
 		return nil, errors.New("document: compiled HTML is nil")
 	}
@@ -115,7 +115,7 @@ func (f *Document) resolveCompiledHTMLImageSources(ctx context.Context, compiled
 	return &clone, nil
 }
 
-func htmlPreflightUnifiedImage(token HTMLSegmentType, index int, decl map[string]string) error {
+func htmlPreflightUnifiedImage(token htmlSegmentType, index int, decl map[string]string) error {
 	for name := range token.Attr {
 		switch name {
 		case "src", "alt", "width", "height", "align":
@@ -138,7 +138,7 @@ func htmlPreflightUnifiedImage(token HTMLSegmentType, index int, decl map[string
 	return nil
 }
 
-func (f *Document) readHTMLPlanningImage(ctx context.Context, name string) ([]byte, string, error) {
+func (f *pdfDocument) readHTMLPlanningImage(ctx context.Context, name string) ([]byte, string, error) {
 	loader := f.resourceLoader
 	if loader == nil {
 		loader = FileResourceLoader{}

@@ -38,7 +38,7 @@ func TestTypedRowColumnTableStructuredCaptionStyleRefDestinationsCaptureRasterAn
 		{Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFixed, Size: 140}, Block: table},
 		{Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFixed, Size: 70}, Block: rowColumnTableParagraph("SIDE")},
 	}}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 120}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 240, Ht: 120}), WithNoCompression(), WithDeterministicOutput())
 	doc := &layout.LayoutDocument{Language: "en-US", PageTemplate: layout.PageTemplate{Margins: layout.Spacing{Left: 10, Top: 10, Right: 10, Bottom: 10}}, Body: []layout.Block{container}}
 	plan, err := planner.PlanLayoutDocument(doc)
 	if err != nil || plan.PageCount() != 1 || plan.Hash() == "" || planner.PageCount() != 0 {
@@ -93,7 +93,7 @@ func TestTypedRowColumnTableStructuredCaptionStyleRefDestinationsCaptureRasterAn
 	if err != nil || status != "captured" || raster == nil || len(raster.Pages) != 1 || raster.Pages[0].PNGSHA256 == "" {
 		t.Fatalf("nested table raster = status %q evidence %+v, %v", status, raster, err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if pages, err := target.WriteLayoutDocumentPlan(plan); err != nil || pages != 1 {
 		t.Fatalf("nested table PDF replay = pages %d, %v", pages, err)
 	}
@@ -109,7 +109,7 @@ func TestTypedRowColumnTablePaginationCaptionConflictsAndAtomicFailures(t *testi
 	container := func(table layout.TableBlock) layout.RowColumnBlock {
 		return layout.RowColumnBlock{Direction: layout.RowDirection, Items: []layout.RowColumnItem{{Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFixed, Size: 80}, Block: table}}}
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 70}))
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 70}))
 	doc := func(table layout.TableBlock) *layout.LayoutDocument {
 		return &layout.LayoutDocument{PageTemplate: layout.PageTemplate{Margins: layout.Spacing{Left: 10, Top: 10, Right: 10, Bottom: 10}}, Body: []layout.Block{container(table)}}
 	}
@@ -168,7 +168,7 @@ func TestTypedRowColumnMultiPageTablePreservesTrackMastersBreaksResourcesAndSema
 		},
 		Body: []layout.Block{container},
 	}
-	planner := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 130, Ht: 82}), WithNoCompression(), WithDeterministicOutput())
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 130, Ht: 82}), WithNoCompression(), WithDeterministicOutput())
 	plan, err := planner.PlanLayoutDocument(doc)
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestTypedRowColumnMultiPageTablePreservesTrackMastersBreaksResourcesAndSema
 	if err != nil || status != "captured" || raster == nil || len(raster.Pages) != len(projection.Pages) {
 		t.Fatalf("multi-page raster = %q %+v, %v", status, raster, err)
 	}
-	target := MustNew(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	if pages, writeErr := target.WriteLayoutDocumentPlan(plan); writeErr != nil || pages != len(projection.Pages) {
 		t.Fatalf("PDF replay = %d pages, %v", pages, writeErr)
 	}
@@ -294,7 +294,7 @@ func TestTypedRowColumnMultiPageTablePreservesTrackMastersBreaksResourcesAndSema
 	if plan.Hash() != before {
 		t.Fatal("multi-page nested table plan aliases authored rows")
 	}
-	limited := MustNew(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 130, Ht: 82}), WithLimits(Limits{MaxPages: 1}))
+	limited := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 130, Ht: 82}), WithLimits(Limits{MaxPages: 1}))
 	if failed, limitErr := limited.PlanLayoutDocument(doc); limitErr == nil || failed.Hash() != "" || limited.PageCount() != 0 {
 		t.Fatalf("nested table page-limit failure = hash %q source pages %d, %v", failed.Hash(), limited.PageCount(), limitErr)
 	}

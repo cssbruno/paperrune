@@ -15,7 +15,7 @@ func TestTableSyntaxIsLosslessAndFormatsStably(t *testing.T) {
 		"    body @body:\n" +
 		"      table @ledger:\n" +
 		"        repeat-header: true\n" +
-		"        table-track @name:\n" +
+		"        table-column @name:\n" +
 		"          width: 90pt\n" +
 		"        table-header @head:\n" +
 		"          table-row @head-row:\n" +
@@ -41,5 +41,12 @@ func TestTableSyntaxIsLosslessAndFormatsStably(t *testing.T) {
 	second, secondErr := Format(reparsed.AST)
 	if !reparsed.OK() || secondErr != nil || !bytes.Equal(second, formatted) {
 		t.Fatalf("table format round trip = %#v, %v\nfirst:\n%s\nsecond:\n%s", reparsed.Diagnostics, secondErr, formatted, second)
+	}
+}
+
+func TestTableTrackLegacySyntaxIsRejected(t *testing.T) {
+	parsed := Parse("legacy-table.paper", "document:\n  page:\n    body:\n      table:\n        table-track:\n          width: 90pt\n")
+	if parsed.OK() {
+		t.Fatal("removed table-track syntax was accepted; use table-column")
 	}
 }

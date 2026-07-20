@@ -20,7 +20,7 @@ comparable stages over a deterministic 48-paragraph fixture:
   production preflight plus positioned-command replay. It does not serialize
   the final PDF.
 - `BenchmarkPaperEngineProductionDefault` measures the public typed
-  `WriteDocument` route after the unified default cutover, including planning,
+  private layout-plan route used by the Paper frontend, including planning,
   painting, and deterministic PDF serialization. It is calibrated separately
   so the public entry point cannot regress while the lower-level cohorts stay
   within their own budgets.

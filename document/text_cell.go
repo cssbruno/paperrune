@@ -21,7 +21,7 @@ import (
 //
 // See the example for SetLeftMargin() to see how this function can be used to
 // manage multiple columns.
-func (f *Document) SetAcceptPageBreakFunc(fnc func() bool) {
+func (f *pdfDocument) SetAcceptPageBreakFunc(fnc func() bool) {
 	f.acceptPageBreak = fnc
 	f.acceptPageBreakSet = true
 }
@@ -65,7 +65,7 @@ func (f *Document) SetAcceptPageBreakFunc(fnc func() bool) {
 //
 // linkStr is a target URL or empty for no external link. A non-zero value for
 // link takes precedence over linkStr.
-func (f *Document) CellFormat(w, h float64, txtStr, borderStr string, ln int, alignStr string, fill bool, link int, linkStr string) {
+func (f *pdfDocument) CellFormat(w, h float64, txtStr, borderStr string, ln int, alignStr string, fill bool, link int, linkStr string) {
 	if f.err != nil {
 		return
 	}
@@ -310,7 +310,7 @@ func (f *Document) CellFormat(w, h float64, txtStr, borderStr string, ln int, al
 	}
 }
 
-func (f *Document) estimateCellFormatBufferCapacity(txtStr, borderStr string, fill bool) int {
+func (f *pdfDocument) estimateCellFormatBufferCapacity(txtStr, borderStr string, fill bool) int {
 	capacity := 0
 	if fill || borderStr == "1" {
 		capacity += 96
@@ -363,7 +363,7 @@ func utf8JustificationWords(text string) ([]string, bool) {
 	return words, fieldCount > 1 && len(words) > 1
 }
 
-func (f *Document) cellSimple(w, h float64, txtStr string) {
+func (f *pdfDocument) cellSimple(w, h float64, txtStr string) {
 	if f.err != nil {
 		return
 	}
@@ -458,7 +458,7 @@ func reverseText(text string) string {
 
 // Cell is a simpler version of CellFormat with no fill, border, links or
 // special alignment. The Cell_strikeout() example demonstrates this method.
-func (f *Document) Cell(w, h float64, txtStr string) {
+func (f *pdfDocument) Cell(w, h float64, txtStr string) {
 	if f.ws == 0 {
 		f.cellSimple(w, h, txtStr)
 		return
@@ -469,7 +469,7 @@ func (f *Document) Cell(w, h float64, txtStr string) {
 // Cellf is a simpler printf-style version of CellFormat with no fill, border,
 // links or special alignment. See documentation for the fmt package for
 // details on fmtStr and args.
-func (f *Document) Cellf(w, h float64, fmtStr string, args ...any) {
+func (f *pdfDocument) Cellf(w, h float64, fmtStr string, args ...any) {
 	if f.ws == 0 {
 		f.cellSimple(w, h, sprintf(fmtStr, args...))
 		return

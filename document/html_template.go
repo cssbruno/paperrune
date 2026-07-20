@@ -25,12 +25,12 @@ const (
 // CompiledHTMLTemplate rendering. RenderHTMLTemplate HTML-escapes plain values
 // before insertion. CompiledHTMLTemplate inserts plain values directly into
 // precompiled text or attribute slots without reparsing them as HTML.
-type HTMLTemplateValues map[string]any
+type htmlTemplateValues map[string]any
 
 // HTMLTemplateRaw inserts trusted HTML without escaping in RenderHTMLTemplate.
 // It is not supported by CompiledHTMLTemplate because raw HTML can change the
 // precompiled document structure.
-type HTMLTemplateRaw string
+type htmlTemplateRaw string
 
 // HTMLTemplateImage renders a template value as an HTML img tag.
 //
@@ -38,7 +38,7 @@ type HTMLTemplateRaw string
 // or a local path when HTML.AllowLocalImages is enabled before rendering.
 // Width, Height, MaxWidth, MaxHeight, ObjectFit, Align, Class, and Style map to
 // normal HTML attributes/CSS supported by HTMLNew.
-type HTMLTemplateImage struct {
+type htmlTemplateImage struct {
 	Source     string
 	Alt        string
 	Width      string
@@ -60,8 +60,8 @@ type HTMLTemplateImage struct {
 // or raw HTML structure. Typical attribute slots include href, src, alt, width,
 // and height. Use RenderHTMLTemplate for templates that need trusted raw HTML
 // insertion or structural changes.
-type CompiledHTMLTemplate struct {
-	compiled *CompiledHTML
+type compiledHTMLTemplate struct {
+	compiled *compiledHTML
 	slots    []compiledHTMLTemplateSlot
 }
 
@@ -85,7 +85,7 @@ type htmlTemplatePlaceholder struct {
 // Placeholder keys are looked up literally, with an additional fallback that
 // treats {{.key}} as {{key}}. Missing keys return an error so generated PDFs do
 // not silently contain unresolved placeholders.
-func RenderHTMLTemplate(templateHTML string, values HTMLTemplateValues) (string, error) {
+func renderHTMLTemplate(templateHTML string, values htmlTemplateValues) (string, error) {
 	var err error
 	out := htmlTemplatePlaceholderPattern.ReplaceAllStringFunc(templateHTML, func(match string) string {
 		if err != nil {
@@ -130,18 +130,18 @@ func RenderHTMLTemplate(templateHTML string, values HTMLTemplateValues) (string,
 // Placeholders are accepted in text nodes and non-structural attributes. They
 // are rejected in tag names, CSS rules, SVG content, style/script content,
 // class/style/id attributes, and event handler attributes.
-func CompileHTMLTemplate(templateHTML string) (*CompiledHTMLTemplate, error) {
-	return CompileHTMLTemplateContext(context.Background(), templateHTML)
+func compileHTMLTemplate(templateHTML string) (*compiledHTMLTemplate, error) {
+	return compileHTMLTemplateContext(context.Background(), templateHTML)
 }
 
 // CompileHTMLTemplateContext compiles a supported HTML template once while
 // checking ctx during HTML compilation. See CompileHTMLTemplate for slot rules.
-func CompileHTMLTemplateContext(ctx context.Context, templateHTML string) (*CompiledHTMLTemplate, error) {
+func compileHTMLTemplateContext(ctx context.Context, templateHTML string) (*compiledHTMLTemplate, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if len(templateHTML) > htmlDefaultMaxHTMLBytes {
-		return nil, ErrHTMLLimitExceeded
+		return nil, errHTMLLimitExceeded
 	}
 	if strings.Contains(templateHTML, htmlTemplateSlotPrefix) {
 		return nil, errors.New("HTML template contains a reserved slot marker")
@@ -151,7 +151,7 @@ func CompileHTMLTemplateContext(ctx context.Context, templateHTML string) (*Comp
 		return nil, err
 	}
 	if len(markedHTML) > htmlDefaultMaxHTMLBytes {
-		return nil, ErrHTMLLimitExceeded
+		return nil, errHTMLLimitExceeded
 	}
 	compiled, err := compileHTMLWithDataImageLimitContext(ctx, markedHTML, true, htmlDefaultMaxDataImageBytes)
 	if err != nil {
@@ -162,7 +162,7 @@ func CompileHTMLTemplateContext(ctx context.Context, templateHTML string) (*Comp
 	if err != nil {
 		return nil, err
 	}
-	return &CompiledHTMLTemplate{compiled: compiled, slots: slots}, nil
+	return &compiledHTMLTemplate{compiled: compiled, slots: slots}, nil
 }
 
 // WriteTemplate fills a compiled HTML template with values and renders it.
@@ -171,17 +171,17 @@ func CompileHTMLTemplateContext(ctx context.Context, templateHTML string) (*Comp
 // reparsed as HTML, so HTMLTemplateRaw and HTMLTemplateImage are intentionally
 // unsupported. For image sources, place the slot inside a static img tag, for
 // example <img src="{{logo}}" alt="{{alt}}">.
-func (html *HTML) WriteTemplate(lineHt float64, template *CompiledHTMLTemplate, values HTMLTemplateValues) {
+func (html *htmlRenderer) WriteTemplate(lineHt float64, template *compiledHTMLTemplate, values htmlTemplateValues) {
 	_ = html.writeTemplateContextEntry(context.Background(), lineHt, template, values, "HTML.WriteTemplate")
 }
 
 // WriteTemplateContext fills a compiled HTML template with values, renders it,
 // and checks ctx before render. See WriteTemplate for value handling.
-func (html *HTML) WriteTemplateContext(ctx context.Context, lineHt float64, template *CompiledHTMLTemplate, values HTMLTemplateValues) error {
+func (html *htmlRenderer) WriteTemplateContext(ctx context.Context, lineHt float64, template *compiledHTMLTemplate, values htmlTemplateValues) error {
 	return html.writeTemplateContextEntry(ctx, lineHt, template, values, "HTML.WriteTemplateContext")
 }
 
-func (html *HTML) writeTemplateContextEntry(ctx context.Context, lineHt float64, template *CompiledHTMLTemplate, values HTMLTemplateValues, entryPoint string) error {
+func (html *htmlRenderer) writeTemplateContextEntry(ctx context.Context, lineHt float64, template *compiledHTMLTemplate, values htmlTemplateValues, entryPoint string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -216,7 +216,7 @@ func markHTMLTemplatePlaceholders(templateHTML string) (string, []htmlTemplatePl
 	return marked, placeholders, nil
 }
 
-func compiledHTMLTemplateSlots(tokens []HTMLSegmentType, placeholders []htmlTemplatePlaceholder) ([]compiledHTMLTemplateSlot, error) {
+func compiledHTMLTemplateSlots(tokens []htmlSegmentType, placeholders []htmlTemplatePlaceholder) ([]compiledHTMLTemplateSlot, error) {
 	if len(placeholders) == 0 {
 		return nil, nil
 	}
@@ -326,13 +326,13 @@ func compiledHTMLTemplateDisallowedContext(stack []string) string {
 	return ""
 }
 
-func (template *CompiledHTMLTemplate) render(values HTMLTemplateValues, maxBytes int) (*CompiledHTML, error) {
+func (template *compiledHTMLTemplate) render(values htmlTemplateValues, maxBytes int) (*compiledHTML, error) {
 	if template == nil || template.compiled == nil {
 		return nil, errors.New("compiled HTML template is nil")
 	}
 	if len(template.slots) == 0 {
 		if template.compiled.sourceBytes > maxBytes {
-			return nil, ErrHTMLLimitExceeded
+			return nil, errHTMLLimitExceeded
 		}
 		return template.cloneCompiled(), nil
 	}
@@ -393,13 +393,13 @@ func (template *CompiledHTMLTemplate) render(values HTMLTemplateValues, maxBytes
 	return rendered, nil
 }
 
-func (template *CompiledHTMLTemplate) renderedSize(replacements map[string]string, maxBytes int) (int, error) {
+func (template *compiledHTMLTemplate) renderedSize(replacements map[string]string, maxBytes int) (int, error) {
 	if maxBytes <= 0 {
 		maxBytes = htmlDefaultMaxHTMLBytes
 	}
 	size := template.compiled.sourceBytes
 	if size > maxBytes {
-		return 0, ErrHTMLLimitExceeded
+		return 0, errHTMLLimitExceeded
 	}
 	for _, slot := range template.slots {
 		value, ok := replacements[slot.marker]
@@ -418,7 +418,7 @@ func (template *CompiledHTMLTemplate) renderedSize(replacements map[string]strin
 		delta := len(value) - len(slot.placeholder)
 		if delta > 0 {
 			if count > (maxBytes-size)/delta {
-				return 0, ErrHTMLLimitExceeded
+				return 0, errHTMLLimitExceeded
 			}
 			size += count * delta
 		} else {
@@ -428,7 +428,7 @@ func (template *CompiledHTMLTemplate) renderedSize(replacements map[string]strin
 	return size, nil
 }
 
-func (template *CompiledHTMLTemplate) cloneCompiled() *CompiledHTML {
+func (template *compiledHTMLTemplate) cloneCompiled() *compiledHTML {
 	base := template.compiled
 	rendered := *base
 	rendered.tokens = cloneHTMLTokens(base.tokens)
@@ -439,7 +439,7 @@ func (template *CompiledHTMLTemplate) cloneCompiled() *CompiledHTML {
 	return &rendered
 }
 
-func compiledHTMLTemplateTables(tokens []HTMLSegmentType) map[int]compiledHTMLTable {
+func compiledHTMLTemplateTables(tokens []htmlSegmentType) map[int]compiledHTMLTable {
 	tables := make(map[int]compiledHTMLTable)
 	for i, token := range tokens {
 		if token.Cat != 'O' || token.Str != "table" {
@@ -451,7 +451,7 @@ func compiledHTMLTemplateTables(tokens []HTMLSegmentType) map[int]compiledHTMLTa
 	return tables
 }
 
-func htmlTemplateValue(values HTMLTemplateValues, key string) (any, bool) {
+func htmlTemplateValue(values htmlTemplateValues, key string) (any, bool) {
 	value, ok := values[key]
 	if !ok && strings.HasPrefix(key, ".") {
 		value, ok = values[strings.TrimPrefix(key, ".")]
@@ -464,11 +464,11 @@ func renderCompiledHTMLTemplateValue(value any) (string, error) {
 		return "", nil
 	}
 	switch v := value.(type) {
-	case HTMLTemplateRaw:
+	case htmlTemplateRaw:
 		return "", errors.New("HTMLTemplateRaw is not supported by compiled HTML templates")
-	case HTMLTemplateImage:
+	case htmlTemplateImage:
 		return "", errors.New("HTMLTemplateImage is not supported by compiled HTML templates; use a static <img> tag with a src placeholder")
-	case *HTMLTemplateImage:
+	case *htmlTemplateImage:
 		return "", errors.New("HTMLTemplateImage is not supported by compiled HTML templates; use a static <img> tag with a src placeholder")
 	case string:
 		return v, nil
@@ -492,11 +492,11 @@ func renderHTMLTemplateValue(value any) (string, error) {
 	switch v := value.(type) {
 	case nil:
 		return "", nil
-	case HTMLTemplateRaw:
+	case htmlTemplateRaw:
 		return string(v), nil
-	case HTMLTemplateImage:
+	case htmlTemplateImage:
 		return renderHTMLTemplateImage(v)
-	case *HTMLTemplateImage:
+	case *htmlTemplateImage:
 		if v == nil {
 			return "", nil
 		}
@@ -512,7 +512,7 @@ func renderHTMLTemplateValue(value any) (string, error) {
 	}
 }
 
-func renderHTMLTemplateImage(image HTMLTemplateImage) (string, error) {
+func renderHTMLTemplateImage(image htmlTemplateImage) (string, error) {
 	if strings.TrimSpace(image.Source) == "" {
 		return "", errors.New("image source is required")
 	}

@@ -18,7 +18,7 @@ const (
 	typedGridMaxColumns         = 64
 )
 
-func (f *Document) measurePaperGridRow(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping,
+func (f *pdfDocument) measurePaperGridRow(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping,
 	block paperPlanningBlock, contentWidth layoutengine.Fixed, left, top, right, bottom float64, nextNode *layoutengine.NodeID, fallback *int) (paperMeasuredGridRow, error) {
 	if block.gridRow == nil || len(block.gridRow.cells) == 0 {
 		return paperMeasuredGridRow{}, fmt.Errorf("%s: grid row has no cells", block.path)

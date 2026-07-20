@@ -11,15 +11,13 @@ func TestRowColumnGrammarAndFormatterRoundTrip(t *testing.T) {
 		"    body:\n" +
 		"      row @summary:\n" +
 		"        gap: 8pt\n" +
-		"        cross-align: \"center\"\n" +
+		"        align-items: \"center\"\n" +
 		"        heading @label:\n" +
-		"          track: \"fixed\"\n" +
-		"          track-size: 72pt\n" +
+		"          width: 72pt\n" +
 		"          text: \"Label\"\n" +
 		"        paragraph @value:\n" +
-		"          track: \"fraction\"\n" +
-		"          track-weight: 2\n" +
-		"          cross-align: \"end\"\n" +
+		"          width: 2fr\n" +
+		"          align-self: \"end\"\n" +
 		"          text: \"Value\"\n"
 	parsed := Parse("row.paper", source)
 	if !parsed.OK() {

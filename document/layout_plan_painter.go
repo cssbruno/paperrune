@@ -51,7 +51,7 @@ type preparedCorePlanPDF struct {
 // It accepts only a fresh Document and a paint-ready core-font LayoutPlan.
 // Complete plan, policy, page, and font preflight happens before the Document
 // is opened, a resource is installed, or a page is added.
-func (f *Document) paintCoreLayoutPlanPDF(plan layoutengine.LayoutPlan) error {
+func (f *pdfDocument) paintCoreLayoutPlanPDF(plan layoutengine.LayoutPlan) error {
 	prepared, err := f.preflightCoreLayoutPlanPDF(plan)
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (f *Document) paintCoreLayoutPlanPDF(plan layoutengine.LayoutPlan) error {
 	return f.paintPreparedCoreLayoutPlanPDF(prepared)
 }
 
-func (f *Document) paintPreparedCoreLayoutPlanPDF(prepared preparedCorePlanPDF) error {
+func (f *pdfDocument) paintPreparedCoreLayoutPlanPDF(prepared preparedCorePlanPDF) error {
 	return f.paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared, false, false)
 }
 
@@ -67,7 +67,7 @@ func (f *Document) paintPreparedCoreLayoutPlanPDF(prepared preparedCorePlanPDF) 
 // into the active page when reuseCurrent is true. The fragment planner has
 // already positioned its first page in the captured body region, so this sink
 // performs no fitting or cursor-dependent layout.
-func (f *Document) paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared preparedCorePlanPDF, reuseCurrent, compactNativeRuns bool) error {
+func (f *pdfDocument) paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared preparedCorePlanPDF, reuseCurrent, compactNativeRuns bool) error {
 	for _, id := range prepared.fontOrder {
 		font := prepared.fonts[id]
 		f.ensureResourceStore().setFont(font.key, font.font)
@@ -102,15 +102,15 @@ func (f *Document) paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared prepared
 	return f.err
 }
 
-func (f *Document) preflightCoreLayoutPlanPDF(plan layoutengine.LayoutPlan) (preparedCorePlanPDF, error) {
+func (f *pdfDocument) preflightCoreLayoutPlanPDF(plan layoutengine.LayoutPlan) (preparedCorePlanPDF, error) {
 	return f.preflightCoreLayoutPlanPDFContext(context.Background(), plan)
 }
 
-func (f *Document) preflightCoreLayoutPlanPDFContext(ctx context.Context, plan layoutengine.LayoutPlan) (preparedCorePlanPDF, error) {
+func (f *pdfDocument) preflightCoreLayoutPlanPDFContext(ctx context.Context, plan layoutengine.LayoutPlan) (preparedCorePlanPDF, error) {
 	return f.preflightCoreLayoutPlanPDFContextForTarget(ctx, plan, false)
 }
 
-func (f *Document) preflightCoreLayoutPlanPDFContextForTarget(ctx context.Context, plan layoutengine.LayoutPlan, allowActivePage bool) (preparedCorePlanPDF, error) {
+func (f *pdfDocument) preflightCoreLayoutPlanPDFContextForTarget(ctx context.Context, plan layoutengine.LayoutPlan, allowActivePage bool) (preparedCorePlanPDF, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -200,15 +200,15 @@ func (f *Document) preflightCoreLayoutPlanPDFContextForTarget(ctx context.Contex
 	return prepared, nil
 }
 
-func (f *Document) preflightCorePlanFont(resource layoutengine.CoreFontResource) (preparedCorePlanFont, error) {
+func (f *pdfDocument) preflightCorePlanFont(resource layoutengine.CoreFontResource) (preparedCorePlanFont, error) {
 	return f.preflightCorePlanFontContext(context.Background(), resource)
 }
 
-func (f *Document) preflightCorePlanFontContext(ctx context.Context, resource layoutengine.CoreFontResource) (preparedCorePlanFont, error) {
+func (f *pdfDocument) preflightCorePlanFontContext(ctx context.Context, resource layoutengine.CoreFontResource) (preparedCorePlanFont, error) {
 	return f.preflightPlanFontContext(ctx, resource, nil)
 }
 
-func (f *Document) preflightPlanFontContext(ctx context.Context, resource layoutengine.CoreFontResource, sources plannedFontSources) (preparedCorePlanFont, error) {
+func (f *pdfDocument) preflightPlanFontContext(ctx context.Context, resource layoutengine.CoreFontResource, sources plannedFontSources) (preparedCorePlanFont, error) {
 	if err := ctx.Err(); err != nil {
 		return preparedCorePlanFont{}, err
 	}
