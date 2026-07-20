@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"context"
+	"encoding/ascii85"
 	"errors"
 	"fmt"
 	"io"
@@ -23,6 +24,63 @@ func TestSecurityDecodedStreamLimit(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "uncompressed data exceeds expected size") {
 		t.Fatalf("decodePDFStream() error = %v, want decoded stream size limit", err)
 	}
+}
+
+func TestDecodePDFStreamAcceptsASCII85FlateChain(t *testing.T) {
+	want := []byte("BT /F1 12 Tf (PaperRune) Tj ET")
+	encoded := ascii85FlateBytes(t, want)
+
+	for name, filters := range map[string][]string{
+		"full names": {"ASCII85Decode", "FlateDecode"},
+		"aliases":    {"A85", "Fl"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := decodePDFStream(pdfDict{"Filter": pdfFilterArray(filters...)}, encoded)
+			if err != nil {
+				t.Fatalf("decodePDFStream() error = %v", err)
+			}
+			if !bytes.Equal(got, want) {
+				t.Fatalf("decodePDFStream() = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestDecodePDFStreamRejectsMalformedASCII85FlateChain(t *testing.T) {
+	_, err := decodePDFStream(
+		pdfDict{"Filter": pdfFilterArray("ASCII85Decode", "FlateDecode")},
+		[]byte("not-ascii85~>"),
+	)
+	if err == nil || !strings.Contains(err.Error(), "ASCII85") {
+		t.Fatalf("decodePDFStream() error = %v, want malformed ASCII85 error", err)
+	}
+}
+
+func TestSecurityASCII85FlateDecodedStreamLimit(t *testing.T) {
+	encoded := ascii85FlateBytes(t, bytes.Repeat([]byte{'A'}, MaxDecodedStreamBytes+1))
+	_, err := decodePDFStream(
+		pdfDict{"Filter": pdfFilterArray("ASCII85Decode", "FlateDecode")},
+		encoded,
+	)
+	if err == nil || !strings.Contains(err.Error(), "uncompressed data exceeds expected size") {
+		t.Fatalf("decodePDFStream() error = %v, want decoded stream size limit", err)
+	}
+}
+
+func ascii85FlateBytes(t *testing.T, payload []byte) []byte {
+	t.Helper()
+	compressed := zlibBytes(payload)
+	encoded := make([]byte, ascii85.MaxEncodedLen(len(compressed)))
+	n := ascii85.Encode(encoded, compressed)
+	return append(encoded[:n], '~', '>')
+}
+
+func pdfFilterArray(names ...string) pdfValue {
+	values := make([]pdfValue, 0, len(names))
+	for _, name := range names {
+		values = append(values, pdfValue{kind: pdfValueName, name: name})
+	}
+	return pdfValue{kind: pdfValueArray, array: values}
 }
 
 func TestObjRefAccessors(t *testing.T) {
