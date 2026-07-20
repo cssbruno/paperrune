@@ -26,10 +26,12 @@ const state = {
   committing: false,
   resources: [],
   resourceCatalogEditable: false,
+  resourceFormOpen: false,
+  review: null,
   authoring: null,
   authoringDraft: {operation: 'template'},
   authoringFeedback: null,
-  breakPolicy: 'hard',
+  outlineCollapsed: new Set(),
   pageSetupDraft: null,
   pageSetupFeedback: null,
   loading: false,
@@ -139,6 +141,7 @@ async function performRefresh({quiet = false} = {}) {
       renderWorkspace();
       await loadResources(workspace.revision);
       await loadAuthoring(workspace.revision);
+      await loadReview(workspace.revision);
       loadDeliveryStatus(workspace.revision);
       if (workspace.pages) await showPage(state.page);
       if (workspace.pages && app.dataset.mode === 'accessibility') await loadPDFTags();
@@ -146,6 +149,7 @@ async function performRefresh({quiet = false} = {}) {
       renderStatus();
     }
     if (!changed) await loadResources(workspace.revision);
+    if (!changed) await loadReview(workspace.revision);
     app.classList.toggle('has-no-plan', !workspace.pages);
     app.classList.remove('is-loading');
   } catch (error) {
@@ -170,12 +174,24 @@ function renderHistoryActions() {
   const locked = visualMutationsLocked();
   const undo = $('#history-undo');
   const redo = $('#history-redo');
-  undo.disabled = locked || !state.history.can_undo;
-  redo.disabled = locked || !state.history.can_redo;
-  undo.title = state.history.can_undo ? `Undo ${state.history.undo_label || 'last edit'} (${state.history.undo_count} available)` : 'Nothing to undo';
-  redo.title = state.history.can_redo ? `Redo ${state.history.redo_label || 'last edit'} (${state.history.redo_count} available)` : 'Nothing to redo';
+  setButtonUnavailable(undo, locked || !state.history.can_undo, locked ? 'Undo waits for the current exact plan and any active edit' : 'Nothing to undo');
+  setButtonUnavailable(redo, locked || !state.history.can_redo, locked ? 'Redo waits for the current exact plan and any active edit' : 'Nothing to redo');
+  undo.title = locked ? 'Undo waits for the current exact plan and any active edit' : state.history.can_undo ? `Undo ${state.history.undo_label || 'last edit'} (${state.history.undo_count} available)` : 'Nothing to undo';
+  redo.title = locked ? 'Redo waits for the current exact plan and any active edit' : state.history.can_redo ? `Redo ${state.history.redo_label || 'last edit'} (${state.history.redo_count} available)` : 'Nothing to redo';
   undo.setAttribute('aria-label', state.history.can_undo ? `Undo ${state.history.undo_label || 'last edit'}` : 'Nothing to undo');
   redo.setAttribute('aria-label', state.history.can_redo ? `Redo ${state.history.redo_label || 'last edit'}` : 'Nothing to redo');
+}
+
+function setButtonUnavailable(button, unavailable, reason = '') {
+  button.disabled = false;
+  button.setAttribute('aria-disabled', String(unavailable));
+  if (unavailable) button.dataset.disabledReason = reason;
+  else delete button.dataset.disabledReason;
+  if (unavailable && reason) button.title = reason;
+}
+
+function buttonUnavailable(button) {
+  return button?.getAttribute('aria-disabled') === 'true';
 }
 
 async function applyHistory(action) {
@@ -253,11 +269,110 @@ async function loadResources(revision) {
   renderResources();
 }
 
+async function loadReview(revision) {
+  const scenario = state.scenario ? `&scenario=${encodeURIComponent(state.scenario)}` : '';
+  try {
+    const payload = await api(`/api/review?revision=${encodeURIComponent(revision)}&source_revision=${encodeURIComponent(state.workspace?.source_revision || '')}${scenario}`);
+    if (revision !== state.revision) return;
+    state.review = PaperStudioReviewModel.normalizeReview(payload, state.workspace);
+  } catch (error) {
+    if (revision === state.revision && error.status !== 409) state.review = null;
+  }
+  renderReviewControls();
+}
+
+async function submitReview(payload, errorTarget) {
+  try {
+    const response = await api('/api/review', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload)});
+    state.review = PaperStudioReviewModel.normalizeReview(response, state.workspace);
+    renderReviewControls();
+  } catch (error) {
+    if (error.status === 409) await refresh();
+    else if (errorTarget?.isConnected) errorTarget.textContent = error.message;
+  }
+}
+
+function reviewReferencePayload(file, bytes, bitmap, digest) {
+  let binary = '';
+  const view = new Uint8Array(bytes);
+  for (let offset = 0; offset < view.length; offset += 0x8000) binary += String.fromCharCode(...view.subarray(offset, offset + 0x8000));
+  return {
+    source_revision: state.workspace.source_revision, plan_revision: state.workspace.revision, scenario: state.workspace.scenario || '',
+    kind: 'reference', page: state.page, reference_kind: file.type, reference_digest: digest,
+    reference_data_base64: btoa(binary), width: bitmap.width, height: bitmap.height, transform: [1, 0, 0, 1, 0, 0],
+  };
+}
+
+function renderReviewControls() {
+  const target = $('#review-controls');
+  if (!target) return;
+  target.replaceChildren();
+  const selected = state.editSelection?.target;
+  const comments = (state.review?.comments || []).filter(item => !selected || item.target === selected);
+  const annotations = (state.review?.annotations || []).filter(item => !selected || item.target === selected);
+  $('#review-count').textContent = String((state.review?.comments?.length || 0) + (state.review?.annotations?.length || 0));
+  if (state.review?.reference) {
+    const reference = document.createElement('div'); reference.className = 'review-reference';
+    reference.textContent = `Reference · ${state.review.reference.diff_status || 'stored'} · ${state.review.reference.changedPixels} changed pixels`;
+    target.append(reference);
+  }
+  for (const item of [...comments, ...annotations]) {
+    const entry = document.createElement('article'); entry.className = 'review-entry';
+    const meta = document.createElement('small'); meta.textContent = `${item.target} · page ${item.page}`;
+    const body = document.createElement('div'); body.textContent = item.body || item.note || item.label || 'Pinned annotation';
+    entry.append(meta, body); target.append(entry);
+  }
+  if (!selected) {
+    const empty = document.createElement('span'); empty.className = 'quiet'; empty.textContent = 'Select an addressed node to add a comment or pin.'; target.append(empty);
+  } else {
+    const form = document.createElement('form'); form.className = 'review-form';
+    const label = document.createElement('label'); label.className = 'edit-field';
+    const caption = document.createElement('span'); caption.textContent = `Comment on ${selected}`;
+    const body = document.createElement('textarea'); body.rows = 3; body.maxLength = 4096; body.placeholder = 'Describe the requested change';
+    const error = document.createElement('small'); error.className = 'edit-inline-error'; error.setAttribute('role', 'alert');
+    const actions = document.createElement('div'); actions.className = 'edit-actions';
+    const pin = document.createElement('button'); pin.type = 'button'; pin.className = 'edit-secondary'; pin.textContent = 'Pin annotation';
+    const add = document.createElement('button'); add.type = 'submit'; add.className = 'edit-commit'; add.textContent = 'Add comment';
+    label.append(caption, body, error); actions.append(pin, add); form.append(label, actions);
+    form.addEventListener('submit', event => {
+      event.preventDefault(); error.textContent = '';
+      try { void submitReview(PaperStudioReviewModel.commentPayload(state.workspace, selected, state.page, body.value), error); }
+      catch (failure) { error.textContent = failure.message; }
+    });
+    pin.addEventListener('click', () => { error.textContent = ''; void submitReview(PaperStudioReviewModel.annotationPayload(state.workspace, selected, state.page, body.value), error); });
+    target.append(form);
+  }
+  const reference = document.createElement('label'); reference.className = 'review-reference-picker';
+  const referenceCaption = document.createElement('span'); referenceCaption.textContent = 'Compare PNG/JPEG reference';
+  const file = document.createElement('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg';
+  const referenceError = document.createElement('small'); referenceError.className = 'edit-inline-error'; referenceError.setAttribute('role', 'alert');
+  file.addEventListener('change', async () => {
+    const selectedFile = file.files?.[0]; if (!selectedFile) return;
+    referenceError.textContent = '';
+    if (selectedFile.size > 8 * 1024 * 1024) { referenceError.textContent = 'Reference images must be 8 MB or smaller'; return; }
+    try {
+      const bytes = await selectedFile.arrayBuffer();
+      const hash = await crypto.subtle.digest('SHA-256', bytes);
+      const digest = [...new Uint8Array(hash)].map(value => value.toString(16).padStart(2, '0')).join('');
+      const bitmap = await createImageBitmap(selectedFile);
+      const payload = reviewReferencePayload(selectedFile, bytes, bitmap, digest); bitmap.close();
+      await submitReview(payload, referenceError);
+    } catch (failure) { referenceError.textContent = failure.message; }
+  });
+  reference.append(referenceCaption, file, referenceError); target.append(reference);
+}
+
 function renderResources() {
   const add = $('#resource-add');
-  if (add) { add.hidden = !state.resourceCatalogEditable; add.disabled = visualMutationsLocked(); }
+  if (add) {
+    add.hidden = !state.resourceCatalogEditable;
+    add.disabled = visualMutationsLocked();
+    add.textContent = state.resourceFormOpen ? 'Close' : 'Add';
+    add.setAttribute('aria-expanded', String(state.resourceFormOpen));
+  }
   const target=$('#resources'); target.replaceChildren(); $('#resource-count').textContent=String(state.resources.length);
-  if (!state.resources.length) { const empty=document.createElement('span');empty.className='quiet';empty.textContent='No catalog assets';target.append(empty);return; }
+  if (state.resourceFormOpen && state.resourceCatalogEditable) target.append(resourceCatalogForm());
+  if (!state.resources.length) { const empty=document.createElement('span');empty.className='quiet resource-empty';empty.textContent='No catalog assets';target.append(empty);return; }
   for (const item of state.resources) {
     const row=document.createElement('article');row.className='resource-item';
     const heading=document.createElement('div');heading.className='resource-name';const name=document.createElement('span');name.textContent=item.name;const type=document.createElement('span');type.className='resource-type';type.textContent=item.mediaType;heading.append(name,type);
@@ -272,32 +387,81 @@ function renderResources() {
   }
 }
 
-async function addResource() {
-  if (visualMutationsLocked() || !state.workspace || !state.resourceCatalogEditable) return;
-  const name = window.prompt('Catalog name (lowercase portable identifier):', 'new-resource');
-  if (!name) return;
-  const path = window.prompt('Project-relative asset path:', 'assets/new.png');
-  if (!path) return;
-  const mediaType = window.prompt('Media type (image/png, image/jpeg, font/ttf, font/otf, or font/woff2):', 'image/png');
-  if (!mediaType) return;
-  const fields = {name, path, mediaType};
-  if (mediaType.startsWith('font/')) {
-    fields.family = window.prompt('Font family:', 'Readable Sans') || '';
-    fields.license = window.prompt('License identifier:', 'OFL-1.1') || '';
-    fields.weight = window.prompt('Weight (optional, defaults to 400):', '') || '';
-    fields.style = window.prompt('Style (optional, defaults to normal):', '') || '';
-    fields.fallback = (window.prompt('Fallback names, comma separated (optional):', '') || '').split(',').map((value) => value.trim()).filter(Boolean);
-  } else {
-    fields.replaces = window.prompt('Declared image replacement target (optional):', '') || '';
-    fields.focusX = window.prompt('Default crop focus X, 0–1 (optional):', '') || '';
-    fields.focusY = window.prompt('Default crop focus Y, 0–1 (optional):', '') || '';
+function resourceFormField(labelText, name, {type = 'text', placeholder = '', required = false, min = '', max = '', step = ''} = {}) {
+  const label = document.createElement('label');
+  label.className = 'resource-field';
+  const caption = document.createElement('span'); caption.textContent = labelText;
+  const input = document.createElement('input');
+  Object.assign(input, {type, name, placeholder, required});
+  if (min !== '') input.min = min;
+  if (max !== '') input.max = max;
+  if (step !== '') input.step = step;
+  label.append(caption, input);
+  return label;
+}
+
+function resourceCatalogForm() {
+  const form = document.createElement('form');
+  form.className = 'resource-form';
+  form.noValidate = true;
+  const heading = document.createElement('strong'); heading.textContent = 'Add catalog resource';
+  const name = resourceFormField('Catalog name', 'name', {placeholder: 'hero-image', required: true});
+  name.querySelector('input').pattern = '[a-z0-9][a-z0-9._-]*';
+  const path = resourceFormField('Project-relative path', 'path', {placeholder: 'assets/hero.png', required: true});
+  const mediaLabel = document.createElement('label'); mediaLabel.className = 'resource-field';
+  const mediaCaption = document.createElement('span'); mediaCaption.textContent = 'Media type';
+  const media = document.createElement('select'); media.name = 'mediaType'; media.required = true;
+  for (const value of ['image/png', 'image/jpeg', 'font/ttf', 'font/otf', 'font/woff2']) {
+    const option = document.createElement('option'); option.value = value; option.textContent = value; media.append(option);
   }
-  let payload;
-  try { payload = PaperStudioResourceModel.catalogAddPayload(state.workspace, fields); } catch (error) { showFailure(error); return; }
-  state.committing = true; renderResources();
-  try { await api('/api/resources', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload)}); await refresh(); }
-  catch (error) { if (error.status === 409) await refresh(); else showFailure(error); }
-  finally { state.committing = false; renderResources(); }
+  mediaLabel.append(mediaCaption, media);
+  const advanced = document.createElement('details'); advanced.className = 'resource-advanced';
+  const summary = document.createElement('summary'); summary.textContent = 'Type-specific metadata';
+  const fields = document.createElement('div'); fields.className = 'resource-fields';
+  fields.append(
+    resourceFormField('Font family', 'family', {placeholder: 'Readable Sans'}),
+    resourceFormField('License', 'license', {placeholder: 'OFL-1.1'}),
+    resourceFormField('Weight', 'weight', {type: 'number', min: '1', max: '1000', step: '1'}),
+    resourceFormField('Style', 'style', {placeholder: 'normal'}),
+    resourceFormField('Fallbacks', 'fallback', {placeholder: 'Arial, sans-serif'}),
+    resourceFormField('Replaces image', 'replaces', {placeholder: 'old-hero'}),
+    resourceFormField('Focus X', 'focusX', {type: 'number', min: '0', max: '1', step: '0.01'}),
+    resourceFormField('Focus Y', 'focusY', {type: 'number', min: '0', max: '1', step: '0.01'}),
+  );
+  advanced.append(summary, fields);
+  const error = document.createElement('output'); error.className = 'field-error'; error.setAttribute('aria-live', 'polite');
+  const actions = document.createElement('div'); actions.className = 'edit-actions';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'edit-secondary'; cancel.textContent = 'Cancel';
+  const submit = document.createElement('button'); submit.type = 'submit'; submit.className = 'edit-commit'; submit.textContent = 'Add resource';
+  cancel.addEventListener('click', () => { state.resourceFormOpen = false; renderResources(); $('#resource-add')?.focus(); });
+  actions.append(cancel, submit);
+  form.append(heading, name, path, mediaLabel, advanced, error, actions);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    error.textContent = '';
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+    const values = Object.fromEntries(new FormData(form));
+    values.fallback = String(values.fallback || '').split(',').map(value => value.trim()).filter(Boolean);
+    let payload;
+    try { payload = PaperStudioResourceModel.catalogAddPayload(state.workspace, values); }
+    catch (failure) { error.textContent = failure.message; return; }
+    state.committing = true; submit.disabled = true; submit.textContent = 'Adding…';
+    try {
+      await api('/api/resources', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload)});
+      state.resourceFormOpen = false;
+      await refresh();
+    } catch (failure) {
+      if (failure.status === 409) await refresh(); else error.textContent = failure.message;
+    } finally { state.committing = false; renderResources(); }
+  });
+  queueMicrotask(() => form.querySelector('input')?.focus());
+  return form;
+}
+
+function toggleResourceForm() {
+  if (visualMutationsLocked() || !state.workspace || !state.resourceCatalogEditable) return;
+  state.resourceFormOpen = !state.resourceFormOpen;
+  renderResources();
 }
 
 async function removeResource(name) {
@@ -353,20 +517,24 @@ function syncInsertTools() {
   const tooling = globalThis.PaperStudioToolingModel;
   const descriptions = {header: 'Add a repeating page header', footer: 'Add a repeating page footer', heading: 'Add a heading', paragraph: 'Add a text paragraph', image: 'Add an image block', table: 'Add a table', section: 'Add a semantic section', 'page-break': 'Add an explicit page break'};
   document.querySelectorAll('.insert-tool[data-template]').forEach(button => {
-    button.disabled = !tooling || !tooling.availability(state.authoring, button.dataset.template) || visualMutationsLocked();
-    button.title = button.disabled ? (visualMutationsLocked() ? 'Wait for the current exact plan before inserting content' : `Select a compatible addressed parent before adding ${button.dataset.template.replaceAll('-', ' ')}`) : descriptions[button.dataset.template];
+    const unavailable = !tooling || !tooling.availability(state.authoring, button.dataset.template) || visualMutationsLocked();
+    const reason = visualMutationsLocked() ? 'Wait for the current exact plan before inserting content' : `Select a compatible addressed parent before adding ${button.dataset.template.replaceAll('-', ' ')}`;
+    setButtonUnavailable(button, unavailable, reason);
+    if (!unavailable) button.title = descriptions[button.dataset.template];
   });
   const data = document.querySelector('.insert-tool[data-authoring-operation="binding"]');
   if (data) {
-    data.disabled = !state.authoring || visualMutationsLocked() || (!state.authoring.bindingTargets.length && !state.authoring.documentTarget);
-    data.title = data.disabled ? (visualMutationsLocked() ? 'Wait for the current exact plan before editing data bindings' : 'Add a schema and select bindable content to enable data binding') : 'Bind content to a schema path';
+    const unavailable = !state.authoring || visualMutationsLocked() || (!state.authoring.bindingTargets.length && !state.authoring.documentTarget);
+    const reason = visualMutationsLocked() ? 'Wait for the current exact plan before editing data bindings' : 'Add a schema and select bindable content to enable data binding';
+    setButtonUnavailable(data, unavailable, reason);
+    if (!unavailable) data.title = 'Bind content to a schema path';
   }
-  const enabled = document.querySelectorAll('.insert-tool:not(:disabled)').length;
+  const enabled = document.querySelectorAll('.insert-tool:not([aria-disabled="true"])').length;
   $('#insert-context').textContent = visualMutationsLocked() ? 'Tools wait for the current exact plan.' : enabled ? 'Available tools match the current source context.' : 'Select an addressed compatible parent to enable tools.';
 }
 
 function prepareInsertTool(button) {
-  if (button.disabled || !state.authoring) return;
+  if (buttonUnavailable(button) || !state.authoring) return;
   const template = button.dataset.template;
   try {
     state.authoringDraft = PaperStudioToolingModel.prepareTemplateDraft(
@@ -384,7 +552,7 @@ function prepareInsertTool(button) {
 }
 
 function prepareDataTool(button) {
-  if (button.disabled || !state.authoring) return;
+  if (buttonUnavailable(button) || !state.authoring) return;
   state.authoringDraft = state.authoring.bindingTargets.length
     ? {operation: 'binding'}
     : {operation: 'schema', target: state.authoring.documentTarget, id: '@new-schema'};
@@ -478,21 +646,20 @@ function renderPageSetup() {
   $('#page-size-summary').textContent = `${draft.preset} · ${draft.orientation}`;
   const form = document.createElement('form');
   form.className = 'page-setup-form';
-  form.addEventListener('submit', event => event.preventDefault());
+  form.addEventListener('submit', event => { event.preventDefault(); commitPageSetup({...draft}); });
   const preset = authoringSelect('Preset', [...Object.keys(PaperStudioPageSetupModel.presets), 'Custom'], draft.preset, value => {
     draft.preset = value;
     renderPageSetup();
-    if (value !== 'Custom') commitPageSetup({...draft});
   });
   preset.classList.add('page-size-preset');
   form.append(preset, authoringSelect('Orientation', ['portrait', 'landscape'], draft.orientation, value => {
     draft.orientation = value;
-    commitPageSetup({...draft});
+    renderPageSetup();
   }));
   if (draft.preset === 'Custom') {
     form.append(
-      pageSetupInput('Width', draft.width, value => { draft.width = value; commitPageSetup({...draft}); }),
-      pageSetupInput('Height', draft.height, value => { draft.height = value; commitPageSetup({...draft}); }),
+      pageSetupInput('Width', draft.width, value => { draft.width = value; }),
+      pageSetupInput('Height', draft.height, value => { draft.height = value; }),
       authoringSelect('Unit', ['mm', 'in', 'pt'], draft.unit, value => {
         const points = {mm: 72 / 25.4, in: 72, pt: 1};
         draft.width = Number((Number(draft.width) * points[draft.unit] / points[value]).toFixed(3));
@@ -502,6 +669,14 @@ function renderPageSetup() {
       }),
     );
   }
+  const actions = document.createElement('div'); actions.className = 'edit-actions page-setup-actions';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'edit-secondary'; cancel.textContent = 'Cancel';
+  cancel.disabled = visualMutationsLocked();
+  cancel.addEventListener('click', () => { state.pageSetupDraft = null; state.pageSetupFeedback = null; renderPageSetup(); });
+  const apply = document.createElement('button'); apply.type = 'submit'; apply.className = 'edit-commit'; apply.textContent = state.committing ? 'Applying…' : 'Apply page size';
+  apply.disabled = visualMutationsLocked();
+  actions.append(cancel, apply);
+  form.append(actions);
   target.append(form);
   if (state.pageSetupFeedback) {
     const feedback = document.createElement('div');
@@ -580,9 +755,8 @@ function renderAuthoringControls() {
   if (draft.operation === 'template') {
     const targets=metadata.templateTargets.map(item=>item.id); draft.target=targets.includes(draft.target)?draft.target:targets[0];
     const targetKind=metadata.templateTargets.find(item=>item.id===draft.target)?.kind;
-    const repeatPaths=metadata.schemas.flatMap(schema=>schema.fields.filter(field=>field.kind==='list').map(field=>field.path));
-    const flowChoices=['paragraph','heading','list','image','table','canvas','row','column','page-break','note-box','metadata-grid','signature-row','qr-verification','clause','styled-container',...(repeatPaths.length?['repeat']:[]),...(state.scenario?['loop']:[]),...(metadata.components.length?['component']:[]),'section'];
-    const choices=targetKind==='document'?['document-preset','page']:targetKind==='page'?['header','footer']:flowChoices;
+	const repeatPaths=metadata.schemas.flatMap(schema=>schema.fields.filter(field=>field.kind==='list').map(field=>field.path));
+	const choices=PaperStudioAuthoringModel.templateChoices(metadata,state.workspace,targetKind);
     draft.template=choices.includes(draft.template)?draft.template:choices[0]; draft.id=draft.id|| (draft.template==='page'?'@sheet':'@new-content');
     form.append(authoringSelect('Inside',targets,draft.target,value=>{draft.target=value;renderAuthoringControls();}),authoringSelect('Palette',choices,draft.template,value=>{draft.template=value;renderAuthoringControls();}),authoringInput('Readable ID',draft.id,value=>draft.id=value));
     if (draft.template === 'document-preset') {
@@ -708,14 +882,19 @@ function renderSource(source, issues = []) {
 function nodeLabel(node) {
   if (node.id) return node.id;
   const value = node.value?.string_value ?? node.value?.raw;
-  return value ? String(value).slice(0, 38) : node.kind;
+  return value ? String(value) : node.kind;
 }
 
-function walkNodes(node, depth = 0, output = []) {
+function walkNodes(node, depth = 0, output = [], parent = null) {
   if (!node) return output;
-  output.push({node, depth});
-  for (const member of node.members || []) if (member.node) walkNodes(member.node, depth + 1, output);
+  output.push({node, depth, parent});
+  for (const member of node.members || []) if (member.node) walkNodes(member.node, depth + 1, output, node);
   return output;
+}
+
+function outlineNodeKey(node) {
+  const start = node.header_span?.start || node.span?.start || {};
+  return node.id || `${node.kind}:${start.line || 0}:${start.column || 0}`;
 }
 
 function renderOutline(root) {
@@ -723,20 +902,42 @@ function renderOutline(root) {
   outline.replaceChildren();
   const nodes = walkNodes(root);
   $('#node-count').textContent = `${nodes.length} nodes`;
-  for (const {node, depth} of nodes) {
+  let hiddenBelow = -1;
+  for (const {node, depth, parent} of nodes) {
+    if (hiddenBelow >= 0 && depth > hiddenBelow) continue;
+    hiddenBelow = -1;
+    const collapseKey = outlineNodeKey(node);
+    const hasChildren = (node.members || []).some(member => member.node);
+    const collapsed = hasChildren && state.outlineCollapsed.has(collapseKey);
     const row = document.createElement('button');
+    const selected = Boolean(node.id && node.id === state.editSelection?.target);
     row.className = 'outline-row';
     row.setAttribute('role', 'treeitem');
-    row.setAttribute('aria-selected', 'false');
-    row.tabIndex = node.id === state.editSelection?.target || (!state.editSelection && outline.children.length === 0) ? 0 : -1;
+    row.setAttribute('aria-selected', String(selected));
+    if (selected) row.classList.add('is-selected');
+    if (hasChildren) row.setAttribute('aria-expanded', String(!collapsed));
+    row.tabIndex = selected || (!state.editSelection && outline.children.length === 0) ? 0 : -1;
     if (node.id) row.dataset.key = node.id;
-    row.style.paddingLeft = `${8 + Math.min(depth, 8) * 12}px`;
-    row.innerHTML = `<span class="outline-kind"></span><span class="outline-label"></span>`;
+    row.dataset.collapseKey = collapseKey;
+    row.dataset.depth = String(depth);
+    if (parent) row.dataset.parentKey = outlineNodeKey(parent);
+    row.style.paddingLeft = `${6 + Math.min(depth, 12) * 12}px`;
+    row.innerHTML = `<span class="outline-disclosure" aria-hidden="true"></span><span class="outline-kind"></span><span class="outline-label"></span>`;
+    row.querySelector('.outline-disclosure').textContent = hasChildren ? (collapsed ? '›' : '⌄') : '';
     row.querySelector('.outline-kind').textContent = node.kind;
     row.querySelector('.outline-label').textContent = nodeLabel(node);
     row.title = `${node.kind} · ${nodeLabel(node)}`;
-    row.addEventListener('click', () => selectSourceNode(node, row));
+    row.addEventListener('click', event => {
+      if (hasChildren && event.offsetX < 24 + Math.min(depth, 12) * 12) {
+        if (collapsed) state.outlineCollapsed.delete(collapseKey); else state.outlineCollapsed.add(collapseKey);
+        renderOutline(root);
+        document.querySelector(`.outline-row[data-collapse-key="${CSS.escape(collapseKey)}"]`)?.focus();
+        return;
+      }
+      selectSourceNode(node, row);
+    });
     outline.append(row);
+    if (collapsed) hiddenBelow = depth;
   }
 }
 
@@ -749,6 +950,33 @@ $('#outline').addEventListener('keydown', (event) => {
   else if (event.key === 'ArrowUp') next = Math.max(0, current - 1);
   else if (event.key === 'Home') next = 0;
   else if (event.key === 'End') next = rows.length - 1;
+  else if (event.key === 'ArrowRight') {
+    const expanded = rows[current].getAttribute('aria-expanded');
+    if (expanded === 'false') {
+      event.preventDefault();
+      state.outlineCollapsed.delete(rows[current].dataset.collapseKey);
+      const key = rows[current].dataset.collapseKey;
+      renderOutline(state.workspace?.ast?.root);
+      document.querySelector(`.outline-row[data-collapse-key="${CSS.escape(key)}"]`)?.focus();
+      return;
+    }
+    if (expanded === 'true' && Number(rows[current + 1]?.dataset.depth) > Number(rows[current].dataset.depth)) next = current + 1;
+    else return;
+  }
+  else if (event.key === 'ArrowLeft') {
+    if (rows[current].getAttribute('aria-expanded') === 'true') {
+      event.preventDefault();
+      state.outlineCollapsed.add(rows[current].dataset.collapseKey);
+      const key = rows[current].dataset.collapseKey;
+      renderOutline(state.workspace?.ast?.root);
+      document.querySelector(`.outline-row[data-collapse-key="${CSS.escape(key)}"]`)?.focus();
+      return;
+    }
+    const parentKey = rows[current].dataset.parentKey;
+    if (!parentKey) return;
+    next = rows.findIndex(row => row.dataset.collapseKey === parentKey);
+    if (next < 0) return;
+  }
   else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); rows[current].click(); return; }
   else return;
   event.preventDefault();
@@ -1540,6 +1768,8 @@ function markOutlineKey(key) {
 }
 
 async function selectSourceNode(node, row) {
+  app.classList.remove('mobile-outline-open');
+  $('#toggle-outline-mobile')?.setAttribute('aria-expanded', 'false');
   selectEditableTarget(node.id || '');
   if (node.id) markOutlineKey(node.id);
   else document.querySelectorAll('.outline-row').forEach((item) => {
@@ -1651,6 +1881,7 @@ function selectEditableTarget(target) {
   state.editSelection = target ? PaperStudioEditModel.findSelection(state.workspace?.ast?.root, target) : null;
   if (target && state.authoring?.templateTargets?.some(item => item.id === target)) {
     state.authoringDraft.target = target;
+	renderAuthoringControls();
   }
   state.editDraft = null;
   state.editFeedback = null;
@@ -1660,6 +1891,7 @@ function selectEditableTarget(target) {
   if (state.editSelection && matchMedia('(max-width: 760px)').matches) inspector.setAttribute('aria-modal', 'true');
   else inspector.removeAttribute('aria-modal');
   renderEditControls();
+  renderReviewControls();
   if (state.editSelection && matchMedia('(max-width: 760px)').matches) requestAnimationFrame(() => $('#inspector-close').focus());
 }
 
@@ -1680,6 +1912,7 @@ function reconcileEditSelection() {
     state.editSelection = PaperStudioEditModel.findSelection(state.workspace?.ast?.root, state.editSelection.target);
   }
   renderEditControls();
+  renderReviewControls();
 }
 
 function renderEditControls() {
@@ -1688,9 +1921,11 @@ function renderEditControls() {
   const operations = PaperStudioEditModel.operations(state.editSelection);
   const bindingAvailable = state.authoring?.bindingTargets?.some((item) => item.id === state.editSelection?.target) &&
     state.authoring.schemas.some((schema) => schema.fields.length);
+  const lifecycleAvailable = state.authoring?.lifecycleTargets?.some((item) => item.id === state.editSelection?.target);
   if (bindingAvailable) operations.push('binding');
   if (!operations.length) {
-    target.hidden = true;
+	target.hidden = !lifecycleAvailable;
+	if (lifecycleAvailable) renderNodeLifecycleControls(target);
     return;
   }
   target.hidden = false;
@@ -1716,6 +1951,7 @@ function renderEditControls() {
   form.className = 'edit-form';
   form.setAttribute('aria-label', `Edit ${state.editSelection.target}`);
   const operationField = studioSelect('Edit', operations, operation, (value) => ({
+    content: 'content',
     document: 'document details',
     appearance: 'style & theme',
     condition: 'visibility',
@@ -1744,15 +1980,6 @@ function renderEditControls() {
     valueSpec.choices = PaperStudioEditModel.flowDestinations(state.editSelection).map((node) => node.id);
   }
   const valueField = studioValueField(valueSpec);
-  let breakPolicyField = null;
-  if (state.editSelection.node.kind === 'page-break' && globalThis.PaperStudioReviewModel) {
-    const policies = globalThis.PaperStudioReviewModel.pageBreakPolicies();
-    breakPolicyField = studioSelect('Break policy', policies.map(policy => policy.value), state.breakPolicy);
-    breakPolicyField.select.addEventListener('change', () => {
-      state.breakPolicy = breakPolicyField.select.value;
-      renderEditControls();
-    });
-  }
   const submit = document.createElement('button');
   submit.type = 'submit';
   submit.className = 'edit-commit';
@@ -1762,20 +1989,21 @@ function renderEditControls() {
   reset.type = 'button';
   reset.className = 'edit-secondary edit-reset';
   reset.textContent = 'Reset property';
-  reset.disabled = visualMutationsLocked() || !valueSpec.authored || operation === 'flow';
+  reset.disabled = visualMutationsLocked() || !valueSpec.authored || operation === 'flow' || operation === 'content';
   reset.title = valueSpec.authored ? 'Remove this authored override and use inheritance or the built-in default' : 'No authored override exists for this property';
   const actions = document.createElement('div');
   actions.className = 'edit-actions';
   actions.append(reset, submit);
   form.append(operationField.label, propertyField.label);
   if (propertyField.searchLabel) form.append(propertyField.searchLabel);
-  if (breakPolicyField) form.append(breakPolicyField.label);
   form.append(valueField.label, actions);
 
   let validationTimer = 0;
   let validationSerial = 0;
+  let validationController = null;
   const validate = () => {
     clearTimeout(validationTimer);
+    validationController?.abort();
     const serial = ++validationSerial;
     let payload;
     try {
@@ -1789,12 +2017,14 @@ function renderEditControls() {
     }
     if (visualMutationsLocked()) return;
     validationTimer = setTimeout(async () => {
+      validationController = new AbortController();
       try {
-        await api('/api/validate-edit', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload)});
+        await api('/api/validate-edit', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload), signal: validationController.signal});
         if (serial !== validationSerial || !valueField.label.isConnected) return;
         valueField.setError('');
         submit.disabled = visualMutationsLocked();
       } catch (error) {
+        if (error.name === 'AbortError') return;
         if (serial !== validationSerial || !valueField.label.isConnected) return;
         valueField.setError(error.status === 409 ? 'The source changed; refresh before editing' : error.message);
         submit.disabled = true;
@@ -1831,7 +2061,6 @@ function renderEditControls() {
     let payload;
     try {
       payload = PaperStudioEditModel.buildPayload(state.workspace, state.editSelection, operation, property, valueField.read());
-      if (state.editSelection.node.kind === 'page-break') payload.break_policy = state.breakPolicy;
     } catch (error) {
       state.editFeedback = {tone: 'error', text: error.message};
       renderEditControls();
@@ -1867,6 +2096,140 @@ function renderEditControls() {
     feedback.textContent = state.editFeedback.text;
     target.append(feedback);
   }
+  renderNodeLifecycleControls(target);
+}
+
+function renderNodeLifecycleControls(target) {
+  const selected = state.editSelection?.target;
+  if (!selected || !state.authoring?.lifecycleTargets?.some((item) => item.id === selected)) return;
+  const details = document.createElement('details');
+  details.className = 'node-lifecycle';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Rename or delete node';
+  const form = document.createElement('form');
+  form.className = 'node-lifecycle-form';
+  const idField = document.createElement('label');
+  idField.className = 'edit-field';
+  const caption = document.createElement('span');
+  caption.textContent = 'New readable ID';
+  const input = document.createElement('input');
+  input.value = selected;
+  input.spellcheck = false;
+  input.autocomplete = 'off';
+  const error = document.createElement('small');
+  error.className = 'edit-inline-error';
+  error.setAttribute('role', 'alert');
+  idField.append(caption, input, error);
+  const actions = document.createElement('div');
+  actions.className = 'node-lifecycle-actions';
+  const rename = document.createElement('button');
+  rename.type = 'submit';
+  rename.className = 'edit-secondary';
+  rename.textContent = 'Rename node';
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'edit-secondary node-delete';
+  remove.textContent = 'Delete node';
+  remove.title = 'Requires a second click; compilation must still succeed';
+  actions.append(rename, remove);
+  form.append(idField, actions);
+  details.append(summary, form);
+  target.append(details);
+
+  const payloadFor = (action) => PaperStudioAuthoringModel.buildNodeLifecyclePayload(state.workspace, state.authoring, {action, target: selected, id: action === 'rename' ? input.value.trim() : ''});
+	let validationTimer = 0;
+	let validationSerial = 0;
+	let validationController = null;
+  const validateRename = () => {
+	clearTimeout(validationTimer);
+	validationController?.abort();
+	const serial = ++validationSerial;
+	let payload;
+	try {
+	  payload = payloadFor('rename');
+	  error.textContent = '';
+	  rename.disabled = true;
+	} catch (validationError) {
+	  error.textContent = validationError.message;
+	  rename.disabled = true;
+	  return;
+	}
+	if (visualMutationsLocked()) return;
+	validationTimer = setTimeout(async () => {
+	  validationController = new AbortController();
+	  try {
+		await api('/api/validate-edit', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload), signal: validationController.signal});
+		if (serial !== validationSerial || !details.isConnected) return;
+		error.textContent = '';
+		rename.disabled = visualMutationsLocked();
+	  } catch (validationError) {
+		if (validationError.name === 'AbortError' || serial !== validationSerial || !details.isConnected) return;
+		error.textContent = validationError.status === 409 ? 'The source changed; refresh before renaming' : validationError.message;
+		rename.disabled = true;
+	  }
+	}, 250);
+  };
+  input.addEventListener('input', validateRename);
+  validateRename();
+
+  const commit = async (payload) => {
+    const renamedTarget = payload.property === 'rename' ? payload.id : '';
+    state.committing = true;
+    state.editFeedback = {tone: 'working', text: `${payload.property === 'rename' ? 'Renaming' : 'Deleting'} ${selected} against exact revisions…`};
+    renderEditControls();
+    try {
+      const result = await api('/api/edit', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload)});
+      state.editFeedback = {tone: 'success', text: `Committed · ${result.patch_count} exact patch${result.patch_count === 1 ? '' : 'es'}`};
+      await refresh();
+      selectEditableTarget(renamedTarget);
+      if (renamedTarget) requestAnimationFrame(() => document.querySelector('.node-lifecycle summary')?.focus());
+    } catch (commitError) {
+      state.editFeedback = {tone: commitError.status === 409 ? 'stale' : 'error', text: commitError.status === 409 ? 'Selection changed · refreshed without applying' : commitError.message};
+      if (commitError.status === 409) await refresh();
+    } finally {
+      state.committing = false;
+      renderEditControls();
+      renderHistoryActions();
+    }
+  };
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+	if (rename.disabled) return;
+    try { void commit(payloadFor('rename')); }
+    catch (validationError) { error.textContent = validationError.message; }
+  });
+	let disarmTimer = 0;
+  remove.addEventListener('click', async () => {
+    if (visualMutationsLocked()) return;
+    if (remove.dataset.armed !== 'true') {
+	  remove.disabled = true;
+	  remove.textContent = 'Checking delete…';
+	  try {
+		const payload = payloadFor('delete');
+		await api('/api/validate-edit', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload)});
+		if (!details.isConnected) return;
+		remove.dataset.armed = 'true';
+		remove.textContent = `Confirm delete ${selected}`;
+		remove.title = 'Click again within five seconds to delete this node.';
+		clearTimeout(disarmTimer);
+		disarmTimer = setTimeout(() => {
+		  if (!remove.isConnected) return;
+		  delete remove.dataset.armed;
+		  remove.textContent = 'Delete node';
+		  remove.title = 'Requires a second click; compilation must still succeed';
+		}, 5000);
+	  } catch (validationError) {
+		error.textContent = validationError.status === 409 ? 'The source changed; refresh before deleting' : validationError.message;
+		remove.textContent = 'Delete node';
+	  } finally {
+		remove.disabled = false;
+	  }
+      return;
+    }
+	clearTimeout(disarmTimer);
+    try { void commit(payloadFor('delete')); }
+    catch (validationError) { error.textContent = validationError.message; }
+  });
 }
 
 function renderBindingEditControls(target, operations) {
@@ -1953,8 +2316,10 @@ function renderBindingEditControls(target, operations) {
 
   let validationTimer = 0;
   let validationSerial = 0;
+  let validationController = null;
   const validate = () => {
     clearTimeout(validationTimer);
+    validationController?.abort();
     const serial = ++validationSerial;
     let payload;
     try {
@@ -1968,12 +2333,14 @@ function renderBindingEditControls(target, operations) {
     }
     if (visualMutationsLocked()) return;
     validationTimer = setTimeout(async () => {
+      validationController = new AbortController();
       try {
-        await api('/api/validate-edit', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload)});
+        await api('/api/validate-edit', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload), signal: validationController.signal});
         if (serial !== validationSerial || !form.isConnected) return;
         bindingError.textContent = '';
         submit.disabled = visualMutationsLocked();
       } catch (error) {
+        if (error.name === 'AbortError') return;
         if (serial !== validationSerial || !form.isConnected) return;
         bindingError.textContent = error.status === 409 ? 'The source changed; refresh before editing' : error.message;
         submit.disabled = true;
@@ -2017,6 +2384,7 @@ function renderBindingEditControls(target, operations) {
     feedback.textContent = state.editFeedback.text;
     target.append(feedback);
   }
+  renderNodeLifecycleControls(target);
 }
 
 function studioSelect(labelText, options, selected, display = (value) => value.replaceAll('-', ' ')) {
@@ -2092,7 +2460,27 @@ function studioValueField(spec) {
   let input;
   let read;
   let unavailable = false;
-  if (spec.kind === 'constraint') {
+  if (spec.kind === 'rich-text') {
+    const controls = document.createElement('div');
+    controls.className = 'rich-text-runs';
+    const runs = Array.isArray(spec.currentValue) ? spec.currentValue : [];
+    const inputs = runs.map(run => {
+      const row = document.createElement('div'); row.className = 'rich-text-run';
+      const target = document.createElement('code'); target.textContent = run.target;
+      const area = document.createElement('textarea'); area.rows = 3; area.value = run.text; area.dataset.target = run.target;
+      area.disabled = visualMutationsLocked();
+      row.append(target, area); controls.append(row);
+      return area;
+    });
+    input = inputs[0];
+    read = () => inputs.map(area => ({target: area.dataset.target, text: area.value}));
+    label.append(caption, controls);
+  } else if (spec.kind === 'multiline') {
+    input = document.createElement('textarea');
+    input.rows = 5;
+    input.value = PaperStudioEditModel.defaultValue(spec);
+    read = () => input.value;
+  } else if (spec.kind === 'constraint') {
     const controls = document.createElement('span');
     controls.className = 'edit-constraint';
     const current = PaperStudioEditModel.defaultValue(spec);
@@ -2422,6 +2810,11 @@ function clearObjectURLs() {
 }
 
 document.querySelectorAll('.mode').forEach((button) => button.addEventListener('click', () => setMode(button.dataset.mode)));
+$('#toggle-outline-mobile')?.addEventListener('click', event => {
+  const open = app.classList.toggle('mobile-outline-open');
+  event.currentTarget.setAttribute('aria-expanded', String(open));
+  if (open) $('#outline .outline-row[tabindex="0"]')?.focus();
+});
 document.querySelectorAll('.insert-tool[data-template]').forEach(button => button.addEventListener('click', () => prepareInsertTool(button)));
 document.querySelector('.insert-tool[data-authoring-operation="binding"]')?.addEventListener('click', event => prepareDataTool(event.currentTarget));
 document.querySelector('.insert-tool[data-open-authoring]')?.addEventListener('click', event => { openAuthoringTools(); pulseInsertTool(event.currentTarget); });
@@ -2459,7 +2852,7 @@ $('#inspector').addEventListener('keydown', (event) => {
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 });
-$('#resource-add')?.addEventListener('click', addResource);
+$('#resource-add')?.addEventListener('click', toggleResourceForm);
 $('#zoom-in').addEventListener('click', () => setZoom(state.zoom + .1));
 $('#zoom-out').addEventListener('click', () => setZoom(state.zoom - .1));
 $('#zoom-mode').addEventListener('change', event => setZoomMode(event.currentTarget.value));
@@ -2474,6 +2867,12 @@ pageImage.addEventListener('click', hitPage);
 window.addEventListener('keydown', (event) => {
   const typing = event.target.matches('input, select, textarea, button, pre, [contenteditable="true"]');
   if (event.key === 'Escape') {
+    if (app.classList.contains('mobile-outline-open')) {
+      app.classList.remove('mobile-outline-open');
+      $('#toggle-outline-mobile')?.setAttribute('aria-expanded', 'false');
+      $('#toggle-outline-mobile')?.focus();
+      return;
+    }
     closeSelectionInspector();
     return;
   }

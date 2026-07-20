@@ -139,10 +139,10 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		!bytes.Contains(javascript.Body, []byte("commitPageSetup")) ||
 		!bytes.Contains(javascript.Body, []byte("refreshPromise")) ||
 		!bytes.Contains(javascript.Body, []byte("loadDeliveryStatus")) ||
-		bytes.Contains(javascript.Body, []byte("loadReview(")) || bytes.Contains(javascript.Body, []byte("submitReview(")) ||
+		!bytes.Contains(javascript.Body, []byte("loadReview(")) || !bytes.Contains(javascript.Body, []byte("submitReview(")) ||
 		!bytes.Contains(javascript.Body, []byte("EventSource")) ||
 		bytes.Contains(javascript.Body, []byte("draft.orientation = 'portrait'")) ||
-		bytes.Contains(javascript.Body, []byte("Apply page size")) ||
+		!bytes.Contains(javascript.Body, []byte("Apply page size")) ||
 		!bytes.Contains(javascript.Body, []byte(".render?revision=")) ||
 		bytes.Contains(javascript.Body, []byte("preview-status")) ||
 		bytes.Contains(javascript.Body, []byte("WASM plan preview")) ||

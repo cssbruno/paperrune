@@ -36,6 +36,7 @@ const (
 	studioReviewBodyLimit     = 4096
 	studioReviewArtifactLimit = 100_000
 	studioReviewMaxBytes      = 8 << 20
+	studioReviewJSONLimit     = 12 << 20
 )
 
 // Review metadata deliberately lives beside the source instead of inside the
@@ -157,7 +158,7 @@ func (s *studioServer) handleReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var mutation studioReviewMutation
-	if err := decodeStudioJSON(r, &mutation); err != nil {
+	if err := decodeStudioJSONWithLimit(r, &mutation, studioReviewJSONLimit); err != nil {
 		writeStudioError(w, http.StatusBadRequest, err)
 		return
 	}

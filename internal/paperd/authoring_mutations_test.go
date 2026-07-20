@@ -79,6 +79,53 @@ func TestPaperInsertTemplatePaletteCoversTypedPrimitivesAndComponents(t *testing
 	}
 }
 
+func TestPaperInsertTemplateSupportsExactListAndTableChildren(t *testing.T) {
+	source := `document @report:
+  page @sheet:
+    body @body:
+      list @tasks:
+        item @first:
+          text @first-text: "First"
+      table @grid:
+        table-header @grid-head:
+          table-row @heading-row:
+            cell @heading-cell:
+              text: "Heading"
+        table-row @data-row:
+          cell @data-cell:
+            text: "Value"
+`
+	tests := []struct {
+		name, target, template, id, want string
+	}{
+		{"list item", "@tasks", "item", "@second", "item @second:"},
+		{"item text", "@first", "text", "@more", `text @more: "New text"`},
+		{"table row", "@grid", "table-row", "@second-row", "table-row @second-row:"},
+		{"header row", "@grid-head", "table-row", "@subheading-row", "table-row @subheading-row:"},
+		{"row cell", "@data-row", "cell", "@extra-cell", "cell @extra-cell:"},
+		{"cell paragraph", "@data-cell", "paragraph", "@cell-copy", "paragraph @cell-copy:"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			workspace := mustWorkspace(t, Limits{})
+			guard, _, _ := mutationGuard(t, workspace, source, test.target, "nested-"+test.template, CapabilityEdit)
+			result, err := workspace.PaperInsertTemplate(PaperInsertTemplateRequest{Guard: guard, Template: test.template, ID: test.id})
+			if err != nil || !result.Semantic.AfterCompileOK || !strings.Contains(result.Revision.Source, test.want) {
+				t.Fatalf("nested %s = %v result=%#v\nsource=%s", test.template, err, result, result.Revision.Source)
+			}
+		})
+	}
+}
+
+func TestPaperInsertTemplateRejectsGrammarIncompatibleNestedChoice(t *testing.T) {
+	source := "document @report:\n  page @sheet:\n    body @body:\n      row @columns:\n        paragraph @copy:\n          text: \"Body\"\n"
+	workspace := mustWorkspace(t, Limits{})
+	guard, _, _ := mutationGuard(t, workspace, source, "@columns", "invalid-nested-canvas", CapabilityEdit)
+	if _, err := workspace.PaperInsertTemplate(PaperInsertTemplateRequest{Guard: guard, Template: "canvas", ID: "@bad"}); err == nil || !strings.Contains(err.Error(), "INVALID_TEMPLATE_PARENT") {
+		t.Fatalf("incompatible nested template error = %v", err)
+	}
+}
+
 func TestPaperInsertTemplateCreatesRegionsAndCompleteDocumentPresets(t *testing.T) {
 	for _, template := range []string{"header", "footer"} {
 		source := "document @report:\n  page @sheet:\n    body @body:\n      paragraph @copy:\n        text: \"Body\"\n"
@@ -305,5 +352,28 @@ func TestPaperManageScenarioRenamesAndDeletesExactMatrixRows(t *testing.T) {
 	deleted, err := deleteWorkspace.PaperManageScenario(PaperManageScenarioRequest{Guard: deleteGuard, Action: "delete"})
 	if err != nil || !deleted.Semantic.AfterCompileOK || strings.Contains(deleted.Revision.Source, "scenario @review:") {
 		t.Fatalf("delete = %v result=%#v\nsource=%s", err, deleted, deleted.Revision.Source)
+	}
+}
+
+func TestPaperManageNodeRenamesDeletesAndProtectsStructure(t *testing.T) {
+	workspace := mustWorkspace(t, Limits{})
+	guard, _, _ := mutationGuard(t, workspace, authoringMutationFixture, "@copy", "node-rename", CapabilityEdit)
+	rename, err := workspace.PaperManageNode(PaperManageNodeRequest{Guard: guard, Action: "rename", NewName: "@intro"})
+	if err != nil || !rename.Semantic.AfterCompileOK || !strings.Contains(rename.Revision.Source, "paragraph @intro:") || strings.Contains(rename.Revision.Source, "paragraph @copy:") {
+		t.Fatalf("rename = %v result=%#v\nsource=%s", err, rename, rename.Revision.Source)
+	}
+
+	deleteWorkspace := mustWorkspace(t, Limits{})
+	deletableSource := strings.Replace(authoringMutationFixture, "      paragraph @copy:\n        text: \"Invoice\"\n", "      paragraph @copy:\n        text: \"Invoice\"\n      paragraph @keep:\n        text: \"Keep\"\n", 1)
+	deleteGuard, _, _ := mutationGuard(t, deleteWorkspace, deletableSource, "@copy", "node-delete", CapabilityEdit)
+	deleted, err := deleteWorkspace.PaperManageNode(PaperManageNodeRequest{Guard: deleteGuard, Action: "delete"})
+	if err != nil || !deleted.Semantic.AfterCompileOK || strings.Contains(deleted.Revision.Source, "paragraph @copy:") {
+		t.Fatalf("delete = %v result=%#v\nsource=%s", err, deleted, deleted.Revision.Source)
+	}
+
+	protectedWorkspace := mustWorkspace(t, Limits{})
+	protectedGuard, _, _ := mutationGuard(t, protectedWorkspace, authoringMutationFixture, "@body", "node-protected", CapabilityEdit)
+	if _, err := protectedWorkspace.PaperManageNode(PaperManageNodeRequest{Guard: protectedGuard, Action: "delete"}); err == nil || !strings.Contains(err.Error(), "INVALID_NODE_TARGET") {
+		t.Fatalf("protected node error = %v", err)
 	}
 }

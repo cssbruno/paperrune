@@ -51,6 +51,7 @@ const (
 	MutationSetScenarioValue     MutationOperation = "set_scenario_value"
 	MutationAddSchemaField       MutationOperation = "add_schema_field"
 	MutationManageScenario       MutationOperation = "manage_scenario"
+	MutationManageNode           MutationOperation = "manage_node"
 	MutationResetProperty        MutationOperation = "reset_property"
 )
 
@@ -60,7 +61,7 @@ func (operation MutationOperation) valid() bool {
 		MutationSetBoxProperty, MutationSetTextProperty, MutationSetListProperty, MutationSetDocumentProperty, MutationSetPageNumbering, MutationSetCanvasProperty,
 		MutationSetAppearance, MutationSetCondition, MutationSetLayoutItem, MutationSetLayoutContainer, MutationSetImageProperty, MutationSetTableProperty, MutationSetPageMargin, MutationSetPageSize, MutationSetCanvasItem, MutationSetPageRegion:
 		return true
-	case MutationMoveNode, MutationInsertTemplate, MutationCreateScenario, MutationCreateScenarioMatrix, MutationSetScenarioValue, MutationAddSchemaField, MutationManageScenario, MutationResetProperty:
+	case MutationMoveNode, MutationInsertTemplate, MutationCreateScenario, MutationCreateScenarioMatrix, MutationSetScenarioValue, MutationAddSchemaField, MutationManageScenario, MutationManageNode, MutationResetProperty:
 		return true
 	default:
 		return false

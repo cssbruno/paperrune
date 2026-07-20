@@ -30,7 +30,7 @@ const root = {
 
 test('selection exposes only handles supported by exact source structure', () => {
   const left = model.findSelection(root, '@left');
-  assert.deepEqual(model.operations(left), ['text', 'appearance', 'condition', 'box', 'layout-item', 'flow']);
+  assert.deepEqual(model.operations(left), ['content', 'text', 'appearance', 'condition', 'box', 'layout-item', 'flow']);
   assert.equal(left.parent.id, '@grid');
   assert.deepEqual(model.operations(model.findSelection(root, '@art')), ['appearance', 'condition', 'box', 'layout-item', 'image', 'flow']);
   assert.deepEqual(model.operations(model.findSelection(root, '@ledger')), ['condition', 'layout-item', 'table', 'flow']);
@@ -42,6 +42,26 @@ test('selection exposes only handles supported by exact source structure', () =>
   assert.deepEqual(model.properties(model.findSelection(root, '@track'), 'table'), ['width', 'min-width', 'max-width']);
   assert.deepEqual(model.operations(model.findSelection(root, '@cell')), ['text', 'appearance', 'box', 'table']);
   assert.equal(model.findSelection(root, '@missing'), null);
+});
+
+test('content editor preserves literal and addressed rich-text representations', () => {
+  const literalRoot = {kind: 'document', id: '@doc', members: [{node: {kind: 'paragraph', id: '@copy', members: [
+    {property: {name: 'text', value: {kind: 'string', string_value: 'Hello'}}},
+  ]}}]};
+  const literal = model.findSelection(literalRoot, '@copy');
+  assert.deepEqual(model.properties(literal, 'content'), ['text']);
+  assert.equal(model.valueSpec('content', 'text', literal).currentValue, 'Hello');
+  assert.equal(model.buildPayload({source_revision: 's', revision: 'p'}, literal, 'content', 'text', 'Edited').text, 'Edited');
+
+  const richRoot = {kind: 'document', id: '@doc', members: [{node: {kind: 'heading', id: '@title', members: [
+    {node: {kind: 'text', id: '@first', value: {kind: 'string', string_value: 'Hello'}, members: []}},
+    {node: {kind: 'text', id: '@second', value: {kind: 'string', string_value: ' world'}, members: []}},
+  ]}}]};
+  const rich = model.findSelection(richRoot, '@title');
+  assert.deepEqual(model.properties(rich, 'content'), ['runs']);
+  assert.deepEqual(model.buildPayload({source_revision: 's', revision: 'p'}, rich, 'content', 'runs', [
+    {target: '@first', text: 'Goodbye'}, {target: '@second', text: ' moon'},
+  ]).runs, [{target: '@first', text: 'Goodbye'}, {target: '@second', text: ' moon'}]);
 });
 
 test('list controls keep semantic ordering separate from typography and box styling', () => {

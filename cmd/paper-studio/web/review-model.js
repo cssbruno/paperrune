@@ -112,14 +112,6 @@
     return Object.freeze({scope, count: targets.length, targets: Object.freeze(targets)});
   }
 
-  function pageBreakPolicies() {
-    return Object.freeze([
-      {value: 'hard', label: 'Hard break', detail: 'Always start the following content on a new page.'},
-      {value: 'keep-with-next', label: 'Keep with next', detail: 'Move the break decision with the following authored block.'},
-      {value: 'avoid-orphan', label: 'Avoid orphan', detail: 'Prefer a legal break that preserves the next block as a unit.'},
-    ]);
-  }
-
   function optimisticFeedback(intent) {
     return Object.freeze({
       tone: 'speculative',
@@ -159,5 +151,5 @@
     return {...reviewAnchor(workspace, target, page, {x: rect.x ?? 8, y: rect.y ?? 8, width: rect.width ?? 28, height: rect.height ?? 12}), kind: 'annotation', label: 'selection', note: String(note || '').trim()};
   }
 
-  return Object.freeze({annotationPayload, palette, acceptedPalette, blastRadius, commentPayload, describe, dropTargets, normalizeReview, pageBreakPolicies, optimisticFeedback});
+  return Object.freeze({annotationPayload, palette, acceptedPalette, blastRadius, commentPayload, describe, dropTargets, normalizeReview, optimisticFeedback});
 });

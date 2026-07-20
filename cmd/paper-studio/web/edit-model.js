@@ -12,6 +12,7 @@
     'border-radius', 'border-color', 'background',
   ]);
   const textKinds = new Set(['paragraph', 'heading', 'list', 'cell']);
+  const contentKinds = new Set(['paragraph', 'heading', 'text']);
   const appearanceKinds = new Set(['paragraph', 'heading', 'list', 'image', 'cell']);
   const conditionKinds = new Set(['paragraph', 'heading', 'list', 'row', 'column', 'image', 'table']);
   const boxKinds = new Set(['paragraph', 'heading', 'list', 'image', 'cell', 'anchor']);
@@ -57,6 +58,7 @@
   function operations(selection) {
     if (!selection) return [];
     const result = [];
+    if (contentKinds.has(selection.node.kind) && contentState(selection).available) result.push('content');
     if (selection.node.kind === 'document') result.push('document');
     if (textKinds.has(selection.node.kind)) result.push('text');
     if (appearanceKinds.has(selection.node.kind)) result.push('appearance');
@@ -88,6 +90,11 @@
   }
 
   function properties(operation, selection) {
+    if (operation === 'content') {
+      const content = contentState(selection);
+      if (!content.available) return [];
+      return content.runs.length > 1 ? ['runs'] : ['text'];
+    }
     if (operation === 'document') return ['title', 'language', 'theme'];
     if (operation === 'text') return selection?.node?.kind === 'heading' ? ['font', 'size', 'line-height', 'color', 'align', 'bold', 'italic', 'level'] : ['font', 'size', 'line-height', 'color', 'align', 'bold', 'italic'];
     if (operation === 'appearance') return selection?.node?.kind === 'image' ? ['style'] : ['style', 'font-token', 'size-token', 'line-height-token', 'color-token'];
@@ -112,6 +119,11 @@
   }
 
   function baseValueSpec(operation, property, selection) {
+    if (operation === 'content') {
+      const content = contentState(selection);
+      if (property === 'runs') return {kind: 'rich-text', label: 'Styled text runs', currentValue: content.runs, authored: true};
+      return {kind: 'multiline', label: 'Text content', currentValue: content.text, authored: content.authored};
+    }
     if (operation === 'document' && property === 'title') return {kind: 'text', label: 'Document title'};
     if (operation === 'document' && property === 'language') return {kind: 'text', label: 'Language tag', defaultValue: 'en', required: true};
     if (operation === 'document' && property === 'theme') return {kind: 'reference', label: 'Theme @id', prefix: '@', required: true};
@@ -208,6 +220,24 @@
     return {authored: false, value: ''};
   }
 
+  function contentState(selection) {
+    const node = selection?.node;
+    if (!node || !contentKinds.has(node.kind)) return {available: false, authored: false, text: '', runs: []};
+    if (node.kind === 'text') return {available: Boolean(node.id && node.value), authored: Boolean(node.value), text: scalarValue(node.value) ?? '', runs: []};
+    const propertyText = authoredValue(selection, 'text');
+    const children = (node.members || []).map(member => member.node).filter(child => child?.kind === 'text');
+    if (propertyText.authored && children.length) return {available: false, authored: true, text: '', runs: []};
+    if (children.length === 1 && children[0].value) {
+      const run = children[0].id ? [{target: children[0].id, text: scalarValue(children[0].value) ?? ''}] : [];
+      return {available: true, authored: true, text: scalarValue(children[0].value) ?? '', runs: run};
+    }
+    if (children.length > 1 && children.length <= 7 && children.every(child => child.id && child.value)) {
+      return {available: true, authored: true, text: '', runs: children.map(child => ({target: child.id, text: scalarValue(child.value) ?? ''}))};
+    }
+    if (children.length > 1) return {available: false, authored: true, text: '', runs: []};
+    return {available: true, authored: propertyText.authored, text: propertyText.value, runs: []};
+  }
+
   function nodesByKind(root, kind) {
     const result = [];
     (function walk(node) {
@@ -255,9 +285,11 @@
 
   function valueSpec(operation, property, selection) {
     const spec = {...baseValueSpec(operation, property, selection)};
-    const current = authoredValue(selection, property);
-    spec.authored = current.authored;
-    if (current.authored) spec.currentValue = current.value;
+    if (operation !== 'content') {
+      const current = authoredValue(selection, property);
+      spec.authored = current.authored;
+      if (current.authored) spec.currentValue = current.value;
+    }
     spec.help = propertyHelp[property] || ({
       length: 'Choose a number and one of the units available for this property.',
       reference: 'Choose an existing authored ID; references are checked exactly.',
@@ -312,7 +344,17 @@
       property,
     };
     const spec = valueSpec(operation, property, selection);
-    if (operation === 'flow') {
+    if (operation === 'content') {
+      if (property === 'runs') {
+        if (!Array.isArray(rawValue) || rawValue.length === 0 || rawValue.length > 7) throw new Error('Rich text requires one through seven addressed runs');
+        payload.runs = rawValue.map(run => {
+          if (!/^@[A-Za-z][A-Za-z0-9_-]*$/.test(run?.target || '')) throw new Error('Every rich-text run needs an exact readable @id');
+          return {target: run.target, text: String(run.text ?? '')};
+        });
+      } else {
+        payload.text = String(rawValue ?? '');
+      }
+    } else if (operation === 'flow') {
       const destination = String(rawValue || '').trim();
       if (!/^@[A-Za-z][A-Za-z0-9_-]*$/.test(destination) || !flowDestinations(selection).some((node) => node.id === destination)) {
         throw new Error('Choose an existing body, row, or column destination');
@@ -388,7 +430,7 @@
     if (spec.kind === 'color') return '#315ee8';
     if (spec.kind === 'constraint') return 'canvas.left';
     if (spec.kind === 'length') return spec.allowAuto === false ? (spec.positive === false ? '0pt' : '1pt') : 'auto';
-    if (spec.kind === 'text') return '';
+    if (spec.kind === 'text' || spec.kind === 'multiline') return '';
     if (spec.kind === 'reference' || spec.kind === 'name') return '';
     if (spec.kind === 'integer') return String(spec.min ?? 1);
     if (spec.kind === 'choice' || spec.kind === 'boolean') return String(spec.choices?.[0] ?? '');
@@ -432,5 +474,5 @@
     return result;
   }
 
-  return Object.freeze({coreFonts, findSelection, findTextSelectionAtLine, operations, properties: propertiesForSelection, propertyGroup, authoredValue, valueSpec, defaultValue, buildPayload, buildResetPayload, flowDestinations});
+  return Object.freeze({coreFonts, findSelection, findTextSelectionAtLine, operations, properties: propertiesForSelection, propertyGroup, authoredValue, contentState, valueSpec, defaultValue, buildPayload, buildResetPayload, flowDestinations});
 });

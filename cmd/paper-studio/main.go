@@ -84,7 +84,7 @@ type studioServer struct {
 	file             string
 	scenario         string
 	mu               sync.Mutex
-	editMu           sync.Mutex
+	editMu           sync.RWMutex
 	reviewMu         sync.Mutex
 	snapshots        map[string]*studioSnapshot
 	sourceHash       [32]byte
@@ -779,8 +779,12 @@ func (s *studioServer) handleExplain(w http.ResponseWriter, r *http.Request) {
 }
 
 func decodeStudioJSON(r *http.Request, target any) error {
+	return decodeStudioJSONWithLimit(r, target, studioJSONLimit)
+}
+
+func decodeStudioJSONWithLimit(r *http.Request, target any, limit int64) error {
 	defer func() { _ = r.Body.Close() }()
-	decoder := json.NewDecoder(io.LimitReader(r.Body, studioJSONLimit+1))
+	decoder := json.NewDecoder(io.LimitReader(r.Body, limit+1))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return fmt.Errorf("paper-studio: invalid request: %w", err)

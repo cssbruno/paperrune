@@ -19,7 +19,6 @@ assert.equal(model.describe(root.members[1].node.members[0].node.members[1].node
 assert.equal(model.describe(root.members[1].node.members[0].node.members[0].node, root).mode, 'invocation');
 assert.equal(model.blastRadius(root.members[0].node, root).scope, 'local');
 assert.deepEqual(model.blastRadius(root.members[1].node.members[0].node.members[1].node, root), {scope:'shared', count:2, targets:['@copy','@copy-2']});
-assert.equal(model.pageBreakPolicies().length, 3);
 assert.equal(model.optimisticFeedback('box background').authoritative, false);
 const workspace = {revision:'plan-1', source_revision:'source-1', plan_hash:'plan-1', scenario:'@preview'};
 const normalized = model.normalizeReview({format_version:1, revision:'plan-1', source_revision:'source-1', plan_hash:'plan-1', scenario:'@preview', accessibility:{status:'verified', failures:[]}, annotations:[{transform:[1,0,0,1,0,0]}], comments:[], reference:{diff_digest:'abc', changed_pixels:4, transform:[1,0,0,1,0,0]}}, workspace);

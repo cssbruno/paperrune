@@ -33,8 +33,8 @@ func (w *Workspace) PaperInsertTemplate(request PaperInsertTemplateRequest) (Pap
 		return PaperMutationResult{}, err
 	}
 	parent := findNodeByID(revision.parsed.AST.Root, request.Guard.Target)
-	if parent == nil || (parent.Kind != paperlang.NodeDocument && parent.Kind != paperlang.NodePage && parent.Kind != paperlang.NodeBody && parent.Kind != paperlang.NodeHeader && parent.Kind != paperlang.NodeFooter && parent.Kind != paperlang.NodeRow && parent.Kind != paperlang.NodeColumn) {
-		return PaperMutationResult{}, workspaceError("INVALID_TEMPLATE_PARENT", "template parent must be a document, page, region, body, row, or column", paperedit.ErrInvalidOperation)
+	if parent == nil || !authoringTemplateAllowed(parent.Kind, request.Template) {
+		return PaperMutationResult{}, workspaceError("INVALID_TEMPLATE_PARENT", "template is not valid beneath the selected node", paperedit.ErrInvalidOperation)
 	}
 	if request.Template == "import" {
 		if parent.Kind != paperlang.NodeDocument || !safeAuthoringImportPath(request.ImportPath) {
@@ -97,6 +97,9 @@ func (w *Workspace) PaperInsertTemplate(request PaperInsertTemplateRequest) (Pap
 		}
 	case "paragraph":
 		node = paperedit.NodeSpec{Kind: paperlang.NodeParagraph, ID: request.ID, Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("New content")}}}
+	case "text":
+		value := paperedit.StringValue("New text")
+		node = paperedit.NodeSpec{Kind: paperlang.NodeText, ID: request.ID, Value: &value}
 	case "heading":
 		node = paperedit.NodeSpec{Kind: paperlang.NodeHeading, ID: request.ID, Properties: []paperedit.PropertySpec{
 			{Name: "level", Value: paperedit.NumberValue(2)},
@@ -107,6 +110,18 @@ func (w *Workspace) PaperInsertTemplate(request PaperInsertTemplateRequest) (Pap
 		node = paperedit.NodeSpec{Kind: paperlang.NodeList, ID: request.ID, Children: []paperedit.NodeSpec{
 			{Kind: paperlang.NodeItem, Children: []paperedit.NodeSpec{{Kind: paperlang.NodeText, Value: &value}}},
 		}}
+	case "item":
+		base := strings.TrimPrefix(request.ID, "@")
+		value := paperedit.StringValue("New item")
+		node = paperedit.NodeSpec{Kind: paperlang.NodeItem, ID: request.ID, Children: []paperedit.NodeSpec{{Kind: paperlang.NodeText, ID: "@" + base + "-text", Value: &value}}}
+	case "table-row":
+		base := strings.TrimPrefix(request.ID, "@")
+		cell := func(suffix, value string) paperedit.NodeSpec {
+			return paperedit.NodeSpec{Kind: paperlang.NodeTableCell, ID: "@" + base + "-" + suffix, Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue(value)}}}
+		}
+		node = paperedit.NodeSpec{Kind: paperlang.NodeTableRow, ID: request.ID, Children: []paperedit.NodeSpec{cell("cell-one", "New cell"), cell("cell-two", "New cell")}}
+	case "cell":
+		node = paperedit.NodeSpec{Kind: paperlang.NodeTableCell, ID: request.ID, Properties: []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue("New cell")}}}
 	case "row", "column":
 		base := strings.TrimPrefix(request.ID, "@")
 		if len(base) > 220 {
@@ -174,6 +189,42 @@ func (w *Workspace) PaperInsertTemplate(request PaperInsertTemplateRequest) (Pap
 	}
 	return w.applyPaperMutation("insert_template", request.Guard, opened, revision,
 		[]string{request.Guard.Target}, []paperedit.Operation{paperedit.InsertNode{Parent: request.Guard.Target, Node: node}}, "INVALID_TEMPLATE_RESULT")
+}
+
+// authoringTemplateAllowed mirrors the grammar's parent/child contract at the
+// template level. Keeping this closed prevents Studio from offering mutations
+// that can only fail during compilation.
+func authoringTemplateAllowed(parent paperlang.NodeKind, template string) bool {
+	allowed := func(templates ...string) bool {
+		for _, candidate := range templates {
+			if template == candidate {
+				return true
+			}
+		}
+		return false
+	}
+	switch parent {
+	case paperlang.NodeDocument:
+		return allowed("import", "schema", "schema-object", "page", "document-preset")
+	case paperlang.NodePage:
+		return allowed("header", "footer")
+	case paperlang.NodeBody, paperlang.NodeHeader, paperlang.NodeFooter:
+		return allowed("paragraph", "heading", "list", "row", "column", "page-break", "component", "section", "image", "table", "canvas", "note-box", "metadata-grid", "signature-row", "qr-verification", "clause", "styled-container", "repeat", "loop")
+	case paperlang.NodeRow, paperlang.NodeColumn:
+		return allowed("paragraph", "heading", "row", "column", "component", "section", "image", "table", "note-box", "metadata-grid", "signature-row", "qr-verification", "clause", "styled-container")
+	case paperlang.NodeList:
+		return template == "item"
+	case paperlang.NodeItem:
+		return allowed("text", "paragraph", "component")
+	case paperlang.NodeTable, paperlang.NodeTableHeader:
+		return template == "table-row"
+	case paperlang.NodeTableRow:
+		return template == "cell"
+	case paperlang.NodeTableCell:
+		return allowed("text", "paragraph", "image", "list")
+	default:
+		return false
+	}
 }
 
 func authoringRepeaterTemplate(ast paperlang.AST, template, id, sourcePath string) (paperedit.NodeSpec, error) {
@@ -636,6 +687,58 @@ type PaperManageScenarioRequest struct {
 	Guard   PaperMutationGuard `json:"guard"`
 	Action  string             `json:"action"`
 	NewName string             `json:"new_name,omitempty"`
+}
+
+type PaperManageNodeRequest struct {
+	Guard   PaperMutationGuard `json:"guard"`
+	Action  string             `json:"action"`
+	NewName string             `json:"new_name,omitempty"`
+}
+
+// PaperManageNode renames or removes an optional authored content node. Root
+// document structure, definitions, schemas, and fixtures use dedicated tools
+// and cannot be changed through this lifecycle endpoint.
+func (w *Workspace) PaperManageNode(request PaperManageNodeRequest) (PaperMutationResult, error) {
+	opened, revision, err := w.mutationRevision(request.Guard)
+	if err != nil {
+		return PaperMutationResult{}, err
+	}
+	node, parent := sourceNodeAndParent(revision.parsed.AST.Root, request.Guard.Target)
+	if node == nil || parent == nil || !authoringNodeLifecycleAllowed(node.Kind) {
+		return PaperMutationResult{}, workspaceError("INVALID_NODE_TARGET", "node lifecycle target must be an optional authored content node", paperedit.ErrInvalidOperation)
+	}
+	var operation paperedit.Operation
+	switch request.Action {
+	case "rename":
+		if !validAuthorityNodeID(request.NewName) || request.NewName == request.Guard.Target {
+			return PaperMutationResult{}, workspaceError("INVALID_NODE", "node rename requires a distinct readable @id", ErrInvalidQuery)
+		}
+		if findNodeByID(revision.parsed.AST.Root, request.NewName) != nil {
+			return PaperMutationResult{}, workspaceError("INVALID_NODE", "node ID already exists in the exact source revision", paperedit.ErrInvalidOperation)
+		}
+		operation = paperedit.RenameID{Target: request.Guard.Target, NewID: request.NewName}
+	case "delete":
+		if request.NewName != "" {
+			return PaperMutationResult{}, workspaceError("INVALID_NODE", "node delete does not accept a replacement ID", ErrInvalidQuery)
+		}
+		operation = paperedit.DeleteNode{Target: request.Guard.Target}
+	default:
+		return PaperMutationResult{}, workspaceError("INVALID_NODE", "node action must be rename or delete", ErrInvalidQuery)
+	}
+	return w.applyPaperMutation("manage_node", request.Guard, opened, revision,
+		[]string{request.Guard.Target}, []paperedit.Operation{operation}, "INVALID_NODE_RESULT")
+}
+
+func authoringNodeLifecycleAllowed(kind paperlang.NodeKind) bool {
+	switch kind {
+	case paperlang.NodeCanvas, paperlang.NodeAnchor, paperlang.NodeHeading, paperlang.NodeText, paperlang.NodeParagraph,
+		paperlang.NodeList, paperlang.NodeItem, paperlang.NodePageBreak, paperlang.NodeRow, paperlang.NodeColumn,
+		paperlang.NodeImage, paperlang.NodeTable, paperlang.NodeTableRow, paperlang.NodeTableCell, paperlang.NodeTableHeader,
+		paperlang.NodeTableColumn, paperlang.NodeUse, paperlang.NodeRepeat, paperlang.NodeLoop:
+		return true
+	default:
+		return false
+	}
 }
 
 // PaperManageScenario provides the bounded lifecycle operations needed by a

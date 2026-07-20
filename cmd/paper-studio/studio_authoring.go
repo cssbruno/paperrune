@@ -52,21 +52,22 @@ type studioAuthoringTarget struct {
 }
 
 type studioAuthoringResponse struct {
-	FormatVersion   uint16                    `json:"format_version"`
-	Revision        string                    `json:"revision"`
-	SourceRevision  string                    `json:"source_revision"`
-	PlanHash        string                    `json:"plan_hash"`
-	Scenario        string                    `json:"scenario,omitempty"`
-	DocumentTarget  string                    `json:"document_target,omitempty"`
-	TemplateTargets []studioAuthoringTarget   `json:"template_targets"`
-	BindingTargets  []studioAuthoringTarget   `json:"binding_targets"`
-	Schemas         []studioSchemaChoice      `json:"schemas"`
-	ObjectTypes     []string                  `json:"object_types"`
-	SchemaFields    []studioSchemaFieldTarget `json:"schema_field_targets"`
-	Scenarios       []string                  `json:"scenarios"`
-	ScenarioValues  []studioScenarioValue     `json:"scenario_values"`
-	StressPresets   []string                  `json:"stress_presets"`
-	Components      []string                  `json:"components"`
+	FormatVersion    uint16                    `json:"format_version"`
+	Revision         string                    `json:"revision"`
+	SourceRevision   string                    `json:"source_revision"`
+	PlanHash         string                    `json:"plan_hash"`
+	Scenario         string                    `json:"scenario,omitempty"`
+	DocumentTarget   string                    `json:"document_target,omitempty"`
+	TemplateTargets  []studioAuthoringTarget   `json:"template_targets"`
+	LifecycleTargets []studioAuthoringTarget   `json:"lifecycle_targets"`
+	BindingTargets   []studioAuthoringTarget   `json:"binding_targets"`
+	Schemas          []studioSchemaChoice      `json:"schemas"`
+	ObjectTypes      []string                  `json:"object_types"`
+	SchemaFields     []studioSchemaFieldTarget `json:"schema_field_targets"`
+	Scenarios        []string                  `json:"scenarios"`
+	ScenarioValues   []studioScenarioValue     `json:"scenario_values"`
+	StressPresets    []string                  `json:"stress_presets"`
+	Components       []string                  `json:"components"`
 }
 
 const studioComponentPreviewFormat = "2"
@@ -322,7 +323,7 @@ func buildStudioAuthoringResponse(snapshot *studioSnapshot, ast paperlang.AST) s
 	response := studioAuthoringResponse{
 		FormatVersion: 1, Revision: snapshot.revision, SourceRevision: studioSourceRevision(snapshot.source),
 		PlanHash: snapshot.plan.Hash(), Scenario: snapshot.scenario, StressPresets: []string{"empty", "typical", "stress"},
-		TemplateTargets: []studioAuthoringTarget{}, BindingTargets: []studioAuthoringTarget{}, Schemas: []studioSchemaChoice{}, ObjectTypes: []string{}, SchemaFields: []studioSchemaFieldTarget{}, Scenarios: []string{}, ScenarioValues: []studioScenarioValue{}, Components: []string{},
+		TemplateTargets: []studioAuthoringTarget{}, LifecycleTargets: []studioAuthoringTarget{}, BindingTargets: []studioAuthoringTarget{}, Schemas: []studioSchemaChoice{}, ObjectTypes: []string{}, SchemaFields: []studioSchemaFieldTarget{}, Scenarios: []string{}, ScenarioValues: []studioScenarioValue{}, Components: []string{},
 	}
 	hasPage := false
 	var walk func(*paperlang.Node)
@@ -336,11 +337,14 @@ func buildStudioAuthoringResponse(snapshot *studioSnapshot, ast paperlang.AST) s
 		if node.Kind == paperlang.NodePage {
 			hasPage = true
 		}
-		if node.ID != "" && (node.Kind == paperlang.NodePage || node.Kind == paperlang.NodeBody || node.Kind == paperlang.NodeHeader || node.Kind == paperlang.NodeFooter || node.Kind == paperlang.NodeRow || node.Kind == paperlang.NodeColumn) {
+		if node.ID != "" && (node.Kind == paperlang.NodePage || node.Kind == paperlang.NodeBody || node.Kind == paperlang.NodeHeader || node.Kind == paperlang.NodeFooter || node.Kind == paperlang.NodeRow || node.Kind == paperlang.NodeColumn || node.Kind == paperlang.NodeList || node.Kind == paperlang.NodeItem || node.Kind == paperlang.NodeTable || node.Kind == paperlang.NodeTableHeader || node.Kind == paperlang.NodeTableRow || node.Kind == paperlang.NodeTableCell) {
 			response.TemplateTargets = append(response.TemplateTargets, studioAuthoringTarget{ID: node.ID, Kind: string(node.Kind)})
 		}
 		if node.ID != "" && (node.Kind == paperlang.NodeParagraph || node.Kind == paperlang.NodeHeading || node.Kind == paperlang.NodeTableCell || node.Kind == paperlang.NodeUse) {
 			response.BindingTargets = append(response.BindingTargets, studioAuthoringTarget{ID: node.ID, Kind: string(node.Kind)})
+		}
+		if node.ID != "" && studioNodeLifecycleAllowed(node.Kind) {
+			response.LifecycleTargets = append(response.LifecycleTargets, studioAuthoringTarget{ID: node.ID, Kind: string(node.Kind)})
 		}
 		if node.ID != "" && node.Kind == paperlang.NodeComponent {
 			response.Components = append(response.Components, node.ID)
@@ -357,6 +361,7 @@ func buildStudioAuthoringResponse(snapshot *studioSnapshot, ast paperlang.AST) s
 		response.TemplateTargets = append(response.TemplateTargets, studioAuthoringTarget{ID: response.DocumentTarget, Kind: string(paperlang.NodeDocument)})
 	}
 	sort.Slice(response.TemplateTargets, func(i, j int) bool { return response.TemplateTargets[i].ID < response.TemplateTargets[j].ID })
+	sort.Slice(response.LifecycleTargets, func(i, j int) bool { return response.LifecycleTargets[i].ID < response.LifecycleTargets[j].ID })
 	sort.Slice(response.BindingTargets, func(i, j int) bool { return response.BindingTargets[i].ID < response.BindingTargets[j].ID })
 	schemas := papercompile.ExtractSchemas(ast)
 	for _, schema := range schemas.Schemas {
@@ -396,6 +401,18 @@ func buildStudioAuthoringResponse(snapshot *studioSnapshot, ast paperlang.AST) s
 	sort.Strings(response.Components)
 	sort.Strings(response.ObjectTypes)
 	return response
+}
+
+func studioNodeLifecycleAllowed(kind paperlang.NodeKind) bool {
+	switch kind {
+	case paperlang.NodeCanvas, paperlang.NodeAnchor, paperlang.NodeHeading, paperlang.NodeText, paperlang.NodeParagraph,
+		paperlang.NodeList, paperlang.NodeItem, paperlang.NodePageBreak, paperlang.NodeRow, paperlang.NodeColumn,
+		paperlang.NodeImage, paperlang.NodeTable, paperlang.NodeTableRow, paperlang.NodeTableCell, paperlang.NodeTableHeader,
+		paperlang.NodeTableColumn, paperlang.NodeUse, paperlang.NodeRepeat, paperlang.NodeLoop:
+		return true
+	default:
+		return false
+	}
 }
 
 func collectStudioSchemaFieldTargets(node *paperlang.Node, schema, prefix string, output *[]studioSchemaFieldTarget) {

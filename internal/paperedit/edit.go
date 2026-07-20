@@ -213,6 +213,16 @@ type ReplaceText struct {
 
 func (ReplaceText) paperEditOperation() {}
 
+// ReplaceInlineText updates the one anonymous inline text child of an
+// addressed paragraph or heading. The parent remains the exact mutation
+// target; zero or multiple inline text children fail closed.
+type ReplaceInlineText struct {
+	Parent string
+	Text   string
+}
+
+func (ReplaceInlineText) paperEditOperation() {}
+
 type InsertNode struct {
 	Parent string
 	Node   NodeSpec
@@ -563,6 +573,8 @@ func operationTargetIDs(operation Operation) []string {
 		return []string{edit.Target}
 	case ReplaceText:
 		return []string{edit.Target}
+	case ReplaceInlineText:
+		return []string{edit.Parent}
 	case InsertNode:
 		return []string{edit.Parent}
 	case InsertNodes:
@@ -857,6 +869,30 @@ func resolveOperation(source string, index sourceIndex, operationIndex int, oper
 			return nil, patch.target, fmt.Errorf("target %s is not a text node with an inline value", edit.Target)
 		}
 		patch.start, patch.end = int(node.Value.Span.Start.Offset), int(node.Value.Span.End.Offset) // #nosec G115 -- source offset is bounded by validated input or parser state
+		patch.replacement = strconv.Quote(edit.Text)
+		return []sourcePatch{patch}, patch.target, nil
+
+	case ReplaceInlineText:
+		patch.target = edit.Parent
+		parent, err := targetNode(index, edit.Parent)
+		if err != nil {
+			return nil, patch.target, err
+		}
+		var inline *paperlang.Node
+		for _, member := range parent.Members {
+			child := member.Node
+			if child == nil || child.Kind != paperlang.NodeText {
+				continue
+			}
+			if inline != nil {
+				return nil, patch.target, fmt.Errorf("inline text is ambiguous on %s", edit.Parent)
+			}
+			inline = child
+		}
+		if inline == nil || inline.ID != "" || inline.Value == nil {
+			return nil, patch.target, fmt.Errorf("target %s does not have one anonymous inline text value", edit.Parent)
+		}
+		patch.start, patch.end = int(inline.Value.Span.Start.Offset), int(inline.Value.Span.End.Offset) // #nosec G115 -- source offset is bounded by validated input or parser state
 		patch.replacement = strconv.Quote(edit.Text)
 		return []sourcePatch{patch}, patch.target, nil
 
@@ -1652,6 +1688,8 @@ func invalidationScope(index sourceIndex, operations []Operation) *InvalidationS
 			addNodeAndAncestors(edit.Target)
 		case ReplaceText:
 			addNodeAndAncestors(edit.Target)
+		case ReplaceInlineText:
+			addNodeAndAncestors(edit.Parent)
 		case InsertNode:
 			addNodeAndAncestors(edit.Parent)
 			addSpec(edit.Node)

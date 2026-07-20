@@ -57,6 +57,49 @@ func TestPaperStudioAppliesExactPageSize(t *testing.T) {
 	}
 }
 
+func TestPaperStudioEditsLiteralAndAddressedRichText(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		source   string
+		target   string
+		property string
+		payload  map[string]any
+		want     []string
+	}{
+		{name: "literal", source: studioBoxFixture, target: "@message", property: "text", payload: map[string]any{"text": "Edited content"}, want: []string{`text: "Edited content"`}},
+		{name: "rich text", source: "document @report:\n  page @sheet:\n    body @body:\n      paragraph @rich:\n        text @first: \"Hello\"\n        text @second: \" world\"\n", target: "@rich", property: "runs", payload: map[string]any{"runs": []map[string]any{{"target": "@first", "text": "Goodbye"}, {"target": "@second", "text": " moon"}}}, want: []string{`text @first: "Goodbye"`, `text @second: " moon"`}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "content.paper")
+			if err := os.WriteFile(file, []byte(test.source), 0o640); err != nil {
+				t.Fatal(err)
+			}
+			studio, err := newStudioServer(file, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := fetchStudioWorkspace(t, studio.routes())
+			request := map[string]any{"source_revision": before.SourceRevision, "plan_revision": before.Revision, "operation": "content", "target": test.target, "property": test.property}
+			for key, value := range test.payload {
+				request[key] = value
+			}
+			response := postStudioJSON(t, studio.routes(), "/api/edit", request)
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("content edit = %d %s", response.StatusCode, response.Body)
+			}
+			written, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range test.want {
+				if !strings.Contains(string(written), want) {
+					t.Fatalf("content source missing %q: %s", want, written)
+				}
+			}
+		})
+	}
+}
+
 func TestPaperStudioOffersExplicitFontRepairAgainstUnavailablePlan(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "invalid-font.paper")
 	if err := os.WriteFile(file, []byte(studioInvalidFontFixture), 0o640); err != nil {
@@ -353,6 +396,57 @@ func TestPaperStudioAuthoringMetadataAndJournaledCreateToConnectFlow(t *testing.
 	oldMetadata := studioRequest(t, handler, http.MethodGet, "/api/authoring?revision="+before.Revision, nil, "")
 	if oldMetadata.StatusCode != http.StatusConflict {
 		t.Fatalf("stale metadata = %d %s", oldMetadata.StatusCode, oldMetadata.Body)
+	}
+}
+
+func TestPaperStudioNodeLifecycleIsCataloguedValidatedAndJournaled(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "node-lifecycle.paper")
+	source := strings.Replace(studioAuthoringFixture, "      paragraph @copy:\n        text: \"Invoice\"\n", "      paragraph @copy:\n        text: \"Invoice\"\n      paragraph @keep:\n        text: \"Keep\"\n", 1)
+	if err := os.WriteFile(file, []byte(source), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	studio, err := newStudioServer(file, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := studio.routes()
+	before := fetchStudioWorkspace(t, handler)
+	metadataResponse := studioRequest(t, handler, http.MethodGet, "/api/authoring?revision="+before.Revision, nil, "")
+	var metadata studioAuthoringResponse
+	if err := json.Unmarshal(metadataResponse.Body, &metadata); err != nil {
+		t.Fatal(err)
+	}
+	foundCopy, foundBody := false, false
+	for _, target := range metadata.LifecycleTargets {
+		foundCopy = foundCopy || target.ID == "@copy"
+		foundBody = foundBody || target.ID == "@body"
+	}
+	if !foundCopy || foundBody {
+		t.Fatalf("lifecycle targets = %+v", metadata.LifecycleTargets)
+	}
+
+	rename := map[string]any{"source_revision": before.SourceRevision, "plan_revision": before.Revision, "operation": "node", "target": "@copy", "property": "rename", "id": "@intro"}
+	if validated := postStudioJSON(t, handler, "/api/validate-edit", rename); validated.StatusCode != http.StatusOK {
+		t.Fatalf("rename validation = %d %s", validated.StatusCode, validated.Body)
+	}
+	if committed := postStudioJSON(t, handler, "/api/edit", rename); committed.StatusCode != http.StatusOK {
+		t.Fatalf("rename = %d %s", committed.StatusCode, committed.Body)
+	}
+	afterRename := fetchStudioWorkspace(t, handler)
+	if !strings.Contains(afterRename.Source, "paragraph @intro:") || strings.Contains(afterRename.Source, "paragraph @copy:") {
+		t.Fatalf("renamed source:\n%s", afterRename.Source)
+	}
+
+	remove := map[string]any{"source_revision": afterRename.SourceRevision, "plan_revision": afterRename.Revision, "operation": "node", "target": "@intro", "property": "delete"}
+	if validated := postStudioJSON(t, handler, "/api/validate-edit", remove); validated.StatusCode != http.StatusOK {
+		t.Fatalf("delete validation = %d %s", validated.StatusCode, validated.Body)
+	}
+	if committed := postStudioJSON(t, handler, "/api/edit", remove); committed.StatusCode != http.StatusOK {
+		t.Fatalf("delete = %d %s", committed.StatusCode, committed.Body)
+	}
+	afterDelete := fetchStudioWorkspace(t, handler)
+	if strings.Contains(afterDelete.Source, "paragraph @intro:") || !strings.Contains(afterDelete.Source, "paragraph @keep:") {
+		t.Fatalf("deleted source:\n%s", afterDelete.Source)
 	}
 }
 

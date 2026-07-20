@@ -14,6 +14,7 @@
       sourceRevision: payload.source_revision,
       documentTarget: payload.document_target || '',
       templateTargets: Object.freeze((payload.template_targets || []).map(Object.freeze)),
+	  lifecycleTargets: Object.freeze((payload.lifecycle_targets || []).map(Object.freeze)),
       bindingTargets: Object.freeze((payload.binding_targets || []).map(Object.freeze)),
       schemas: Object.freeze((payload.schemas || []).map(schema => Object.freeze({name: schema.name, fields: Object.freeze((schema.fields || []).map(Object.freeze))}))),
       objectTypes: Object.freeze([...(payload.object_types || [])]),
@@ -27,16 +28,32 @@
 
   function readableID(value) { return /^@[A-Za-z_][A-Za-z0-9_-]{0,127}$/.test(String(value || '')); }
 
+  function templateChoices(metadata, workspace, kind) {
+    const component = metadata.components.length ? ['component'] : [];
+    const repeat = metadata.schemas.some(schema => schema.fields.some(field => field.kind === 'list')) ? ['repeat'] : [];
+    const loop = workspace.scenario ? ['loop'] : [];
+    const nestedFlow = ['paragraph', 'heading', 'image', 'table', 'row', 'column', 'note-box', 'metadata-grid', 'signature-row', 'qr-verification', 'clause', 'styled-container', ...component, 'section'];
+    switch (kind) {
+    case 'document': return ['document-preset', 'page'];
+    case 'page': return ['header', 'footer'];
+    case 'body': case 'header': case 'footer':
+      return ['paragraph', 'heading', 'list', 'image', 'table', 'canvas', 'row', 'column', 'page-break', 'note-box', 'metadata-grid', 'signature-row', 'qr-verification', 'clause', 'styled-container', ...repeat, ...loop, ...component, 'section'];
+    case 'row': case 'column': return nestedFlow;
+    case 'list': return ['item'];
+    case 'item': return ['text', 'paragraph', ...component];
+    case 'table': case 'table-header': return ['table-row'];
+    case 'table-row': return ['cell'];
+    case 'cell': return ['text', 'paragraph', 'image', 'list'];
+    default: return [];
+    }
+  }
+
   function buildPayload(workspace, metadata, draft) {
     if (!workspace || !metadata || metadata.revision !== workspace.revision || metadata.sourceRevision !== workspace.source_revision) throw new Error('Exact revisions are unavailable');
     const base = {source_revision: workspace.source_revision, plan_revision: workspace.revision, scenario: workspace.scenario || '', operation: draft.operation, property: ''};
     if (draft.operation === 'template') {
       const target = metadata.templateTargets.find(item => item.id === draft.target);
-      const flowTemplates = ['paragraph', 'heading', 'list', 'row', 'column', 'page-break', 'image', 'table', 'canvas', 'note-box', 'metadata-grid', 'signature-row', 'qr-verification', 'clause', 'styled-container', 'repeat', 'loop', 'component', 'section'];
-      const validTemplate = ['page', 'document-preset'].includes(draft.template) ? target?.kind === 'document' :
-        ['header', 'footer'].includes(draft.template) ? target?.kind === 'page' :
-        flowTemplates.includes(draft.template) &&
-        ['body', 'header', 'footer', 'row', 'column'].includes(target?.kind) &&
+      const validTemplate = templateChoices(metadata, workspace, target?.kind).includes(draft.template) &&
         (draft.template !== 'component' || metadata.components.includes(draft.component)) &&
         (draft.template !== 'repeat' || metadata.schemas.some(schema => schema.fields.some(field => field.path === draft.path && field.kind === 'list'))) &&
         (draft.template !== 'loop' || Boolean(workspace.scenario));
@@ -115,5 +132,14 @@
     throw new Error('Choose a distinct readable scenario @id');
   }
 
-  return Object.freeze({normalize, buildPayload, buildScenarioLifecyclePayload});
+  function buildNodeLifecyclePayload(workspace, metadata, draft) {
+    if (!workspace || !metadata || metadata.revision !== workspace.revision || metadata.sourceRevision !== workspace.source_revision) throw new Error('Exact revisions are unavailable');
+    if (!metadata.lifecycleTargets.some(item => item.id === draft.target)) throw new Error('Choose an exact optional content node');
+    const base = {source_revision: workspace.source_revision, plan_revision: workspace.revision, scenario: workspace.scenario || '', operation: 'node', target: draft.target, property: draft.action};
+    if (draft.action === 'delete') return base;
+    if (draft.action === 'rename' && readableID(draft.id) && draft.id !== draft.target && !metadata.lifecycleTargets.some(item => item.id === draft.id)) return {...base, id: draft.id};
+    throw new Error('Choose a distinct readable node @id');
+  }
+
+  return Object.freeze({normalize, templateChoices, buildPayload, buildScenarioLifecyclePayload, buildNodeLifecyclePayload});
 });

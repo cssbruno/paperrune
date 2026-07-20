@@ -25,6 +25,7 @@
         <button class="mode" data-mode="accessibility" aria-pressed="false">Accessibility</button>
       </nav>
       <div class="top-actions">
+        <button id="toggle-outline-mobile" class="icon-button mobile-outline-toggle" type="button" aria-controls="left-panel" aria-expanded="false">Outline</button>
         <a id="save-paperdoc" class="icon-button paperdoc-action" href="/api/export.paperdoc" download>Save .paperdoc</a>
         <button id="toggle-overlay" class="icon-button" aria-pressed="false" title="Toggle geometry overlay">Geometry</button>
         <button id="refresh" class="primary-action">Refresh plan</button>
@@ -165,6 +166,10 @@
           <div id="page-setup-controls" class="page-setup-controls" aria-live="polite"></div>
         </details>
         <div id="edit-controls" class="edit-controls" aria-live="polite"></div>
+        <details class="inspector-disclosure review-disclosure">
+          <summary><span>Review</span><span id="review-count" class="quiet">0</span></summary>
+          <div id="review-controls" class="review-controls" aria-live="polite"></div>
+        </details>
         <details class="inspector-disclosure authoring-disclosure">
           <summary><span>Create content</span><span class="quiet">Optional</span></summary>
           <div id="authoring-controls" class="authoring-controls" aria-live="polite"></div>

@@ -261,7 +261,7 @@ func (w *Workspace) PaperResetProperty(request PaperResetPropertyRequest) (Paper
 				}
 			}
 		}
-		return w.applyPaperMutation("reset_binding", request.Guard, opened, revision, []string{request.Guard.Target}, operations, "INVALID_RESET_PROPERTY_STATE")
+		return w.applyPaperMutation("reset_property", request.Guard, opened, revision, []string{request.Guard.Target}, operations, "INVALID_RESET_PROPERTY_STATE")
 	}
 	return w.applyPaperMutation("reset_property", request.Guard, opened, revision, []string{request.Guard.Target}, []paperedit.Operation{
 		paperedit.DeleteProperty{Target: request.Guard.Target, Name: request.Property},

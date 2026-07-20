@@ -3,6 +3,7 @@ const model = require('../web/authoring-model.js');
 const workspace = {revision:'plan-1', plan_hash:'plan-1', source_revision:'source-1', scenario:''};
 const payload = {format_version:1, revision:'plan-1', plan_hash:'plan-1', source_revision:'source-1', document_target:'@doc',
   template_targets:[{id:'@body',kind:'body'}], binding_targets:[{id:'@copy',kind:'paragraph'}],
+	lifecycle_targets:[{id:'@copy',kind:'paragraph'}],
   schemas:[{name:'@invoice',fields:[{path:'@invoice.total',kind:'number',required:true},{path:'@invoice.items',kind:'list',required:true}]}],
   object_types:['Address'],
   schema_field_targets:[{id:'@invoice',kind:'schema',schema:'@invoice',path:''}],
@@ -35,8 +36,21 @@ assert.deepEqual(model.buildScenarioLifecyclePayload(workspace, metadata, {actio
 assert.deepEqual(model.buildScenarioLifecyclePayload(workspace, metadata, {action:'delete',target:'@review'}),
   {source_revision:'source-1',plan_revision:'plan-1',scenario:'',operation:'scenario',target:'@review',property:'delete'});
 assert.throws(() => model.buildScenarioLifecyclePayload(workspace, metadata, {action:'rename',target:'@review',id:'@review'}), /distinct/);
+assert.deepEqual(model.buildNodeLifecyclePayload(workspace, metadata, {action:'rename',target:'@copy',id:'@renamed'}),
+  {source_revision:'source-1',plan_revision:'plan-1',scenario:'',operation:'node',target:'@copy',property:'rename',id:'@renamed'});
+assert.deepEqual(model.buildNodeLifecyclePayload(workspace, metadata, {action:'delete',target:'@copy'}),
+  {source_revision:'source-1',plan_revision:'plan-1',scenario:'',operation:'node',target:'@copy',property:'delete'});
 assert.equal(model.buildPayload(workspace, metadata, {operation:'template',target:'@body',template:'component',component:'@card',id:'@card-1'}).component, '@card');
 assert.equal(model.buildPayload(workspace, metadata, {operation:'template',target:'@body',template:'heading',id:'@heading'}).template, 'heading');
+const nestedMetadata = model.normalize({...payload, template_targets:[
+  {id:'@body',kind:'body'},{id:'@tasks',kind:'list'},{id:'@first',kind:'item'},
+  {id:'@grid',kind:'table'},{id:'@row',kind:'table-row'},{id:'@cell',kind:'cell'},
+]}, workspace);
+assert.deepEqual(model.templateChoices(nestedMetadata, workspace, 'list'), ['item']);
+assert.deepEqual(model.templateChoices(nestedMetadata, workspace, 'table-row'), ['cell']);
+assert.equal(model.buildPayload(workspace, nestedMetadata, {operation:'template',target:'@tasks',template:'item',id:'@second'}).template, 'item');
+assert.equal(model.buildPayload(workspace, nestedMetadata, {operation:'template',target:'@row',template:'cell',id:'@extra'}).template, 'cell');
+assert.throws(() => model.buildPayload(workspace, nestedMetadata, {operation:'template',target:'@row',template:'canvas',id:'@bad'}), /compatible/);
 assert.equal(model.buildPayload(workspace, metadata, {operation:'schema',target:'@doc',id:'@receipt'}).id, '@receipt');
 assert.equal(model.buildPayload(workspace, metadata, {operation:'schema-object',target:'@doc',id:'@Address'}).id, '@Address');
 assert.throws(() => model.normalize({...payload, revision:'old'}, workspace), /Stale/);
