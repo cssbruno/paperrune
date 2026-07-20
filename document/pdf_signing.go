@@ -1,0 +1,150 @@
+// SPDX-License-Identifier: LicenseRef-PaperRune-Health-Sector-Restricted-1.0
+// Copyright (c) 2026 cssBruno
+
+package document
+
+import (
+	"bytes"
+	"context"
+	"io"
+	"strings"
+
+	"github.com/cssbruno/paperrune/sign"
+)
+
+// OutputSigned writes the current document as a signed PDF.
+func (f *Document) OutputSigned(w io.Writer, options sign.Options) error {
+	return f.OutputSignedContext(context.Background(), w, options)
+}
+
+// OutputSignedContext writes the current document as a signed PDF and checks
+// ctx before generation/signing and before the final writer call.
+func (f *Document) OutputSignedContext(ctx context.Context, w io.Writer, options sign.Options) error {
+	return f.writeSignedOutputContext(ctx, w, options)
+}
+
+func (f *Document) writeSignedOutputContext(ctx context.Context, w io.Writer, options sign.Options) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := f.requireSecurityFeature("PDF signing", f.securityPolicy.AllowPDFSigning); err != nil {
+		return err
+	}
+	if isNilWriter(w) {
+		f.SetError(ErrNilWriter)
+		return f.err
+	}
+	if err := outputCanceledError(ctx); err != nil {
+		f.SetError(err)
+		return err
+	}
+	signed, err := f.outputSignedBytesContext(ctx, options)
+	if err != nil {
+		return err
+	}
+	if err := outputCanceledError(ctx); err != nil {
+		f.SetError(err)
+		return err
+	}
+	n, err := w.Write(signed)
+	if err != nil {
+		f.SetError(err)
+		return err
+	}
+	if n != len(signed) {
+		f.SetError(io.ErrShortWrite)
+		return io.ErrShortWrite
+	}
+	return nil
+}
+
+// OutputSignedFile creates or truncates fileStr and writes the current document
+// as a signed PDF.
+func (f *Document) OutputSignedFile(fileStr string, options sign.Options) error {
+	return f.OutputSignedFileContext(context.Background(), fileStr, options)
+}
+
+// OutputSignedFileContext creates or truncates fileStr and writes the current
+// document as a signed PDF with context cancellation.
+func (f *Document) OutputSignedFileContext(ctx context.Context, fileStr string, options sign.Options) error {
+	if fileStr == "" {
+		f.SetError(sign.ErrMissingOutput)
+		return sign.ErrMissingOutput
+	}
+	return f.coordinateFileOutput(ctx, fileStr, f.signedOutputRequest(options, OutputOptions{}), !f.outputPolicy.DisableSync)
+}
+
+// OutputSignedFileWithOptions writes the current document as a signed PDF using
+// explicit file output options. A zero-value OutputOptions keeps the durable
+// default.
+func (f *Document) OutputSignedFileWithOptions(fileStr string, signOptions sign.Options, fileOptions OutputOptions) error {
+	return f.OutputSignedFileWithOptionsContext(context.Background(), fileStr, signOptions, fileOptions)
+}
+
+// OutputSignedFileWithOptionsContext writes the current document as a signed
+// PDF using output-wide options and context cancellation.
+func (f *Document) OutputSignedFileWithOptionsContext(ctx context.Context, fileStr string, signOptions sign.Options, fileOptions OutputOptions) error {
+	if fileStr == "" {
+		f.SetError(sign.ErrMissingOutput)
+		return sign.ErrMissingOutput
+	}
+	return f.coordinateFileOutput(ctx, fileStr, f.signedOutputRequest(signOptions, fileOptions), f.syncOutputForOptions(fileOptions))
+}
+
+// OutputSignedWithOptions writes the current document as a signed PDF using
+// output-wide options before signing.
+func (f *Document) OutputSignedWithOptions(w io.Writer, signOptions sign.Options, outputOptions OutputOptions) error {
+	return f.OutputSignedWithOptionsContext(context.Background(), w, signOptions, outputOptions)
+}
+
+// OutputSignedWithOptionsContext writes the current document as a signed PDF
+// using output-wide options and context cancellation.
+func (f *Document) OutputSignedWithOptionsContext(ctx context.Context, w io.Writer, signOptions sign.Options, outputOptions OutputOptions) error {
+	return f.coordinateOutput(ctx, w, f.signedOutputRequest(signOptions, outputOptions))
+}
+
+func (f *Document) signedOutputRequest(signOptions sign.Options, outputOptions OutputOptions) outputRequest {
+	return outputRequest{
+		options: outputOptions,
+		write: func(ctx context.Context, w io.Writer) error {
+			return f.writeSignedOutputContext(ctx, w, signOptions)
+		},
+	}
+}
+
+func (f *Document) outputSignedBytes(options sign.Options) ([]byte, error) {
+	return f.outputSignedBytesContext(context.Background(), options)
+}
+
+func (f *Document) outputSignedBytesContext(ctx context.Context, options sign.Options) ([]byte, error) {
+	options = f.signingOptions(options)
+	var buf bytes.Buffer
+	outputPolicy := f.outputPolicy
+	if outputPolicy.StreamFinal {
+		f.outputPolicy.StreamFinal = false
+		defer func() { f.outputPolicy = outputPolicy }()
+	}
+	if err := f.writeBufferedOutputContext(ctx, &buf); err != nil {
+		return nil, err
+	}
+	if err := outputCanceledError(ctx); err != nil {
+		f.SetError(err)
+		return nil, err
+	}
+	signed, err := sign.AppendBytesContext(ctx, buf.Bytes(), options)
+	if err != nil {
+		if ctxErr := outputCanceledError(ctx); ctxErr != nil {
+			err = ctxErr
+		}
+		f.SetError(err)
+		return nil, err
+	}
+	return signed, nil
+}
+
+func (f *Document) signingOptions(options sign.Options) sign.Options {
+	if strings.TrimSpace(options.FieldName) == "" && f.signatureFieldName != "" {
+		options.FieldName = f.signatureFieldName
+	}
+	return options
+}

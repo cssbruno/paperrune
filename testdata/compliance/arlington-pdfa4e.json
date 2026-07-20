@@ -1,0 +1,63 @@
+{"report":{"buildInformation":{"releaseDetails":[{
+  "id" : "validation-model-arlington",
+  "version" : "1.30.1",
+  "buildDate" : 1776373680000
+},{
+  "id" : "verapdf-rest-arlington",
+  "version" : "1.30.1",
+  "buildDate" : 1777113780000
+},{
+  "id" : "core-arlington",
+  "version" : "1.30.1",
+  "buildDate" : 1776373560000
+}]},"jobs":[{"itemDetails":{
+  "name" : "pdfa4e-attachment-metadata.pdf",
+  "size" : 59720
+},"arlingtonResult":[ {
+  "details" : {
+    "passedRules" : 9022,
+    "failedRules" : 0,
+    "passedChecks" : 804,
+    "failedChecks" : 0,
+    "ruleSummaries" : [ ]
+  },
+  "jobEndStatus" : "normal",
+  "profileName" : "Arlington PDF 2.0 profile",
+  "statement" : "PDF file is compliant with Profile requirements.",
+  "compliant" : true
+} ],"processingTime":{
+  "start" : 1781041844435,
+  "finish" : 1781041844608,
+  "difference" : 173,
+  "duration" : "00:00:00.173"
+}}],"batchSummary":{
+  "duration" : {
+    "start" : 1781041844431,
+    "finish" : 1781041844612,
+    "difference" : 181,
+    "duration" : "00:00:00.181"
+  },
+  "totalJobs" : 1,
+  "outOfMemory" : 0,
+  "veraExceptions" : 0,
+  "validationSummary" : {
+    "failedJobCount" : 0,
+    "totalJobCount" : 1,
+    "compliantPdfaCount" : 1,
+    "nonCompliantPdfaCount" : 0,
+    "successfulJobCount" : 1
+  },
+  "failedParsingJobs" : 0,
+  "failedEncryptedJobs" : 0,
+  "featuresSummary" : {
+    "failedJobCount" : 0,
+    "totalJobCount" : 0,
+    "successfulJobCount" : 0
+  },
+  "repairSummary" : {
+    "failedJobCount" : 0,
+    "totalJobCount" : 0,
+    "successfulJobCount" : 0
+  },
+  "multiJob" : false
+}}}

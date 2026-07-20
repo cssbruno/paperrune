@@ -1,0 +1,63 @@
+{"report":{"buildInformation":{"releaseDetails":[{
+  "id" : "validation-model-arlington",
+  "version" : "1.30.1",
+  "buildDate" : 1776373680000
+},{
+  "id" : "verapdf-rest-arlington",
+  "version" : "1.30.1",
+  "buildDate" : 1777113780000
+},{
+  "id" : "core-arlington",
+  "version" : "1.30.1",
+  "buildDate" : 1776373560000
+}]},"jobs":[{"itemDetails":{
+  "name" : "pdfua2-arlington-metadata-foundation.pdf",
+  "size" : 51714
+},"arlingtonResult":[ {
+  "details" : {
+    "passedRules" : 9022,
+    "failedRules" : 0,
+    "passedChecks" : 4039,
+    "failedChecks" : 0,
+    "ruleSummaries" : [ ]
+  },
+  "jobEndStatus" : "normal",
+  "profileName" : "Arlington PDF 2.0 profile",
+  "statement" : "PDF file is compliant with Profile requirements.",
+  "compliant" : true
+} ],"processingTime":{
+  "start" : 1781044617363,
+  "finish" : 1781044617679,
+  "difference" : 316,
+  "duration" : "00:00:00.316"
+}}],"batchSummary":{
+  "duration" : {
+    "start" : 1781044617361,
+    "finish" : 1781044617682,
+    "difference" : 321,
+    "duration" : "00:00:00.321"
+  },
+  "totalJobs" : 1,
+  "outOfMemory" : 0,
+  "veraExceptions" : 0,
+  "featuresSummary" : {
+    "failedJobCount" : 0,
+    "totalJobCount" : 0,
+    "successfulJobCount" : 0
+  },
+  "repairSummary" : {
+    "failedJobCount" : 0,
+    "totalJobCount" : 0,
+    "successfulJobCount" : 0
+  },
+  "multiJob" : false,
+  "validationSummary" : {
+    "compliantPdfaCount" : 1,
+    "nonCompliantPdfaCount" : 0,
+    "failedJobCount" : 0,
+    "totalJobCount" : 1,
+    "successfulJobCount" : 1
+  },
+  "failedParsingJobs" : 0,
+  "failedEncryptedJobs" : 0
+}}}

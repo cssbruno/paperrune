@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret history scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan repository history
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: tools/go.mod
+          cache: true
+
+      - name: Install final-PDF visual test dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
+      - name: Check formatting and module files
+        shell: bash
+        run: |
+          make fmt-check
+          go mod tidy -diff
+          go mod verify
+          cd tools
+          go mod tidy -diff
+          go mod verify
+
+      - name: Check repository command contracts
+        shell: bash
+        run: |
+          make release-version
+          mismatch=v0.0.0
+          if [ "$(sed -n '1p' VERSION)" = "$mismatch" ]; then
+            mismatch=v0.0.1
+          fi
+          if make release-version VERSION="$mismatch"; then
+            echo "release-version accepted VERSION mismatch" >&2
+            exit 1
+          fi
+          make clean
+          git diff --exit-code
+
+      - name: Test
+        run: |
+          make coverage-check
+          go test ./cmd/... ./internal/...
+
+      - name: Static analysis
+        run: |
+          make lint
+          make nilaway
+
+      - name: Security analysis
+        run: make gosec
+
+      - name: Race test shared-state packages
+        run: go test -race ./document ./importpdf
+
+      - name: Vulnerability check
+        if: github.event_name != 'pull_request'
+        run: make govulncheck
+
+      - name: Cross-build Windows
+        run: GOOS=windows GOARCH=amd64 go build ./...
