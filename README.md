@@ -132,9 +132,9 @@ The following are intentionally not general-purpose features:
 - Arbitrary PDF editing, OCR, or universal semantic text extraction.
 
 Imported pages support classic xref-table PDFs, unencrypted documents, and
-pages whose content streams are unfiltered or FlateDecode-compressed. Xref
-streams, object streams, unsupported filter chains, and ambiguous stream
-lengths fail closed.
+pages whose content streams are unfiltered, FlateDecode-compressed, or use the
+common ASCII85Decode-to-FlateDecode chain. Xref streams, object streams, other
+filter chains, and ambiguous stream lengths fail closed.
 
 Password protection applies to newly generated output. Permission flags are
 advisory because PDF readers decide how strictly to enforce them.

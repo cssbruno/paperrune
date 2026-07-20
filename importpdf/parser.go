@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"context"
+	"encoding/ascii85"
 	"errors"
 	"fmt"
 	"io"
@@ -1530,7 +1531,51 @@ func decodePDFStreamContext(ctx context.Context, dict pdfDict, stream []byte) ([
 	if len(filters) == 1 && (filters[0] == "FlateDecode" || filters[0] == "Fl") {
 		return uncompressStreamContext(ctx, stream, MaxDecodedStreamBytes)
 	}
+	if len(filters) == 2 && isASCII85Filter(filters[0]) && isFlateFilter(filters[1]) {
+		compressed, err := decodeASCII85StreamContext(ctx, stream, MaxDecodedStreamBytes)
+		if err != nil {
+			return nil, err
+		}
+		return uncompressStreamContext(ctx, compressed, MaxDecodedStreamBytes)
+	}
 	return nil, fmt.Errorf("filters %v are not supported", filters)
+}
+
+func isASCII85Filter(filter string) bool {
+	return filter == "ASCII85Decode" || filter == "A85"
+}
+
+func isFlateFilter(filter string) bool {
+	return filter == "FlateDecode" || filter == "Fl"
+}
+
+func decodeASCII85StreamContext(ctx context.Context, data []byte, limit int) ([]byte, error) {
+	if err := importContextErr(ctx); err != nil {
+		return nil, err
+	}
+	marker := bytes.Index(data, []byte("~>"))
+	if marker < 0 {
+		return nil, errors.New("ASCII85 stream is missing end marker")
+	}
+	for _, b := range data[marker+2:] {
+		if b != 0 && b != '\t' && b != '\n' && b != '\f' && b != '\r' && b != ' ' {
+			return nil, errors.New("ASCII85 stream has data after end marker")
+		}
+	}
+
+	reader := ascii85.NewDecoder(bytes.NewReader(data[:marker]))
+	var out bytes.Buffer
+	_, err := out.ReadFrom(io.LimitReader(importContextReader{ctx: ctx, r: reader}, int64(limit)+1))
+	if err != nil {
+		return nil, fmt.Errorf("decode ASCII85 stream: %w", err)
+	}
+	if out.Len() > limit {
+		return nil, errors.New("ASCII85 decoded data exceeds expected size")
+	}
+	if err := importContextErr(ctx); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 func preservedPDFStreamFilter(dict pdfDict) (string, bool) {
