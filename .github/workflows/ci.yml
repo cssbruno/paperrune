@@ -46,7 +46,7 @@ jobs:
       - name: Install final-PDF visual test dependency
         run: |
           sudo apt-get update
-          sudo apt-get install -y poppler-utils
+          sudo apt-get install -y brotli poppler-utils
 
       - name: Check formatting and module files
         shell: bash

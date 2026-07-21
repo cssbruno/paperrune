@@ -235,8 +235,23 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		gzipRecorder.body.Len() >= len(wasmModule.Body) {
 		t.Fatalf("compressed wasm = %d / %q / %d bytes", gzipRecorder.status, gzipRecorder.header, gzipRecorder.body.Len())
 	}
+	brotliRequest, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7331/paper-studio.wasm", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	brotliRequest.Header.Set("Accept-Encoding", "gzip, br")
+	brotliRecorder := &memoryResponseWriter{header: make(http.Header)}
+	handler.ServeHTTP(brotliRecorder, brotliRequest)
+	if brotliRecorder.status != http.StatusOK || brotliRecorder.header.Get("Content-Encoding") != "br" ||
+		brotliRecorder.body.Len() >= gzipRecorder.body.Len() {
+		t.Fatalf("Brotli wasm = %d / %q / %d bytes", brotliRecorder.status, brotliRecorder.header, brotliRecorder.body.Len())
+	}
 	if acceptsGzip("br, gzip;q=0") || !acceptsGzip("br, gzip") {
 		t.Fatal("WASM gzip negotiation ignored an explicit client preference")
+	}
+	if acceptsEncoding("gzip, br;q=0", "br") || acceptsEncoding("gzip, br;q=0.000", "br") ||
+		!acceptsEncoding("gzip, br", "br") {
+		t.Fatal("WASM Brotli negotiation ignored an explicit client preference")
 	}
 	stylesheet := studioRequest(t, handler, http.MethodGet, "/studio.css", nil, "")
 	if stylesheet.StatusCode != http.StatusOK || !bytes.Contains(stylesheet.Body, []byte("preview-loading-progress")) ||

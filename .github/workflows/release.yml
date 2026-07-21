@@ -52,7 +52,7 @@ jobs:
       - name: Install compliance dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y colord-data poppler-utils
+          sudo apt-get install -y brotli colord-data poppler-utils
 
       - name: Verify release version and tests
         run: make release-version test VERSION="${VERSION}"

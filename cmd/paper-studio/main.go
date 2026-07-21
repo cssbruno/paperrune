@@ -56,10 +56,10 @@ const (
 )
 
 // Keep the raw WASM build artifact out of the native server binary. The
-// deterministic gzip representation is served directly to browsers and is
-// expanded only for clients that do not advertise gzip support.
+// deterministic Brotli or gzip representation is served directly to browsers;
+// gzip is expanded only for clients that advertise neither encoding.
 //
-//go:embed web/*.html web/*.css web/*.js web/*.gz
+//go:embed web/*.html web/*.css web/*.js web/*.gz web/*.br
 var studioAssets embed.FS
 
 type studioSnapshot struct {
@@ -258,6 +258,10 @@ func newStudioStaticHandler(web fs.FS) (http.Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("paper-studio: read compressed WASM: %w", err)
 	}
+	brotliWASM, err := fs.ReadFile(web, "paper-studio.wasm.br")
+	if err != nil {
+		return nil, fmt.Errorf("paper-studio: read Brotli WASM: %w", err)
+	}
 	files := http.FileServer(http.FS(web))
 	var decodeOnce sync.Once
 	var plainWASM []byte
@@ -270,7 +274,10 @@ func newStudioStaticHandler(web fs.FS) (http.Handler, error) {
 		w.Header().Set("Content-Type", "application/wasm")
 		w.Header().Set("Vary", "Accept-Encoding")
 		body := compressedWASM
-		if acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		if acceptsEncoding(r.Header.Get("Accept-Encoding"), "br") {
+			body = brotliWASM
+			w.Header().Set("Content-Encoding", "br")
+		} else if acceptsGzip(r.Header.Get("Accept-Encoding")) {
 			w.Header().Set("Content-Encoding", "gzip")
 		} else {
 			decodeOnce.Do(func() {
@@ -300,15 +307,22 @@ func newStudioStaticHandler(web fs.FS) (http.Handler, error) {
 }
 
 func acceptsGzip(value string) bool {
+	return acceptsEncoding(value, "gzip")
+}
+
+func acceptsEncoding(value, name string) bool {
 	for _, encoding := range strings.Split(value, ",") {
 		parts := strings.Split(encoding, ";")
-		if !strings.EqualFold(strings.TrimSpace(parts[0]), "gzip") {
+		if !strings.EqualFold(strings.TrimSpace(parts[0]), name) {
 			continue
 		}
 		for _, parameter := range parts[1:] {
-			if strings.EqualFold(strings.TrimSpace(parameter), "q=0") {
-				return false
+			key, rawQuality, found := strings.Cut(strings.TrimSpace(parameter), "=")
+			if !found || !strings.EqualFold(strings.TrimSpace(key), "q") {
+				continue
 			}
+			quality, qualityErr := strconv.ParseFloat(strings.TrimSpace(rawQuality), 64)
+			return qualityErr == nil && quality > 0
 		}
 		return true
 	}

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 cssBruno
 
 import vm from 'node:vm';
+import {readFile} from 'node:fs/promises';
 
 const baseURL = process.argv[2];
 if (!baseURL) throw new Error('Paper Studio base URL is required');
@@ -9,14 +10,26 @@ const sessionToken = process.argv[3];
 if (!sessionToken) throw new Error('Paper Studio session token is required');
 const apiHeaders = {'X-Paper-Studio-Token': sessionToken};
 
-const runtimeResponse = await fetch(`${baseURL}/wasm_exec.js`);
-if (!runtimeResponse.ok) throw new Error(`wasm_exec.js returned ${runtimeResponse.status}`);
-vm.runInThisContext(await runtimeResponse.text(), {filename: 'wasm_exec.js'});
+let runtimeSource;
+if (process.env.PAPER_STUDIO_WASM_EXEC) {
+  runtimeSource = await readFile(process.env.PAPER_STUDIO_WASM_EXEC, 'utf8');
+} else {
+  const runtimeResponse = await fetch(`${baseURL}/wasm_exec.js`);
+  if (!runtimeResponse.ok) throw new Error(`wasm_exec.js returned ${runtimeResponse.status}`);
+  runtimeSource = await runtimeResponse.text();
+}
+vm.runInThisContext(runtimeSource, {filename: 'wasm_exec.js'});
 
 const go = new Go();
-const moduleResponse = await fetch(`${baseURL}/paper-studio.wasm`);
-if (!moduleResponse.ok) throw new Error(`paper-studio.wasm returned ${moduleResponse.status}`);
-const module = await WebAssembly.instantiate(await moduleResponse.arrayBuffer(), go.importObject);
+let moduleBytes;
+if (process.env.PAPER_STUDIO_WASM_PATH) {
+  moduleBytes = await readFile(process.env.PAPER_STUDIO_WASM_PATH);
+} else {
+  const moduleResponse = await fetch(`${baseURL}/paper-studio.wasm`);
+  if (!moduleResponse.ok) throw new Error(`paper-studio.wasm returned ${moduleResponse.status}`);
+  moduleBytes = await moduleResponse.arrayBuffer();
+}
+const module = await WebAssembly.instantiate(moduleBytes, go.importObject);
 let runtimeFailure = null;
 go.run(module.instance).catch((error) => { runtimeFailure = error; });
 for (let attempt = 0; attempt < 100 && !globalThis.PaperStudioWASM; attempt += 1) {
