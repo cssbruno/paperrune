@@ -6,17 +6,14 @@
 
 <img src="https://raw.githubusercontent.com/cssbruno/paperrune/main/assets/static/image/gopher_pdf.png" alt="PaperRune gopher" width="160">
 
-Pure-Go document generator.
+Pure-Go `.paper` compiler for PDF and standalone HTML.
 
-- Input: `.paper` only.
-- Output: PDF or standalone HTML.
-- HTML is export-only; HTML/CSS input is not supported.
 - Strict JSON schemas, reusable styles, themes, tables, images, and pagination.
 - PDF signing, inspection, compliance metadata, and CDR.
 
 ## Install
 
-Requires the Go version declared in [`go.mod`](go.mod), currently Go 1.26.5.
+Requires Go 1.26.5.
 
 ```sh
 go get github.com/cssbruno/paperrune@latest
@@ -27,7 +24,7 @@ From a clone, use `go run ./cmd/paper` instead of `paper`.
 
 ## Quick start
 
-Create `hello.paper`:
+`hello.paper`:
 
 ```paper
 document @hello:
@@ -42,20 +39,17 @@ document @hello:
         text: "Hello, world"
 ```
 
-Check and render:
-
 ```sh
 paper check hello.paper
 paper render -o hello.pdf hello.paper
 paper render --format html -o hello.html hello.paper
 ```
 
-Paper is indentation-sensitive. Use `paper fmt -w hello.paper` for canonical
-formatting.
+Paper is indentation-sensitive. Format with `paper fmt -w hello.paper`.
 
 ## Go API
 
-Keep Paper in its own file and embed it when needed:
+Embed `.paper` files instead of using indented Go strings:
 
 ```go
 package main
@@ -82,17 +76,7 @@ func main() {
 }
 ```
 
-Main APIs:
-
-- `document.NewDocument` / `document.MustNew`
-- `Document.WritePaper`
-- `Document.WritePaperJSON`
-- `document.PlanPaper`
-- `PaperPlan.ExportHTML`
-- `Document.OutputFile` / `Document.OutputFileStream`
-
-`Document` is not safe for concurrent calls. `PaperPlan` is immutable and
-reusable.
+`Document` is single-owner. `PaperPlan` is immutable and reusable.
 
 ## CLI
 
@@ -105,32 +89,16 @@ reusable.
 | `paper explain` | Inspect plan nodes and pages |
 | `paper scenario` | List or select scenarios |
 
-Common options:
-
-```text
---data FILE
---schema NAME
---locale LOCALE
---scenario NAME
---assets MANIFEST
---asset-root DIR
---json
-```
-
 Run `paper COMMAND -h` for all options.
 
 ## Data and assets
 
-Render JSON data:
-
 ```sh
+# JSON data
 paper check --data data.json report.paper
 paper render --data data.json -o report.pdf report.paper
-```
 
-Render with explicit assets:
-
-```sh
+# Assets
 paper render \
   --assets project.assets.json \
   --asset-root . \
@@ -148,16 +116,6 @@ make paper-studio \
 ```
 
 Open <http://127.0.0.1:7331>. Studio accepts loopback hosts only.
-
-Full demo:
-
-```sh
-make paper-studio-wasm
-go run ./cmd/paper-studio \
-  -assets testdata/paper/studio-assets.json \
-  -asset-root testdata/paper/assets \
-  testdata/paper/studio-demo.paper
-```
 
 ## Packages
 
