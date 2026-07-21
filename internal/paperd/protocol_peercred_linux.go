@@ -25,6 +25,9 @@ func unixSocketPeerCredentials(connection *net.UnixConn) (unixProtocolPeer, erro
 	if err != nil {
 		return unixProtocolPeer{}, err
 	}
+	if raw == nil {
+		return unixProtocolPeer{}, errors.New("paperd: missing raw socket connection")
+	}
 	var credential linuxUcred
 	var controlErr error
 	err = raw.Control(func(fd uintptr) {
