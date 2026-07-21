@@ -9,7 +9,6 @@ intentionally contains no facade package.
 
 - `document` owns the Paper facade, immutable plan exports, and private PDF construction engine.
 - `internal/layout` owns the renderer-independent compiler-to-planner model and measurement.
-- `internal/layoutgeom` owns pure geometry used by private layout machinery.
 
 PaperRune has no package that accepts an existing PDF. Parsing, inspection,
 page import, CDR, signing, signature verification, and final-byte verification
@@ -146,8 +145,9 @@ identity.
 The Makefile is the source of truth for performance tooling. Use
 `bench-paper-engine-ci` for repeated samples, `bench-paper-engine-budget` for
 the calibrated gate, and `profile-paper-engine-check` for bounded profiles.
-Generated reports belong under `artifacts/`; host-specific benchmark output is
-not committed.
+These workflows measure cold end-to-end Paper compilation and warm retained
+Paper-plan rendering. Generated reports belong under `artifacts/`; host-specific
+benchmark output is not committed.
 
 ## Public API policy
 

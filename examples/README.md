@@ -29,7 +29,3 @@ go run ./cmd/paper render --format html \
   --data examples/invoice/example.json \
   -o /tmp/invoice.html examples/invoice/invoice.paper
 ```
-
-The `hello-world`, `invoice`, `table-report`, and `headers-footers` paths are
-conversions of former direct-placement examples. They contain no FPDF-style or
-HTML-input authoring calls.

@@ -3,8 +3,6 @@
 
 package layout
 
-import "github.com/cssbruno/paperrune/internal/layoutgeom"
-
 // ImageFitResult describes an image fitted inside a target box. Offset values
 // locate the fitted image relative to the target box; callers decide whether a
 // cover result should be clipped.
@@ -45,23 +43,39 @@ func FitImage(naturalWidth, naturalHeight, boxWidth, boxHeight float64, mode Ima
 // than remains on the current page. Equality fits, matching PDF pagination
 // semantics across typed-layout and HTML renderers.
 func ExceedsAvailableHeight(contentHeight, availableHeight float64) bool {
-	return layoutgeom.ExceedsAvailableHeight(contentHeight, availableHeight)
+	return contentHeight > availableHeight
 }
 
 // TrackOffsets returns cumulative offsets for row or column sizes. The result
 // always has len(sizes)+1 entries and starts at zero.
 func TrackOffsets(sizes []float64) []float64 {
-	return layoutgeom.TrackOffsets(sizes)
+	offsets := make([]float64, len(sizes)+1)
+	for index, size := range sizes {
+		offsets[index+1] = offsets[index] + size
+	}
+	return offsets
 }
 
 // SpanSize returns the extent of span tracks starting at start. Invalid starts
 // and non-positive spans return zero; spans extending past the end are clipped.
 func SpanSize(offsets []float64, start, span int) float64 {
-	return layoutgeom.SpanSize(offsets, start, span)
+	if span <= 0 || start < 0 || start >= len(offsets)-1 {
+		return 0
+	}
+	end := min(start+span, len(offsets)-1)
+	return offsets[end] - offsets[start]
 }
 
 // SumSpan returns the sum of span values starting at start. It is useful when
 // offsets are not already available, such as row-span height calculation.
 func SumSpan(values []float64, start, span int) float64 {
-	return layoutgeom.SumSpan(values, start, span)
+	if span <= 0 || start < 0 || start >= len(values) {
+		return 0
+	}
+	end := min(start+span, len(values))
+	total := 0.0
+	for _, value := range values[start:end] {
+		total += value
+	}
+	return total
 }

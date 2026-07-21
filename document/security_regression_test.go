@@ -15,8 +15,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/cssbruno/paperrune/internal/testpdf"
 )
 
 func TestSecurityMalformedUTF8DoesNotPanic(t *testing.T) {
@@ -285,15 +283,6 @@ func TestSecurityInvalidTemplateImageRejected(t *testing.T) {
 	_, err = DeserializeTemplate(encoded)
 	if err == nil || !strings.Contains(err.Error(), "invalid image decode parameters") {
 		t.Fatalf("DeserializeTemplate() error = %v, want invalid image decode params", err)
-	}
-}
-
-func TestSecurityCompareHelpers(t *testing.T) {
-	if err := testpdf.ComparePDFs(bytes.NewReader([]byte("same")), bytes.NewReader([]byte("same")), false); err != nil {
-		t.Fatalf("ComparePDFs() error = %v", err)
-	}
-	if err := testpdf.CompareBytes([]byte("a"), []byte("ab"), false); err == nil {
-		t.Fatal("CompareBytes() accepted different lengths")
 	}
 }
 

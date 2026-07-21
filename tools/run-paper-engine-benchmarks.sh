@@ -4,7 +4,7 @@ set -eu
 output=${1:-artifacts/paper-engine-benchmarks.txt}
 count=${PAPER_ENGINE_BENCH_COUNT:-10}
 benchtime=${PAPER_ENGINE_BENCHTIME:-250ms}
-benchmark='^BenchmarkPaperEngine(Planner|Painter|ProductionDefault|EndToEnd|WarmCompiled|Concurrent|Table)'
+benchmark='^BenchmarkPaperEngine(EndToEndPaper|WarmCompiledPaper)$'
 
 case "$count" in
 	''|*[!0-9]*|0)
@@ -27,7 +27,7 @@ fi
 
 {
 	printf '# paperrune-paper-engine-benchmark-v3\n'
-	printf '# command: go test ./document ./internal/layoutengine -run ^$ -bench %s -benchmem -benchtime=%s -count=%s\n' "$benchmark" "$benchtime" "$count"
+	printf '# command: go test ./document -run ^$ -bench %s -benchmem -benchtime=%s -count=%s\n' "$benchmark" "$benchtime" "$count"
 	printf '# go-version: %s\n' "$(go version)"
 	printf '# goos: %s\n' "$(go env GOOS)"
 	printf '# goarch: %s\n' "$(go env GOARCH)"
@@ -35,7 +35,7 @@ fi
 	printf '# worktree: %s\n' "$worktree"
 } >"$temporary"
 
-if go test ./document ./internal/layoutengine -run '^$' -bench "$benchmark" -benchmem -benchtime="$benchtime" -count="$count" >>"$temporary" 2>&1; then
+if go test ./document -run '^$' -bench "$benchmark" -benchmem -benchtime="$benchtime" -count="$count" >>"$temporary" 2>&1; then
 	status=0
 else
 	status=$?

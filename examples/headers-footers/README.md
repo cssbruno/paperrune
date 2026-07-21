@@ -1,7 +1,7 @@
 # Paper headers and page numbers
 
-This replacement for the former direct-placement example uses a Paper page
-header, a repeating table header, and planner-owned page numbers.
+This example uses a Paper page header, a repeating table header, and
+planner-owned page numbers.
 
 Automatic page counters support `header` or `footer` placement; `left`,
 `center`, `right`, mirrored `inner`, or mirrored `outer` alignment; optional

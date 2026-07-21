@@ -7,6 +7,12 @@
 - Moved the former public `layout` model under `internal`. Removed the obsolete
   `fontmaker` command, its generator package, and the private JSON/`.z`
   single-byte font-definition loader; custom fonts now use raw TTF/OTF input.
+- Removed orphaned data-validation and organization-governance packages, the
+  one-consumer geometry wrapper package, and a self-testing PDF comparison
+  helper. Deleted committed generated PDFs and unreferenced image fixtures;
+  release smoke checks now generate their input on demand. Retired stale
+  generation-core and legacy clean-checkout scripts; performance gates and
+  profiles now measure Paper-only workloads.
 - Added deterministic Paper-to-HTML export through `PaperPlan.ExportHTML` and
   `paper render --format html`; HTML embeds exact planned page SVG.
 - Removed direct-placement and HTML-input examples; maintained examples and

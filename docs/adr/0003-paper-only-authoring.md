@@ -23,6 +23,6 @@ do not create additional authoring surfaces.
 - One Paper source and one plan define both PDF and HTML output.
 - Callers cannot mix planned pages with mutable direct-placement or HTML state.
 - Examples, commands, and public documentation author exclusively with Paper.
-- Serializer and legacy parser tests may exercise private engines through
-  test-only helpers; those helpers are absent from normal builds.
+- Serializer regression tests may exercise private engines through test-only
+  helpers; those helpers are absent from normal builds.
 - New authoring features enter through Paper and lower into the immutable plan.

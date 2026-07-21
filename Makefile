@@ -13,8 +13,7 @@ GOSEC := $(TOOLS_BIN)/gosec
 GOVULNCHECK := $(TOOLS_BIN)/govulncheck
 BENCHSTAT := $(TOOLS_BIN)/benchstat
 COMPLIANCE_OUT ?= artifacts/compliance
-GENERATION_CORE_BENCH ?= BenchmarkGeneration(BaselineNoCompliance.*Concurrent40|TextConcurrent40|LongTextConcurrent40|UTF8Text.*Concurrent40|TextCompressionLevelConcurrent40|Images.*Concurrent40|SVGConcurrent40|TemplatesConcurrent40|ImportedPDFPagesConcurrent40|ProtectionConcurrent40|AttachmentsConcurrent40|HTMLLargeTableCompiled|HTMLWideTableCompiled)$
-BENCH ?= BenchmarkGenerationHTMLLargeTableCompiled$
+BENCH ?= BenchmarkPaperEngineEndToEndPaper$
 BENCH_PACKAGE ?= ./document
 BENCH_COUNT ?= 3
 BENCH_OUT ?= artifacts/benchmarks.txt
@@ -22,7 +21,6 @@ PAPER_ENGINE_BENCH_OUT ?= artifacts/paper-engine-benchmarks.txt
 PAPER_ENGINE_BENCH_COUNT ?= 10
 PAPER_ENGINE_BENCHTIME ?= 250ms
 PAPER_ENGINE_CALIBRATION_PROFILE ?= docs/performance/calibrations/apple-m2-go1.26.json
-GENERATION_CORE_BENCH_OUT ?= artifacts/generation-core-benchmarks.txt
 PROFILE_DIR ?= artifacts/profiles
 PROFILE_BENCHTIME ?= 10s
 ALLOC_PROFILE_BENCHTIME ?= 20x
@@ -31,7 +29,7 @@ PAPER_ENGINE_PROFILE_CPU_SECONDS ?= 2
 PAPER_ENGINE_PROFILE_ALLOC_ITERATIONS ?= 20
 PAPER_STUDIO_LATENCY_REPORT ?= artifacts/paper-studio-wasm-latency.json
 
-.PHONY: all documentation help bootstrap test-fast ci docs-check cov coverage-check test race vet fmt-check check modules tools tools-clean benchstat lint lin nilaway gosec gosev govulncheck quality release-version release-check release-notes release-artifacts release-tag release-push release build bench bench-ci bench-generation-core bench-generation-core-ci bench-generation-core-budget bench-paper-engine bench-paper-engine-ci bench-paper-engine-budget bench-paper-studio bench-paper-studio-wasm-latency bench-paper-studio-wasm-latency-budget test-paper-studio-js test-paper-studio-wasm verify-clean-checkout paper-studio-wasm paper-studio profile-paper-engine profile-paper-engine-check profile profile-cpu profile-alloc profile-block profile-mutex profile-trace compliance-fixtures compliance-validate compliance-baseline-check compliance-regenerate pdf-reader-smoke clean
+.PHONY: all documentation help bootstrap test-fast ci docs-check cov coverage-check test race vet fmt-check check modules tools tools-clean benchstat lint lin nilaway gosec gosev govulncheck quality release-version release-check release-notes release-artifacts release-tag release-push release build bench bench-ci bench-paper-engine bench-paper-engine-ci bench-paper-engine-budget bench-paper-studio bench-paper-studio-wasm-latency bench-paper-studio-wasm-latency-budget test-paper-studio-js test-paper-studio-wasm paper-studio-wasm paper-studio profile-paper-engine profile-paper-engine-check profile profile-cpu profile-alloc profile-block profile-mutex profile-trace compliance-fixtures compliance-validate compliance-baseline-check compliance-regenerate pdf-reader-smoke clean
 
 help :
 	@awk 'BEGIN { FS = " :" } /^[a-z][a-z0-9_-]* :/ { print $$1 }' Makefile | sort -u
@@ -155,17 +153,8 @@ bench :
 bench-ci :
 	sh tools/run-benchmark.sh "$(BENCH_OUT)" go test $(GO_PACKAGES) -run '^$$' -bench . -benchmem -count="$(BENCH_COUNT)"
 
-bench-generation-core :
-	go test ./document -run '^$$' -bench '$(value GENERATION_CORE_BENCH)' -benchmem
-
-bench-generation-core-ci :
-	sh tools/run-benchmark.sh "$(GENERATION_CORE_BENCH_OUT)" go test ./document -run '^$$' -bench '$(value GENERATION_CORE_BENCH)' -benchmem -count="$(BENCH_COUNT)"
-
-bench-generation-core-budget : bench-generation-core-ci
-	sh tools/benchmark-budget-check.sh "$(GENERATION_CORE_BENCH_OUT)"
-
 bench-paper-engine :
-	go test ./document ./internal/layoutengine -run '^$$' -bench '^BenchmarkPaperEngine(Planner|Painter|ProductionDefault|EndToEnd|WarmCompiled|Concurrent|Table)' -benchmem
+	go test ./document -run '^$$' -bench '^BenchmarkPaperEngine(EndToEndPaper|WarmCompiledPaper)$$' -benchmem
 
 bench-paper-engine-ci :
 	PAPER_ENGINE_BENCH_COUNT="$(PAPER_ENGINE_BENCH_COUNT)" PAPER_ENGINE_BENCHTIME="$(PAPER_ENGINE_BENCHTIME)" sh tools/run-paper-engine-benchmarks.sh "$(PAPER_ENGINE_BENCH_OUT)"
@@ -200,9 +189,6 @@ paper-studio-wasm :
 
 test-paper-studio-wasm : paper-studio-wasm
 	sh tools/test-paper-studio-wasm.sh
-
-verify-clean-checkout :
-	sh tools/verify-clean-checkout.sh
 
 PAPER_STUDIO_FILE ?= testdata/paper/studio-demo.paper
 PAPER_STUDIO_ADDR ?= 127.0.0.1:7331

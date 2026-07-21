@@ -13,8 +13,7 @@ open
 *.orig
 *.rej
 *~
-assets/generated/pdf/examples/signed.pdf
-assets/generated/pdf/examples/*.pdf
+/assets/generated/
 pdf.txt
 private
 *.sublime*

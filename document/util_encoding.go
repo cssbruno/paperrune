@@ -197,7 +197,6 @@ func UnicodeTranslatorFromFile(fileStr string) (f func(string) string, err error
 //
 // If an error occurs reading the descriptor, the returned function is valid
 // but does not perform any rune translation.
-//
 func (f *pdfDocument) UnicodeTranslatorFromDescriptor(cpStr string) (rep func(string) string) {
 	var str string
 	var ok bool

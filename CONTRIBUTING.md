@@ -31,6 +31,6 @@ Follow the ownership and public-surface rules in `ARCHITECTURE.md`. Prefer a
 small private helper over a new exported alias or wrapper. Do not add an API
 that accepts an existing PDF; that responsibility belongs to PDFRune.
 
-The PDFs under `assets/generated/pdf` are checked-in visual/reference artifacts,
-not disposable build output. `make clean` must leave tracked files untouched.
-Compliance fixtures are generated under ignored `artifacts/` paths.
+Generated PDFs are disposable and ignored by Git. Release reader checks and
+compliance validation generate current fixtures on demand under temporary or
+ignored `artifacts/` paths.
