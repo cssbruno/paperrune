@@ -135,15 +135,6 @@ func normalizeCandidateAcceptancePolicy(policy CandidateAcceptancePolicy, limit 
 	return result, acceptanceHash("paperd/candidate-acceptance-policy/v1", payload), nil
 }
 
-func (w *Workspace) CandidateAcceptancePolicy() (CandidateAcceptancePolicy, string) {
-	if w == nil {
-		return CandidateAcceptancePolicy{}, ""
-	}
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	return cloneCandidateAcceptancePolicy(w.acceptancePolicy), w.acceptancePolicyHash
-}
-
 // CandidateAcceptanceInputHash returns the exact operation-input digest that
 // an outer reviewer must place in SensitiveEvidence before granting a one-use
 // acceptance approval. It exposes no opaque handle internals or evidence bytes.
@@ -153,13 +144,6 @@ func (w *Workspace) CandidateAcceptanceInputHash(request CandidateAcceptanceRequ
 	}
 	_, _, inputHash, err := w.canonicalCandidateAcceptanceRequest(request)
 	return inputHash, err
-}
-
-func cloneCandidateAcceptancePolicy(policy CandidateAcceptancePolicy) CandidateAcceptancePolicy {
-	policy.RequiredScenarios = append([]string(nil), policy.RequiredScenarios...)
-	policy.RequiredValidators = append([]CandidateValidatorRequirement(nil), policy.RequiredValidators...)
-	policy.RequiredReviewArtifacts = append([]string(nil), policy.RequiredReviewArtifacts...)
-	return policy
 }
 
 // AcceptCandidate validates every configured gate and consumes the exact

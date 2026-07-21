@@ -192,10 +192,6 @@ func (f *pdfDocument) ensureComplianceMetadata() {
 
 func (f *pdfDocument) validateComplianceMetadata() {
 	if f.compliance.PDFA != PDFAModeNone {
-		if f.protect.encrypted {
-			f.SetErrorf("PDF/A metadata mode does not allow encrypted output")
-			return
-		}
 		if len(f.outputIntent.iccProfile) == 0 {
 			f.SetErrorf("PDF/A metadata mode requires an ICC output intent")
 			return

@@ -152,29 +152,6 @@ func TestSecurityMaskImageFileSizeLimit(t *testing.T) {
 	}
 }
 
-func TestSecurityPDFImportFileSizeLimit(t *testing.T) {
-	sourcePath := filepath.Join(t.TempDir(), "oversized.pdf")
-	file, err := os.Create(sourcePath)
-	if err != nil {
-		t.Fatalf("Create() error = %v", err)
-	}
-	if err := file.Truncate(int64(maxPDFImportSourceBytes) + 1); err != nil {
-		_ = file.Close()
-		t.Fatalf("Truncate() error = %v", err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-
-	pdf := mustNewPDFDocument()
-	if page := pdf.ImportPage(sourcePath, 1, "MediaBox"); page != 0 {
-		t.Fatalf("ImportPage() page = %d, want 0", page)
-	}
-	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "PDF import source exceeds maximum size") {
-		t.Fatalf("ImportPage() error = %v, want PDF import size limit", pdf.Error())
-	}
-}
-
 func TestSecuritySVGSourceSizeLimit(t *testing.T) {
 	_, err := SVGParse([]byte(strings.Repeat(" ", maxSVGSourceBytes+1)))
 	if err == nil || !strings.Contains(err.Error(), "SVG source exceeds maximum size") {
@@ -256,33 +233,6 @@ func TestSecurityInvalidLinkDestinationPageReturnsError(t *testing.T) {
 	pdf.SetLink(link, 10, 99)
 	if pdf.Error() == nil {
 		t.Fatal("expected invalid link destination page error")
-	}
-}
-
-func TestSecurityImportedObjectOffsetReturnsError(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	hash := strings.Repeat("a", 40)
-	pdf.ImportObjects(map[string][]byte{hash: []byte("short")})
-	pdf.ImportObjPos(map[string]map[int]string{hash: {8: hash}})
-
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("Output panicked: %v", r)
-		}
-	}()
-	err := pdf.Output(&bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "invalid imported object replacement offset") {
-		t.Fatalf("Output() error = %v, want invalid replacement offset", err)
-	}
-}
-
-func TestSecurityImportedTemplateNameRejected(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.UseImportedTemplate("/Tpl Q 1 0 0 1 0 0 cm", 1, 1, 0, 0)
-	if pdf.Error() == nil {
-		t.Fatal("expected invalid imported template name error")
 	}
 }
 

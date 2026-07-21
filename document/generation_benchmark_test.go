@@ -6,14 +6,7 @@ package document_test
 import (
 	"bytes"
 	"compress/zlib"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/asn1"
 	"fmt"
-	"math/big"
 	"os"
 	"strings"
 	"sync"
@@ -23,7 +16,6 @@ import (
 
 	"github.com/cssbruno/paperrune/document"
 	"github.com/cssbruno/paperrune/internal/testsupport/example"
-	"github.com/cssbruno/paperrune/sign"
 )
 
 const benchmarkWorkerCount40 = 40
@@ -50,13 +42,6 @@ func benchmarkGeneratedPDF(b *testing.B, build func(*document.TestPDFDocument)) 
 	b.Helper()
 	benchmarkGeneratedPDFOutput(b, build, func(pdf *document.TestPDFDocument, output *bytes.Buffer) error {
 		return pdf.Output(output)
-	})
-}
-
-func benchmarkGeneratedSignedPDF(b *testing.B, build func(*document.TestPDFDocument), options sign.Options) {
-	b.Helper()
-	benchmarkGeneratedPDFOutput(b, build, func(pdf *document.TestPDFDocument, output *bytes.Buffer) error {
-		return pdf.OutputSigned(output, options)
 	})
 }
 
@@ -96,18 +81,6 @@ func benchmarkGeneratedPDFConcurrent(b *testing.B, workers int, build func(*docu
 func benchmarkGeneratedPDFConcurrent40(b *testing.B, build func(*document.TestPDFDocument)) {
 	b.Helper()
 	benchmarkGeneratedPDFConcurrent(b, benchmarkWorkerCount40, build)
-}
-
-func benchmarkGeneratedSignedPDFConcurrent(b *testing.B, workers int, build func(*document.TestPDFDocument), options sign.Options) {
-	b.Helper()
-	benchmarkGeneratedPDFOutputConcurrent(b, workers, build, func(pdf *document.TestPDFDocument, output *bytes.Buffer) error {
-		return pdf.OutputSigned(output, options)
-	})
-}
-
-func benchmarkGeneratedSignedPDFConcurrent40(b *testing.B, build func(*document.TestPDFDocument), options sign.Options) {
-	b.Helper()
-	benchmarkGeneratedSignedPDFConcurrent(b, benchmarkWorkerCount40, build, options)
 }
 
 func benchmarkGeneratedPDFOutputConcurrent(b *testing.B, workers int, build func(*document.TestPDFDocument), outputPDF benchmarkPDFOutput) {
@@ -180,47 +153,6 @@ func reportBenchmarkThroughput(b *testing.B, totalBytes int64, elapsed time.Dura
 	}
 	b.ReportMetric(float64(totalBytes)/float64(b.N), "pdf_bytes")
 	b.ReportMetric(float64(b.N)/elapsed.Seconds(), "pdf/s")
-}
-
-func benchmarkSignOptions(b *testing.B) sign.Options {
-	b.Helper()
-	cert, signer := benchmarkTestSigner(b)
-	return sign.Options{
-		Signer:          signer,
-		Certificate:     cert,
-		DigestAlgorithm: crypto.SHA256,
-		Name:            "PaperRune benchmark signer",
-		Reason:          "PDF generation benchmark",
-		SigningTime:     time.Unix(1_704_067_200, 0).UTC(),
-	}
-}
-
-func benchmarkTestSigner(tb testing.TB) (*x509.Certificate, crypto.Signer) {
-	tb.Helper()
-
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		tb.Fatalf("GenerateKey() error = %v", err)
-	}
-	now := time.Now().UTC()
-	template := &x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "PaperRune benchmark signer"},
-		NotBefore:             now.Add(-time.Hour),
-		NotAfter:              now.Add(time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageContentCommitment,
-		UnknownExtKeyUsage:    []asn1.ObjectIdentifier{{1, 3, 6, 1, 5, 5, 7, 3, 36}},
-		BasicConstraintsValid: true,
-	}
-	der, err := x509.CreateCertificate(rand.Reader, template, template, key.Public(), key)
-	if err != nil {
-		tb.Fatalf("CreateCertificate() error = %v", err)
-	}
-	cert, err := x509.ParseCertificate(der)
-	if err != nil {
-		tb.Fatalf("ParseCertificate() error = %v", err)
-	}
-	return cert, key
 }
 
 func BenchmarkGenerationText(b *testing.B) {
@@ -600,30 +532,6 @@ func BenchmarkGenerationBaselineNoComplianceCachedImageConcurrent40(b *testing.B
 	benchmarkGeneratedPDFConcurrent40(b, benchmarkGenerationBaselineNoComplianceBuilder(b, cache, true))
 }
 
-func BenchmarkGenerationBaselineNoComplianceSigned(b *testing.B) {
-	benchmarkGeneratedSignedPDF(b, benchmarkGenerationBaselineNoComplianceBuilder(b, nil, true), benchmarkSignOptions(b))
-}
-
-func BenchmarkGenerationBaselineNoComplianceSignedConcurrent40(b *testing.B) {
-	benchmarkGeneratedSignedPDFConcurrent40(b, benchmarkGenerationBaselineNoComplianceBuilder(b, nil, true), benchmarkSignOptions(b))
-}
-
-func BenchmarkGenerationBaselineNoComplianceCachedImageSigned(b *testing.B) {
-	cache := document.NewImageCache()
-	if _, err := cache.RegisterImageOptions("logo.png", example.ImageFile("logo.png"), document.ImageOptions{}); err != nil {
-		b.Fatalf("RegisterImageOptions(logo.png) error = %v", err)
-	}
-	benchmarkGeneratedSignedPDF(b, benchmarkGenerationBaselineNoComplianceBuilder(b, cache, true), benchmarkSignOptions(b))
-}
-
-func BenchmarkGenerationBaselineNoComplianceCachedImageSignedConcurrent40(b *testing.B) {
-	cache := document.NewImageCache()
-	if _, err := cache.RegisterImageOptions("logo.png", example.ImageFile("logo.png"), document.ImageOptions{}); err != nil {
-		b.Fatalf("RegisterImageOptions(logo.png) error = %v", err)
-	}
-	benchmarkGeneratedSignedPDFConcurrent40(b, benchmarkGenerationBaselineNoComplianceBuilder(b, cache, true), benchmarkSignOptions(b))
-}
-
 func BenchmarkGenerationPDFA4FCompliance(b *testing.B) {
 	benchmarkGeneratedPDF(b, benchmarkGenerationPDFA4FComplianceBuilder(b))
 }
@@ -691,14 +599,6 @@ func BenchmarkGenerationHTMLMalformedCompiled(b *testing.B) {
 
 func BenchmarkGenerationHTMLMalformedCompiledConcurrent40(b *testing.B) {
 	benchmarkGeneratedPDFConcurrent40(b, benchmarkGenerationCompiledHTMLBuilder(b, benchmarkMalformedHTML()))
-}
-
-func BenchmarkGenerationSignedPDFA4FPDFUA2ArlingtonXMP(b *testing.B) {
-	benchmarkGeneratedSignedPDF(b, benchmarkGenerationPDFA4FPDFUA2ArlingtonXMPBuilder(b), benchmarkSignOptions(b))
-}
-
-func BenchmarkGenerationSignedPDFA4FPDFUA2ArlingtonXMPConcurrent40(b *testing.B) {
-	benchmarkGeneratedSignedPDFConcurrent40(b, benchmarkGenerationPDFA4FPDFUA2ArlingtonXMPBuilder(b), benchmarkSignOptions(b))
 }
 
 func benchmarkGenerationBaselineNoCompliance(b *testing.B, imageCache *document.ImageCache) {
@@ -905,47 +805,6 @@ func benchmarkHTMLTemplateValues(n int64) document.HTMLTemplateValuesForTest {
 		"status3":   "Ready",
 		"qty3":      1,
 		"amount3":   fmt.Sprintf("$%0.2f", float64(n%250)*2.10),
-	}
-}
-
-func benchmarkGenerationPDFA4FPDFUA2ArlingtonXMPBuilder(b *testing.B) func(*document.TestPDFDocument) {
-	cache := benchmarkComplianceFontCache(b)
-	compiled, err := document.CompileHTMLForTest(benchmarkTaggedHTML())
-	if err != nil {
-		b.Fatalf("CompileHTML() error = %v", err)
-	}
-	icc := []byte("benchmark sRGB ICC placeholder for generation-only benchmark")
-
-	return func(pdf *document.TestPDFDocument) {
-		pdf.SetTitle("Signed PDF/A-4f PDF/UA-2 Arlington XMP benchmark", false)
-		pdf.SetComplianceMetadata(document.ComplianceMetadata{
-			PDFA:       document.PDFAMode4F,
-			PDFUA2:     true,
-			Arlington:  true,
-			Lang:       "en-US",
-			Title:      "Signed PDF/A-4f PDF/UA-2 Arlington XMP benchmark",
-			Identifier: "urn:uuid:paperrune-benchmark-signed-pdfa4f-pdfua2-arlington-xmp",
-		})
-		if err := pdf.SetOutputIntent(icc, "sRGB IEC61966-2.1"); err != nil {
-			b.Fatalf("SetOutputIntent() error = %v", err)
-		}
-		pdf.AddUTF8FontFromCache("DejaVu", "", cache)
-		pdf.AddUTF8FontFromCache("DejaVu", "B", cache)
-		pdf.AddUTF8FontFromCache("DejaVu", "I", cache)
-		pdf.AddUTF8FontFromCache("DejaVu", "BI", cache)
-		pdf.SetAttachments([]document.Attachment{{
-			Filename:       "compliance-benchmark.txt",
-			Description:    "Signed PDF/A-4f PDF/UA-2 Arlington benchmark attachment",
-			MIMEType:       "text/plain",
-			AFRelationship: "Data",
-			Content:        []byte("Signed compliance benchmark attachment."),
-		}})
-		pdf.AddPage()
-		pdf.SetFont("DejaVu", "", 10)
-		pdf.SetNextTextRole("H1")
-		pdf.CellFormat(0, 7, "Signed compliance benchmark", "", 1, "L", false, 0, "")
-		html := pdf.HTMLNewForTest()
-		html.WriteCompiled(5, compiled)
 	}
 }
 
@@ -1412,82 +1271,6 @@ func BenchmarkGenerationTemplatesConcurrent40(b *testing.B) {
 				pdf.SetXY(5+float64(x)*95, 10+float64(y)*45)
 				pdf.UseTemplate(template)
 			}
-		}
-	})
-}
-
-func BenchmarkGenerationImportedPDFPages(b *testing.B) {
-	source := func() []byte {
-		pdf := document.MustNewTestPDFDocument(document.WithUnit(document.UnitPoint))
-		pdf.AddPage()
-		pdf.SetFont("Helvetica", "", 16)
-		pdf.Text(72, 96, "Imported benchmark page")
-		pdf.Rect(70, 110, 220, 60, "D")
-		var out bytes.Buffer
-		if err := pdf.Output(&out); err != nil {
-			b.Fatalf("source Output() error = %v", err)
-		}
-		return out.Bytes()
-	}()
-
-	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
-		imported := pdf.ImportPageStream(bytes.NewReader(source), 1, "MediaBox")
-		pdf.AddPage()
-		for row := 0; row < 4; row++ {
-			for col := 0; col < 2; col++ {
-				pdf.UseImportedPage(imported, 8+float64(col)*100, 10+float64(row)*62, 88, 0)
-			}
-		}
-	})
-}
-
-func BenchmarkGenerationImportedPDFPagesConcurrent40(b *testing.B) {
-	source := func() []byte {
-		pdf := document.MustNewTestPDFDocument(document.WithUnit(document.UnitPoint))
-		pdf.AddPage()
-		pdf.SetFont("Helvetica", "", 16)
-		pdf.Text(72, 96, "Imported benchmark page")
-		pdf.Rect(70, 110, 220, 60, "D")
-		var out bytes.Buffer
-		if err := pdf.Output(&out); err != nil {
-			b.Fatalf("source Output() error = %v", err)
-		}
-		return out.Bytes()
-	}()
-
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
-		imported := pdf.ImportPageStream(bytes.NewReader(source), 1, "MediaBox")
-		pdf.AddPage()
-		for row := 0; row < 4; row++ {
-			for col := 0; col < 2; col++ {
-				pdf.UseImportedPage(imported, 8+float64(col)*100, 10+float64(row)*62, 88, 0)
-			}
-		}
-	})
-}
-
-func BenchmarkGenerationProtection(b *testing.B) {
-	benchmarkGeneratedPDF(b, func(pdf *document.TestPDFDocument) {
-		if err := pdf.SetLegacyProtection(document.CnProtectPrint, "reader", "owner"); err != nil {
-			b.Fatal(err)
-		}
-		pdf.AddPage()
-		pdf.SetFont("Arial", "", 10)
-		for i := 0; i < 80; i++ {
-			pdf.CellFormat(0, 5, fmt.Sprintf("Protected line %02d", i), "", 1, "L", false, 0, "")
-		}
-	})
-}
-
-func BenchmarkGenerationProtectionConcurrent40(b *testing.B) {
-	benchmarkGeneratedPDFConcurrent40(b, func(pdf *document.TestPDFDocument) {
-		if err := pdf.SetLegacyProtection(document.CnProtectPrint, "reader", "owner"); err != nil {
-			b.Fatal(err)
-		}
-		pdf.AddPage()
-		pdf.SetFont("Arial", "", 10)
-		for i := 0; i < 80; i++ {
-			pdf.CellFormat(0, 5, fmt.Sprintf("Protected line %02d", i), "", 1, "L", false, 0, "")
 		}
 	})
 }

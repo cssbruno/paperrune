@@ -30,8 +30,7 @@ func typedCharacterizationFixtures() []typedCharacterizationFixture {
 	p := characterizationParagraph("body")
 	envelope := characterizationDocument(p)
 	envelope.Signature = &layout.SignatureBlock{
-		PlaceholderReference: "CharacterizationSignature",
-		Rows:                 []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Label: "Approved", Name: "Ada Example"}}}},
+		Rows: []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Label: "Approved", Name: "Ada Example"}}}},
 	}
 	envelope.QR = &layout.QRBlock{Value: "characterization-envelope", Label: "Verify", Size: 24}
 	envelope.Attachments = []layout.AttachmentBlock{{Name: "evidence.txt", MIMEType: "text/plain", Description: "characterization evidence", Data: []byte("typed envelope")}}

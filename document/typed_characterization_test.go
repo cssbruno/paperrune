@@ -249,7 +249,7 @@ func TestTypedCharacterizationCorpusIsCompleteBoundedAndDeterministic(t *testing
 		t.Fatalf("runner is nondeterministic:\n%s\n%s", a, b)
 	}
 	digest := sha256.Sum256(a)
-	if got := hex.EncodeToString(digest[:]); got != "7ed33e14aa42457a7bc3f8e3b0a9b2b52f55685d47a097f806d1556656fbfd23" {
+	if got := hex.EncodeToString(digest[:]); got != "fd798941817174b1f20472d39ebe952b0881185177d2af0c6ad57e738b671db2" {
 		t.Fatalf("typed characterization golden drift: got %s", got)
 	}
 	if len(first.Fixtures) != len(inventory.Fixtures) {
@@ -274,13 +274,6 @@ func TestTypedCharacterizationCorpusIsCompleteBoundedAndDeterministic(t *testing
 			}
 		} else if len(fixture.BreakLedger) != 0 {
 			t.Fatalf("unsuccessful fixture published break evidence: %+v", fixture)
-		}
-		if success && (fixture.Pages == 0 || fixture.PDF == nil || fixture.PDF.SHA256 == "" ||
-			fixture.PDF.Bytes == 0 || len(fixture.PDF.PageText) != fixture.Pages) {
-			t.Fatalf("successful fixture lacks complete PDF evidence: %+v", fixture)
-		}
-		if !success && fixture.PDF != nil {
-			t.Fatalf("unsuccessful fixture published PDF evidence: %+v", fixture)
 		}
 	}
 	for _, want := range []string{"planned", "rejected", "accepted-malformed", "canceled", "resource-limit"} {

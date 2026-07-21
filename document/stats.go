@@ -14,7 +14,6 @@ type DocumentStats struct {
 	Fonts                int
 	Templates            int
 	Attachments          int
-	ImportedPages        int
 	EstimatedMemoryBytes int64
 }
 
@@ -52,7 +51,6 @@ func (f *pdfDocument) Stats() DocumentStats {
 		Fonts:                len(resources.fonts),
 		Templates:            len(resources.templates),
 		Attachments:          len(f.attachments) + countAnnotationAttachments(f.pageAttachments),
-		ImportedPages:        len(resources.importedPages),
 		EstimatedMemoryBytes: f.estimatedMemoryBytes(),
 	}
 	return stats
@@ -103,18 +101,6 @@ func (f *pdfDocument) estimatedMemoryBytes() int64 {
 				size += attachmentEstimatedBytes(*attachment.Attachment)
 			}
 		}
-	}
-	for _, page := range resources.importedPages {
-		if page == nil {
-			continue
-		}
-		for _, object := range page.rewrittenObjects {
-			size += int64(len(object))
-		}
-		size += int64(len(page.rewrittenResources))
-	}
-	for _, object := range resources.importedObjs {
-		size += int64(len(object))
 	}
 	size += int64(cap(f.contentScratch))
 	size += int64(len(f.xmp))

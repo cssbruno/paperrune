@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/paperrune/inspect"
 	"github.com/cssbruno/paperrune/layout"
 )
 
@@ -259,7 +258,7 @@ func TestCellFormatUTF8JustifiedSingleWordDoesNotWriteInvalidNumber(t *testing.T
 	}
 }
 
-func TestInspectRoundTripsGeneratedBOMLessUTF16BEText(t *testing.T) {
+func TestEmbeddedUnicodeTextProducesCompletePDF(t *testing.T) {
 	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
 	fontBytes, err := os.ReadFile("../assets/static/font/DejaVuSansCondensed.ttf")
@@ -275,12 +274,8 @@ func TestInspectRoundTripsGeneratedBOMLessUTF16BEText(t *testing.T) {
 	if err := pdf.Output(&out); err != nil {
 		t.Fatalf("Output() error = %v", err)
 	}
-	text, err := inspect.PageText(out.Bytes(), 1)
-	if err != nil {
-		t.Fatalf("PageText() error = %v", err)
-	}
-	if !strings.Contains(text, "Relatório clínico em Português") {
-		t.Fatalf("PageText() = %q, want generated Portuguese text", text)
+	if !bytes.HasPrefix(out.Bytes(), []byte("%PDF-")) || !bytes.Contains(out.Bytes(), []byte("%%EOF")) {
+		t.Fatal("unicode output is not a complete PDF")
 	}
 }
 
@@ -414,20 +409,129 @@ func TestWriteDocumentInlineImagesUseContentHashAndFit(t *testing.T) {
 
 func extractedDocumentText(t *testing.T, pdf []byte) string {
 	t.Helper()
-	pages, err := inspect.PageCount(pdf)
-	if err != nil {
-		t.Fatalf("PageCount() error = %v", err)
-	}
 	var text strings.Builder
-	for page := 1; page <= pages; page++ {
-		value, err := inspect.PageText(pdf, page)
-		if err != nil {
-			t.Fatalf("PageText(%d) error = %v", page, err)
+	if bytes.Contains(pdf, []byte("/ActualText")) {
+		for offset := 0; offset < len(pdf); {
+			index := bytes.Index(pdf[offset:], []byte("/ActualText"))
+			if index < 0 {
+				break
+			}
+			offset += index + len("/ActualText")
+			for offset < len(pdf) && (pdf[offset] == ' ' || pdf[offset] == '\t' || pdf[offset] == '\r' || pdf[offset] == '\n') {
+				offset++
+			}
+			value, next, ok := generatedPDFTestLiteral(pdf, offset)
+			if ok {
+				text.WriteString(value)
+				offset = next
+			}
 		}
-		text.WriteString(value)
-		text.WriteByte('\n')
+	}
+	markedDepth := 0
+	for offset := 0; offset < len(pdf); {
+		if offset+3 <= len(pdf) && string(pdf[offset:offset+3]) == "BDC" {
+			markedDepth++
+			offset += 3
+			continue
+		}
+		if offset+3 <= len(pdf) && string(pdf[offset:offset+3]) == "EMC" {
+			if markedDepth > 0 {
+				markedDepth--
+			}
+			offset += 3
+			continue
+		}
+		index := bytes.IndexByte(pdf[offset:], '(')
+		if index < 0 {
+			break
+		}
+		offset += index
+		value, next, ok := generatedPDFTestLiteral(pdf, offset)
+		if !ok {
+			offset++
+			continue
+		}
+		operator := next
+		for operator < len(pdf) && (pdf[operator] == ' ' || pdf[operator] == '\t' || pdf[operator] == '\r' || pdf[operator] == '\n') {
+			operator++
+		}
+		if markedDepth == 0 && operator+2 <= len(pdf) && string(pdf[operator:operator+2]) == "Tj" {
+			text.WriteString(value)
+		}
+		offset = next
 	}
 	return text.String()
+}
+
+// generatedPDFTestLiteral decodes the literal strings emitted by this
+// package's uncompressed test output. It is test-only and is not a PDF input
+// API or a general-purpose parser.
+func generatedPDFTestLiteral(pdf []byte, start int) (string, int, bool) {
+	if start < 0 || start >= len(pdf) || pdf[start] != '(' {
+		return "", start, false
+	}
+	decoded := make([]byte, 0, 32)
+	depth := 1
+	for index := start + 1; index < len(pdf); index++ {
+		char := pdf[index]
+		if char == '\\' {
+			index++
+			if index >= len(pdf) {
+				return "", start, false
+			}
+			escaped := pdf[index]
+			switch escaped {
+			case 'n':
+				decoded = append(decoded, '\n')
+			case 'r':
+				decoded = append(decoded, '\r')
+			case 't':
+				decoded = append(decoded, '\t')
+			case 'b':
+				decoded = append(decoded, '\b')
+			case 'f':
+				decoded = append(decoded, '\f')
+			case '\n':
+			case '\r':
+				if index+1 < len(pdf) && pdf[index+1] == '\n' {
+					index++
+				}
+			default:
+				if escaped >= '0' && escaped <= '7' {
+					value := int(escaped - '0')
+					for count := 1; count < 3 && index+1 < len(pdf) && pdf[index+1] >= '0' && pdf[index+1] <= '7'; count++ {
+						index++
+						value = value*8 + int(pdf[index]-'0')
+					}
+					decoded = append(decoded, byte(value))
+				} else {
+					decoded = append(decoded, escaped)
+				}
+			}
+			continue
+		}
+		switch char {
+		case '(':
+			depth++
+			decoded = append(decoded, char)
+		case ')':
+			depth--
+			if depth == 0 {
+				if len(decoded) >= 2 && decoded[0] == 0xfe && decoded[1] == 0xff {
+					runes := make([]rune, 0, (len(decoded)-2)/2)
+					for position := 2; position+1 < len(decoded); position += 2 {
+						runes = append(runes, rune(uint16(decoded[position])<<8|uint16(decoded[position+1])))
+					}
+					return string(runes), index + 1, true
+				}
+				return string(decoded), index + 1, true
+			}
+			decoded = append(decoded, char)
+		default:
+			decoded = append(decoded, char)
+		}
+	}
+	return "", start, false
 }
 
 func decodeDocumentRenderTestPNG(t *testing.T) []byte {

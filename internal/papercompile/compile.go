@@ -6,6 +6,7 @@
 package papercompile
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -104,9 +105,12 @@ type Result struct {
 	// ScenarioDigest identifies the exact normalized fixture selected for this
 	// compile. It is empty for template-only compilation.
 	ScenarioDigest string
-	Mapping        CompileMapping
-	Schemas        []SchemaDescriptor
-	Diagnostics    []paperlang.Diagnostic
+	// ImportDependencies is the deterministic manifest of exact imported
+	// sources accepted by the compiler.
+	ImportDependencies []ImportDependency
+	Mapping            CompileMapping
+	Schemas            []SchemaDescriptor
+	Diagnostics        []paperlang.Diagnostic
 }
 
 func (r Result) OK() bool {
@@ -147,6 +151,12 @@ func CompileWithAssetsAndResolver(ast paperlang.AST, assets AssetCatalog, resolv
 	return compileWithLimitsAndResolver(ast, ExpansionLimits{}, SchemaLimits{}, assets, resolver)
 }
 
+// CompileWithAssetsAndResolverContext is CompileWithAssetsAndResolver with
+// cancellation that also covers synchronous import resolution.
+func CompileWithAssetsAndResolverContext(ctx context.Context, ast paperlang.AST, assets AssetCatalog, resolver ImportResolver) Result {
+	return compilePipeline(ctx, ast, ExpansionLimits{}, SchemaLimits{}, nil, assets, resolver)
+}
+
 // CompileWithExpansionLimits compiles with explicit bounded component
 // expansion. A zero limits value selects conservative defaults.
 func CompileWithExpansionLimits(ast paperlang.AST, limits ExpansionLimits) Result {
@@ -163,11 +173,11 @@ func compileWithLimits(ast paperlang.AST, expansionLimits ExpansionLimits, schem
 }
 
 func compileWithLimitsAndResolver(ast paperlang.AST, expansionLimits ExpansionLimits, schemaLimits SchemaLimits, assets AssetCatalog, resolver ImportResolver) Result {
-	return compilePipeline(ast, expansionLimits, schemaLimits, nil, assets, resolver)
+	return compilePipeline(context.Background(), ast, expansionLimits, schemaLimits, nil, assets, resolver)
 }
 
-func compilePipeline(ast paperlang.AST, expansionLimits ExpansionLimits, schemaLimits SchemaLimits, scenario *scenarioCompileRequest, assets AssetCatalog, resolver ImportResolver) Result {
-	imports := resolveImports(ast, resolver, ImportLimits{})
+func compilePipeline(ctx context.Context, ast paperlang.AST, expansionLimits ExpansionLimits, schemaLimits SchemaLimits, scenario *scenarioCompileRequest, assets AssetCatalog, resolver ImportResolver) Result {
+	imports := resolveImports(ctx, ast, resolver, ImportLimits{})
 	ast = imports.ast
 	if scenario != nil && scenario.dataSet && strings.TrimSpace(scenario.dataOptions.Locale) == "" {
 		scenario.dataOptions.Locale = paperDocumentLanguage(ast)
@@ -186,8 +196,9 @@ func compilePipeline(ast paperlang.AST, expansionLimits ExpansionLimits, schemaL
 	}
 	bindings := validateBindings(expanded.ast, expanded.provenance, schemas, schemaLimits)
 	c := compiler{
-		result: Result{Document: layout.NewLayoutDocument(), Page: PageSpec{Width: 595.275590551, Height: 841.88976378}, Schemas: schemas.descriptors},
-		ids:    make(map[string]paperlang.Span), provenance: expanded.provenance, bindings: bindings.metadata,
+		result: Result{Document: layout.NewLayoutDocument(), Page: PageSpec{Width: 595.275590551, Height: 841.88976378}, Schemas: schemas.descriptors,
+			ImportDependencies: append([]ImportDependency(nil), imports.dependencies...)},
+		ids: make(map[string]paperlang.Span), provenance: expanded.provenance, bindings: bindings.metadata,
 		themeInput: themes.Input, themeOutput: themes.Output, themeDiagnostics: themes.Diagnostics,
 		assets: assets,
 	}

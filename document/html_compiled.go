@@ -4,7 +4,6 @@
 package document
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -110,10 +109,6 @@ func compileHTMLContext(ctx context.Context, htmlStr string) (*compiledHTML, err
 		return nil, errHTMLLimitExceeded
 	}
 	return compileHTMLWithDataImageLimitContext(ctx, htmlStr, true, htmlDefaultMaxDataImageBytes)
-}
-
-func compileHTMLWithDataImageLimit(htmlStr string, cacheReusableData bool, maxDataImageBytes int) (*compiledHTML, error) {
-	return compileHTMLWithDataImageLimitContext(context.Background(), htmlStr, cacheReusableData, maxDataImageBytes)
 }
 
 func compileHTMLWithDataImageLimitContext(ctx context.Context, htmlStr string, cacheReusableData bool, maxDataImageBytes int) (*compiledHTML, error) {
@@ -300,25 +295,6 @@ func (compiled *compiledHTML) inlineStyleDeclarations(attrs map[string]string) m
 	return declarations
 }
 
-func (compiled *compiledHTML) ancestorsForToken(tokenIndex int) []htmlSegmentType {
-	if compiled == nil || tokenIndex < 0 || tokenIndex >= len(compiled.tokenNode) {
-		return nil
-	}
-	nodeIndex := compiled.tokenNode[tokenIndex]
-	if nodeIndex < 0 || nodeIndex >= len(compiled.nodeIndexes) {
-		return nil
-	}
-	var rev []htmlSegmentType
-	for parent := compiled.nodeIndexes[nodeIndex].Parent; parent >= 0; parent = compiled.nodeIndexes[parent].Parent {
-		rev = append(rev, compiled.tokens[compiled.nodeIndexes[parent].Token])
-	}
-	ancestors := make([]htmlSegmentType, len(rev))
-	for i := range rev {
-		ancestors[i] = rev[len(rev)-1-i]
-	}
-	return ancestors
-}
-
 func (compiled *compiledHTML) compileElementText(start int, tag string) {
 	if !htmlCompiledTextTag(tag) {
 		return
@@ -380,10 +356,6 @@ func (compiled *compiledHTML) compileStyleDeclarations(attrs map[string]string) 
 	compiled.styleDeclarations[style] = parseStyleDeclarations(style)
 }
 
-func (compiled *compiledHTML) compileInlineSVGs() error {
-	return compiled.compileInlineSVGsContext(context.Background())
-}
-
 func (compiled *compiledHTML) compileInlineSVGsContext(ctx context.Context) error {
 	var cache map[string]*SVG
 	for i := 0; i < len(compiled.tokens); i++ {
@@ -420,10 +392,6 @@ func (compiled *compiledHTML) compileInlineSVGsContext(ctx context.Context) erro
 		i = end
 	}
 	return nil
-}
-
-func (compiled *compiledHTML) compileDataImages(maxBytes int) error {
-	return compiled.compileDataImagesContext(context.Background(), maxBytes)
 }
 
 func (compiled *compiledHTML) compileDataImagesContext(ctx context.Context, maxBytes int) error {
@@ -525,45 +493,12 @@ func compiledHTMLDataImageName(data []byte) string {
 	return fmt.Sprintf("html-data-image-%x", sum)
 }
 
-func (compiled *compiledHTML) styleDeclaration(style string) (map[string]string, bool) {
-	if compiled == nil {
-		return nil, false
-	}
-	declarations, ok := compiled.styleDeclarations[style]
-	return declarations, ok
-}
-
 func (compiled *compiledHTML) declarations(start int) (map[string]string, bool) {
 	if compiled == nil || start < 0 || start >= len(compiled.elementDecl) {
 		return nil, false
 	}
 	decl := compiled.elementDecl[start]
 	return decl, decl != nil
-}
-
-func (compiled *compiledHTML) tableStyleKey(start int) (string, bool) {
-	if compiled == nil || start < 0 || start >= len(compiled.tableStyleKeys) {
-		return "", false
-	}
-	token := compiled.tokens[start]
-	if token.Cat != 'O' || (token.Str != "tr" && token.Str != "td" && token.Str != "th") {
-		return "", false
-	}
-	return compiled.tableStyleKeys[start], true
-}
-
-func (compiled *compiledHTML) text(start int, preserveWhitespace bool) (string, bool) {
-	if compiled == nil || start < 0 || start >= len(compiled.elementText) {
-		return "", false
-	}
-	text := compiled.elementText[start]
-	if !text.ok {
-		return "", false
-	}
-	if preserveWhitespace {
-		return text.preserved, true
-	}
-	return text.plain, true
 }
 
 // Tokens returns a copy of the token stream used by the compiled HTML fragment.
@@ -670,22 +605,6 @@ func (compiled *compiledHTML) skipElement(start int, tag string) int {
 	return end
 }
 
-func (compiled *compiledHTML) table(start int) (htmlTableType, int, bool) {
-	if compiled == nil {
-		return htmlTableType{}, start, false
-	}
-	table, ok := compiled.tables[start]
-	return table.table, table.end, ok
-}
-
-func (compiled *compiledHTML) inlineSVG(start int) (*SVG, int, bool) {
-	if compiled == nil {
-		return nil, start, false
-	}
-	svg, ok := compiled.inlineSVGs[start]
-	return svg.svg, svg.end, ok
-}
-
 func (compiled *compiledHTML) dataImage(start int) (compiledHTMLDataImage, bool) {
 	if compiled == nil {
 		return compiledHTMLDataImage{}, false
@@ -707,19 +626,6 @@ func (compiled *compiledHTML) validateDataImageLimit(maxBytes int) error {
 		}
 	}
 	return nil
-}
-
-func (img compiledHTMLDataImage) register(pdf *pdfDocument) (string, ImageOptions, error) {
-	if pdf == nil {
-		return "", img.options, errors.New("PDF document is nil")
-	}
-	if _, ok := pdf.ensureResourceStore().image(img.name); !ok {
-		pdf.RegisterImageOptionsReader(img.name, img.options, bytes.NewReader(img.data))
-		if pdf.err != nil {
-			return "", img.options, pdf.err
-		}
-	}
-	return img.name, img.options, nil
 }
 
 func validateHTMLImageSource(src string) error {

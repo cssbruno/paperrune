@@ -267,10 +267,6 @@ func svgArcDerivative(rx, ry, cosPhi, sinPhi, theta float64) (float64, float64) 
 	return -rx*cosPhi*sinTheta - ry*sinPhi*cosTheta, -rx*sinPhi*sinTheta + ry*cosPhi*cosTheta
 }
 
-func svgArcSegments(x1, y1, rx, ry, xAxisRotation float64, largeArc, sweep bool, x2, y2 float64) ([]SVGSegment, error) {
-	return appendSVGArcSegments(nil, x1, y1, rx, ry, xAxisRotation, largeArc, sweep, x2, y2)
-}
-
 func appendSVGArcSegments(segs []SVGSegment, x1, y1, rx, ry, xAxisRotation float64, largeArc, sweep bool, x2, y2 float64) ([]SVGSegment, error) {
 	if !svgFinite(rx) || !svgFinite(ry) || !svgFinite(xAxisRotation) || !svgFinite(x2) || !svgFinite(y2) {
 		return nil, errors.New("invalid SVG arc: non-finite value")
@@ -627,10 +623,6 @@ func svgApplyPatternNode(pattern SVGPattern, node svgNode) SVGPattern {
 	return pattern
 }
 
-func svgResolvePattern(id string, refs map[string]svgNode, gradients map[string]SVGGradient, cache map[string]SVGPattern, clipCache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int, seen map[string]bool) (SVGPattern, bool, error) {
-	return svgResolvePatternContext(context.Background(), id, refs, gradients, cache, clipCache, rules, ancestors, depth, seen)
-}
-
 func svgResolvePatternContext(ctx context.Context, id string, refs map[string]svgNode, gradients map[string]SVGGradient, cache map[string]SVGPattern, clipCache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int, seen map[string]bool) (SVGPattern, bool, error) {
 	if err := outputCanceledError(ctx); err != nil {
 		return SVGPattern{}, false, err
@@ -676,10 +668,6 @@ func svgResolvePatternContext(ctx context.Context, id string, refs map[string]sv
 	return pattern, pattern.Set && len(pattern.Elements) > 0, nil
 }
 
-func svgPatternElements(node svgNode, pattern SVGPattern, refs map[string]svgNode, gradients map[string]SVGGradient, clipCache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int) ([]SVGElement, error) {
-	return svgPatternElementsContext(context.Background(), node, pattern, refs, gradients, clipCache, rules, ancestors, depth)
-}
-
 func svgPatternElementsContext(ctx context.Context, node svgNode, pattern SVGPattern, refs map[string]svgNode, gradients map[string]SVGGradient, clipCache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int) ([]SVGElement, error) {
 	if err := outputCanceledError(ctx); err != nil {
 		return nil, err
@@ -697,10 +685,6 @@ func svgPatternElementsContext(ctx context.Context, node svgNode, pattern SVGPat
 		}
 	}
 	return sig.Elements, nil
-}
-
-func svgCollect(node svgNode, style SVGStyle, transform svgMatrix, sig *SVG) error {
-	return svgCollectContext(context.Background(), node, style, transform, sig)
 }
 
 func svgCollectContext(ctx context.Context, node svgNode, style SVGStyle, transform svgMatrix, sig *SVG) error {
@@ -806,10 +790,6 @@ type svgClipCacheEntry struct {
 	rule     string
 }
 
-func svgResolveStyleRefs(style SVGStyle, transform svgMatrix, refs map[string]svgNode, gradients map[string]SVGGradient, patterns map[string]SVGPattern, clipCache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int) (SVGStyle, error) {
-	return svgResolveStyleRefsContext(context.Background(), style, transform, refs, gradients, patterns, clipCache, rules, ancestors, depth)
-}
-
 func svgResolveStyleRefsContext(ctx context.Context, style SVGStyle, transform svgMatrix, refs map[string]svgNode, gradients map[string]SVGGradient, patterns map[string]SVGPattern, clipCache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int) (SVGStyle, error) {
 	if err := outputCanceledError(ctx); err != nil {
 		return style, err
@@ -842,10 +822,6 @@ func svgResolveStyleRefsContext(ctx context.Context, style SVGStyle, transform s
 	return style, nil
 }
 
-func svgResolveClipPath(id string, refs map[string]svgNode, transform svgMatrix, cache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int) ([]SVGSegment, string, error) {
-	return svgResolveClipPathContext(context.Background(), id, refs, transform, cache, rules, ancestors, depth)
-}
-
 func svgResolveClipPathContext(ctx context.Context, id string, refs map[string]svgNode, transform svgMatrix, cache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int) ([]SVGSegment, string, error) {
 	if err := outputCanceledError(ctx); err != nil {
 		return nil, "", err
@@ -874,10 +850,6 @@ func svgResolveClipPathContext(ctx context.Context, id string, refs map[string]s
 		cache[key] = svgClipCacheEntry{segments: segs, rule: rule}
 	}
 	return segs, rule, err
-}
-
-func svgCollectClipSegments(node svgNode, style SVGStyle, transform svgMatrix, refs map[string]svgNode, cache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int) ([]SVGSegment, error) {
-	return svgCollectClipSegmentsContext(context.Background(), node, style, transform, refs, cache, rules, ancestors, depth)
 }
 
 func svgCollectClipSegmentsContext(ctx context.Context, node svgNode, style SVGStyle, transform svgMatrix, refs map[string]svgNode, cache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int) ([]SVGSegment, error) {
@@ -927,10 +899,6 @@ func svgCollectClipSegmentsContext(ctx context.Context, node svgNode, style SVGS
 		out = append(out, childSegs...)
 	}
 	return out, nil
-}
-
-func svgCollectDepth(node svgNode, style SVGStyle, transform svgMatrix, sig *SVG, refs map[string]svgNode, gradients map[string]SVGGradient, patterns map[string]SVGPattern, clipCache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int, renderingRef bool) error {
-	return svgCollectDepthContext(context.Background(), node, style, transform, sig, refs, gradients, patterns, clipCache, rules, ancestors, depth, renderingRef)
 }
 
 func svgCollectDepthContext(ctx context.Context, node svgNode, style SVGStyle, transform svgMatrix, sig *SVG, refs map[string]svgNode, gradients map[string]SVGGradient, patterns map[string]SVGPattern, clipCache map[svgClipCacheKey]svgClipCacheEntry, rules []htmlCSSRule, ancestors []htmlSegmentType, depth int, renderingRef bool) error {

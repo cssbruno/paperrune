@@ -71,25 +71,21 @@ func evaluateEdgeThresholds(inspection edgeCheckPDFInspection, request edgeCheck
 	if uint64(inspection.PageIssueCount) > uint64(request.maxPageIssues) {
 		return fmt.Errorf("page issue count %d exceeds maximum %d", inspection.PageIssueCount, request.maxPageIssues)
 	}
-	if uint64(inspection.ExtractedTextRunes) < uint64(request.minTextRunes) {
-		return fmt.Errorf("extracted text runes %d is below minimum %d", inspection.ExtractedTextRunes, request.minTextRunes)
-	}
-	if uint64(inspection.ParsedPages) > uint64(request.maxPages) {
-		return fmt.Errorf("PDF page count %d exceeds maximum %d", inspection.ParsedPages, request.maxPages)
+	if uint64(inspection.PlannedPages) > uint64(request.maxPages) {
+		return fmt.Errorf("planned page count %d exceeds maximum %d", inspection.PlannedPages, request.maxPages)
 	}
 	return nil
 }
 
 type edgeBaselineFingerprint struct {
-	OK                  bool
-	Stage               string
-	Error               string
-	InputSHA256         string
-	Pages               int
-	PlanHash            string
-	PDFSHA256           string
-	ExtractedTextSHA256 string
-	PageIssueCount      uint32
+	OK             bool
+	Stage          string
+	Error          string
+	InputSHA256    string
+	Pages          int
+	PlanHash       string
+	PDFSHA256      string
+	PageIssueCount uint32
 }
 
 func edgeCaseFingerprint(item edgeCheckCaseResult) edgeBaselineFingerprint {
@@ -99,7 +95,6 @@ func edgeCaseFingerprint(item edgeCheckCaseResult) edgeBaselineFingerprint {
 	}
 	if item.Inspection != nil {
 		fingerprint.PDFSHA256 = item.Inspection.SHA256
-		fingerprint.ExtractedTextSHA256 = item.Inspection.ExtractedTextSHA256
 		fingerprint.PageIssueCount = item.Inspection.PageIssueCount
 	}
 	return fingerprint
@@ -114,7 +109,7 @@ func compareEdgeBaseline(file string, current edgeCheckResult) (edgeBaselineComp
 	if err := json.Unmarshal(payload, &baseline); err != nil {
 		return edgeBaselineComparison{}, fmt.Errorf("decode edge baseline: %w", err)
 	}
-	if baseline.FormatVersion < 2 || baseline.FormatVersion > 3 {
+	if baseline.FormatVersion != 4 {
 		return edgeBaselineComparison{}, fmt.Errorf("unsupported edge baseline format %d", baseline.FormatVersion)
 	}
 

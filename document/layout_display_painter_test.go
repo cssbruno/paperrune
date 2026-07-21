@@ -5,6 +5,7 @@ package document
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -58,6 +59,57 @@ func TestPaintDisplayLayoutPlanPDFRejectsBytesBeforeMutation(t *testing.T) {
 	if after := typedShadowSnapshotOf(target); after != before || target.PageCount() != 0 || target.resources != beforeResources {
 		t.Fatalf("failed image preflight mutated target: before=%#v after=%#v pages=%d resources=%v",
 			before, after, target.PageCount(), target.resources != nil)
+	}
+}
+
+func TestDisplayPlanPreflightPreparesSemanticsOnlyForTaggedOutput(t *testing.T) {
+	const source = "document @report:\n" +
+		"  language: \"en\"\n" +
+		"  page @sheet:\n" +
+		"    body @body:\n" +
+		"      paragraph @copy:\n" +
+		"        text: \"Prepared semantic path\"\n"
+	plan, result, err := PlanPaper("semantic-fast-path.paper", source)
+	if err != nil || !result.OK() {
+		t.Fatalf("PlanPaper() = %#v, %v", result, err)
+	}
+
+	untagged := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
+	plainPrepared, err := untagged.preflightDisplayLayoutPlanPDFResourcesContextForTarget(
+		context.Background(), plan.plan, plan.imageSources, plan.fontSources, false, false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plainPrepared.semanticPaths != nil || plainPrepared.documentLanguage != "" {
+		t.Fatalf("untagged preflight prepared semantic state: paths=%d language=%q",
+			len(plainPrepared.semanticPaths), plainPrepared.documentLanguage)
+	}
+
+	tagged := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression())
+	tagged.EnableTaggedPDF()
+	taggedPrepared, err := tagged.preflightDisplayLayoutPlanPDFResourcesContextForTarget(
+		context.Background(), plan.plan, plan.imageSources, plan.fontSources, false, true,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(taggedPrepared.semanticPaths) == 0 || taggedPrepared.documentLanguage != "en" {
+		t.Fatalf("tagged preflight semantic state: paths=%d language=%q",
+			len(taggedPrepared.semanticPaths), taggedPrepared.documentLanguage)
+	}
+	for fragment, path := range taggedPrepared.semanticPaths {
+		if len(path) == 0 {
+			t.Fatalf("fragment %d has an empty prepared semantic path", fragment)
+		}
+	}
+
+	page := taggedPrepared.projection.Pages[0]
+	plainCapacity := plannedDisplayPageContentCapacity(taggedPrepared.projection, page, false)
+	taggedCapacity := plannedDisplayPageContentCapacity(taggedPrepared.projection, page, true)
+	if plainCapacity >= taggedCapacity {
+		t.Fatalf("content capacity plain/tagged = %d/%d, want tagging allowance only for tagged output",
+			plainCapacity, taggedCapacity)
 	}
 }
 

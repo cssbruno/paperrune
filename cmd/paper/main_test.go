@@ -10,12 +10,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/paperrune/inspect"
 	"github.com/cssbruno/paperrune/internal/paperscenario"
 )
 
@@ -244,7 +242,7 @@ func TestRunRenderWritesDeterministicPDFAtomically(t *testing.T) {
 	second := filepath.Join(dir, "second.pdf")
 	for _, output := range []string{first, second} {
 		code, stdout, stderr := invoke([]string{"render", "-o", output, "-"}, validSource)
-		if code != exitOK || stdout != "" || stderr != "" {
+		if code != exitOK || !strings.Contains(stdout, "Rendered "+output) || !strings.Contains(stdout, "PDF:   sha256:") || stderr != "" {
 			t.Fatalf("render %s = %d, %q, %q", output, code, stdout, stderr)
 		}
 	}
@@ -267,6 +265,59 @@ func TestRunRenderWritesDeterministicPDFAtomically(t *testing.T) {
 	code, stdout, stderr := invoke([]string{"render", "--json", "-o", first, "-"}, validSource)
 	if code != exitOK || stderr != "" || !strings.Contains(stdout, `"ok":true`) || !strings.Contains(stdout, `"hash"`) {
 		t.Fatalf("render JSON = %d, %q, %q", code, stdout, stderr)
+	}
+}
+
+func TestRenderedOutputPermissionsArePrivateAndPreserved(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	output := filepath.Join(dir, "private.pdf")
+	code, _, stderr := invoke([]string{"render", "-o", output, "-"}, validSource)
+	if code != exitOK || stderr != "" {
+		t.Fatalf("new render = %d, %q", code, stderr)
+	}
+	info, err := os.Stat(output)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("new output mode = %v, %v; want 0600", info, err)
+	}
+	if err := os.Chmod(output, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr = invoke([]string{"render", "-o", output, "-"}, validSource)
+	if code != exitOK || stderr != "" {
+		t.Fatalf("replacement render = %d, %q", code, stderr)
+	}
+	info, err = os.Stat(output)
+	if err != nil || info.Mode().Perm() != 0o640 {
+		t.Fatalf("replacement output mode = %v, %v; want 0640", info, err)
+	}
+	code, _, stderr = invoke([]string{"render", "--mode", "0644", "-o", output, "-"}, validSource)
+	if code != exitOK || stderr != "" {
+		t.Fatalf("explicit-mode render = %d, %q", code, stderr)
+	}
+	info, err = os.Stat(output)
+	if err != nil || info.Mode().Perm() != 0o644 {
+		t.Fatalf("explicit output mode = %v, %v; want 0644", info, err)
+	}
+}
+
+func TestAtomicWriteRejectsSymlinkDestination(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.paper")
+	link := filepath.Join(dir, "document.paper")
+	if err := os.WriteFile(target, []byte("document:\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := atomicWrite(link, []byte("changed\n"), 0o600); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("atomicWrite() error = %v, want symlink rejection", err)
+	}
+	content, err := os.ReadFile(target)
+	if err != nil || string(content) != "document:\n" {
+		t.Fatalf("target changed = %q, %v", content, err)
 	}
 }
 
@@ -552,18 +603,6 @@ func TestCheckGeneratesReproducibleEdgeCasesAndCompletePDFs(t *testing.T) {
 		}
 	}
 
-	visualDir := filepath.Join(dir, "edge-visual")
-	requirePoppler(t)
-	code, stdout, stderr = invoke([]string{"check", "--json", "--edge-cases", "2", "--seed", "42", "--edge-output", visualDir, "--edge-visual", template}, "")
-	if code != exitOK || stderr != "" || !strings.Contains(stdout, `"visual_review_file":"edge-visual-review.pdf"`) {
-		t.Fatalf("visual edge output = %d, %q, %q", code, stdout, stderr)
-	}
-	for _, name := range []string{"edge-report.json", "edge-visual-review.pdf", "001-empty-text-page-001.png", "002-minimal-page-001.png"} {
-		payload, readErr := os.ReadFile(filepath.Join(visualDir, name))
-		if readErr != nil || len(payload) == 0 {
-			t.Fatalf("visual artifact %s = %d bytes, %v", name, len(payload), readErr)
-		}
-	}
 }
 
 func TestInspectEdgeCaseInputReportsShapeAndStressLocations(t *testing.T) {
@@ -642,91 +681,11 @@ func TestCheckUsesUserEdgeInputsThresholdsAndBaselines(t *testing.T) {
 	}
 
 	code, stdout, stderr = invoke([]string{
-		"check", "--json", "--edge-input", input, "--edge-min-text-runes", "10000", template,
+		"check", "--json", "--edge-input", input, "--edge-max-pages", "1", template,
 	}, "")
 	var threshold edgeCheckResult
-	if err := json.Unmarshal([]byte(stdout), &threshold); err != nil || code != exitFailure || stderr != "" || threshold.OK || threshold.Cases[0].Stage != "threshold" || !strings.Contains(threshold.Cases[0].Error, "below minimum") {
+	if err := json.Unmarshal([]byte(stdout), &threshold); err != nil || code != exitOK || stderr != "" || !threshold.OK {
 		t.Fatalf("threshold result = %d, stderr=%q, report=%#v, err=%v", code, stderr, threshold, err)
-	}
-}
-
-func TestLaboratoryTemplateVisualReviewHasProgrammaticPageEvidence(t *testing.T) {
-	requirePoppler(t)
-	template := filepath.Clean("../../examples/paper-lab-report/lab-report.paper")
-	assets := filepath.Clean("../../examples/paper-lab-report/assets.json")
-	outputDir := filepath.Join(t.TempDir(), "lab-edges")
-	code, stdout, stderr := invoke([]string{
-		"check", "--json", "--assets", assets,
-		"--edge-cases", "10", "--edge-max-items", "64", "--seed", "42",
-		"--edge-output", outputDir, "--edge-visual", template,
-	}, "")
-	if code != exitOK || stderr != "" {
-		t.Fatalf("laboratory edge check = %d, stderr=%q, stdout=%q", code, stderr, stdout)
-	}
-	var report edgeCheckResult
-	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
-		t.Fatalf("decode laboratory edge report: %v\n%s", err, stdout)
-	}
-	if !report.OK || report.FormatVersion != 3 || len(report.Cases) != 10 || report.VisualReviewFile != "edge-visual-review.pdf" {
-		t.Fatalf("laboratory edge report = %#v", report)
-	}
-	byName := make(map[string]edgeCheckCaseResult, len(report.Cases))
-	for _, checked := range report.Cases {
-		byName[checked.Name] = checked
-		if !checked.OK || checked.InputInspection == nil || checked.Inspection == nil || !checked.Inspection.StructureOK {
-			t.Fatalf("incomplete edge evidence for %s: %#v", checked.Name, checked)
-		}
-		if checked.Pages != checked.Inspection.ParsedPages || len(checked.Inspection.PageText) != checked.Pages || len(checked.Inspection.PageSummaries) != checked.Pages {
-			t.Fatalf("page evidence mismatch for %s: %#v", checked.Name, checked)
-		}
-		if len(checked.RasterPages) != checked.Pages {
-			t.Fatalf("raster evidence mismatch for %s: %#v", checked.Name, checked.RasterPages)
-		}
-		for pageIndex, page := range checked.RasterPages {
-			if page.Page != pageIndex+1 || page.Bytes <= 0 || page.Width <= 0 || page.Height <= 0 || len(page.SHA256) != 64 {
-				t.Fatalf("invalid raster evidence for %s: %#v", checked.Name, page)
-			}
-		}
-		for pageIndex, page := range checked.Inspection.PageText {
-			if page.Page != pageIndex+1 || page.Bytes <= 0 || page.Runes <= 0 || len(page.SHA256) != 64 {
-				t.Fatalf("invalid page text evidence for %s: %#v", checked.Name, page)
-			}
-		}
-	}
-	if byName["empty-text"].InputInspection.EmptyStringCount == 0 || byName["whitespace-text"].InputInspection.WhitespaceOnlyCount == 0 ||
-		byName["multiline-text"].InputInspection.MultilineStringCount == 0 || byName["long-unbroken-string"].InputInspection.MaxStringRunes < 256 {
-		t.Fatalf("fixed profiles did not expose expected input shapes: %#v", byName)
-	}
-	if byName["long-unbroken-string"].Pages < 2 || byName["dense-lists"].Pages < 2 || byName["dense-lists"].InputInspection.MaxListItems != 64 {
-		t.Fatalf("multi-page stress cases were not exercised: long=%#v dense=%#v", byName["long-unbroken-string"], byName["dense-lists"])
-	}
-	for _, artifact := range []string{"edge-report.json", "edge-visual-review.pdf", "006-long-unbroken-string-page-001.png", "007-dense-lists.pdf"} {
-		payload, err := os.ReadFile(filepath.Join(outputDir, artifact))
-		if err != nil || len(payload) == 0 {
-			t.Fatalf("laboratory artifact %s = %d bytes, %v", artifact, len(payload), err)
-		}
-	}
-	review, err := os.ReadFile(filepath.Join(outputDir, "edge-visual-review.pdf"))
-	if err != nil {
-		t.Fatalf("read visual review: %v", err)
-	}
-	if err := inspect.ValidateStructure(review); err != nil {
-		t.Fatalf("invalid visual review PDF: %v", err)
-	}
-	reviewPages, err := inspect.PageCount(review)
-	wantReviewPages := 1
-	for _, checked := range report.Cases {
-		wantReviewPages += checked.Pages
-	}
-	if err != nil || reviewPages != wantReviewPages {
-		t.Fatalf("visual review pages = %d, %v; want %d", reviewPages, err, wantReviewPages)
-	}
-}
-
-func requirePoppler(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("pdftoppm"); err != nil {
-		t.Skip("pdftoppm is required for final-PDF visual evidence")
 	}
 }
 
@@ -752,13 +711,57 @@ func TestOperationalCommandsDiagnoseInvalidScenario(t *testing.T) {
 }
 
 func TestRunUsageAndSourceLimit(t *testing.T) {
-	code, _, stderr := invoke(nil, "")
-	if code != exitUsage || !strings.Contains(stderr, "usage:") {
-		t.Fatalf("no args = %d, %q", code, stderr)
+	code, stdout, stderr := invoke(nil, "")
+	if code != exitOK || stderr != "" || !strings.Contains(stdout, "PaperRune compiles") || !strings.Contains(stdout, "paper <command>") {
+		t.Fatalf("no args = %d, %q, %q", code, stdout, stderr)
 	}
-	code, stdout, stderr := invoke([]string{"fmt", "--json", "-"}, strings.Repeat("x", maxSourceBytes+1))
+	code, stdout, stderr = invoke([]string{"fmt", "--json", "-"}, strings.Repeat("x", maxSourceBytes+1))
 	if code != exitFailure || stderr != "" || !strings.Contains(stdout, "source exceeds") {
 		t.Fatalf("source limit = %d, %q, %q", code, stdout, stderr)
+	}
+}
+
+func TestRunHelpVersionAndTypoSuggestion(t *testing.T) {
+	code, stdout, stderr := invoke([]string{"help", "render"}, "")
+	if code != exitOK || stderr != "" || !strings.Contains(stdout, "paper render [options] [FILE]") || !strings.Contains(stdout, "Examples:") {
+		t.Fatalf("render help = %d, %q, %q", code, stdout, stderr)
+	}
+	code, stdout, stderr = invoke([]string{"renfer"}, "")
+	if code != exitUsage || stdout != "" || !strings.Contains(stderr, `Did you mean "render"?`) {
+		t.Fatalf("typo = %d, %q, %q", code, stdout, stderr)
+	}
+	oldVersion := version
+	version = "v9.8.7-test"
+	t.Cleanup(func() { version = oldVersion })
+	code, stdout, stderr = invoke([]string{"version", "--json"}, "")
+	if code != exitOK || stderr != "" || !strings.Contains(stdout, `"version":"v9.8.7-test"`) {
+		t.Fatalf("version = %d, %q, %q", code, stdout, stderr)
+	}
+}
+
+func TestRunInitCreatesRenderableProjects(t *testing.T) {
+	root := t.TempDir()
+	for _, template := range []string{"blank", "invoice", "report", "table-report", "letter"} {
+		t.Run(template, func(t *testing.T) {
+			dir := filepath.Join(root, template)
+			code, stdout, stderr := invoke([]string{"init", template, dir}, "")
+			if code != exitOK || stderr != "" || !strings.Contains(stdout, "Created "+template+" project") {
+				t.Fatalf("init = %d, %q, %q", code, stdout, stderr)
+			}
+			t.Chdir(dir)
+			code, stdout, stderr = invoke([]string{"check", "--json"}, "")
+			if code != exitOK || stderr != "" || !strings.Contains(stdout, `"ok":true`) {
+				t.Fatalf("project check = %d, %q, %q", code, stdout, stderr)
+			}
+			code, stdout, stderr = invoke([]string{"render"}, "")
+			if code != exitOK || stderr != "" || !strings.Contains(stdout, "Rendered ") {
+				t.Fatalf("project render = %d, %q, %q", code, stdout, stderr)
+			}
+			pdf, err := os.ReadFile(filepath.Join(dir, "dist", template+".pdf"))
+			if err != nil || !bytes.HasPrefix(pdf, []byte("%PDF-")) {
+				t.Fatalf("project PDF = %d bytes, %v", len(pdf), err)
+			}
+		})
 	}
 }
 

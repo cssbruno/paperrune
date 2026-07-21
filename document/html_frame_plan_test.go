@@ -8,8 +8,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-
-	"github.com/cssbruno/paperrune/inspect"
 )
 
 func newHTMLFrameTestDocument(t *testing.T, height float64) *pdfDocument {
@@ -89,11 +87,7 @@ func TestHTMLUnifiedFragmentBetweenManualDrawingBeforeAndAfter(t *testing.T) {
 	if err := pdf.OutputWithOptions(&out, OutputOptions{Deterministic: true}); err != nil {
 		t.Fatal(err)
 	}
-	text, err := inspect.PageTextContext(context.Background(), out.Bytes(), 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text = strings.ReplaceAll(text, "\x00", "")
+	text := extractedDocumentText(t, out.Bytes())
 	for _, want := range []string{"manual-before", "planned-middle", "planned-tail", "manual-after"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("page text lacks %q: %q", want, text)

@@ -107,8 +107,8 @@ func TestStudioResourceReplacementCommitsExactCatalogReference(t *testing.T) {
 	if err := studio.setProjectResources([]paperassets.ProjectResource{{Name: "old-hero", MediaType: "image/png", Digest: hash, Data: data}, {Name: "new-hero", MediaType: "image/png", Digest: hash, Data: data, Replaces: "old-hero"}}); err != nil {
 		t.Fatal(err)
 	}
-	workspace := fetchStudioWorkspace(t, studio.routes())
-	response := postStudioJSON(t, studio.routes(), "/api/edit", map[string]any{"source_revision": workspace.SourceRevision, "plan_revision": workspace.Revision, "operation": "image", "target": "@hero", "property": "source", "text": "asset:new-hero"})
+	workspace := fetchStudioWorkspace(t, studio.testRoutes())
+	response := postStudioJSON(t, studio.testRoutes(), "/api/edit", map[string]any{"source_revision": workspace.SourceRevision, "plan_revision": workspace.Revision, "operation": "image", "target": "@hero", "property": "source", "text": "asset:new-hero"})
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("replacement=%d %s", response.StatusCode, response.Body)
 	}
@@ -166,7 +166,7 @@ func TestStudioResourcesEndpointBindsExactPlanWithoutReturningBytes(t *testing.T
 	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/resources?revision="+snapshot.revision+"&source_revision="+studioSourceRevision(snapshot.source), nil)
 	request.Header.Set(studioSessionHeader, studio.sessionToken)
 	response := httptest.NewRecorder()
-	studio.routes().ServeHTTP(response, request)
+	studio.testRoutes().ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -180,7 +180,7 @@ func TestStudioResourcesEndpointBindsExactPlanWithoutReturningBytes(t *testing.T
 	stale := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/resources?revision=stale&source_revision="+studioSourceRevision(snapshot.source), nil)
 	stale.Header.Set(studioSessionHeader, studio.sessionToken)
 	staleResponse := httptest.NewRecorder()
-	studio.routes().ServeHTTP(staleResponse, stale)
+	studio.testRoutes().ServeHTTP(staleResponse, stale)
 	if staleResponse.Code != http.StatusConflict {
 		t.Fatalf("stale status=%d", staleResponse.Code)
 	}

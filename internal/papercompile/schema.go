@@ -4,6 +4,7 @@
 package papercompile
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strings"
@@ -75,7 +76,13 @@ func ExtractSchemas(ast paperlang.AST) SchemaSourceResult {
 // imports. The resolver remains the only source boundary; no ambient files or
 // network locations are consulted by the compiler.
 func ExtractSchemasWithResolver(ast paperlang.AST, resolver ImportResolver) SchemaSourceResult {
-	imports := resolveImports(ast, resolver, ImportLimits{})
+	return ExtractSchemasWithResolverContext(context.Background(), ast, resolver)
+}
+
+// ExtractSchemasWithResolverContext is ExtractSchemasWithResolver with
+// cancellation that also covers synchronous import resolution.
+func ExtractSchemasWithResolverContext(ctx context.Context, ast paperlang.AST, resolver ImportResolver) SchemaSourceResult {
+	imports := resolveImports(ctx, ast, resolver, ImportLimits{})
 	analysis := analyzeSchemas(imports.ast, SchemaLimits{})
 	return SchemaSourceResult{
 		Schemas:     cloneSchemaDescriptors(analysis.descriptors),

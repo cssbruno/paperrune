@@ -41,7 +41,7 @@ func (s *studioServer) handleResources(w http.ResponseWriter, r *http.Request) {
 		writeStudioError(w, http.StatusConflict, errors.New("paper-studio: stale resource inventory revision"))
 		return
 	}
-	if r.URL.Query().Get("source_revision") != studioSourceRevision(snapshot.source) {
+	if r.URL.Query().Get("source_revision") != studioSnapshotSourceRevision(snapshot) {
 		writeStudioError(w, http.StatusConflict, errors.New("paper-studio: stale resource inventory source revision"))
 		return
 	}
@@ -56,7 +56,7 @@ func (s *studioServer) handleResources(w http.ResponseWriter, r *http.Request) {
 		writeStudioError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	inventory.SourceRevision = studioSourceRevision(snapshot.source)
+	inventory.SourceRevision = studioSnapshotSourceRevision(snapshot)
 	inventory.CatalogEditable = editable
 	writeStudioJSON(w, http.StatusOK, inventory)
 }

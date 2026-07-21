@@ -258,7 +258,6 @@ func TestLayoutDocumentPlanMetadataAndSignaturePreserveOrderedSemanticsCaptureAn
 			Style:   layout.TextStyle{FontFamily: "Helvetica", FontSize: 10, LineHeight: 11},
 		}},
 		Signature: &layout.SignatureBlock{
-			PlaceholderReference: " ApprovalSignature ",
 			Rows: []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{
 				Label: "Approved by", Name: "Ada Example", Role: "Director",
 				Metadata: []layout.MetadataField{{Label: "Employee", Value: "42"}},
@@ -291,8 +290,8 @@ func TestLayoutDocumentPlanMetadataAndSignaturePreserveOrderedSemanticsCaptureAn
 
 	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
 	pages, err := target.WriteLayoutDocumentPlan(plan)
-	if err != nil || pages != 1 || target.signatureFieldName != "ApprovalSignature" {
-		t.Fatalf("WriteLayoutDocumentPlan() = pages %d field %q, %v", pages, target.signatureFieldName, err)
+	if err != nil || pages != 1 {
+		t.Fatalf("WriteLayoutDocumentPlan() = pages %d, %v", pages, err)
 	}
 	var pdf bytes.Buffer
 	if err := target.OutputWithOptions(&pdf, OutputOptions{Deterministic: true}); err != nil || pdf.Len() == 0 {

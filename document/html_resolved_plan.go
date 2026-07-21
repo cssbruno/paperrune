@@ -401,16 +401,6 @@ func htmlUnifiedBlockLikeTag(tag string, decl map[string]string) bool {
 	return display == "block" || display == "inline-block"
 }
 
-func htmlUnifiedFilteredDeclarations(decl map[string]string, allowed map[string]bool) map[string]string {
-	result := make(map[string]string)
-	for name, value := range decl {
-		if allowed[name] {
-			result[name] = value
-		}
-	}
-	return result
-}
-
 func htmlUnifiedLayoutTextStyle(style htmlTextStyle, fallbackLineHeight float64) layout.TextStyle {
 	lineHeight := style.lineHeight
 	if lineHeight <= 0 {

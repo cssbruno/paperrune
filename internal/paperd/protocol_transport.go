@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -390,16 +389,4 @@ func CanonicalProtocolResponse(response ProtocolResponse, limit int) ([]byte, er
 		return nil, workspaceError("PROTOCOL_RESPONSE", "protocol response exceeds its byte bound", ErrLimit)
 	}
 	return bytes.Clone(encoded), nil
-}
-
-// SupportedProtocolVersions returns a detached sorted copy for adapters.
-func (server *ProtocolServer) SupportedProtocolVersions() []uint16 {
-	if server == nil {
-		return nil
-	}
-	server.mu.Lock()
-	defer server.mu.Unlock()
-	result := append([]uint16(nil), server.versions...)
-	sort.Slice(result, func(i, j int) bool { return result[i] > result[j] })
-	return result
 }

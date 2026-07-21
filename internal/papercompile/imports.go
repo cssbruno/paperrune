@@ -4,6 +4,9 @@
 package papercompile
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"path"
 	"strings"
@@ -14,7 +17,15 @@ import (
 // ImportResolver is the explicit source boundary used by .paper imports.
 // The compiler never reads files by itself: callers decide how an import is
 // loaded and return its stable source filename for diagnostics and provenance.
-type ImportResolver func(importerFile, importPath string) (file, source string, err error)
+type ImportResolver func(ctx context.Context, importerFile, importPath string) (file, source string, err error)
+
+// ImportDependency identifies one exact imported source accepted during
+// compilation. File is the resolver's stable diagnostic name and Digest is
+// the lowercase SHA-256 of the imported source bytes.
+type ImportDependency struct {
+	File   string `json:"file"`
+	Digest string `json:"digest"`
+}
 
 // ImportLimits bounds recursive design-file imports. Zero fields select the
 // conservative defaults below.
@@ -22,6 +33,25 @@ type ImportLimits struct {
 	MaxDepth uint32
 	MaxFiles uint32
 	MaxBytes uint64
+}
+
+type importReadLimitContextKey struct{}
+
+// ImportReadLimit returns the smaller of fallback and the compiler's
+// remaining cumulative import-byte budget carried by ctx. Resolvers that read
+// bytes should use this value as their actual I/O limit.
+func ImportReadLimit(ctx context.Context, fallback int64) int64 {
+	if fallback < 0 {
+		fallback = 0
+	}
+	if ctx == nil {
+		return fallback
+	}
+	remaining, ok := ctx.Value(importReadLimitContextKey{}).(uint64)
+	if !ok || remaining >= uint64(fallback) {
+		return fallback
+	}
+	return int64(remaining)
 }
 
 func defaultImportLimits() ImportLimits {
@@ -43,15 +73,19 @@ func normalizeImportLimits(limits ImportLimits) ImportLimits {
 }
 
 type importResolution struct {
-	ast         paperlang.AST
-	diagnostics []paperlang.Diagnostic
+	ast          paperlang.AST
+	dependencies []ImportDependency
+	diagnostics  []paperlang.Diagnostic
 }
 
 // resolveImports expands only the design declarations from imported
 // documents. Pages, components, scenarios, and schemas stay owned by the
 // importing document, which keeps imports composable and prevents a second
 // document from silently becoming part of the layout.
-func resolveImports(ast paperlang.AST, resolver ImportResolver, limits ImportLimits) importResolution {
+func resolveImports(ctx context.Context, ast paperlang.AST, resolver ImportResolver, limits ImportLimits) importResolution {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	limits = normalizeImportLimits(limits)
 	result := importResolution{ast: paperlang.AST{File: ast.File, Root: cloneImportNode(ast.Root)}}
 	if result.ast.Root == nil || result.ast.Root.Kind != paperlang.NodeDocument {
@@ -74,6 +108,7 @@ func resolveImports(ast paperlang.AST, resolver ImportResolver, limits ImportLim
 	}
 
 	walker := importWalker{
+		ctx:      ctx,
 		resolver: resolver,
 		limits:   limits,
 		seen:     make(map[string]bool),
@@ -94,22 +129,29 @@ func resolveImports(ast paperlang.AST, resolver ImportResolver, limits ImportLim
 		result.ast.Root.Members = members
 	}
 	result.diagnostics = walker.diagnostics
+	result.dependencies = walker.dependencies
 	return result
 }
 
 type importWalker struct {
-	resolver    ImportResolver
-	limits      ImportLimits
-	seen        map[string]bool
-	stack       map[string]bool
-	files       uint32
-	bytes       uint64
-	members     []paperlang.Member
-	diagnostics []paperlang.Diagnostic
+	ctx          context.Context
+	resolver     ImportResolver
+	limits       ImportLimits
+	seen         map[string]bool
+	stack        map[string]bool
+	files        uint32
+	bytes        uint64
+	members      []paperlang.Member
+	dependencies []ImportDependency
+	diagnostics  []paperlang.Diagnostic
 }
 
 func (w *importWalker) visit(importer string, root *paperlang.Node, depth uint32) {
 	for _, property := range importProperties(root) {
+		if err := w.ctx.Err(); err != nil {
+			w.add("PAPER_IMPORT_CANCELED", fmt.Sprintf("import resolution canceled: %v", err), "retry with an active planning context", property.Span)
+			return
+		}
 		if depth >= w.limits.MaxDepth {
 			w.add("PAPER_IMPORT_DEPTH", "import nesting exceeds the configured limit", "flatten the design imports or raise the bounded depth limit", property.Span)
 			continue
@@ -127,7 +169,13 @@ func (w *importWalker) visit(importer string, root *paperlang.Node, depth uint32
 			w.add("PAPER_IMPORT_COUNT_LIMIT", "import file count exceeds the configured limit", "reduce imported files or raise the bounded file limit", property.Span)
 			continue
 		}
-		file, source, err := w.resolver(importer, importPath)
+		if w.bytes >= w.limits.MaxBytes {
+			w.add("PAPER_IMPORT_BYTES_LIMIT", "imported source bytes exceed the configured limit", "reduce imported source size or raise the bounded byte limit", property.Value.Span)
+			continue
+		}
+		remaining := w.limits.MaxBytes - w.bytes
+		resolverCtx := context.WithValue(w.ctx, importReadLimitContextKey{}, remaining)
+		file, source, err := w.resolver(resolverCtx, importer, importPath)
 		if err != nil {
 			w.add("PAPER_IMPORT_RESOLVE", fmt.Sprintf("cannot resolve import %q: %v", importPath, err), "make the source-relative design file available", property.Value.Span)
 			continue
@@ -149,6 +197,8 @@ func (w *importWalker) visit(importer string, root *paperlang.Node, depth uint32
 		w.files++
 		w.bytes += uint64(len(source))
 		w.seen[file] = true
+		digest := sha256.Sum256([]byte(source))
+		w.dependencies = append(w.dependencies, ImportDependency{File: file, Digest: hex.EncodeToString(digest[:])})
 		parsed := paperlang.Parse(file, source)
 		w.diagnostics = append(w.diagnostics, parsed.Diagnostics...)
 		if parsed.AST.Root == nil || parsed.AST.Root.Kind != paperlang.NodeDocument {
@@ -192,7 +242,7 @@ func safeImportPath(value string) bool {
 		return false
 	}
 	clean := path.Clean(strings.ReplaceAll(value, "\\", "/"))
-	return clean != "."
+	return clean != "." && clean != ".." && !strings.HasPrefix(clean, "../")
 }
 
 func importDiagnostic(code, message, hint string, span paperlang.Span) paperlang.Diagnostic {

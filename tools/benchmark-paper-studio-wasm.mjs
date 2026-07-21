@@ -60,9 +60,6 @@ function query(params) {
 
 async function loadWASM() {
   const runtime = await timed(async () => {
-    if (process.env.PAPER_STUDIO_WASM_EXEC) {
-      return readFile(process.env.PAPER_STUDIO_WASM_EXEC, 'utf8');
-    }
     const response = await fetch(`${baseURL}/wasm_exec.js`, {cache: 'no-store'});
     if (!response.ok) throw new Error(`wasm_exec.js returned ${response.status}`);
     return response.text();
@@ -70,9 +67,6 @@ async function loadWASM() {
   vm.runInThisContext(await runtime.value, {filename: 'wasm_exec.js'});
 
   const module = await timed(async () => {
-    if (process.env.PAPER_STUDIO_WASM_PATH) {
-      return readFile(process.env.PAPER_STUDIO_WASM_PATH);
-    }
     const response = await fetch(`${baseURL}/paper-studio.wasm`, {cache: 'no-store'});
     if (!response.ok) throw new Error(`paper-studio.wasm returned ${response.status}`);
     return new Uint8Array(await response.arrayBuffer());

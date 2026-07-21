@@ -9,15 +9,13 @@ intentionally contains no facade package.
 
 - `document` owns the Paper facade, immutable plan exports, and private PDF construction engine.
 - `layout` owns renderer-independent public document models and measurement.
-- `importpdf` owns the bounded classic-xref parser and imported-page model.
-- `inspect` and `pdfcdr` consume `importpdf`; inspection reports source
-  structure, while CDR creates a new document from a constrained safe subset.
-- `sign` owns classic-xref incremental signing and CMS verification, and
-  `font` owns standalone font-definition generation.
+- `font` owns standalone font-definition generation.
 - `internal/layoutgeom` owns pure geometry used by private layout machinery.
 
-Lower-level packages must not import `document`. This keeps the dependency graph
-acyclic and lets them be used without the high-level renderer.
+PaperRune has no package that accepts an existing PDF. Parsing, inspection,
+page import, CDR, signing, signature verification, and final-byte verification
+live in the independent PDFRune module. Neither module imports the other; a
+host application may compose them after PaperRune finishes generation.
 
 ## Document ownership
 
@@ -26,7 +24,7 @@ cell, image-placement, or drawing methods. Private state has concrete owners:
 
 - `pdfSerializationState` allocates and records PDF object numbers.
 - `resourceOwnershipState` initializes the document resource registry.
-- `resourceStore` owns fonts, images, templates, and imported resources.
+- `resourceStore` owns fonts, images, and templates.
 - `resourceObjectNumbers` owns resource-specific PDF object references.
 - `attachmentResourceStore` owns attachment object references and compressed
   temporary data.
@@ -41,11 +39,9 @@ A `Document` is a mutable, single-owner build session and is not safe for
 concurrent calls. Create one document per independently generated PDF.
 Immutable `PaperPlan` values are reusable across PDF and HTML output.
 
-An opened `importpdf.Source` is immutable after parsing. Concurrent page
-resolution is supported and serialized around its bounded object cache;
-`PageRef` also coordinates lazy content decoding so cancellation does not
-poison later retries. Package-level inspection, CDR, and signing operations do
-not share mutable document state between calls.
+PDF serialization is a terminal PaperRune operation. Runtime code does not
+reopen the resulting bytes for inspection, signing, import, sanitization, or
+verification.
 
 ## Layout invariants
 
@@ -102,16 +98,14 @@ canvas is visibly stale and non-interactive while a replacement is loading.
 The page inspector is another bounded retained-plan projection: border/content
 rectangles, fragment region membership, causal breaks, semantic roles, and
 reading indexes are plan facts. Studio does not synthesize unavailable margin,
-padding, baseline, or final-PDF verification evidence. Unsupported authored
+padding, baseline, or serialized-PDF verification evidence. Unsupported authored
 fonts remain compile errors; Studio may offer an explicit supported-font
 replacement but never substitutes one automatically. Overlap
 selection follows the deterministic reverse fragment order returned by the
 plan hit-test contract.
-Accessibility inspection keeps two evidence domains separate: numbered reading
-order and semantic-role overlays are retained-plan facts, while the displayed
-tag tree is parsed from a newly serialized, hash-bound final PDF. The final-byte
-tag verifier validates structure and marked-content linkage and never projects
-plan semantics into missing PDF tags.
+Accessibility inspection is based on retained-plan reading order and semantic
+roles. Serialized-PDF tag verification belongs to PDFRune and is performed by
+the host after generation when required.
 The development Studio server accepts only explicit loopback hosts because it
 serves local source and plan evidence without a remote authentication boundary.
 Scenario snapshots and page artifacts are immutable, bounded, and discarded
@@ -149,15 +143,15 @@ identity.
 
 ## Performance workflow
 
-Benchmarks, regression budgets, `benchstat` comparisons, pprof profiles, and
-runtime traces are local developer tools; they do not run in CI. Optimize from
-profiles, compare repeated samples against a named baseline, and keep behavior
-coverage with the optimization. See the performance section in `README.md` for
-the supported Make targets.
+The Makefile is the source of truth for performance tooling. Use
+`bench-paper-engine-ci` for repeated samples, `bench-paper-engine-budget` for
+the calibrated gate, and `profile-paper-engine-check` for bounded profiles.
+Generated reports belong under `artifacts/`; host-specific benchmark output is
+not committed.
 
 ## Public API policy
 
-The `document` surface is compatibility-sensitive and intentionally frozen.
-Prefer private helpers or focused capability packages over new aliases and
-wrapper combinations. Public removals and package moves require a planned
-breaking release and a migration guide.
+The `document` surface is compatibility-sensitive and intentionally small.
+Prefer private helpers over aliases and wrapper combinations. Existing-PDF
+operations are outside this module and must not be reintroduced as deprecated
+wrappers.

@@ -118,13 +118,6 @@ func appendPDFObjectRef(dst []byte, objectID int) []byte {
 	return dst
 }
 
-func ensurePDFBuffer(dst []byte, capacity int) []byte {
-	if dst != nil {
-		return dst
-	}
-	return make([]byte, 0, capacity)
-}
-
 func appendPDFRectPaint(dst []byte, x, y, w, h float64, op string, trailingSpace bool) []byte {
 	dst = appendPDFNumberSpace(dst, x, 2)
 	dst = appendPDFNumberSpace(dst, y, 2)

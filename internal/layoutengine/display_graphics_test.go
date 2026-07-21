@@ -87,7 +87,7 @@ func TestDisplayGraphicsStrictValidationAndWorkBounds(t *testing.T) {
 		value.Commands = cloneSlice(projection.Commands)
 		value.Transforms = cloneSlice(projection.Transforms)
 		mutate(&value)
-		if _, err := NewLayoutPlan(layoutPlanInputFromStoredProjection(value)); err == nil {
+		if _, err := NewLayoutPlan(layoutPlanInputFromProjection(value)); err == nil {
 			t.Fatalf("invalid graphics case %d validated", index)
 		}
 	}
@@ -102,29 +102,21 @@ func TestDisplayGraphicsStrictValidationAndWorkBounds(t *testing.T) {
 	}
 }
 
-func TestDisplayGraphicsCanonicalStoreRoundTrip(t *testing.T) {
+func TestDisplayGraphicsCanonicalProjectionIsDetached(t *testing.T) {
 	plan := graphicsDisplayPlan(t)
-	store, err := NewMemoryPlanStore(DefaultPlanStoreLimits())
+	hash, err := plan.Hash()
 	if err != nil {
 		t.Fatal(err)
 	}
-	hash, err := store.Put(plan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	loaded, err := store.Get(hash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	projection := loaded.Projection()
+	projection := plan.Projection()
 	if len(projection.Paths) != 2 || len(projection.Transforms) != 1 || len(projection.Clips) != 1 || len(projection.Fills) != 1 || len(projection.Strokes) != 1 {
-		t.Fatalf("stored graphics projection = %+v", projection)
+		t.Fatalf("graphics projection = %+v", projection)
 	}
 	projection.Paths[0].Segments[0].Point.X++
-	if loaded.Projection().Paths[0].Segments[0].Point.X != graphFixed(10) {
-		t.Fatal("projection exposed stored path segments")
+	if plan.Projection().Paths[0].Segments[0].Point.X != graphFixed(10) {
+		t.Fatal("projection exposed plan path segments")
 	}
-	if got, _ := loaded.Hash(); got != hash {
+	if got, _ := plan.Hash(); got != hash {
 		t.Fatal("graphics plan hash changed after detached projection mutation")
 	}
 }

@@ -110,24 +110,6 @@ func TestOutputDefaultTrailerOmitsFileID(t *testing.T) {
 	}
 }
 
-func TestOutputEncryptedTrailerKeepsEmptyFileID(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument()
-	if err := pdf.SetLegacyProtection(document.CnProtectPrint, "reader", "owner"); err != nil {
-		t.Fatalf("SetLegacyProtection() error = %v", err)
-	}
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	pdf.Cell(20, 10, "hello")
-
-	var out bytes.Buffer
-	if err := pdf.Output(&out); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "/ID [()()]") {
-		t.Fatal("encrypted output trailer did not contain empty /ID")
-	}
-}
-
 func TestOutputArlingtonTrailerKeepsHashFileID(t *testing.T) {
 	pdf := document.MustNewTestPDFDocument()
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{Arlington: true})

@@ -30,10 +30,6 @@ type JSONSchemaPolicy struct {
 	MaxDocumentBytes uint32
 }
 
-func DefaultJSONSchemaPolicy() JSONSchemaPolicy {
-	return JSONSchemaPolicy{Limits: DefaultSchemaLimits(), MaxDocumentBytes: defaultJSONSchemaBytes}
-}
-
 // JSONSchemaError preserves the RFC 6901 JSON pointer for a rejected value.
 // The empty pointer identifies the schema document root.
 type JSONSchemaError struct {

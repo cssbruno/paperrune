@@ -17,7 +17,6 @@ const (
 	ResourceImage      ResourceKind = "image"
 	ResourceFont       ResourceKind = "font"
 	ResourceAttachment ResourceKind = "attachment"
-	ResourcePDFImport  ResourceKind = "pdf-import"
 )
 
 type ResourceInfo struct {

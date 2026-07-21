@@ -7,9 +7,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/png"
@@ -123,6 +125,38 @@ func TestCaptureDisplayPlanPNGPreflightIsAtomic(t *testing.T) {
 	if !errors.Is(err, ErrDisplayRasterLimit) || len(artifact.PNG()) != 0 {
 		t.Fatalf("PNG-byte artifact=%d err=%v", len(artifact.PNG()), err)
 	}
+}
+
+func TestCaptureDisplayPlanPNGRejectsOversizedDecodedImageFromConfig(t *testing.T) {
+	encoded := pngConfigOnly(8192, 8192)
+	digest := sha256.Sum256(encoded)
+	input := imagePlanInput()
+	input.ImageResources[0].Digest = ImageContentDigest(hex.EncodeToString(digest[:]))
+	input.ImageResources[0].PixelWidth = 8192
+	input.ImageResources[0].PixelHeight = 8192
+	plan, err := NewLayoutPlan(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := rasterRequest()
+	_, err = CaptureDisplayPlanPNG(plan, DisplayRasterSources{Images: DisplaySVGImageSources{
+		input.ImageResources[0].Digest: encoded,
+	}}, request)
+	if !errors.Is(err, ErrDisplayRasterLimit) {
+		t.Fatalf("CaptureDisplayPlanPNG() error = %v, want decoded-image limit", err)
+	}
+}
+
+func pngConfigOnly(width, height uint32) []byte {
+	result := append([]byte(nil), 137, 80, 78, 71, 13, 10, 26, 10)
+	var chunk [25]byte
+	binary.BigEndian.PutUint32(chunk[0:4], 13)
+	copy(chunk[4:8], "IHDR")
+	binary.BigEndian.PutUint32(chunk[8:12], width)
+	binary.BigEndian.PutUint32(chunk[12:16], height)
+	chunk[16], chunk[17] = 8, 2
+	binary.BigEndian.PutUint32(chunk[21:25], crc32.ChecksumIEEE(chunk[4:21]))
+	return append(result, chunk[:]...)
 }
 
 func TestCaptureDisplayPlanPNGRejectsUnsupportedBeforePainting(t *testing.T) {

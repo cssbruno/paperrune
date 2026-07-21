@@ -165,14 +165,6 @@ func lowerCompiledHTMLTextCohortUnitsBounds(ctx context.Context, compiled *compi
 	return model, nil
 }
 
-func lowerHTMLPlanBlockRange(ctx context.Context, compiled *compiledHTML, start, limit int, lineHeight float64, textBytes *int, depth int, pointsToUnits func(float64) float64) ([]layout.Block, error) {
-	return lowerHTMLPlanBlockRangeWidthState(ctx, compiled, start, limit, lineHeight, textBytes, depth, pointsToUnits, 0, &htmlPlanLoweringState{})
-}
-
-func lowerHTMLPlanBlockRangeWidth(ctx context.Context, compiled *compiledHTML, start, limit int, lineHeight float64, textBytes *int, depth int, pointsToUnits func(float64) float64, availableWidth float64) ([]layout.Block, error) {
-	return lowerHTMLPlanBlockRangeWidthState(ctx, compiled, start, limit, lineHeight, textBytes, depth, pointsToUnits, availableWidth, &htmlPlanLoweringState{})
-}
-
 func lowerHTMLPlanBlockRangeWidthState(ctx context.Context, compiled *compiledHTML, start, limit int, lineHeight float64, textBytes *int, depth int, pointsToUnits func(float64) float64, availableWidth float64, state *htmlPlanLoweringState) ([]layout.Block, error) {
 	if depth > 512 {
 		return nil, htmlPlanUnsupported("fragment", start, "block nesting exceeds the unified adapter limit")
@@ -1350,10 +1342,6 @@ func htmlPlanParagraph(text string, lineHeight float64) layout.ParagraphBlock {
 	return layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: text}}, Style: layout.TextStyle{LineHeight: lineHeight}}
 }
 
-func htmlPlanParagraphSegments(segments []layout.TextSegment, lineHeight float64) layout.ParagraphBlock {
-	return layout.ParagraphBlock{Segments: append([]layout.TextSegment(nil), segments...), Style: layout.TextStyle{LineHeight: lineHeight}}
-}
-
 func htmlPlanElementEnd(compiled *compiledHTML, start int) (int, error) {
 	if start < 0 || start >= len(compiled.elementEnd) {
 		return 0, htmlPlanUnsupported("element", start, "element boundary is unavailable")
@@ -1760,14 +1748,6 @@ func (out *htmlPlanTextBuilder) append(value string) {
 		out.text.WriteRune(r)
 		out.pendingSpace = false
 	}
-}
-
-func (out *htmlPlanTextBuilder) lineBreak() {
-	value := out.text.String()
-	if len(value) != 0 && value[len(value)-1] != '\n' {
-		out.text.WriteByte('\n')
-	}
-	out.pendingSpace = false
 }
 
 func (out *htmlPlanTextBuilder) String() string { return out.text.String() }

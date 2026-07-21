@@ -4,14 +4,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"path/filepath"
 	"strings"
 
-	"github.com/cssbruno/paperrune/internal/pdfverify"
+	"github.com/cssbruno/paperrune/document"
 )
 
 type studioDeliveryResponse struct {
@@ -26,13 +28,6 @@ type studioDeliveryResponse struct {
 		PageCount  int    `json:"page_count"`
 		Failure    string `json:"failure,omitempty"`
 	} `json:"preflight"`
-	PDFVerification struct {
-		Status            string   `json:"status"`
-		SHA256            string   `json:"sha256,omitempty"`
-		StructureElements uint32   `json:"structure_elements,omitempty"`
-		ContentMarked     uint32   `json:"content_marked,omitempty"`
-		Failures          []string `json:"failures,omitempty"`
-	} `json:"pdf_verification"`
 	Export struct {
 		Status   string `json:"status"`
 		Endpoint string `json:"endpoint,omitempty"`
@@ -42,6 +37,28 @@ type studioDeliveryResponse struct {
 		Status string `json:"status"`
 		Reason string `json:"reason"`
 	} `json:"publish"`
+}
+
+func renderStudioTaggedPDF(ctx context.Context, plan document.PaperPlan) ([]byte, error) {
+	pdf, err := document.NewDocument(document.WithDeterministicOutput())
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	result, err := pdf.WritePaperPlan(plan)
+	if err != nil {
+		return nil, err
+	}
+	if !result.OK() {
+		return nil, errors.New("paper-studio: current plan could not be rendered")
+	}
+	var output bytes.Buffer
+	if err := pdf.OutputWithOptionsContext(ctx, &output, document.OutputOptions{Deterministic: true}); err != nil {
+		return nil, fmt.Errorf("paper-studio: generate PDF: %w", err)
+	}
+	return output.Bytes(), nil
 }
 
 func (s *studioServer) handleDelivery(w http.ResponseWriter, r *http.Request) {
@@ -61,37 +78,18 @@ func (s *studioServer) handleDelivery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response := buildStudioDeliveryResponse(snapshot)
-	if snapshot.pages > 0 && response.Preflight.Status == "ready" {
-		pdf, renderErr := renderStudioTaggedPDF(ctx, snapshot.plan)
-		if renderErr != nil {
-			response.PDFVerification.Status = "failed"
-			response.PDFVerification.Failures = []string{renderErr.Error()}
-		} else if report, inspectErr := pdfverify.InspectTags(ctx, pdf, pdfverify.TagInspectionLimits{}); inspectErr != nil {
-			response.PDFVerification.Status = "failed"
-			response.PDFVerification.Failures = []string{inspectErr.Error()}
-		} else {
-			response.PDFVerification.SHA256 = report.PDFSHA256
-			response.PDFVerification.StructureElements = report.StructureElements
-			response.PDFVerification.ContentMarked = report.ContentMarked
-			response.PDFVerification.Failures = append([]string(nil), report.Failures...)
-			if report.Passed {
-				response.PDFVerification.Status = "verified"
-				response.Export.Status = "ready"
-			} else {
-				response.PDFVerification.Status = "failed"
-			}
-		}
-	}
-	if response.PDFVerification.Status != "verified" {
+	if response.Preflight.Status == "ready" {
+		response.Export.Status = "ready"
+	} else {
 		response.Export.Status = "blocked"
-		response.Export.Failure = "export requires a verified final PDF"
+		response.Export.Failure = "export requires a valid current plan"
 	}
 	writeStudioJSON(w, http.StatusOK, response)
 }
 
 func buildStudioDeliveryResponse(snapshot *studioSnapshot) studioDeliveryResponse {
 	result := studioDeliveryResponse{FormatVersion: 1, Revision: snapshot.revision,
-		SourceRevision: studioSourceRevision(snapshot.source), PlanHash: snapshot.plan.Hash(), Scenario: snapshot.scenario}
+		SourceRevision: studioSnapshotSourceRevision(snapshot), PlanHash: snapshot.plan.Hash(), Scenario: snapshot.scenario}
 	result.Preflight.PageCount = snapshot.pages
 	result.Preflight.IssueCount = len(snapshot.diagnostics)
 	if snapshot.pages == 0 {
@@ -103,10 +101,9 @@ func buildStudioDeliveryResponse(snapshot *studioSnapshot) studioDeliveryRespons
 	} else {
 		result.Preflight.Status = "ready"
 	}
-	result.PDFVerification.Status = "pending"
 	result.Export.Status = "pending"
 	result.Publish.Status = "separate_authorized_capability"
-	result.Publish.Reason = "publish is never implied by local export or PDF verification"
+	result.Publish.Reason = "publish is never implied by local export"
 	return result
 }
 
@@ -135,17 +132,9 @@ func (s *studioServer) handleExportPDF(w http.ResponseWriter, r *http.Request) {
 		writeStudioError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	report, err := pdfverify.InspectTags(ctx, pdf, pdfverify.TagInspectionLimits{})
-	if err != nil || !report.Passed {
-		if err == nil {
-			err = fmt.Errorf("final PDF verification failed: %s", strings.Join(report.Failures, "; "))
-		}
-		writeStudioError(w, http.StatusUnprocessableEntity, err)
-		return
-	}
 	name := strings.TrimSuffix(filepath.Base(snapshot.file), filepath.Ext(snapshot.file)) + ".pdf"
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(pdf)

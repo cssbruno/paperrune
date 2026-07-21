@@ -225,10 +225,6 @@ func (f *pdfDocument) pageHeightPt(page int) float64 {
 	return f.defPageSize.Wd * f.k
 }
 
-func (f *pdfDocument) putpages() {
-	f.putpagesContext(context.Background())
-}
-
 func (f *pdfDocument) putpagesContext(ctx context.Context) {
 	var wPt, hPt float64
 	var pageSize Size
@@ -355,10 +351,6 @@ func (f *pdfDocument) putpagesContext(ctx context.Context) {
 	f.outf("/MediaBox [0 0 %.2f %.2f]", wPt, hPt)
 	f.endPDFDict()
 	f.endPDFObject()
-}
-
-func (f *pdfDocument) pageStreamBytes(page int, pageStreams *pageStreamCompressor) ([]byte, bool) {
-	return f.pageStreamBytesContext(context.Background(), page, pageStreams)
 }
 
 func (f *pdfDocument) pageStreamBytesContext(ctx context.Context, page int, pageStreams *pageStreamCompressor) ([]byte, bool) {
@@ -488,10 +480,6 @@ func pageBoxOutputKeys(pageBoxes map[string]PageBox, sorted bool) []string {
 		sort.Strings(keys)
 	}
 	return keys
-}
-
-func (c *pageStreamCompressor) page(page int) (pageStreamData, bool) {
-	return c.pageContext(context.Background(), page)
 }
 
 func (c *pageStreamCompressor) stop() {

@@ -537,8 +537,29 @@ func paragraphFragmentLineCounts(projection LayoutPlanProjection) []uint32 {
 
 func layoutPlanInputFromProjection(projection LayoutPlanProjection) LayoutPlanInput {
 	return LayoutPlanInput{
-		Pages: projection.Pages, Fragments: projection.Fragments, Lines: projection.Lines,
-		Commands: projection.Commands, Breaks: projection.Breaks, Diagnostics: projection.Diagnostics,
+		DeterministicInputs: projection.DeterministicInputs,
+		Pages:               projection.Pages,
+		Fragments:           projection.Fragments,
+		Lines:               projection.Lines,
+		PageRegions:         projection.PageRegions,
+		GridTracks:          projection.GridTracks,
+		Fonts:               projection.Fonts,
+		GlyphRuns:           projection.GlyphRuns,
+		ImageResources:      projection.ImageResources,
+		Images:              projection.Images,
+		Destinations:        projection.Destinations,
+		Links:               projection.Links,
+		Paths:               projection.Paths,
+		Transforms:          projection.Transforms,
+		Clips:               projection.Clips,
+		Fills:               projection.Fills,
+		Strokes:             projection.Strokes,
+		Commands:            projection.Commands,
+		Breaks:              projection.Breaks,
+		Diagnostics:         projection.Diagnostics,
+		SemanticNodes:       projection.SemanticNodes,
+		SemanticFragments:   projection.SemanticFragments,
+		ReadingOrder:        projection.ReadingOrder,
 	}
 }
 

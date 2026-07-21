@@ -1,16 +1,12 @@
 #!/bin/sh
 set -eu
 
-output=$(go test ./document ./importpdf ./inspect ./sign ./pdfcdr ./layout ./font -cover)
+output=$(go test ./document ./layout ./font -cover)
 printf '%s\n' "$output"
 
 printf '%s\n' "$output" | awk '
 BEGIN {
 	minimum["github.com/cssbruno/paperrune/document"] = 80
-	minimum["github.com/cssbruno/paperrune/importpdf"] = 60
-	minimum["github.com/cssbruno/paperrune/inspect"] = 55
-	minimum["github.com/cssbruno/paperrune/sign"] = 70
-	minimum["github.com/cssbruno/paperrune/pdfcdr"] = 80
 	minimum["github.com/cssbruno/paperrune/layout"] = 45
 	minimum["github.com/cssbruno/paperrune/font"] = 65
 }

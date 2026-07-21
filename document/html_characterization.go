@@ -4,7 +4,6 @@
 package document
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -64,7 +63,6 @@ type htmlFixtureResult struct {
 	Outcome      string                          `json:"outcome"`
 	Pages        int                             `json:"pages"`
 	ReadingRoles []layoutengine.SemanticRole     `json:"reading_roles"`
-	PDF          *CharacterizationPDFEvidence    `json:"pdf,omitempty"`
 	RasterStatus string                          `json:"raster_status"`
 	Raster       *CharacterizationRasterEvidence `json:"raster,omitempty"`
 }
@@ -79,15 +77,14 @@ func (projection htmlCharacterizationProjection) CanonicalJSON() ([]byte, error)
 }
 
 // RunHTMLCharacterization executes every bounded Stage 0 HTML fixture and
-// records deterministic PDF evidence for every renderable outcome. Policy,
-// unsupported, and recovered-but-unrenderable outcomes remain explicit.
+// records plan and raster evidence for every renderable outcome. Policy,
+// unsupported, and recovered outcomes remain explicit.
 func runHTMLCharacterization(ctx context.Context) (htmlCharacterizationProjection, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	projection := htmlCharacterizationProjection{SchemaVersion: 2,
 		Fixtures: make([]htmlFixtureResult, 0, len(htmlCharacterizationFixtures()))}
-	var totalPDFBytes uint64
 	rasterBudget := characterizationRasterBudget{}
 	for _, fixture := range htmlCharacterizationFixtures() {
 		if err := ctx.Err(); err != nil {
@@ -98,7 +95,6 @@ func runHTMLCharacterization(ctx context.Context) (htmlCharacterizationProjectio
 			return htmlCharacterizationProjection{}, err
 		}
 		entry := htmlFixtureResult{Name: fixture.Name, RasterStatus: "not-applicable"}
-		var output []byte
 		var rasterPlan LayoutDocumentPlan
 		hasRasterPlan := false
 		switch fixture.Classification {
@@ -131,10 +127,6 @@ func runHTMLCharacterization(ctx context.Context) (htmlCharacterizationProjectio
 			if _, err := target.WriteLayoutDocumentPlanContext(ctx, plan); err != nil {
 				return htmlCharacterizationProjection{}, err
 			}
-			output, err = htmlCharacterizationOutput(target)
-			if err != nil {
-				return htmlCharacterizationProjection{}, err
-			}
 			entry.Outcome, entry.Pages = "planned", plan.PageCount()
 			entry.ReadingRoles = characterizationReadingRoles(plan.plan)
 			rasterPlan, hasRasterPlan = plan, true
@@ -144,22 +136,7 @@ func runHTMLCharacterization(ctx context.Context) (htmlCharacterizationProjectio
 			if err := html.WriteContext(ctx, 10, fixture.Source); err != nil {
 				return htmlCharacterizationProjection{}, err
 			}
-			output, err = htmlCharacterizationOutput(pdf)
-			if err != nil {
-				return htmlCharacterizationProjection{}, err
-			}
 			entry.Outcome, entry.Pages = "rendered", pdf.PageCount()
-		}
-		if len(output) != 0 {
-			totalPDFBytes += uint64(len(output))
-			if totalPDFBytes > 128<<20 {
-				return htmlCharacterizationProjection{}, errHTMLLimitExceeded
-			}
-			evidence, err := characterizationPDFOutputEvidence(output, entry.Pages)
-			if err != nil {
-				return htmlCharacterizationProjection{}, err
-			}
-			entry.PDF = &evidence
 		}
 		if hasRasterPlan {
 			raster, rasterStatus, rasterErr := captureCharacterizationRaster(ctx, fixture.Name, rasterPlan, &rasterBudget)
@@ -184,12 +161,6 @@ func newHTMLCharacterizationDocument(addPage bool) *pdfDocument {
 	return pdf
 }
 
-func htmlCharacterizationOutput(pdf *pdfDocument) ([]byte, error) {
-	var output bytes.Buffer
-	err := pdf.OutputWithOptions(&output, OutputOptions{Deterministic: true})
-	return output.Bytes(), err
-}
-
 func characterizationReadingRoles(plan layoutengine.LayoutPlan) []layoutengine.SemanticRole {
 	projection := plan.Projection()
 	byID := make(map[layoutengine.SemanticNodeID]layoutengine.SemanticRole, len(projection.SemanticNodes))
@@ -210,12 +181,6 @@ func sortedHTMLCharacterizationKeys(values map[string]bool) []string {
 			out = append(out, value)
 		}
 	}
-	sort.Strings(out)
-	return out
-}
-
-func sortedHTMLCharacterizationStrings(values []string) []string {
-	out := append([]string(nil), values...)
 	sort.Strings(out)
 	return out
 }

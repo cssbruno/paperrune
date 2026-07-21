@@ -413,17 +413,7 @@ func TestPDFUA2DirectDrawingAndRawContentCanBeArtifacts(t *testing.T) {
 	}
 }
 
-func TestPDFUA2TemplatesAndImportedPagesAreArtifacts(t *testing.T) {
-	source := document.MustNewTestPDFDocument()
-	source.SetCompression(false)
-	source.AddPage()
-	source.SetFont("Helvetica", "", 12)
-	source.Cell(0, 8, "Imported source")
-	var sourceBytes bytes.Buffer
-	if err := source.Output(&sourceBytes); err != nil {
-		t.Fatalf("source Output() error = %v", err)
-	}
-
+func TestPDFUA2TemplatesAreArtifacts(t *testing.T) {
 	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Title: "Artifacts"})
@@ -435,8 +425,6 @@ func TestPDFUA2TemplatesAndImportedPagesAreArtifacts(t *testing.T) {
 		t.Rect(0, 0, 20, 8, "D")
 	})
 	pdf.UseTemplate(tpl)
-	pageID := pdf.ImportPageStream(bytes.NewReader(sourceBytes.Bytes()), 1, "MediaBox")
-	pdf.UseImportedPage(pageID, 30, 30, 20, 0)
 
 	var output bytes.Buffer
 	if err := pdf.Output(&output); err != nil {
@@ -447,7 +435,6 @@ func TestPDFUA2TemplatesAndImportedPagesAreArtifacts(t *testing.T) {
 		"/P <</MCID 0>> BDC",
 		"/Artifact BMC",
 		"/TPL",
-		"/IPG",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("generated tagged artifact PDF does not contain %q", want)
@@ -512,31 +499,6 @@ func TestComplianceMetadataPDFARejectsJavaScript(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "JavaScript") {
 		t.Fatalf("Output() error = %v, want JavaScript rejection", err)
-	}
-}
-
-func TestComplianceMetadataPDFARejectsEncryption(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument()
-	pdf.SetCompression(false)
-	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFA: document.PDFAMode4})
-	if err := pdf.SetOutputIntent([]byte("test-icc-profile"), "sRGB IEC61966-2.1"); err != nil {
-		t.Fatalf("SetOutputIntent() error = %v", err)
-	}
-	pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
-	if err := pdf.SetLegacyProtection(document.CnProtectPrint, "reader", "owner"); err != nil {
-		t.Fatalf("SetLegacyProtection() error = %v", err)
-	}
-	pdf.AddPage()
-	pdf.SetFont("DejaVu", "", 12)
-	pdf.Cell(40, 10, "Encrypted")
-
-	var output bytes.Buffer
-	err := pdf.Output(&output)
-	if err == nil {
-		t.Fatal("Output() error = nil, want PDF/A encryption rejection")
-	}
-	if !strings.Contains(err.Error(), "encrypted") {
-		t.Fatalf("Output() error = %v, want encryption rejection", err)
 	}
 }
 

@@ -4,17 +4,14 @@
 package document
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"reflect"
-	"strings"
 	"sync"
 
-	"github.com/cssbruno/paperrune/inspect"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/layout"
 )
@@ -175,24 +172,8 @@ type TypedFixtureResult struct {
 	PlanHash     string                          `json:"plan_hash,omitempty"`
 	BreakLedger  []layoutengine.BreakDecision    `json:"break_ledger,omitempty"`
 	ReadingRoles []layoutengine.SemanticRole     `json:"reading_roles"`
-	PDF          *CharacterizationPDFEvidence    `json:"pdf,omitempty"`
 	RasterStatus string                          `json:"raster_status"`
 	Raster       *CharacterizationRasterEvidence `json:"raster,omitempty"`
-}
-
-type CharacterizationPDFEvidence struct {
-	SHA256          string   `json:"sha256"`
-	Bytes           uint64   `json:"bytes"`
-	Text            string   `json:"text"`
-	PageText        []string `json:"page_text"`
-	Links           uint32   `json:"links"`
-	Destinations    uint32   `json:"destinations"`
-	Widgets         uint32   `json:"widgets"`
-	Attachments     uint32   `json:"attachments"`
-	StructureTrees  uint32   `json:"structure_trees"`
-	MarkedContent   uint32   `json:"marked_content"`
-	HasAcroForm     bool     `json:"has_acro_form"`
-	HasTaggedMarker bool     `json:"has_tagged_marker"`
 }
 
 type TypedCharacterizationProjection struct {
@@ -201,8 +182,7 @@ type TypedCharacterizationProjection struct {
 	Fixtures      []TypedFixtureResult `json:"fixtures"`
 }
 
-// RunTypedCharacterization executes the bounded exact-planner corpus and
-// paints successful immutable plans into independent deterministic PDFs.
+// RunTypedCharacterization executes the bounded exact-planner corpus.
 // Unsupported/rejected fixtures are recorded as outcomes rather than hidden.
 func RunTypedCharacterization(ctx context.Context, limits TypedCharacterizationLimits) (TypedCharacterizationProjection, error) {
 	if ctx == nil {
@@ -265,11 +245,7 @@ func RunTypedCharacterization(ctx context.Context, limits TypedCharacterizationL
 		}
 		if planErr == nil {
 			entry.BreakLedger = append([]layoutengine.BreakDecision(nil), plan.plan.Projection().Breaks...)
-			evidence, roles, evidenceErr := typedCharacterizationPDFEvidence(plan, fixture.pageHeight)
-			if evidenceErr != nil {
-				return TypedCharacterizationProjection{}, evidenceErr
-			}
-			entry.PDF, entry.ReadingRoles = &evidence, roles
+			entry.ReadingRoles = characterizationReadingRoles(plan.plan)
 			raster, rasterStatus, rasterErr := captureCharacterizationRaster(ctx, fixture.inventory.Name, plan, &rasterBudget)
 			if rasterErr != nil {
 				return TypedCharacterizationProjection{}, rasterErr
@@ -299,51 +275,6 @@ func RunTypedCharacterization(ctx context.Context, limits TypedCharacterizationL
 		result.Fixtures = append(result.Fixtures, entry)
 	}
 	return result, nil
-}
-
-func typedCharacterizationPDFEvidence(plan LayoutDocumentPlan, pageHeight float64) (CharacterizationPDFEvidence, []layoutengine.SemanticRole, error) {
-	target := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: pageHeight}), WithNoCompression(), WithDeterministicOutput())
-	if _, err := target.WriteLayoutDocumentPlan(plan); err != nil {
-		return CharacterizationPDFEvidence{}, nil, err
-	}
-	var output bytes.Buffer
-	if err := target.OutputWithOptions(&output, OutputOptions{Deterministic: true}); err != nil {
-		return CharacterizationPDFEvidence{}, nil, err
-	}
-	pdf := output.Bytes()
-	evidence, err := characterizationPDFOutputEvidence(pdf, plan.PageCount())
-	if err != nil {
-		return CharacterizationPDFEvidence{}, nil, err
-	}
-	projection := plan.plan.Projection()
-	roleByID := make(map[layoutengine.SemanticNodeID]layoutengine.SemanticRole, len(projection.SemanticNodes))
-	for _, semantic := range projection.SemanticNodes {
-		roleByID[semantic.ID] = semantic.Role
-	}
-	roles := make([]layoutengine.SemanticRole, len(projection.ReadingOrder))
-	for index, occurrence := range projection.ReadingOrder {
-		roles[index] = roleByID[occurrence.Semantic]
-	}
-	return evidence, roles, nil
-}
-
-func characterizationPDFOutputEvidence(pdf []byte, pages int) (CharacterizationPDFEvidence, error) {
-	pageText := make([]string, pages)
-	var text strings.Builder
-	for page := 1; page <= pages; page++ {
-		value, err := inspect.PageText(pdf, page)
-		if err != nil {
-			return CharacterizationPDFEvidence{}, err
-		}
-		pageText[page-1] = value
-		text.WriteString(value)
-	}
-	digest := sha256.Sum256(pdf)
-	count := func(token string) uint32 { return uint32(bytes.Count(pdf, []byte(token))) } // #nosec G115 -- low-width representation is explicitly normalized before packing
-	return CharacterizationPDFEvidence{SHA256: hex.EncodeToString(digest[:]), Bytes: uint64(len(pdf)), Text: text.String(), PageText: pageText,
-		Links: count("/Subtype /Link"), Destinations: count("/Dest "), Widgets: count("/Subtype /Widget"),
-		Attachments: count("/Filespec"), StructureTrees: count("/StructTreeRoot"), MarkedContent: count(" BDC"),
-		HasAcroForm: bytes.Contains(pdf, []byte("/AcroForm")), HasTaggedMarker: bytes.Contains(pdf, []byte("/Marked true"))}, nil
 }
 
 func (projection TypedCharacterizationProjection) CanonicalJSON() ([]byte, error) {

@@ -42,7 +42,7 @@ func TestStudioPaperDocumentExportOpenAndEditRoundTrip(t *testing.T) {
 	if err != nil || snapshot.pages != 1 {
 		t.Fatalf("source snapshot = pages %d, %v", snapshot.pages, err)
 	}
-	exported := studioRequest(t, server.routes(), http.MethodGet, "/api/export.paperdoc?revision="+snapshot.revision, nil, "")
+	exported := studioRequest(t, server.testRoutes(), http.MethodGet, "/api/export.paperdoc?revision="+snapshot.revision, nil, "")
 	if exported.StatusCode != http.StatusOK || exported.Header.Get("Content-Type") != paperdoc.MediaType || !strings.Contains(exported.Header.Get("Content-Disposition"), "prescription.paperdoc") {
 		t.Fatalf("export = %d %q", exported.StatusCode, exported.Header)
 	}
@@ -100,11 +100,11 @@ func TestStudioPaperDocumentExportEmbedsImportsAndRejectsStaleRevision(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	stale := studioRequest(t, server.routes(), http.MethodGet, "/api/export.paperdoc?revision=stale", nil, "")
+	stale := studioRequest(t, server.testRoutes(), http.MethodGet, "/api/export.paperdoc?revision=stale", nil, "")
 	if stale.StatusCode != http.StatusConflict {
 		t.Fatalf("stale export = %d", stale.StatusCode)
 	}
-	exported := studioRequest(t, server.routes(), http.MethodGet, "/api/export.paperdoc", nil, "")
+	exported := studioRequest(t, server.testRoutes(), http.MethodGet, "/api/export.paperdoc", nil, "")
 	document, err := paperdoc.Decode(context.Background(), exported.Body)
 	if exported.StatusCode != http.StatusOK || err != nil || document.Imports["shared.paper"] != shared {
 		t.Fatalf("import export = %d, imports %#v, %v", exported.StatusCode, document.Imports, err)

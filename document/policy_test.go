@@ -12,8 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/cssbruno/paperrune/sign"
 )
 
 func TestProductionPolicyAppliesSupportedSettings(t *testing.T) {
@@ -124,16 +122,6 @@ func TestSecurityPolicyGatesFeatures(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy protection", func(t *testing.T) {
-		pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
-		if err != nil {
-			t.Fatalf("NewDocument() error = %v", err)
-		}
-		if err := pdf.SetLegacyProtection(CnProtectPrint, "reader", "owner"); !errors.Is(err, ErrSecurityPolicyDenied) {
-			t.Fatalf("SetLegacyProtection() error = %v, want ErrSecurityPolicyDenied", err)
-		}
-	})
-
 	t.Run("file attachments", func(t *testing.T) {
 		dir := t.TempDir()
 		fileStr := filepath.Join(dir, "payload.txt")
@@ -153,44 +141,6 @@ func TestSecurityPolicyGatesFeatures(t *testing.T) {
 		}
 	})
 
-	t.Run("PDF import", func(t *testing.T) {
-		pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
-		if err != nil {
-			t.Fatalf("NewDocument() error = %v", err)
-		}
-		_, err = pdf.ImportPageStreamError(strings.NewReader("%PDF-1.4\n%%EOF"), 1, "MediaBox")
-		if !errors.Is(err, ErrSecurityPolicyDenied) {
-			t.Fatalf("ImportPageStreamError() error = %v, want ErrSecurityPolicyDenied", err)
-		}
-	})
-
-	t.Run("PDF signing", func(t *testing.T) {
-		pdf, err := newPDFDocument(WithSecurityPolicy(SecurityPolicy{}))
-		if err != nil {
-			t.Fatalf("NewDocument() error = %v", err)
-		}
-		err = pdf.OutputSigned(&bytes.Buffer{}, sign.Options{})
-		if !errors.Is(err, ErrSecurityPolicyDenied) {
-			t.Fatalf("OutputSigned() error = %v, want ErrSecurityPolicyDenied", err)
-		}
-	})
-}
-
-func TestImportPageStreamContextCanceled(t *testing.T) {
-	pdf, err := newPDFDocument()
-	if err != nil {
-		t.Fatalf("NewDocument() error = %v", err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	_, err = pdf.ImportPageStreamContext(ctx, strings.NewReader("%PDF-1.4\n%%EOF"), 1, "MediaBox")
-	if !errors.Is(err, ErrOutputCanceled) {
-		t.Fatalf("ImportPageStreamContext() error = %v, want ErrOutputCanceled", err)
-	}
-	if !errors.Is(pdf.Error(), ErrOutputCanceled) {
-		t.Fatalf("document error = %v, want ErrOutputCanceled", pdf.Error())
-	}
 }
 
 func TestOutputOptionsApplyAttachmentLimits(t *testing.T) {
@@ -250,17 +200,6 @@ func TestLimitsApplyImageSourceLimit(t *testing.T) {
 	_, err = pdf.RegisterImageOptionsError(fileStr, ImageOptions{ImageType: "png"})
 	if !errors.Is(err, ErrImageTooLarge) {
 		t.Fatalf("RegisterImageOptionsError() error = %v, want ErrImageTooLarge", err)
-	}
-}
-
-func TestLimitsApplyImportedPDFStreamLimit(t *testing.T) {
-	pdf, err := newPDFDocument(WithLimits(Limits{MaxImportedPDFBytes: 3}))
-	if err != nil {
-		t.Fatalf("NewDocument() error = %v", err)
-	}
-	_, err = pdf.ImportPageStreamError(bytes.NewReader([]byte("%PDF-too-large")), 1, "MediaBox")
-	if !errors.Is(err, ErrUnsupportedPDFImport) {
-		t.Fatalf("ImportPageStreamError() error = %v, want ErrUnsupportedPDFImport", err)
 	}
 }
 

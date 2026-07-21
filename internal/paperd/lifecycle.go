@@ -237,10 +237,6 @@ func (w *Workspace) RevokeMutationAuthority(handle MutationAuthorityHandle) erro
 	return w.revoke(handle.value, handleMutationAuthority, capabilityAuthorize, func() { delete(w.mutationAuthorities, handle.value.serial) })
 }
 
-func (w *Workspace) RevokeSensitiveAuthority(handle SensitiveAuthorityHandle) error {
-	return w.revoke(handle.value, handleSensitiveAuthority, handle.value.capability, func() { delete(w.sensitiveAuthorities, handle.value.serial) })
-}
-
 func (w *Workspace) RevokeSensitiveApproval(handle SensitiveApprovalHandle) error {
 	return w.revoke(handle.value, handleSensitiveApproval, capabilityApprove, func() { delete(w.sensitiveApprovals, handle.value.serial) })
 }

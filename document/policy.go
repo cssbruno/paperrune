@@ -15,17 +15,15 @@ import (
 
 // Sentinel errors for callers that need to branch on broad failure classes.
 var (
-	ErrInvalidPageSize          = errors.New("invalid page size")
-	ErrAttachmentTooLarge       = errors.New("attachment too large")
-	ErrUnsupportedImageType     = errors.New("unsupported image type")
-	ErrUnsupportedPDFImport     = errors.New("unsupported PDF import")
-	ErrImageTooLarge            = errors.New("image too large")
-	errHTMLLimitExceeded        = errors.New("HTML input exceeds maximum size")
-	ErrPageLimitExceeded        = errors.New("page limit exceeded")
-	ErrOutputCanceled           = errors.New("output canceled")
-	ErrSecurityPolicyDenied     = errors.New("security policy denied feature")
-	ErrJavaScriptUnsupported    = errors.New("JavaScript actions are not supported")
-	ErrAESProtectionUnsupported = errors.New("AES-based PDF encryption is not supported")
+	ErrInvalidPageSize       = errors.New("invalid page size")
+	ErrAttachmentTooLarge    = errors.New("attachment too large")
+	ErrUnsupportedImageType  = errors.New("unsupported image type")
+	ErrImageTooLarge         = errors.New("image too large")
+	errHTMLLimitExceeded     = errors.New("HTML input exceeds maximum size")
+	ErrPageLimitExceeded     = errors.New("page limit exceeded")
+	ErrOutputCanceled        = errors.New("output canceled")
+	ErrSecurityPolicyDenied  = errors.New("security policy denied feature")
+	ErrJavaScriptUnsupported = errors.New("JavaScript actions are not supported")
 )
 
 // Limits bounds resource and document sizes for production deployments. A zero
@@ -34,12 +32,10 @@ type Limits struct {
 	MaxImageSourceBytes        int64
 	MaxImageDecodedBytes       int64
 	MaxAttachmentBytes         int64
-	MaxImportedPDFBytes        int64
 	MaxHTMLBytes               int
 	MaxHTMLGeneratedPages      int
 	MaxTemplateSerializedBytes int
 	MaxPages                   int
-	MaxReferencedObjects       int
 }
 
 // OutputPolicy controls output-specific defaults embedded in ProductionPolicy.
@@ -57,13 +53,10 @@ type OutputPolicy struct {
 // WithProductionPolicy. When enforced, false booleans deny the corresponding
 // feature.
 type SecurityPolicy struct {
-	AllowLegacyRC4Protection bool
-	AllowLocalHTMLImages     bool
-	AllowFileAttachments     bool
-	AllowRawWrites           bool
-	AllowPDFImport           bool
-	AllowPDFSigning          bool
-	MaxEmbeddedFileBytes     int64
+	AllowLocalHTMLImages bool
+	AllowFileAttachments bool
+	AllowRawWrites       bool
+	MaxEmbeddedFileBytes int64
 }
 
 // Hooks receives optional production diagnostics. Hooks are best-effort and
@@ -104,12 +97,10 @@ func ServerSafeLimits() Limits {
 		MaxImageSourceBytes:        32 * 1024 * 1024,
 		MaxImageDecodedBytes:       256 * 1024 * 1024,
 		MaxAttachmentBytes:         MaxAttachmentBytes,
-		MaxImportedPDFBytes:        64 * 1024 * 1024,
 		MaxHTMLBytes:               4 * 1024 * 1024,
 		MaxHTMLGeneratedPages:      500,
 		MaxTemplateSerializedBytes: 16 * 1024 * 1024,
 		MaxPages:                   10_000,
-		MaxReferencedObjects:       100_000,
 	}
 }
 
@@ -119,12 +110,10 @@ func BatchLimits() Limits {
 		MaxImageSourceBytes:        256 * 1024 * 1024,
 		MaxImageDecodedBytes:       1024 * 1024 * 1024,
 		MaxAttachmentBytes:         512 * 1024 * 1024,
-		MaxImportedPDFBytes:        importPDFMaxSourceBytes(),
 		MaxHTMLBytes:               32 * 1024 * 1024,
 		MaxHTMLGeneratedPages:      10_000,
 		MaxTemplateSerializedBytes: 128 * 1024 * 1024,
 		MaxPages:                   100_000,
-		MaxReferencedObjects:       importPDFMaxReferencedObjects(),
 	}
 }
 
@@ -167,23 +156,12 @@ func BatchPolicy() ProductionPolicy {
 		Cache:    ResourceCacheShared,
 		CacheSet: true,
 		Security: SecurityPolicy{
-			AllowLegacyRC4Protection: true,
-			AllowLocalHTMLImages:     true,
-			AllowFileAttachments:     true,
-			AllowRawWrites:           true,
-			AllowPDFImport:           true,
-			AllowPDFSigning:          true,
-			MaxEmbeddedFileBytes:     512 * 1024 * 1024,
+			AllowLocalHTMLImages: true,
+			AllowFileAttachments: true,
+			AllowRawWrites:       true,
+			MaxEmbeddedFileBytes: 512 * 1024 * 1024,
 		},
 	}
-}
-
-func importPDFMaxSourceBytes() int64 {
-	return maxPDFImportSourceBytes
-}
-
-func importPDFMaxReferencedObjects() int {
-	return maxPDFImportReferencedObjects
 }
 
 // DeterministicPolicy returns a server-safe profile with deterministic output
@@ -217,9 +195,6 @@ func validateLimits(limits Limits) error {
 	if limits.MaxAttachmentBytes < 0 {
 		return fmt.Errorf("invalid max attachment bytes: %d", limits.MaxAttachmentBytes)
 	}
-	if limits.MaxImportedPDFBytes < 0 {
-		return fmt.Errorf("invalid max imported PDF bytes: %d", limits.MaxImportedPDFBytes)
-	}
 	if limits.MaxHTMLBytes < 0 {
 		return fmt.Errorf("invalid max HTML bytes: %d", limits.MaxHTMLBytes)
 	}
@@ -231,9 +206,6 @@ func validateLimits(limits Limits) error {
 	}
 	if limits.MaxPages < 0 {
 		return fmt.Errorf("invalid max pages: %d", limits.MaxPages)
-	}
-	if limits.MaxReferencedObjects < 0 {
-		return fmt.Errorf("invalid max referenced objects: %d", limits.MaxReferencedObjects)
 	}
 	return nil
 }

@@ -24,17 +24,6 @@ func (f *pdfDocument) SetFontLocation(fontDirStr string) {
 	f.utf8FontPathCache = make(map[string]utf8FontPathInfo)
 }
 
-// SetFontLoader sets a loader used to read font files (.json and .z) from an
-// arbitrary source. If a font loader has been specified, it is used to load
-// the named font resources when AddFont() is called. If this operation fails,
-// an attempt is made to load the resources from the configured font directory
-// (see SetFontLocation()).
-//
-// Deprecated: use SetResourceLoader with a ResourceLoader implementation.
-func (f *pdfDocument) SetFontLoader(loader FontLoader) {
-	f.fontLoader = loader
-}
-
 // AddFont imports a TrueType, OpenType or Type1 font and makes it available.
 // It is necessary to generate a font definition file first with the fontmaker
 // utility. You do not need to call this function for the core PDF fonts
@@ -163,16 +152,6 @@ func (f *pdfDocument) addFont(familyStr, styleStr, fileStr string, isUTF8 bool) 
 		if !validFontResourceName(fileStr) {
 			f.SetErrorf("invalid font resource name: %s", fileStr)
 			return
-		}
-		if f.fontLoader != nil {
-			reader, err := f.fontLoader.Open(fileStr)
-			if err == nil {
-				f.AddFontFromReader(familyStr, styleStr, reader)
-				if closer, ok := reader.(io.Closer); ok {
-					_ = closer.Close()
-				}
-				return
-			}
 		}
 		if f.resourceLoader != nil {
 			reader, err := f.openFontResource(context.Background(), fileStr, maxFontDefinitionBytes, "font definition")
@@ -1099,16 +1078,6 @@ func appendCIDWidthRun(dst []byte, startCID int, widths []int) []byte {
 func (f *pdfDocument) loadFontFile(name string) ([]byte, error) {
 	if !validFontResourceName(name) {
 		return nil, fmt.Errorf("invalid font resource name: %s", name)
-	}
-	if f.fontLoader != nil {
-		reader, err := f.fontLoader.Open(name)
-		if err == nil {
-			data, err := readFontResourceReader(reader, maxFontSourceBytes)
-			if closer, ok := reader.(io.Closer); ok {
-				_ = closer.Close()
-			}
-			return data, err
-		}
 	}
 	if f.resourceLoader != nil {
 		reader, err := f.openFontResource(context.Background(), name, maxFontSourceBytes, "font data")

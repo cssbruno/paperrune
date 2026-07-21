@@ -7,21 +7,10 @@ mkdir -p "$out_dir"
 
 if [ "${COMPLIANCE_GENERATE:-1}" != "0" ]; then
 	if [ -n "${SRGB_ICC:-}" ]; then
-		go run ./cmd/compliance-fixtures -out "$out_dir" -icc "$SRGB_ICC" -report "$out_dir/characterization.json"
+		go run ./cmd/compliance-fixtures -out "$out_dir" -icc "$SRGB_ICC"
 	else
-		go run ./cmd/compliance-fixtures -out "$out_dir" -report "$out_dir/characterization.json"
+		go run ./cmd/compliance-fixtures -out "$out_dir"
 	fi
-fi
-
-local_pdf_files=""
-for pdf in "$out_dir"/*.pdf; do
-	if [ -f "$pdf" ]; then
-		local_pdf_files="$local_pdf_files $pdf"
-	fi
-done
-if [ -n "$local_pdf_files" ]; then
-	# shellcheck disable=SC2086
-	go run ./cmd/compliance-check $local_pdf_files
 fi
 
 missing=0

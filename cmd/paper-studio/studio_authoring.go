@@ -130,7 +130,7 @@ func (s *studioServer) handleComponentPreview(w http.ResponseWriter, r *http.Req
 		writeStudioError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	if r.URL.Query().Get("revision") != snapshot.revision || r.URL.Query().Get("source_revision") != studioSourceRevision(snapshot.source) {
+	if r.URL.Query().Get("revision") != snapshot.revision || r.URL.Query().Get("source_revision") != studioSnapshotSourceRevision(snapshot) {
 		writeStudioError(w, http.StatusConflict, errors.New("paper-studio: component preview revision is stale"))
 		return
 	}
@@ -185,7 +185,7 @@ func (s *studioServer) componentPreview(ctx context.Context, snapshot *studioSna
 	s.mu.Lock()
 	catalog := s.assetCatalog
 	s.mu.Unlock()
-	resolver := studioFileImportResolver()
+	resolver := studioFileImportResolver(snapshot.file)
 	var plan document.PaperPlan
 	var planned document.PaperPlanResult
 	if snapshot.scenario == "" {
@@ -323,7 +323,7 @@ func cropComponentPreviewSVG(source []byte, crop studioComponentPreviewBounds) [
 
 func buildStudioAuthoringResponse(snapshot *studioSnapshot, ast paperlang.AST) studioAuthoringResponse {
 	response := studioAuthoringResponse{
-		FormatVersion: 1, Revision: snapshot.revision, SourceRevision: studioSourceRevision(snapshot.source),
+		FormatVersion: 1, Revision: snapshot.revision, SourceRevision: studioSnapshotSourceRevision(snapshot),
 		PlanHash: snapshot.plan.Hash(), Scenario: snapshot.scenario, StressPresets: []string{"empty", "typical", "stress"},
 		TemplateTargets: []studioAuthoringTarget{}, TemplateChoices: map[string][]string{}, LifecycleTargets: []studioAuthoringTarget{}, BindingTargets: []studioAuthoringTarget{}, Schemas: []studioSchemaChoice{}, ObjectTypes: []string{}, SchemaFields: []studioSchemaFieldTarget{}, Scenarios: []string{}, ScenarioValues: []studioScenarioValue{}, Components: []string{},
 	}

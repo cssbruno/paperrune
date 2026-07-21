@@ -31,7 +31,30 @@ PAPER_ENGINE_PROFILE_CPU_SECONDS ?= 2
 PAPER_ENGINE_PROFILE_ALLOC_ITERATIONS ?= 20
 PAPER_STUDIO_LATENCY_REPORT ?= artifacts/paper-studio-wasm-latency.json
 
-.PHONY: all documentation cov coverage-check test race vet fmt-check check modules tools tools-clean benchstat lint lin nilaway gosec gosev govulncheck quality release-version release-check release-notes release-tag release-push release build bench bench-ci bench-generation-core bench-generation-core-ci bench-generation-core-budget bench-paper-engine bench-paper-engine-ci bench-paper-engine-budget bench-paper-studio bench-paper-studio-wasm-latency bench-paper-studio-wasm-latency-budget test-paper-studio-js test-paper-studio-wasm audit-paper-studio-wasm-tinygo characterize-paper-engine verify-clean-checkout paper-studio-wasm paper-studio-wasm-go paper-studio-wasm-tinygo paper-studio profile-paper-engine profile-paper-engine-check profile profile-cpu profile-alloc profile-block profile-mutex profile-trace compliance-fixtures compliance-validate compliance-baseline-check compliance-regenerate pdf-reader-smoke clean
+.PHONY: all documentation help bootstrap test-fast ci docs-check cov coverage-check test race vet fmt-check check modules tools tools-clean benchstat lint lin nilaway gosec gosev govulncheck quality release-version release-check release-notes release-artifacts release-tag release-push release build bench bench-ci bench-generation-core bench-generation-core-ci bench-generation-core-budget bench-paper-engine bench-paper-engine-ci bench-paper-engine-budget bench-paper-studio bench-paper-studio-wasm-latency bench-paper-studio-wasm-latency-budget test-paper-studio-js test-paper-studio-wasm verify-clean-checkout paper-studio-wasm paper-studio profile-paper-engine profile-paper-engine-check profile profile-cpu profile-alloc profile-block profile-mutex profile-trace compliance-fixtures compliance-validate compliance-baseline-check compliance-regenerate pdf-reader-smoke clean
+
+help :
+	@awk 'BEGIN { FS = " :" } /^[a-z][a-z0-9_-]* :/ { print $$1 }' Makefile | sort -u
+
+bootstrap :
+	@go version
+	@node --version || echo "Node is required only for Paper Studio development"
+	@command -v gzip >/dev/null || (echo "gzip is required for Paper Studio development" && exit 1)
+	@command -v brotli >/dev/null || (echo "Brotli is required for Paper Studio development" && exit 1)
+	@command -v pdftoppm >/dev/null || echo "Poppler is required only for visual PDF tests"
+	@command -v docker >/dev/null || echo "Docker is required only for external compliance checks"
+	@echo "Installing pinned Go development tools..."
+	@$(MAKE) tools
+
+test-fast : fmt-check vet
+	go test ./cmd/... ./internal/...
+
+ci : fmt-check modules release-version coverage-check lint nilaway gosec
+	go test ./cmd/... ./internal/...
+	go test -race ./document
+
+docs-check :
+	sh tools/docs-check.sh
 
 cov : all
 	go test $(GO_PACKAGES) -coverprofile=coverage && go tool cover -html=coverage -o=coverage.html
@@ -110,6 +133,9 @@ release-check : release-version check modules race coverage-check lint nilaway g
 release-notes : release-version
 	@awk -v version="$(VERSION)" 'BEGIN { found = 0 } /^## / { if (found) exit; if ($$2 == version) found = 1 } found { print } END { if (!found) exit 1 }' CHANGELOG.md
 
+release-artifacts : release-version paper-studio-wasm
+	sh tools/package-release.sh "$(VERSION)" artifacts/release
+
 release-tag : release-check
 	@test -z "$$(git status --porcelain)" || (echo "working tree must be clean before tagging"; git status --short; exit 1)
 	@test -z "$$(git tag --list "$(VERSION)")" || (echo "tag $(VERSION) already exists" && exit 1)
@@ -163,48 +189,17 @@ PAPER_STUDIO_WASM := cmd/paper-studio/web/paper-studio.wasm
 PAPER_STUDIO_WASM_GZIP := cmd/paper-studio/web/paper-studio.wasm.gz
 PAPER_STUDIO_WASM_BROTLI := cmd/paper-studio/web/paper-studio.wasm.br
 PAPER_STUDIO_WASM_EXEC := cmd/paper-studio/web/wasm_exec.js
-PAPER_STUDIO_WASM_COMPILER ?= go
-TINYGO ?= tinygo
-TINYGO_VERSION ?= 0.41.1
-TINYGO_GC ?= precise
-WASM_OPT ?= wasm-opt
-WASM_OPT_VERSION ?= 131
 
 paper-studio-wasm :
-ifeq ($(PAPER_STUDIO_WASM_COMPILER),tinygo)
-	@command -v "$(TINYGO)" >/dev/null || (echo "TinyGo is required for PAPER_STUDIO_WASM_COMPILER=tinygo" && exit 1)
-	@command -v "$(WASM_OPT)" >/dev/null || (echo "wasm-opt (Binaryen) is required for PAPER_STUDIO_WASM_COMPILER=tinygo" && exit 1)
-	@"$(TINYGO)" version | grep -q "tinygo version $(TINYGO_VERSION) " || (echo "TinyGo $(TINYGO_VERSION) is required" && exit 1)
-	@"$(WASM_OPT)" --version | grep -q "wasm-opt version $(WASM_OPT_VERSION)" || (echo "wasm-opt $(WASM_OPT_VERSION) is required" && exit 1)
-	WASMOPT="$$(command -v "$(WASM_OPT)")" "$(TINYGO)" build -target=wasm -opt=z -no-debug -gc="$(TINYGO_GC)" -o "$(PAPER_STUDIO_WASM)" ./cmd/paper-studio-wasm
-	cp "$$($(TINYGO) env TINYGOROOT)/targets/wasm_exec.js" "$(PAPER_STUDIO_WASM_EXEC)"
-else ifeq ($(PAPER_STUDIO_WASM_COMPILER),go)
 	GOOS=js GOARCH=wasm go build -trimpath -buildvcs=false -ldflags='-s -w -buildid=' -o "$(PAPER_STUDIO_WASM)" ./cmd/paper-studio-wasm
 	chmod u+w "$(PAPER_STUDIO_WASM_EXEC)" 2>/dev/null || true
 	cp "$$(go env GOROOT)/lib/wasm/wasm_exec.js" "$(PAPER_STUDIO_WASM_EXEC)"
-else
-	@echo "unsupported PAPER_STUDIO_WASM_COMPILER=$(PAPER_STUDIO_WASM_COMPILER); expected go or tinygo"
-	@exit 1
-endif
 	gzip -9 -n -c "$(PAPER_STUDIO_WASM)" > "$(PAPER_STUDIO_WASM_GZIP)"
 	brotli -q 11 -f -o "$(PAPER_STUDIO_WASM_BROTLI)" "$(PAPER_STUDIO_WASM)"
 	chmod 0644 "$(PAPER_STUDIO_WASM_EXEC)"
 
-paper-studio-wasm-tinygo :
-	$(MAKE) paper-studio-wasm PAPER_STUDIO_WASM_COMPILER=tinygo
-
-paper-studio-wasm-go :
-	$(MAKE) paper-studio-wasm PAPER_STUDIO_WASM_COMPILER=go
-
 test-paper-studio-wasm : paper-studio-wasm
 	sh tools/test-paper-studio-wasm.sh
-
-audit-paper-studio-wasm-tinygo :
-	sh tools/test-paper-studio-wasm-safety.sh
-
-characterize-paper-engine :
-	mkdir -p artifacts/characterization
-	go run ./cmd/paper-characterize -builtin typed > artifacts/characterization/typed.json
 
 verify-clean-checkout :
 	sh tools/verify-clean-checkout.sh
@@ -244,7 +239,7 @@ profile-trace :
 	go test "$(BENCH_PACKAGE)" -run '^$$' -bench '$(value BENCH)' -benchtime="$(TRACE_BENCHTIME)" -count=1 -o="$(abspath $(PROFILE_DIR))/" -outputdir="$(abspath $(PROFILE_DIR))" -trace=trace.out
 
 compliance-fixtures :
-	go run ./cmd/compliance-fixtures -out "$(COMPLIANCE_OUT)" $(if $(SRGB_ICC),-icc "$(SRGB_ICC)") -report "$(COMPLIANCE_OUT)/characterization.json"
+	go run ./cmd/compliance-fixtures -out "$(COMPLIANCE_OUT)" $(if $(SRGB_ICC),-icc "$(SRGB_ICC)")
 
 compliance-validate :
 	COMPLIANCE_OUT="$(COMPLIANCE_OUT)" SRGB_ICC="$(SRGB_ICC)" VERAPDF="$(VERAPDF)" PDFUA_CHECKER="$(PDFUA_CHECKER)" ARLINGTON_CHECKER="$(ARLINGTON_CHECKER)" ARLINGTON_URL="$(ARLINGTON_URL)" ARLINGTON_PROFILE="$(ARLINGTON_PROFILE)" ARLINGTON_REPORT_DIR="$(ARLINGTON_REPORT_DIR)" REQUIRE_COMPLIANCE_TOOLS="$(REQUIRE_COMPLIANCE_TOOLS)" sh tools/compliance-validate.sh

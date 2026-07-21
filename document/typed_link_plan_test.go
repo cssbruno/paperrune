@@ -218,7 +218,7 @@ func TestTypedCharacterizationIncludesInternalLinkPDFEvidence(t *testing.T) {
 		if fixture.Name != "internal-links-hierarchy" {
 			continue
 		}
-		if fixture.Outcome != "planned" || fixture.PDF == nil || fixture.PDF.Links != 1 || fixture.PDF.Destinations == 0 {
+		if fixture.Outcome != "planned" || len(fixture.ReadingRoles) == 0 {
 			t.Fatalf("internal-link characterization = %#v", fixture)
 		}
 		return

@@ -11,7 +11,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cssbruno/paperrune/inspect"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/layout"
 )
@@ -171,11 +170,7 @@ func TestHTMLUnifiedFlexReverseMainKeepsReadingOrderAndRenders(t *testing.T) {
 	if firstY != secondY || !bytes.Equal(firstPDF, secondPDF) {
 		t.Fatalf("reverse-main deterministic PDF drift: y %.3f/%.3f bytes %d/%d", firstY, secondY, len(firstPDF), len(secondPDF))
 	}
-	text, err := inspect.PageTextContext(context.Background(), firstPDF, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text = strings.ReplaceAll(text, "\x00", "")
+	text := extractedDocumentText(t, firstPDF)
 	if !strings.Contains(text, "First") || !strings.Contains(text, "Second") {
 		t.Fatalf("reverse-main PDF text = %q", text)
 	}
@@ -334,9 +329,9 @@ func TestHTMLUnifiedFlexStructuredTableItemPlanRasterPDFSemanticsAndCursor(t *te
 	if firstY != secondY || !bytes.Equal(firstPDF, secondPDF) {
 		t.Fatalf("structured deterministic PDF drift")
 	}
-	text, err := inspect.PageTextContext(context.Background(), firstPDF, 1)
-	if err != nil || !strings.Contains(strings.ReplaceAll(text, "\x00", ""), "Code") || !strings.Contains(strings.ReplaceAll(text, "\x00", ""), "Summary") {
-		t.Fatalf("structured PDF text = %q err=%v", text, err)
+	text := extractedDocumentText(t, firstPDF)
+	if !strings.Contains(text, "Code") || !strings.Contains(text, "Summary") {
+		t.Fatalf("structured PDF output lacks expected labels")
 	}
 }
 

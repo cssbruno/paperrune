@@ -29,7 +29,7 @@ func TestExactTypedAdapterMapsEveryLayoutDocumentField(t *testing.T) {
 		{"PageTemplate", "layout.PageTemplate", func(doc *layout.LayoutDocument) { doc.PageTemplate.Margins.Left = 17 }},
 		{"Body", "[]layout.Block", func(doc *layout.LayoutDocument) { doc.Body = []layout.Block{paragraph("changed body")} }},
 		{"Signature", "*layout.SignatureBlock", func(doc *layout.LayoutDocument) {
-			doc.Signature = &layout.SignatureBlock{PlaceholderReference: "Approval", Rows: []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Label: "Approve", Name: "Ada"}}}}}
+			doc.Signature = &layout.SignatureBlock{Rows: []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Label: "Approve", Name: "Ada"}}}}}
 		}},
 		{"QR", "*layout.QRBlock", func(doc *layout.LayoutDocument) {
 			doc.QR = &layout.QRBlock{Value: "mapped-qr", Label: "Verify", Size: 24}

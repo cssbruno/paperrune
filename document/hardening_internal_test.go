@@ -6,7 +6,6 @@ package document
 import (
 	"bytes"
 	"context"
-	crand "crypto/rand"
 	"crypto/sha256"
 	"errors"
 	"io"
@@ -586,26 +585,6 @@ func TestSetJavascriptIsUnsupported(t *testing.T) {
 	}
 }
 
-func TestSetAESProtectionIsUnsupported(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	if err := pdf.SetAESProtection(CnProtectPrint, "reader", "owner"); !errors.Is(err, ErrAESProtectionUnsupported) {
-		t.Fatalf("SetAESProtection() error = %v, want ErrAESProtectionUnsupported", err)
-	}
-	if !errors.Is(pdf.Error(), ErrAESProtectionUnsupported) {
-		t.Fatalf("document error = %v, want ErrAESProtectionUnsupported", pdf.Error())
-	}
-
-	var out bytes.Buffer
-	if err := pdf.Output(&out); !errors.Is(err, ErrAESProtectionUnsupported) {
-		t.Fatalf("Output() error = %v, want ErrAESProtectionUnsupported", err)
-	}
-	if bytes.Contains(out.Bytes(), []byte("/Encrypt")) ||
-		bytes.Contains(out.Bytes(), []byte("/AESV2")) ||
-		bytes.Contains(out.Bytes(), []byte("/AESV3")) {
-		t.Fatal("unsupported AES protection API emitted encryption dictionary bytes")
-	}
-}
-
 func TestDeterministicOutputSortsPageBoxes(t *testing.T) {
 	first := deterministicPageBoxOutput(t, []string{"trim", "crop", "bleed", "art"})
 	second := deterministicPageBoxOutput(t, []string{"art", "bleed", "crop", "trim"})
@@ -690,54 +669,6 @@ func deterministicSpotColorOutput(t *testing.T, reverse bool) []byte {
 	return out.Bytes()
 }
 
-func TestDeterministicOutputSortsImportedTemplateMaps(t *testing.T) {
-	first := deterministicImportedTemplateOutput(t, false)
-	second := deterministicImportedTemplateOutput(t, true)
-	if !bytes.Equal(first, second) {
-		t.Fatal("deterministic imported-template output changed with map insertion order")
-	}
-	assertOutputOrder(t, first, "/TplA", "/TplZ")
-}
-
-func deterministicImportedTemplateOutput(t *testing.T, reverse bool) []byte {
-	t.Helper()
-	pdf, err := newPDFDocument(WithDeterministicOutput())
-	if err != nil {
-		t.Fatalf("NewDocument() error = %v", err)
-	}
-	pdf.SetCompression(false)
-	objA := []byte("<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Resources << >> /Length 0 >>\nstream\n\nendstream\nendobj\n")
-	objZ := []byte("<< /Type /XObject /Subtype /Form /BBox [0 0 12 12] /Resources << >> /Length 0 >>\nstream\n\nendstream\nendobj\n")
-	objs := make(map[string][]byte)
-	tpls := make(map[string]string)
-	if reverse {
-		objs["hash-z"] = objZ
-		objs["hash-a"] = objA
-		tpls["/TplZ"] = "hash-z"
-		tpls["/TplA"] = "hash-a"
-	} else {
-		objs["hash-a"] = objA
-		objs["hash-z"] = objZ
-		tpls["/TplA"] = "hash-a"
-		tpls["/TplZ"] = "hash-z"
-	}
-	pdf.ImportObjects(objs)
-	pdf.ImportObjPos(map[string]map[int]string{
-		"hash-a": {},
-		"hash-z": {},
-	})
-	pdf.ImportTemplates(tpls)
-	pdf.AddPage()
-	pdf.UseImportedTemplate("/TplA", 1, 1, 10, 10)
-	pdf.UseImportedTemplate("/TplZ", 1, 1, 30, 10)
-
-	var out bytes.Buffer
-	if err := pdf.Output(&out); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	return out.Bytes()
-}
-
 func TestDeterministicOutputSortsTemplateImageResourceNames(t *testing.T) {
 	first := deterministicTemplateImageOutput(t, false)
 	second := deterministicTemplateImageOutput(t, true)
@@ -805,17 +736,6 @@ func TestDeterministicOutputSortsMapBackedResourceKeys(t *testing.T) {
 	pdf.AddSpotColor("Zeta", 1, 2, 3, 4)
 	pdf.AddSpotColor("Alpha", 5, 6, 7, 8)
 	assertStringSlice(t, pdf.spotColorOutputNames(), []string{"Alpha", "Zeta"})
-
-	assertIntSlice(t, importedObjectReplacementPositions(map[int]string{
-		20: "b",
-		4:  "a",
-		12: "c",
-	}, true), []int{4, 12, 20})
-
-	assertStringSlice(t, importedTemplateOutputNames(map[string]string{
-		"/TplZ": "z",
-		"/TplA": "a",
-	}, true), []string{"/TplA", "/TplZ"})
 
 	assertStringSlice(t, templateImageKeys(map[string]*ImageInfo{
 		"zeta":  nil,
@@ -1002,12 +922,6 @@ func TestPDFResourceNameHelpersWriteExpectedReferences(t *testing.T) {
 	if got := templatePDFResourceRef("tpl", 5); got.name != "/TPLtpl" || got.objectNumber != 5 {
 		t.Fatalf("templatePDFResourceRef() = %#v, want /TPLtpl 5", got)
 	}
-	if got := importedPagePDFResourceName(12).String(); got != "/IPG12" {
-		t.Fatalf("importedPagePDFResourceName() = %q, want /IPG12", got)
-	}
-	if got := importedPagePDFResourceRef(12, 6); got.name != "/IPG12" || got.objectNumber != 6 {
-		t.Fatalf("importedPagePDFResourceRef() = %#v, want /IPG12 6", got)
-	}
 	if got := graphicsStatePDFResourceName(2).String(); got != "/GS2" {
 		t.Fatalf("graphicsStatePDFResourceName() = %q, want /GS2", got)
 	}
@@ -1168,21 +1082,6 @@ func (w *chunkRecordingWriter) Bytes() []byte {
 		out = append(out, chunk...)
 	}
 	return out
-}
-
-func TestSetLegacyProtectionLatchesRandomOwnerPasswordError(t *testing.T) {
-	want := errors.New("random failed")
-	original := crand.Reader
-	crand.Reader = errReader{err: want}
-	defer func() { crand.Reader = original }()
-
-	pdf := mustNewPDFDocument()
-	if err := pdf.SetLegacyProtection(CnProtectPrint, "reader", ""); !errors.Is(err, want) {
-		t.Fatalf("SetLegacyProtection() error = %v, want %v", err, want)
-	}
-	if !errors.Is(pdf.Error(), want) {
-		t.Fatalf("document error = %v, want %v", pdf.Error(), want)
-	}
 }
 
 type errReader struct {
@@ -1492,47 +1391,5 @@ func TestCompiledHTMLTokensReturnsCopy(t *testing.T) {
 	}
 	if got := tokens[0].Attr["class"]; got != "a" {
 		t.Fatalf("compiled token class = %q, want a", got)
-	}
-}
-
-func TestImportedPageAndTemplateRequireActivePage(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.UseImportedPage(1, 1, 1, 1, 1)
-	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "without first adding a page") {
-		t.Fatalf("UseImportedPage error = %v", pdf.Error())
-	}
-
-	pdf = mustNewPDFDocument()
-	pdf.UseImportedTemplate("/Tpl1", 1, 1, 0, 0)
-	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "without first adding a page") {
-		t.Fatalf("UseImportedTemplate error = %v", pdf.Error())
-	}
-}
-
-func TestUseImportedTemplateRejectsInvalidTransform(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.UseImportedTemplate("/Tpl1", 0, 1, 0, 0)
-	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "invalid imported template placement") {
-		t.Fatalf("UseImportedTemplate error = %v", pdf.Error())
-	}
-}
-
-func TestImportObjectsCopiesInputMaps(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	objs := map[string][]byte{"a": []byte("object")}
-	pos := map[string]map[int]string{"a": {1: "old"}}
-	pdf.ImportObjects(objs)
-	pdf.ImportObjPos(pos)
-
-	objs["a"][0] = 'X'
-	pos["a"][1] = "new"
-
-	resources := pdf.ensureResourceStore()
-	if got := string(resources.importedObjectData("a")); got != "object" {
-		t.Fatalf("imported object = %q, want object", got)
-	}
-	if got := resources.importedObjectPositions("a")[1]; got != "old" {
-		t.Fatalf("imported object position = %q, want old", got)
 	}
 }

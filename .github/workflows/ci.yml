@@ -48,16 +48,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y brotli poppler-utils
 
-      - name: Check formatting and module files
-        shell: bash
-        run: |
-          make fmt-check
-          go mod tidy -diff
-          go mod verify
-          cd tools
-          go mod tidy -diff
-          go mod verify
-
       - name: Check repository command contracts
         shell: bash
         run: |
@@ -73,21 +63,8 @@ jobs:
           make clean
           git diff --exit-code
 
-      - name: Test
-        run: |
-          make coverage-check
-          go test ./cmd/... ./internal/...
-
-      - name: Static analysis
-        run: |
-          make lint
-          make nilaway
-
-      - name: Security analysis
-        run: make gosec
-
-      - name: Race test shared-state packages
-        run: go test -race ./document ./importpdf
+      - name: Run the canonical contributor gate
+        run: make ci docs-check
 
       - name: Vulnerability check
         if: github.event_name != 'pull_request'

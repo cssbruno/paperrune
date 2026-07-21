@@ -97,6 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -122,6 +124,25 @@ jobs:
         shell: bash
         run: git checkout --detach "refs/tags/${VERSION}"
 
+      - name: Setup Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: tools/go.mod
+          cache: true
+
+      - name: Install release compression dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y brotli
+
+      - name: Build release archives, checksums, and SBOMs
+        run: make release-artifacts VERSION="${VERSION}"
+
+      - name: Attest release artifacts
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-path: artifacts/release/*
+
       - name: Build release notes
         run: make release-notes VERSION="${VERSION}" > release-notes.md
 
@@ -139,3 +160,4 @@ jobs:
           else
             gh release create "${VERSION}" --title "${VERSION}" --notes-file release-notes.md "${release_flags[@]}"
           fi
+          gh release upload "${VERSION}" artifacts/release/* --clobber

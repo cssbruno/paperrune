@@ -110,25 +110,11 @@ func (f *pdfDocument) putresources() {
 	}
 	f.putimages()
 	f.putTemplates()
-	f.putImportedTemplates()
-	f.putImportedPages()
 	f.beginPDFObject(2)
 	f.beginPDFDict()
 	f.putresourcedict()
 	f.endPDFDict()
 	f.endPDFObject()
-	if f.protect.encrypted {
-		f.newPDFDictObject()
-		f.protect.objNum = f.n
-		f.out("/Filter /Standard")
-		f.out("/V 1")
-		f.out("/R 2")
-		f.outf("/O (%s)", f.escape(string(f.protect.oValue)))
-		f.outf("/U (%s)", f.escape(string(f.protect.uValue)))
-		f.outf("/P %d", f.protect.pValue)
-		f.endPDFDict()
-		f.endPDFObject()
-	}
 }
 
 func appendPDFResourceRef(buf []byte, prefix, name string, objNum int) []byte {
@@ -242,10 +228,7 @@ func (f *pdfDocument) puttrailer() {
 	if !f.omitInfoDictionary() {
 		f.outf("/Info %d 0 R", f.n-1)
 	}
-	if f.protect.encrypted {
-		f.outf("/Encrypt %d 0 R", f.protect.objNum)
-		f.out("/ID [()()]")
-	} else if f.compliance.PDFA != PDFAModeNone || f.compliance.Arlington {
+	if f.compliance.PDFA != PDFAModeNone || f.compliance.Arlington {
 		id := f.fileIdentifier()
 		f.outf("/ID [<%s><%s>]", id, id)
 	}
@@ -395,10 +378,6 @@ func appendPDFNamedObjectRef(buf []byte, prefix string, objNum int) []byte {
 	return buf
 }
 
-func (f *pdfDocument) enddoc() {
-	f.enddocContext(context.Background())
-}
-
 func (f *pdfDocument) enddocContext(ctx context.Context) {
 	if f.err != nil {
 		return
@@ -499,8 +478,6 @@ func (f *pdfDocument) estimateFinalBufferSize() int {
 	size += len(resources.images) * 2048
 	size += len(resources.fonts) * 1024
 	size += len(resources.templates) * 1024
-	size += len(resources.importedObjs) * 1024
-	size += len(resources.importedPages) * 1024
 	size += len(f.attachments) * 1024
 	size += len(f.xmp)
 	if size < 0 {

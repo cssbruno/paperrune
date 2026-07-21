@@ -392,14 +392,6 @@ func (f *pdfDocument) textstring(s string) string {
 }
 
 func (f *pdfDocument) appendTextString(buf []byte, s string) []byte {
-	if f.protect.encrypted {
-		b := []byte(s)
-		if err := f.protect.rc4(f.n, &b); err != nil {
-			f.SetError(err)
-			return buf
-		}
-		s = string(b)
-	}
 	buf = append(buf, '(')
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
@@ -416,9 +408,6 @@ func (f *pdfDocument) appendTextString(buf []byte, s string) []byte {
 }
 
 func (f *pdfDocument) appendUTF16TextString(buf []byte, s string) []byte {
-	if f.protect.encrypted {
-		return f.appendTextString(buf, utf8toutf16(s))
-	}
 	buf = append(buf, '(')
 	buf = appendEscapedUTF16BE(buf, s, true, nil)
 	buf = append(buf, ')')

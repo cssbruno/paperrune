@@ -16,19 +16,8 @@ git -C "$root" archive --format=tar --output="$archive" "$revision"
 tar -xf "$archive" -C "$checkout"
 
 cache="$temporary/go-cache"
-typed_first="$temporary/typed-first.json"
-typed_second="$temporary/typed-second.json"
-html_first="$temporary/html-first.json"
-html_second="$temporary/html-second.json"
-
 cd "$checkout"
 GOCACHE="$cache" go test ./document -run '^(TestTypedCharacterizationCorpusIsCompleteBoundedAndDeterministic|TestHTMLCharacterizationFixturesExerciseEveryClassification)$' -count=1
-GOCACHE="$cache" go run ./cmd/paper-characterize -builtin typed >"$typed_first"
-GOCACHE="$cache" go run ./cmd/paper-characterize -builtin typed >"$typed_second"
-GOCACHE="$cache" go run ./cmd/paper-characterize -builtin html >"$html_first"
-GOCACHE="$cache" go run ./cmd/paper-characterize -builtin html >"$html_second"
-cmp "$typed_first" "$typed_second"
-cmp "$html_first" "$html_second"
 
 GOCACHE="$cache" go test ./document ./internal/layoutengine -run '^$' \
   -bench '^BenchmarkPaperEngine(Planner|Painter|ProductionDefault|EndToEnd|WarmCompiled|Concurrent|Table)' \

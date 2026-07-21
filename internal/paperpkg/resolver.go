@@ -44,10 +44,6 @@ type ResolverOptions struct {
 	SymlinkPolicy SymlinkPolicy
 }
 
-func DefaultResolverOptions() ResolverOptions {
-	return ResolverOptions{SymlinkPolicy: AllowInternalSymlinks}
-}
-
 // OfflineResolver reads only through an os.Root anchored to one explicit
 // project directory. It never performs network access. A resolver owns the
 // root handle and must be closed when no longer needed.

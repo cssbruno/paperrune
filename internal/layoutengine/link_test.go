@@ -74,7 +74,7 @@ func TestPlannedLinkValidationRejectsInvalidTargetsAndProvenance(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			input := layoutPlanInputFromStoredProjection(base)
+			input := layoutPlanInputFromProjection(base)
 			test.mutate(&input)
 			if _, err := NewLayoutPlan(input); err == nil {
 				t.Fatal("invalid link plan unexpectedly validated")

@@ -4,7 +4,6 @@
 package layoutengine
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -12,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestSemanticPlanIsCanonicalImmutableAndStoreRoundTrips(t *testing.T) {
+func TestSemanticPlanIsCanonicalAndImmutable(t *testing.T) {
 	plan := semanticTestPlan(t, false)
 	projection := plan.Projection()
 	if projection.SchemaVersion != LayoutPlanSchemaVersion || len(projection.SemanticNodes) != 2 ||
@@ -44,39 +43,6 @@ func TestSemanticPlanIsCanonicalImmutableAndStoreRoundTrips(t *testing.T) {
 	projection.ReadingOrder[0].ReadingIndex = 99
 	if got, _ := plan.Hash(); got != wantHash {
 		t.Fatalf("projection mutation changed plan hash: %s != %s", got, wantHash)
-	}
-
-	store, err := NewMemoryPlanStore(DefaultPlanStoreLimits())
-	if err != nil {
-		t.Fatal(err)
-	}
-	hash, err := store.Put(plan)
-	if err != nil || hash != wantHash {
-		t.Fatalf("Put() = %s, %v; want %s", hash, err, wantHash)
-	}
-	loaded, err := store.Get(hash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := loaded.Hash(); got != wantHash || !reflect.DeepEqual(loaded.Projection().SemanticNodes, plan.Projection().SemanticNodes) {
-		t.Fatalf("semantic store round trip = %s, %#v", got, loaded.Projection())
-	}
-
-	segmented, err := NewMemorySegmentedPlanStore(DefaultSegmentedPlanStoreLimits())
-	if err != nil {
-		t.Fatal(err)
-	}
-	segmentedHash, err := segmented.Put(context.Background(), plan)
-	if err != nil || segmentedHash != wantHash {
-		t.Fatalf("segmented Put() = %s, %v; want %s", segmentedHash, err, wantHash)
-	}
-	segmentedPlan, err := segmented.Get(context.Background(), segmentedHash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := segmentedPlan.Hash(); got != wantHash ||
-		!reflect.DeepEqual(segmentedPlan.Projection().ReadingOrder, plan.Projection().ReadingOrder) {
-		t.Fatalf("segmented semantic round trip = %s, %#v", got, segmentedPlan.Projection())
 	}
 }
 
@@ -227,25 +193,6 @@ func TestSemanticAccessibilityAttributesAreCanonicalStoredAndQueryable(t *testin
 	}
 	if _, err := plan.QueryStructure(StructuralQuery{Language: "pt-br", MaxResults: 8}); err == nil {
 		t.Fatal("noncanonical query language unexpectedly validated")
-	}
-
-	store, _ := NewMemoryPlanStore(DefaultPlanStoreLimits())
-	hash, err := store.Put(plan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	loaded, err := store.Get(hash)
-	if err != nil || !reflect.DeepEqual(loaded.Projection().SemanticNodes, plan.Projection().SemanticNodes) {
-		t.Fatalf("attribute monolithic round trip = %#v, %v", loaded.Projection().SemanticNodes, err)
-	}
-	segmented, _ := NewMemorySegmentedPlanStore(DefaultSegmentedPlanStoreLimits())
-	hash, err = segmented.Put(context.Background(), plan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	loaded, err = segmented.Get(context.Background(), hash)
-	if err != nil || !reflect.DeepEqual(loaded.Projection().SemanticNodes, plan.Projection().SemanticNodes) {
-		t.Fatalf("attribute segmented round trip = %#v, %v", loaded.Projection().SemanticNodes, err)
 	}
 }
 

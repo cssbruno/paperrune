@@ -43,7 +43,7 @@ func TestLowerLayoutDocumentTreeCoversSupportedTypedPrimitiveFamiliesDeterminist
 			layout.RowColumnBlock{Direction: layout.RowDirection, Items: []layout.RowColumnItem{{Block: paragraph("row item"), Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFraction, Weight: 1}}}},
 			layout.PageBreakBlock{After: true},
 		},
-		Signature:   &layout.SignatureBlock{PlaceholderReference: "Sig", Rows: []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Label: "Signer", Width: 80}}}}},
+		Signature:   &layout.SignatureBlock{Rows: []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Label: "Signer", Width: 80}}}}},
 		QR:          &layout.QRBlock{Value: "document qr", Label: "Document QR"},
 		Attachments: []layout.AttachmentBlock{{Name: "proof.txt", MIMEType: "text/plain", Description: "proof", Data: []byte("proof")}},
 	}

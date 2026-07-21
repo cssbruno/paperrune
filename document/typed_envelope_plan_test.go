@@ -84,7 +84,7 @@ func TestLayoutDocumentPlanPreservesConfiguredInlineAttachmentsAndRejectsLiveSou
 	}
 }
 
-func TestLayoutDocumentPlanPreservesImmutableMetadataComplianceOutputAndSigningEnvelope(t *testing.T) {
+func TestLayoutDocumentPlanPreservesImmutableMetadataComplianceAndOutputEnvelope(t *testing.T) {
 	created := time.Date(2024, 2, 3, 4, 5, 6, 0, time.FixedZone("fixture", -3*60*60))
 	updated := created.Add(2 * time.Hour)
 	xmp := []byte(`<?xpacket begin="fixture"?><fixture>detached</fixture><?xpacket end="w"?>`)
@@ -113,8 +113,7 @@ func TestLayoutDocumentPlanPreservesImmutableMetadataComplianceOutputAndSigningE
 		},
 		Body: []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "Body"}}}},
 		Signature: &layout.SignatureBlock{
-			PlaceholderReference: " ApprovalIdentity ",
-			Rows:                 []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Name: "Ada Example"}}}},
+			Rows: []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Name: "Ada Example"}}}},
 		},
 		Attachments: []layout.AttachmentBlock{{
 			Name: "evidence.txt", MIMEType: "text/plain", Description: "Evidence", Data: []byte("original evidence"),
@@ -133,7 +132,6 @@ func TestLayoutDocumentPlanPreservesImmutableMetadataComplianceOutputAndSigningE
 	doc.Title = "mutated"
 	doc.Metadata.Subject = "mutated"
 	doc.Metadata.Author = "mutated"
-	doc.Signature.PlaceholderReference = "MutatedIdentity"
 
 	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithOutputPolicy(OutputPolicy{}))
 	pages, err := target.WriteLayoutDocumentPlan(plan)
@@ -156,9 +154,6 @@ func TestLayoutDocumentPlanPreservesImmutableMetadataComplianceOutputAndSigningE
 	}
 	if target.outputPolicy != (OutputPolicy{DisableSync: true, Deterministic: true, StreamFinal: true}) {
 		t.Fatalf("output policy = %#v", target.outputPolicy)
-	}
-	if target.signatureFieldName != "ApprovalIdentity" {
-		t.Fatalf("signing identity = %q", target.signatureFieldName)
 	}
 	if len(target.attachments) != 1 || target.attachments[0].Filename != "evidence.txt" ||
 		!bytes.Equal(target.attachments[0].Content, []byte("original evidence")) {
@@ -259,39 +254,14 @@ func TestLayoutDocumentPlanRejectsUnsafeLiveEnvelopeStateAtomically(t *testing.T
 	model := &layout.LayoutDocument{
 		Body: []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "Body"}}}},
 		Signature: &layout.SignatureBlock{
-			PlaceholderReference: "PlannedIdentity",
-			Rows:                 []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Name: "Signer"}}}},
+			Rows: []layout.SignatureRowBlock{{Columns: []layout.SignatureColumn{{Name: "Signer"}}}},
 		},
 	}
-	allowProtection := SecurityPolicy{AllowLegacyRC4Protection: true}
-	encrypted := mustNewPDFDocument(WithUnit(UnitPoint), WithSecurityPolicy(allowProtection))
-	if err := encrypted.SetLegacyProtection(CnProtectCopy, "user", "owner"); err != nil {
-		t.Fatal(err)
-	}
-	if plan, err := encrypted.PlanLayoutDocument(model); !errors.Is(err, ErrLayoutDocumentPlanUnsupported) ||
-		!strings.Contains(err.Error(), "live encryption state") || plan.Hash() != "" || encrypted.PageCount() != 0 {
-		t.Fatalf("encrypted planning = hash %q pages %d error %v", plan.Hash(), encrypted.PageCount(), err)
-	}
-
-	conflicting := mustNewPDFDocument(WithUnit(UnitPoint))
-	conflicting.signatureFieldName = "OtherIdentity"
-	if plan, err := conflicting.PlanLayoutDocument(model); !errors.Is(err, ErrLayoutDocumentPlanUnsupported) ||
-		!strings.Contains(err.Error(), "conflicting signing field identities") || plan.Hash() != "" || conflicting.PageCount() != 0 {
-		t.Fatalf("conflicting signing planning = hash %q pages %d error %v", plan.Hash(), conflicting.PageCount(), err)
-	}
-
 	planner := mustNewPDFDocument(WithUnit(UnitPoint))
 	plan, err := planner.PlanLayoutDocument(model)
 	if err != nil {
 		t.Fatal(err)
 	}
-	target := mustNewPDFDocument(WithUnit(UnitPoint))
-	target.signatureFieldName = "OtherIdentity"
-	if pages, err := target.WriteLayoutDocumentPlan(plan); !errors.Is(err, ErrLayoutDocumentPlanUnsupported) ||
-		!strings.Contains(err.Error(), "conflicting signing field identity") || pages != 0 || target.PageCount() != 0 {
-		t.Fatalf("conflicting target replay = pages %d target pages %d error %v", pages, target.PageCount(), err)
-	}
-
 	nonFresh := mustNewPDFDocument(WithUnit(UnitPoint))
 	nonFresh.AddPage()
 	before := nonFresh.PageCount()

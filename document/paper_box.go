@@ -137,34 +137,6 @@ func paperMergeOuterBox(inner, outer layout.BoxStyle, path string) (layout.BoxSt
 	return inner, nil
 }
 
-func paperApplySingleChildWrapperBox(candidate layout.Block, wrapper layout.BoxStyle, path string) (layout.Block, error) {
-	paragraph, ok := paperParagraphBlock(candidate)
-	if !ok {
-		return nil, fmt.Errorf("%s: a visual section box requires one paragraph or heading child", path)
-	}
-	childBox := paragraph.EffectiveBox()
-	childPolicy, childVisual, err := paperParagraphBoxPolicy(childBox, paragraph.BoxRef, path+".blocks[0]")
-	if err != nil {
-		return nil, err
-	}
-	if htmlUnifiedVisualBox(childVisual) {
-		return nil, fmt.Errorf("%s: nested visual wrapper and child boxes are outside the exact cohort", path)
-	}
-	wrapper.KeepTogether = true
-	wrapper.KeepWithNext = wrapper.KeepWithNext || childPolicy.keepWithNext
-	wrapper.Orphans, wrapper.Widows = childPolicy.orphans, childPolicy.widows
-	switch block := candidate.(type) {
-	case layout.ParagraphBlock:
-		block.Box, block.BoxRef = wrapper, nil
-		return block, nil
-	case layout.HeadingBlock:
-		block.Box, block.BoxRef = wrapper, nil
-		return block, nil
-	default:
-		return nil, fmt.Errorf("%s: a visual section box requires one paragraph or heading child", path)
-	}
-}
-
 func (f *pdfDocument) paperMeasureBox(box layout.BoxStyle, path string) (paperMeasuredBox, error) {
 	toFixed := func(value float64, field string) (layoutengine.Fixed, error) {
 		fixed, err := fixedFromDocumentUnits(f, value)
@@ -298,11 +270,6 @@ func (f *pdfDocument) paperMeasureBox(box layout.BoxStyle, path string) (paperMe
 		measured.visual = true
 	}
 	return measured, nil
-}
-
-func (box paperMeasuredBox) horizontalPoints() (left, right float64) {
-	return box.style.Margin.Left.Points() + box.style.Border.Left.Points() + box.style.Padding.Left.Points(),
-		box.style.Margin.Right.Points() + box.style.Border.Right.Points() + box.style.Padding.Right.Points()
 }
 
 func (box paperMeasuredBox) borderWidth(available layoutengine.Fixed) (layoutengine.Fixed, error) {

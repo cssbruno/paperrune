@@ -6,6 +6,7 @@ package document_test
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -765,14 +766,12 @@ func TestFooterFuncLpi(t *testing.T) {
 type fontResourceType struct {
 }
 
-func (f fontResourceType) Open(name string) (rdr io.Reader, err error) {
-	var buf []byte
-	buf, err = os.ReadFile(example.FontFile(name))
+func (fontResourceType) OpenResource(_ context.Context, _ document.ResourceKind, name string) (io.ReadCloser, document.ResourceInfo, error) {
+	buf, err := os.ReadFile(example.FontFile(name))
 	if err == nil {
-		rdr = bytes.NewReader(buf)
 		fmt.Printf("Generalized font loader reading %s\n", name)
 	}
-	return
+	return io.NopCloser(bytes.NewReader(buf)), document.ResourceInfo{Size: int64(len(buf))}, err
 }
 
 // strDelimit converts 'ABCDEFG' to, for example, 'A,BCD,EFG'
@@ -2240,7 +2239,7 @@ func ExampleTestPDFDocument_CellFormat_align() {
 	formatRect(pdf, recList)
 	formatRect(pdf, recListBaseline)
 	var fr fontResourceType
-	pdf.SetFontLoader(fr)
+	pdf.SetResourceLoader(fr)
 	pdf.AddFont("Calligrapher", "", "calligra.json")
 	pdf.SetFont("Calligrapher", "", 16)
 	formatRect(pdf, recListBaseline)
@@ -2321,23 +2320,6 @@ func ExampleTestPDFDocument_CellFormat_codepage() {
 	example.Summary(err, fileStr)
 	// Output:
 	// Successfully generated assets/generated/pdf/Document_CellFormat_codepage.pdf
-}
-
-// ExampleTestPDFDocument_SetLegacyProtection demonstrates legacy PDF standard-security
-// password and permission settings.
-func ExampleTestPDFDocument_SetLegacyProtection() {
-	pdf := document.MustNewTestPDFDocument()
-	if err := pdf.SetLegacyProtection(document.CnProtectPrint, "123", "abc"); err != nil {
-		panic(err)
-	}
-	pdf.AddPage()
-	pdf.SetFont("Arial", "", 12)
-	pdf.Write(10, "Legacy PDF standard-security protection.")
-	fileStr := example.Filename("Document_SetLegacyProtection")
-	err := pdf.OutputFileAndClose(fileStr)
-	example.Summary(err, fileStr)
-	// Output:
-	// Successfully generated assets/generated/pdf/Document_SetLegacyProtection.pdf
 }
 
 // ExampleTestPDFDocument_Polygon displays equilateral polygons in a demonstration of the Polygon
@@ -2557,24 +2539,24 @@ func ExampleTestPDFDocument_Beziergon() {
 	// Successfully generated assets/generated/pdf/Document_Beziergon.pdf
 }
 
-// ExampleTestPDFDocument_SetFontLoader demonstrates loading a non-standard font using a generalized
-// font loader. fontResourceType implements the FontLoader interface and is
+// ExampleTestPDFDocument_SetResourceLoader demonstrates loading a non-standard font using a generalized
+// resource loader. fontResourceType implements the ResourceLoader interface and is
 // defined locally in the test source code.
-func ExampleTestPDFDocument_SetFontLoader() {
+func ExampleTestPDFDocument_SetResourceLoader() {
 	var fr fontResourceType
 	pdf := document.MustNewTestPDFDocument()
-	pdf.SetFontLoader(fr)
+	pdf.SetResourceLoader(fr)
 	pdf.AddFont("Calligrapher", "", "calligra.json")
 	pdf.AddPage()
 	pdf.SetFont("Calligrapher", "", 35)
 	pdf.Cell(0, 10, "Load fonts from any source")
-	fileStr := example.Filename("Document_SetFontLoader")
+	fileStr := example.Filename("Document_SetResourceLoader")
 	err := pdf.OutputFileAndClose(fileStr)
 	example.Summary(err, fileStr)
 	// Output:
 	// Generalized font loader reading calligra.json
 	// Generalized font loader reading calligra.z
-	// Successfully generated assets/generated/pdf/Document_SetFontLoader.pdf
+	// Successfully generated assets/generated/pdf/Document_SetResourceLoader.pdf
 }
 
 // ExampleTestPDFDocument_MoveTo demonstrates the Path Drawing functions, such as: MoveTo,

@@ -803,26 +803,6 @@ func htmlUnifiedFlexPercent(value string) (uint32, bool) {
 	return uint32(scaled), true
 }
 
-func htmlUnifiedFlexWeightDefault(value string, fallback uint32) (uint32, bool, error) {
-	weight, present, err := htmlUnifiedFlexWeight(value)
-	if !present && err == nil {
-		return fallback, false, nil
-	}
-	return weight, present, err
-}
-
-func htmlUnifiedFlexWeight(value string) (uint32, bool, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return 0, false, nil
-	}
-	parsed, err := strconv.ParseUint(value, 10, 32)
-	if err != nil {
-		return 0, true, err
-	}
-	return uint32(parsed), true, nil
-}
-
 func htmlUnifiedFixedCSSLength(value string, allowZero bool) (float64, bool) {
 	trimmed := strings.ToLower(strings.TrimSpace(value))
 	if strings.HasSuffix(trimmed, "%") && trimmed != "0%" && trimmed != "0.0%" {

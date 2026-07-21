@@ -152,7 +152,7 @@ func TestHTMLCharacterizationFixturesExerciseEveryClassification(t *testing.T) {
 	}
 }
 
-func TestRunHTMLCharacterizationRecordsDeterministicPDFEvidence(t *testing.T) {
+func TestRunHTMLCharacterizationRecordsDeterministicPlanEvidence(t *testing.T) {
 	first, err := runHTMLCharacterization(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -168,12 +168,11 @@ func TestRunHTMLCharacterizationRecordsDeterministicPDFEvidence(t *testing.T) {
 	}
 	for _, fixture := range first.Fixtures {
 		rendered := fixture.Outcome == "rendered" || fixture.Outcome == "planned"
-		if rendered && (fixture.Pages == 0 || fixture.PDF == nil || fixture.PDF.SHA256 == "" ||
-			fixture.PDF.Bytes == 0 || len(fixture.PDF.PageText) != fixture.Pages) {
-			t.Fatalf("rendered fixture lacks PDF evidence: %+v", fixture)
+		if rendered && fixture.Pages == 0 {
+			t.Fatalf("rendered fixture lacks page evidence: %+v", fixture)
 		}
-		if !rendered && (fixture.Pages != 0 || fixture.PDF != nil) {
-			t.Fatalf("non-rendered fixture fabricated PDF evidence: %+v", fixture)
+		if !rendered && fixture.Pages != 0 {
+			t.Fatalf("non-rendered fixture fabricated page evidence: %+v", fixture)
 		}
 		if fixture.Outcome == "planned" && len(fixture.ReadingRoles) == 0 {
 			t.Fatalf("unified fixture lacks reading order: %+v", fixture)

@@ -314,7 +314,7 @@ func (b *typedTreeBuilder) metadataGrid(parent int, key string, grid layout.Meta
 
 func (b *typedTreeBuilder) signature(parent int, signature *layout.SignatureBlock) error {
 	flags := boolFlag(signature.KeepTogether, typedTreeKeepTogether)
-	node, err := b.add(parent, "@typed/signature", "signature", signature.PAdESFieldName(), nil, nil, nil, layoutengine.SemanticRoleSection, flags)
+	node, err := b.add(parent, "@typed/signature", "signature", "", nil, nil, nil, layoutengine.SemanticRoleSection, flags)
 	if err != nil {
 		return err
 	}

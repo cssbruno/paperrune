@@ -496,23 +496,3 @@ func compiledHTMLContainsTable(compiled *compiledHTML) bool {
 	}
 	return false
 }
-
-func compiledHTMLContainsImageInTable(compiled *compiledHTML) bool {
-	if compiled == nil {
-		return false
-	}
-	depth := 0
-	for _, token := range compiled.tokens {
-		switch {
-		case token.Cat == 'O' && token.Str == "table":
-			depth++
-		case token.Cat == 'C' && token.Str == "table":
-			if depth > 0 {
-				depth--
-			}
-		case token.Cat == 'O' && token.Str == "img" && depth > 0:
-			return true
-		}
-	}
-	return false
-}

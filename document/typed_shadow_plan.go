@@ -6,7 +6,6 @@ package document
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/layout"
@@ -112,15 +111,4 @@ func typedShadowFixedGeometry(f *pdfDocument, left, top, width, height float64) 
 		return layoutengine.Size{}, layoutengine.Rect{}, err
 	}
 	return pageSize, body, nil
-}
-
-func typedShadowCoreFont(coreFonts map[string]bool, family string) bool {
-	if strings.TrimSpace(family) == "" {
-		return true
-	}
-	family = strings.ToLower(fontFamilyEscape(family))
-	if family == "arial" {
-		family = "helvetica"
-	}
-	return coreFonts[family]
 }

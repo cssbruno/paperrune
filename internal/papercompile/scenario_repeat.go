@@ -42,43 +42,35 @@ type scenarioCompileRequest struct {
 // CompileScenario compiles one explicitly selected source fixture. It is the
 // only compile entry point that expands repeat and loop nodes.
 func CompileScenario(ast paperlang.AST, scenario string) Result {
-	return compilePipeline(ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{name: scenario}, AssetCatalog{}, nil)
+	return compilePipeline(context.Background(), ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{name: scenario}, AssetCatalog{}, nil)
 }
 
-// CompileScenarioWithAssets is CompileScenario with the same explicit,
-// immutable asset boundary used by CompileWithAssets.
-func CompileScenarioWithAssets(ast paperlang.AST, scenario string, assets AssetCatalog) Result {
-	return compilePipeline(ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{name: scenario}, assets, nil)
-}
-
-// CompileScenarioWithResolver is CompileScenario with an explicit source
-// boundary for reusable design imports.
-func CompileScenarioWithResolver(ast paperlang.AST, scenario string, resolver ImportResolver) Result {
-	return compilePipeline(ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{name: scenario}, AssetCatalog{}, resolver)
-}
-
-// CompileScenarioWithAssetsAndResolver combines the explicit asset and source
-// boundaries used by the scenario compiler.
-func CompileScenarioWithAssetsAndResolver(ast paperlang.AST, scenario string, assets AssetCatalog, resolver ImportResolver) Result {
-	return compilePipeline(ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{name: scenario}, assets, resolver)
+// CompileScenarioWithAssetsAndResolverContext is the context-aware scenario
+// compiler used by planning so cancellation includes import resolution.
+func CompileScenarioWithAssetsAndResolverContext(ctx context.Context, ast paperlang.AST, scenario string, assets AssetCatalog, resolver ImportResolver) Result {
+	return compilePipeline(ctx, ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{name: scenario}, assets, resolver)
 }
 
 // CompileScenarioWithLimits is CompileScenario with explicit bounded policies.
 func CompileScenarioWithLimits(ast paperlang.AST, scenario string, limits ScenarioCompileLimits) Result {
-	return compilePipeline(ast, limits.Components, limits.Schemas, &scenarioCompileRequest{name: scenario, limits: limits}, AssetCatalog{}, nil)
+	ctx := limits.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return compilePipeline(ctx, ast, limits.Components, limits.Schemas, &scenarioCompileRequest{name: scenario, limits: limits}, AssetCatalog{}, nil)
 }
 
 // CompileJSONData compiles one strict JSON object against a declared .paper
 // schema. The normalized data uses the same bounded fixture path as authored
 // scenarios, including repeat expansion and binding validation.
 func CompileJSONData(ast paperlang.AST, data []byte, options JSONDataOptions) Result {
-	return compilePipeline(ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{data: data, dataSet: true, dataOptions: options}, AssetCatalog{}, nil)
+	return compilePipeline(context.Background(), ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{data: data, dataSet: true, dataOptions: options}, AssetCatalog{}, nil)
 }
 
-// CompileJSONDataWithAssetsAndResolver combines strict JSON data with the
-// explicit resource and source boundaries used by the other compilers.
-func CompileJSONDataWithAssetsAndResolver(ast paperlang.AST, data []byte, options JSONDataOptions, assets AssetCatalog, resolver ImportResolver) Result {
-	return compilePipeline(ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{data: data, dataSet: true, dataOptions: options}, assets, resolver)
+// CompileJSONDataWithAssetsAndResolverContext is the context-aware external
+// data compiler used by document planning.
+func CompileJSONDataWithAssetsAndResolverContext(ctx context.Context, ast paperlang.AST, data []byte, options JSONDataOptions, assets AssetCatalog, resolver ImportResolver) Result {
+	return compilePipeline(ctx, ast, ExpansionLimits{}, SchemaLimits{}, &scenarioCompileRequest{data: data, dataSet: true, dataOptions: options}, assets, resolver)
 }
 
 type repeatExpansionContext struct {

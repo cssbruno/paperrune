@@ -41,7 +41,7 @@ func TestPaperStudioAppliesExactPageSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
 		"source_revision": before.SourceRevision, "plan_revision": before.Revision,
@@ -78,12 +78,12 @@ func TestPaperStudioEditsLiteralAndAddressedRichText(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			before := fetchStudioWorkspace(t, studio.routes())
+			before := fetchStudioWorkspace(t, studio.testRoutes())
 			request := map[string]any{"source_revision": before.SourceRevision, "plan_revision": before.Revision, "operation": "content", "target": test.target, "property": test.property}
 			for key, value := range test.payload {
 				request[key] = value
 			}
-			response := postStudioJSON(t, studio.routes(), "/api/edit", request)
+			response := postStudioJSON(t, studio.testRoutes(), "/api/edit", request)
 			if response.StatusCode != http.StatusOK {
 				t.Fatalf("content edit = %d %s", response.StatusCode, response.Body)
 			}
@@ -109,7 +109,7 @@ func TestPaperStudioOffersExplicitFontRepairAgainstUnavailablePlan(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	if before.Pages != 0 || len(before.Diagnostics) != 1 || before.Diagnostics[0].Code != "PAPER_COMPILE_FONT" {
 		t.Fatalf("strict unavailable-font workspace = %+v", before)
@@ -149,7 +149,7 @@ func TestPaperStudioCanvasEditGuardsGoverningCanvasAndChangesCapture(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	beforeCapture := studioPageCapture(t, handler, before.Revision)
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
@@ -191,7 +191,7 @@ func TestPaperStudioRegionEditGuardsPageAndChangesCapture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	beforeCapture := studioPageCapture(t, handler, before.Revision)
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
@@ -234,7 +234,7 @@ func TestPaperStudioFlowEditMovesNodeThroughExactDropDestination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
 		"source_revision": before.SourceRevision, "plan_revision": before.Revision,
@@ -265,7 +265,7 @@ func TestPaperStudioPageTemplateBootstrapsParseableDocument(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
 		"source_revision": before.SourceRevision, "plan_revision": before.Revision,
@@ -300,7 +300,7 @@ func TestPaperStudioAuthoringMetadataAndJournaledCreateToConnectFlow(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	metadataResponse := studioRequest(t, handler, http.MethodGet, "/api/authoring?revision="+before.Revision, nil, "")
 	if metadataResponse.StatusCode != http.StatusOK {
@@ -390,7 +390,7 @@ func TestPaperStudioAuthoringMetadataAndJournaledCreateToConnectFlow(t *testing.
 		t.Fatalf("deleted scenario source:\n%s", afterLifecycle.Source)
 	}
 	delivery := studioRequest(t, handler, http.MethodGet, "/api/delivery?revision="+afterLifecycle.Revision, nil, "")
-	if delivery.StatusCode != http.StatusOK || !strings.Contains(string(delivery.Body), `"status":"verified"`) || !strings.Contains(string(delivery.Body), `"publish":{"status":"separate_authorized_capability"`) {
+	if delivery.StatusCode != http.StatusOK || !strings.Contains(string(delivery.Body), `"status":"ready"`) || !strings.Contains(string(delivery.Body), `"publish":{"status":"separate_authorized_capability"`) {
 		t.Fatalf("create-to-deliver status = %d %s", delivery.StatusCode, delivery.Body)
 	}
 	export := studioRequest(t, handler, http.MethodGet, "/api/export.pdf?revision="+afterLifecycle.Revision, nil, "")
@@ -413,7 +413,7 @@ func TestPaperStudioNodeLifecycleIsCataloguedValidatedAndJournaled(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	metadataResponse := studioRequest(t, handler, http.MethodGet, "/api/authoring?revision="+before.Revision, nil, "")
 	var metadata studioAuthoringResponse
@@ -478,7 +478,7 @@ func TestPaperStudioSchemaFieldMatrixAndFixtureValueControls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	metadataResponse := studioRequest(t, handler, http.MethodGet, "/api/authoring?revision="+before.Revision, nil, "")
 	var metadata studioAuthoringResponse
@@ -547,7 +547,7 @@ func TestPaperStudioCreatesCustomObjectType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	created := postStudioJSON(t, handler, "/api/edit", map[string]any{
 		"source_revision": before.SourceRevision,
@@ -583,7 +583,7 @@ func TestPaperStudioTypedPaletteInsertsPrimitiveAndComponentInstances(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	metadataResponse := studioRequest(t, handler, http.MethodGet, "/api/authoring?revision="+before.Revision, nil, "")
 	if metadataResponse.StatusCode != http.StatusOK || !strings.Contains(string(metadataResponse.Body), `"@card"`) {
@@ -640,7 +640,7 @@ func TestPaperStudioImportTemplateFlowsThroughPreviewAndExport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
 		"source_revision": before.SourceRevision, "plan_revision": before.Revision,
@@ -668,7 +668,7 @@ func TestPaperStudioBoxEditBindsExactRevisionsAndKeepsCapabilitiesServerSide(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	beforeCapture := studioPageCapture(t, handler, before.Revision)
 	request := map[string]any{
@@ -731,7 +731,7 @@ func TestPaperStudioLayoutItemEditAuthorizesAndGuardsTransitiveParent(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	beforeCapture := studioPageCapture(t, handler, before.Revision)
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
@@ -774,7 +774,7 @@ func TestPaperStudioLayoutContainerEditUsesReadableProperty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
 		"source_revision": before.SourceRevision,
@@ -802,7 +802,7 @@ func TestPaperStudioEditRejectsUnboundedUnknownAndConcurrentStaleIntents(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	base := map[string]any{
 		"source_revision": before.SourceRevision, "plan_revision": before.Revision,
@@ -885,7 +885,7 @@ func TestPaperStudioImageAndTableEditsUseClosedPrivateAuthorities(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			handler := studio.routes()
+			handler := studio.testRoutes()
 			before := fetchStudioWorkspace(t, handler)
 			beforeCapture := studioPageCapture(t, handler, before.Revision)
 			request := map[string]any{"source_revision": before.SourceRevision, "plan_revision": before.Revision}
@@ -970,7 +970,7 @@ func TestPaperStudioRoutesMissingAttributesThroughClosedMutations(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			handler := studio.routes()
+			handler := studio.testRoutes()
 			before := fetchStudioWorkspace(t, handler)
 			request := map[string]any{
 				"source_revision": before.SourceRevision, "plan_revision": before.Revision,
@@ -1000,7 +1000,7 @@ func TestPaperStudioPageMarginEditsGoverningPageMaster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	beforeCapture := studioPageCapture(t, handler, before.Revision)
 	response := postStudioJSON(t, handler, "/api/edit", map[string]any{
@@ -1035,7 +1035,7 @@ func TestPaperStudioResetUndoAndRedoRemainExact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	before := fetchStudioWorkspace(t, handler)
 	set := postStudioJSON(t, handler, "/api/edit", map[string]any{
 		"source_revision": before.SourceRevision, "plan_revision": before.Revision,
@@ -1087,8 +1087,8 @@ func TestPaperStudioResetRejectsUnavailableProperty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before := fetchStudioWorkspace(t, studio.routes())
-	response := postStudioJSON(t, studio.routes(), "/api/edit", map[string]any{
+	before := fetchStudioWorkspace(t, studio.testRoutes())
+	response := postStudioJSON(t, studio.testRoutes(), "/api/edit", map[string]any{
 		"source_revision": before.SourceRevision, "plan_revision": before.Revision,
 		"operation": "page", "target": "@sheet", "property": "margin-left", "reset": true,
 	})

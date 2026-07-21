@@ -21,6 +21,25 @@ import (
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 )
 
+func TestStudioBrowserCommand(t *testing.T) {
+	for _, test := range []struct {
+		goos string
+		want string
+	}{
+		{"darwin", "open"},
+		{"linux", "xdg-open"},
+		{"windows", "rundll32"},
+	} {
+		name, args, err := studioBrowserCommand("http://127.0.0.1:7331/#token=test", test.goos)
+		if err != nil || name != test.want || len(args) == 0 {
+			t.Fatalf("browser command for %s = %q, %v, %v", test.goos, name, args, err)
+		}
+	}
+	if _, _, err := studioBrowserCommand("http://127.0.0.1", "plan9"); err == nil {
+		t.Fatal("unsupported platform did not fail")
+	}
+}
+
 const studioFixture = "document @report:\n" +
 	"  title: \"Studio fixture\"\n" +
 	"  language: \"en\"\n" +
@@ -45,7 +64,7 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 
 	response := studioRequest(t, handler, http.MethodGet, "/", nil, "")
 	if response.StatusCode != http.StatusOK || !bytes.Contains(response.Body, []byte("Paper Studio")) ||
@@ -67,7 +86,6 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		bytes.Contains(response.Body, []byte(`experiments-disclosure`)) ||
 		bytes.Contains(response.Body, []byte(`src="/typed-experiment-model.js"`)) ||
 		bytes.Contains(response.Body, []byte(`src="/review-model.js"`)) ||
-		!bytes.Contains(response.Body, []byte(`src="/tag-model.js"`)) ||
 		!bytes.Contains(response.Body, []byte(`src="/syntax-model.js"`)) ||
 		!bytes.Contains(response.Body, []byte(`src="/page-setup-model.js"`)) ||
 		!bytes.Contains(response.Body, []byte(`src="/issue-model.js"`)) ||
@@ -76,7 +94,6 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		!bytes.Contains(response.Body, []byte(`data-template="header"`)) ||
 		!bytes.Contains(response.Body, []byte(`data-template="footer"`)) ||
 		!bytes.Contains(response.Body, []byte(`id="page-setup-controls"`)) ||
-		!bytes.Contains(response.Body, []byte(`id="tag-tree"`)) ||
 		!bytes.Contains(response.Body, []byte(`data-overlay="margin"`)) ||
 		!bytes.Contains(response.Body, []byte(`data-overlay="padding"`)) ||
 		!bytes.Contains(response.Body, []byte(`data-overlay="overflow"`)) ||
@@ -140,7 +157,8 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		!bytes.Contains(javascript.Body, []byte("refreshPromise")) ||
 		!bytes.Contains(javascript.Body, []byte("loadDeliveryStatus")) ||
 		!bytes.Contains(javascript.Body, []byte("loadReview(")) || !bytes.Contains(javascript.Body, []byte("submitReview(")) ||
-		!bytes.Contains(javascript.Body, []byte("EventSource")) ||
+		bytes.Contains(javascript.Body, []byte("EventSource")) || !bytes.Contains(javascript.Body, []byte("readChangeStream")) ||
+		!bytes.Contains(javascript.Body, []byte("history.replaceState")) || bytes.Contains(javascript.Body, []byte("bootstrapStudioSession")) ||
 		bytes.Contains(javascript.Body, []byte("draft.orientation = 'portrait'")) ||
 		!bytes.Contains(javascript.Body, []byte("Apply page size")) ||
 		!bytes.Contains(javascript.Body, []byte(".render?revision=")) ||
@@ -188,11 +206,6 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 	if typedModel.StatusCode != http.StatusOK || !bytes.Contains(typedModel.Body, []byte("function normalize")) || !bytes.Contains(typedModel.Body, []byte("breakLabel")) {
 		t.Fatalf("typed experiment model = %d / %s", typedModel.StatusCode, typedModel.Body)
 	}
-	tagModel := studioRequest(t, handler, http.MethodGet, "/tag-model.js", nil, "")
-	if tagModel.StatusCode != http.StatusOK || !bytes.Contains(tagModel.Body, []byte("final_serialized_pdf")) ||
-		!bytes.Contains(tagModel.Body, []byte("content_marked")) || !bytes.Contains(tagModel.Body, []byte("normalize")) {
-		t.Fatalf("tag model = %d / %s", tagModel.StatusCode, tagModel.Body)
-	}
 	syntaxModel := studioRequest(t, handler, http.MethodGet, "/syntax-model.js", nil, "")
 	if syntaxModel.StatusCode != http.StatusOK || !bytes.Contains(syntaxModel.Body, []byte("function highlight")) ||
 		!bytes.Contains(syntaxModel.Body, []byte("kind = 'keyword'")) || !bytes.Contains(syntaxModel.Body, []byte("escapeHTML")) {
@@ -208,12 +221,15 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 	}
 	wasmBootstrap := studioRequest(t, handler, http.MethodGet, "/wasm-renderer.js", nil, "")
 	if wasmBootstrap.StatusCode != http.StatusOK || !bytes.Contains(wasmBootstrap.Body, []byte("new Worker('/wasm-renderer-worker.js')")) ||
-		!bytes.Contains(wasmBootstrap.Body, []byte("PaperStudioWASMRenderer")) || !bytes.Contains(wasmBootstrap.Body, []byte("renderResponse")) {
+		!bytes.Contains(wasmBootstrap.Body, []byte("PaperStudioWASMRenderer")) || !bytes.Contains(wasmBootstrap.Body, []byte("renderResponse")) ||
+		!bytes.Contains(wasmBootstrap.Body, []byte("WebAssembly.compileStreaming")) || !bytes.Contains(wasmBootstrap.Body, []byte("RENDER_TIMEOUT_MS")) ||
+		!bytes.Contains(wasmBootstrap.Body, []byte("createImageBitmap")) || !bytes.Contains(wasmBootstrap.Body, []byte("worker.terminate()")) {
 		t.Fatalf("wasm bootstrap = %d / %s", wasmBootstrap.StatusCode, wasmBootstrap.Body)
 	}
 	wasmWorker := studioRequest(t, handler, http.MethodGet, "/wasm-renderer-worker.js", nil, "")
-	if wasmWorker.StatusCode != http.StatusOK || !bytes.Contains(wasmWorker.Body, []byte("WebAssembly.instantiateStreaming")) ||
-		!bytes.Contains(wasmWorker.Body, []byte("importScripts('/wasm_exec.js')")) || !bytes.Contains(wasmWorker.Body, []byte("createImageBitmap")) {
+	if wasmWorker.StatusCode != http.StatusOK || !bytes.Contains(wasmWorker.Body, []byte("globalThis.Go")) ||
+		!bytes.Contains(wasmWorker.Body, []byte("WebAssembly.instantiate(module")) || bytes.Contains(wasmWorker.Body, []byte("importScripts(")) ||
+		wasmWorker.Header.Get("Content-Security-Policy") != "default-src 'none'; script-src 'wasm-unsafe-eval'; connect-src 'none'; child-src 'none'; worker-src 'none'" {
 		t.Fatalf("wasm worker = %d / %s", wasmWorker.StatusCode, wasmWorker.Body)
 	}
 	wasmRuntime := studioRequest(t, handler, http.MethodGet, "/wasm_exec.js", nil, "")
@@ -344,7 +360,7 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		t.Fatalf("stale typed experiment status = %d", staleTyped.StatusCode)
 	}
 	delivery := studioRequest(t, handler, http.MethodGet, "/api/delivery?revision="+workspace.Revision, nil, "")
-	if delivery.StatusCode != http.StatusOK || !bytes.Contains(delivery.Body, []byte(`"preflight":{"status":"ready"`)) || !bytes.Contains(delivery.Body, []byte(`"pdf_verification":{"status":"verified"`)) || !bytes.Contains(delivery.Body, []byte(`"export":{"status":"ready"`)) || !bytes.Contains(delivery.Body, []byte(`"publish":{"status":"separate_authorized_capability"`)) {
+	if delivery.StatusCode != http.StatusOK || !bytes.Contains(delivery.Body, []byte(`"preflight":{"status":"ready"`)) || !bytes.Contains(delivery.Body, []byte(`"export":{"status":"ready"`)) || !bytes.Contains(delivery.Body, []byte(`"publish":{"status":"separate_authorized_capability"`)) {
 		t.Fatalf("delivery status = %d %s", delivery.StatusCode, delivery.Body)
 	}
 	export := studioRequest(t, handler, http.MethodGet, "/api/export.pdf?revision="+workspace.Revision, nil, "")
@@ -382,7 +398,7 @@ func TestPaperStudioChangeStreamSignalsSourceRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspace := fetchStudioWorkspace(t, studio.routes())
+	workspace := fetchStudioWorkspace(t, studio.testRoutes())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -394,7 +410,7 @@ func TestPaperStudioChangeStreamSignalsSourceRevision(t *testing.T) {
 	stream := &studioStreamRecorder{header: make(http.Header), chunks: make(chan string, 16), ready: make(chan struct{})}
 	done := make(chan struct{})
 	go func() {
-		studio.routes().ServeHTTP(stream, request)
+		studio.testRoutes().ServeHTTP(stream, request)
 		close(done)
 	}()
 	select {
@@ -404,6 +420,9 @@ func TestPaperStudioChangeStreamSignalsSourceRevision(t *testing.T) {
 	}
 	if status := stream.Status(); status != 0 && status != http.StatusOK {
 		t.Fatalf("change stream = %d %q", status, stream.header)
+	}
+	if !stream.WriteDeadlineCleared() {
+		t.Fatal("change stream did not clear the server write deadline")
 	}
 	readStream := func(marker string) string {
 		var content strings.Builder
@@ -436,13 +455,78 @@ func TestPaperStudioChangeStreamSignalsSourceRevision(t *testing.T) {
 	<-done
 }
 
+func TestPaperStudioChangeStreamSignalsImportedSourceRevision(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "fixture.paper")
+	imported := filepath.Join(dir, "design.paper")
+	source := "document:\n  import: \"design.paper\"\n  page:\n    body:\n      paragraph:\n        style: \"@body\"\n        text: \"Imported\"\n"
+	design := "document:\n  style @body:\n    font: \"Courier\"\n    size: 10pt\n"
+	if err := os.WriteFile(file, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(imported, []byte(design), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	studio, err := newStudioServer(file, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := fetchStudioWorkspace(t, studio.testRoutes())
+	if workspace.SourceRevision == studioSourceRevision(source) {
+		t.Fatal("workspace source revision omitted imported content")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/changes?source_revision="+workspace.SourceRevision, nil).WithContext(ctx)
+	request.Header.Set(studioSessionHeader, studio.sessionToken)
+	stream := &studioStreamRecorder{header: make(http.Header), chunks: make(chan string, 16), ready: make(chan struct{})}
+	done := make(chan struct{})
+	go func() {
+		studio.testRoutes().ServeHTTP(stream, request)
+		close(done)
+	}()
+	select {
+	case <-stream.ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("change stream did not become ready")
+	}
+	if err := os.WriteFile(imported, []byte(strings.Replace(design, "10pt", "18pt", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var event strings.Builder
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	for !strings.Contains(event.String(), "event: changed") {
+		select {
+		case chunk := <-stream.chunks:
+			event.WriteString(chunk)
+		case <-timer.C:
+			t.Fatalf("timed out waiting for imported change; stream=%q", event.String())
+		}
+	}
+	if strings.Contains(event.String(), `"source_revision":"`+workspace.SourceRevision+`"`) {
+		t.Fatalf("import change retained stale revision: %q", event.String())
+	}
+	cancel()
+	<-done
+	updated := fetchStudioWorkspace(t, studio.testRoutes())
+	if updated.SourceRevision == workspace.SourceRevision || updated.Revision == workspace.Revision || updated.Baseline.Status == "none" {
+		t.Fatalf("updated imported workspace = %#v", updated)
+	}
+	if !strings.Contains(event.String(), `"source_revision":"`+updated.SourceRevision+`"`) {
+		t.Fatalf("change event %q does not match updated revision %q", event.String(), updated.SourceRevision)
+	}
+}
+
 type studioStreamRecorder struct {
-	header http.Header
-	chunks chan string
-	ready  chan struct{}
-	mu     sync.Mutex
-	once   sync.Once
-	status int
+	header          http.Header
+	chunks          chan string
+	ready           chan struct{}
+	mu              sync.Mutex
+	once            sync.Once
+	status          int
+	deadlineCleared bool
 }
 
 func (w *studioStreamRecorder) Header() http.Header { return w.header }
@@ -468,6 +552,17 @@ func (w *studioStreamRecorder) Status() int {
 	return w.status
 }
 func (w *studioStreamRecorder) Flush() {}
+func (w *studioStreamRecorder) SetWriteDeadline(deadline time.Time) error {
+	w.mu.Lock()
+	w.deadlineCleared = deadline.IsZero()
+	w.mu.Unlock()
+	return nil
+}
+func (w *studioStreamRecorder) WriteDeadlineCleared() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.deadlineCleared
+}
 
 func TestPaperStudioInspectionRetainsRepeatedFragmentEvidence(t *testing.T) {
 	var source strings.Builder
@@ -483,11 +578,11 @@ func TestPaperStudioInspectionRetainsRepeatedFragmentEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspace := fetchStudioWorkspace(t, studio.routes())
+	workspace := fetchStudioWorkspace(t, studio.testRoutes())
 	if workspace.Pages < 2 {
 		t.Fatalf("repeated fixture pages = %d", workspace.Pages)
 	}
-	inspection := postStudioJSON(t, studio.routes(), "/api/inspect", map[string]any{"revision": workspace.Revision, "page": 2})
+	inspection := postStudioJSON(t, studio.testRoutes(), "/api/inspect", map[string]any{"revision": workspace.Revision, "page": 2})
 	if inspection.StatusCode != http.StatusOK || !strings.Contains(inspection.Body, `"repeated":true`) ||
 		!strings.Contains(inspection.Body, `"region":"body"`) || !strings.Contains(inspection.Body, `"instance":"@typed-table-r1-c1"`) ||
 		!strings.Contains(inspection.Body, `"semantic_ownership":{"owner":`) || !strings.Contains(inspection.Body, `"table_header":true`) {
@@ -526,8 +621,8 @@ func TestPaperStudioInspectionShowsBindingAndTokenProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspace := fetchStudioWorkspace(t, studio.routes())
-	inspection := postStudioJSON(t, studio.routes(), "/api/inspect", map[string]any{"revision": workspace.Revision, "page": 1})
+	workspace := fetchStudioWorkspace(t, studio.testRoutes())
+	inspection := postStudioJSON(t, studio.testRoutes(), "/api/inspect", map[string]any{"revision": workspace.Revision, "page": 1})
 	if inspection.StatusCode != http.StatusOK || !strings.Contains(inspection.Body, `"bindings":[`) || !strings.Contains(inspection.Body, `"path":"@invoice.total"`) || !strings.Contains(inspection.Body, `"style_tokens":[`) || !strings.Contains(inspection.Body, `"token":"font"`) {
 		t.Fatalf("provenance inspection = %d %s", inspection.StatusCode, inspection.Body)
 	}
@@ -543,8 +638,8 @@ func TestPaperStudioInspectionShowsBreakLedger(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workspace := fetchStudioWorkspace(t, studio.routes())
-	inspection := postStudioJSON(t, studio.routes(), "/api/inspect", map[string]any{"revision": workspace.Revision, "page": 1})
+	workspace := fetchStudioWorkspace(t, studio.testRoutes())
+	inspection := postStudioJSON(t, studio.testRoutes(), "/api/inspect", map[string]any{"revision": workspace.Revision, "page": 1})
 	if inspection.StatusCode != http.StatusOK || !strings.Contains(inspection.Body, `"breaks":[`) || !strings.Contains(inspection.Body, `"from_page":1`) {
 		t.Fatalf("break ledger inspection = %d %s", inspection.StatusCode, inspection.Body)
 	}
@@ -572,7 +667,7 @@ func TestPaperStudioRejectsRebindingHostsAndOrigins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 
 	tests := []struct {
 		name   string
@@ -598,7 +693,7 @@ func TestPaperStudioRejectsRebindingHostsAndOrigins(t *testing.T) {
 	}
 }
 
-func TestPaperStudioRequiresSessionAndMutationMetadata(t *testing.T) {
+func TestPaperStudioRequiresHeaderTokenAndMutationMetadata(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "fixture.paper")
 	if err := os.WriteFile(file, []byte(studioFixture), 0o600); err != nil {
 		t.Fatal(err)
@@ -607,7 +702,7 @@ func TestPaperStudioRequiresSessionAndMutationMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 
 	unauthenticated := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/workspace", nil)
 	unauthenticatedResponse := httptest.NewRecorder()
@@ -616,25 +711,20 @@ func TestPaperStudioRequiresSessionAndMutationMetadata(t *testing.T) {
 		t.Fatalf("unauthenticated status = %d, want 403", unauthenticatedResponse.Code)
 	}
 
-	bootstrap := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:7331/session", nil)
-	bootstrap.Header.Set("Origin", "http://127.0.0.1:7331")
-	bootstrap.Header.Set(studioSessionHeader, studio.sessionToken)
-	bootstrapResponse := httptest.NewRecorder()
-	handler.ServeHTTP(bootstrapResponse, bootstrap)
-	if bootstrapResponse.Code != http.StatusNoContent {
-		t.Fatalf("bootstrap status = %d, want 204", bootstrapResponse.Code)
-	}
-	cookies := bootstrapResponse.Result().Cookies()
-	if len(cookies) != 1 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
-		t.Fatalf("bootstrap cookies = %#v, want one HttpOnly SameSite=Strict cookie", cookies)
+	cookieOnly := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/workspace", nil)
+	cookieOnly.AddCookie(&http.Cookie{Name: "paper_studio_session", Value: studio.sessionToken})
+	cookieResponse := httptest.NewRecorder()
+	handler.ServeHTTP(cookieResponse, cookieOnly)
+	if cookieResponse.Code != http.StatusForbidden {
+		t.Fatalf("cookie-authenticated status = %d, want 403", cookieResponse.Code)
 	}
 
-	authenticated := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/workspace", nil)
-	authenticated.AddCookie(cookies[0])
-	authenticatedResponse := httptest.NewRecorder()
-	handler.ServeHTTP(authenticatedResponse, authenticated)
-	if authenticatedResponse.Code != http.StatusOK {
-		t.Fatalf("cookie-authenticated status = %d, want 200", authenticatedResponse.Code)
+	headerAuthenticated := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/workspace", nil)
+	headerAuthenticated.Header.Set(studioSessionHeader, studio.sessionToken)
+	headerResponse := httptest.NewRecorder()
+	handler.ServeHTTP(headerResponse, headerAuthenticated)
+	if headerResponse.Code != http.StatusOK || len(headerResponse.Result().Cookies()) != 0 {
+		t.Fatalf("header-authenticated status/cookies = %d/%#v, want 200/no cookies", headerResponse.Code, headerResponse.Result().Cookies())
 	}
 
 	missingOrigin := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:7331/api/edit", strings.NewReader(`{}`))
@@ -657,6 +747,26 @@ func TestPaperStudioRequiresSessionAndMutationMetadata(t *testing.T) {
 	}
 }
 
+func TestStudioFileImportResolverConfinesSymlinksToProjectRoot(t *testing.T) {
+	project := t.TempDir()
+	outside := t.TempDir()
+	mainFile := filepath.Join(project, "main.paper")
+	outsideFile := filepath.Join(outside, "outside.paper")
+	if err := os.WriteFile(mainFile, []byte("document:\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outsideFile, []byte("document:\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(project, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	resolver := studioFileImportResolver(mainFile)
+	if _, _, err := resolver(t.Context(), mainFile, "linked/outside.paper"); err == nil || !strings.Contains(err.Error(), "escapes the project root") {
+		t.Fatalf("symlink import error = %v, want project-root rejection", err)
+	}
+}
+
 func TestPaperStudioReloadsAtomicallyAndRejectsMalformedOrConcurrentRequests(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "fixture.paper")
 	if err := os.WriteFile(file, []byte(studioFixture), 0o600); err != nil {
@@ -666,7 +776,7 @@ func TestPaperStudioReloadsAtomicallyAndRejectsMalformedOrConcurrentRequests(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	first := fetchStudioWorkspace(t, handler)
 	for index := 0; index < studioScenarioCacheLimit+8; index++ {
 		if _, err := studio.current(context.Background(), fmt.Sprintf("@untrusted-%d", index)); err != nil {
@@ -750,7 +860,7 @@ func BenchmarkPaperStudioWarmWorkspaceWithPageRailBaseline(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	first, err := fetchStudioWorkspaceResult(handler)
 	if err != nil {
 		b.Fatal(err)
@@ -781,7 +891,7 @@ func BenchmarkPaperStudioWarmWorkspaceAndVisibleRenderPayload(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	handler := studio.routes()
+	handler := studio.testRoutes()
 	workspace, err := fetchStudioWorkspaceResult(handler)
 	if err != nil {
 		b.Fatal(err)
@@ -841,6 +951,17 @@ type studioRecordedResponse struct {
 	StatusCode int
 	Header     http.Header
 	Body       []byte
+}
+
+type studioTestRoutes struct {
+	http.Handler
+	token string
+}
+
+func (routes studioTestRoutes) studioSessionToken() string { return routes.token }
+
+func (s *studioServer) testRoutes() http.Handler {
+	return studioTestRoutes{Handler: s.routes(), token: s.sessionToken}
 }
 
 func studioRequest(t *testing.T, handler http.Handler, method, target string, body io.Reader, contentType string) studioRecordedResponse {

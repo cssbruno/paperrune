@@ -65,37 +65,6 @@ func (html *htmlRenderer) maxDataImageBytes() int {
 	return html.MaxDataImageBytes
 }
 
-func (html *htmlRenderer) generatedPageCount() int {
-	if html == nil || html.pdf == nil {
-		return 0
-	}
-	pageCount := html.pdf.PageCount()
-	if html.renderStartPageCount <= 0 {
-		return pageCount
-	}
-	if pageCount <= html.renderStartPageCount {
-		return 1
-	}
-	return pageCount - html.renderStartPageCount + 1
-}
-
-func (html *htmlRenderer) checkGeneratedPageLimitForAdd() error {
-	pageCount := html.generatedPageCount() + 1
-	maxPages := html.maxGeneratedPages()
-	if pageCount <= maxPages {
-		return nil
-	}
-	return fmt.Errorf("%w: HTML rendering exceeded maximum generated pages: %d > %d", errHTMLLimitExceeded, pageCount, maxPages)
-}
-
-func (html *htmlRenderer) addPageFormat() bool {
-	if html == nil || html.pdf == nil {
-		return false
-	}
-	html.pdf.addPageFormatRotation(html.pdf.curOrientation, html.pdf.curPageSize, html.pdf.curRotation)
-	return html.pdf.err == nil
-}
-
 func htmlElementDepthMessage(tokens []htmlSegmentType, maxDepth int) string {
 	depth := 0
 	for _, token := range tokens {

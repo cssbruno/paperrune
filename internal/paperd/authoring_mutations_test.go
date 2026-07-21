@@ -4,6 +4,7 @@
 package paperd
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -351,7 +352,7 @@ func TestPaperAuthoringEditsScenarioFixtureValueByRelativePath(t *testing.T) {
 }
 
 func TestPaperInsertImportTemplateAppendsOneResolvedDesignImport(t *testing.T) {
-	workspace, err := NewWorkspaceWithOptions(WorkspaceOptions{ImportResolver: func(importerFile, importPath string) (string, string, error) {
+	workspace, err := NewWorkspaceWithOptions(WorkspaceOptions{ImportResolver: func(_ context.Context, importerFile, importPath string) (string, string, error) {
 		if importerFile != "mutation.paper" || importPath != "styles/design.paper" {
 			t.Fatalf("resolver request = %s %s", importerFile, importPath)
 		}

@@ -1,3 +1,6 @@
+(() => {
+'use strict';
+
 const state = {
   workspace: null,
   revision: '',
@@ -36,17 +39,12 @@ const state = {
   pageSetupFeedback: null,
   loading: false,
   refreshPromise: null,
-  pdfTags: null,
-  pdfTagsRevision: '',
-  tagsLoading: false,
-  tagError: '',
-  verificationStale: false,
   delivery: null,
   deliveryRevision: '',
   deliveryLoading: false,
+  deliveryDownloading: false,
   deliveryError: '',
   changeStream: null,
-  poll: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -58,6 +56,7 @@ const overlapPicker = $('#overlap-picker');
 const selectionLayer = $('#selection-layer');
 const canvasScroll = $('#canvas-scroll');
 const studioSessionToken = new URLSearchParams(window.location.hash.slice(1)).get('token') || '';
+if (studioSessionToken) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
 
 function previewRevisionLocked() {
   return PaperStudioMutationGate.revisionsLocked(
@@ -74,6 +73,7 @@ function visualMutationsLocked() {
 function setPreviewStale(stale) {
   app.classList.toggle('is-stale', stale);
   renderVerificationState();
+  renderDelivery();
   renderEditControls();
   renderAuthoringControls();
   renderPageSetup();
@@ -95,16 +95,6 @@ async function api(path, options = {}) {
     throw error;
   }
   return type.includes('json') ? response.json() : response;
-}
-
-async function bootstrapStudioSession() {
-  if (!studioSessionToken) throw new Error('Paper Studio session token is missing from the launch URL');
-  const response = await fetch('/session', {
-    method: 'POST',
-    cache: 'no-store',
-    headers: {'X-Paper-Studio-Token': studioSessionToken},
-  });
-  if (!response.ok) throw new Error(`Paper Studio session bootstrap failed (${response.status})`);
 }
 
 async function refresh({quiet = false} = {}) {
@@ -137,17 +127,14 @@ async function performRefresh({quiet = false} = {}) {
     state.loadedScenario = state.scenario;
     await loadHistory();
     if (changed) {
-      if (state.pdfTagsRevision && state.pdfTagsRevision !== workspace.revision) state.verificationStale = true;
       clearObjectURLs();
       state.pageMeta.clear();
       state.inspections.clear();
       state.selectionFragments = [];
       state.activePageMeta = null;
-      state.pdfTags = null;
-      state.pdfTagsRevision = '';
-      state.tagError = '';
       state.delivery = null;
       state.deliveryRevision = '';
+      state.deliveryDownloading = false;
       state.deliveryError = '';
       closeOverlapPicker();
       state.page = Math.min(Math.max(1, state.page), Math.max(1, workspace.pages));
@@ -157,7 +144,6 @@ async function performRefresh({quiet = false} = {}) {
       await loadReview(workspace.revision);
       loadDeliveryStatus(workspace.revision);
       if (workspace.pages) await showPage(state.page);
-      if (workspace.pages && app.dataset.mode === 'accessibility') await loadPDFTags();
     } else if (!quiet) {
       renderStatus();
     }
@@ -235,23 +221,57 @@ function connectChangeStream() {
   const query = new URLSearchParams();
   if (state.scenario) query.set('scenario', state.scenario);
   if (state.sourceRevision) query.set('source_revision', state.sourceRevision);
-  if (typeof EventSource === 'function') {
-    const stream = new EventSource(`/api/changes?${query.toString()}`);
-    stream.addEventListener('changed', (event) => {
-      let message;
-      try { message = JSON.parse(event.data); } catch (_) { return; }
-      const expected = String(message.source_revision || '');
-      if (!expected || expected === state.sourceRevision) return;
-      refresh({quiet: true}).then(() => {
-        if (state.sourceRevision !== expected) return refresh({quiet: true});
-      });
-    });
-    state.changeStream = stream;
-    return;
+  const controller = new AbortController();
+  const stream = {close: () => controller.abort()};
+  state.changeStream = stream;
+  (async () => {
+    while (!controller.signal.aborted && state.changeStream === stream) {
+      try {
+        const response = await fetch(`/api/changes?${query.toString()}`, {
+          cache: 'no-store', signal: controller.signal,
+          headers: {'X-Paper-Studio-Token': studioSessionToken},
+        });
+        if (!response.ok || !response.body) throw new Error(`Change stream failed (${response.status})`);
+        await readChangeStream(response.body, controller.signal);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+    }
+  })();
+}
+
+async function readChangeStream(body, signal) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffered = '';
+  try {
+    while (!signal.aborted) {
+      const {value, done} = await reader.read();
+      if (done) return;
+      buffered += decoder.decode(value, {stream: true}).replaceAll('\r\n', '\n');
+      for (let boundary = buffered.indexOf('\n\n'); boundary >= 0; boundary = buffered.indexOf('\n\n')) {
+        const frame = buffered.slice(0, boundary);
+        buffered = buffered.slice(boundary + 2);
+        handleChangeFrame(frame);
+      }
+    }
+  } finally {
+    reader.releaseLock();
   }
-  // EventSource is available in supported browsers. Keep a bounded fallback
-  // for embedded shells that do not expose it yet.
-  state.poll = window.setInterval(() => refresh({quiet: true}), 2000);
+}
+
+function handleChangeFrame(frame) {
+  const lines = frame.split('\n');
+  if (!lines.some((line) => line === 'event: changed')) return;
+  const data = lines.filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n');
+  let message;
+  try { message = JSON.parse(data); } catch (_) { return; }
+  const expected = String(message.source_revision || '');
+  if (!expected || expected === state.sourceRevision) return;
+  refresh({quiet: true}).then(() => {
+    if (state.sourceRevision !== expected) return refresh({quiet: true});
+  });
 }
 
 async function loadAuthoring(revision) {
@@ -502,7 +522,6 @@ function renderWorkspace() {
   renderOutline(workspace.ast?.root);
   renderScenarios(workspace.ast?.root);
   renderIssues(workspace.diagnostics || []);
-  renderPDFTags();
   renderThumbnails(workspace.pages, workspace.page_rail || []);
   renderBaseline(workspace.baseline || {status: 'none'});
   reconcileEditSelection();
@@ -600,9 +619,9 @@ function renderDelivery() {
   const actions = $('#delivery-actions');
   if (!status || !summary || !actions) return;
   actions.replaceChildren();
-  if (state.deliveryLoading) {
-    status.textContent = 'Inspecting…';
-    summary.textContent = 'Running exact preflight and final-PDF verification…';
+	if (state.deliveryLoading) {
+		status.textContent = 'Inspecting…';
+		summary.textContent = 'Checking the exact retained plan…';
     return;
   }
   if (state.deliveryError) {
@@ -613,28 +632,65 @@ function renderDelivery() {
   const delivery = state.delivery;
   if (!delivery) {
     status.textContent = 'Not inspected';
-    summary.textContent = 'Preflight, final PDF verification, export, and publish are separate statuses.';
+		summary.textContent = 'Planning, export, and publish are separate statuses.';
     return;
   }
   const preflight = delivery.preflight || {};
-  const verification = delivery.pdf_verification || {};
   const exportStatus = delivery.export || {};
   const publish = delivery.publish || {};
-  status.textContent = verification.status === 'verified' ? 'Ready to export' : preflight.status;
-  summary.textContent = `Preflight ${preflight.status} · PDF ${verification.status} · Export ${exportStatus.status} · Publish ${publish.status}`;
+  status.textContent = exportStatus.status === 'ready' ? 'Ready to export' : preflight.status;
+  summary.textContent = `Plan ${preflight.status} · Export ${exportStatus.status}`;
   if (exportStatus.status === 'ready') {
-    const link = document.createElement('a');
-    link.className = 'delivery-export';
-    const scenario = state.scenario ? `&scenario=${encodeURIComponent(state.scenario)}` : '';
-    link.href = `/api/export.pdf?revision=${encodeURIComponent(state.revision)}${scenario}`;
-    link.textContent = 'Export verified PDF';
-    link.setAttribute('download', '');
-    actions.append(link);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'delivery-export';
+    button.textContent = state.deliveryDownloading ? 'Generating PDF…' : 'Export PDF';
+    button.disabled = state.deliveryDownloading || previewRevisionLocked();
+    button.addEventListener('click', exportDeliveryPDF);
+    actions.append(button);
   }
   const publishLine = document.createElement('span');
   publishLine.className = 'delivery-publish';
   publishLine.textContent = `Publish: ${publish.reason || 'separate authorized capability'}`;
   actions.append(publishLine);
+}
+
+async function exportDeliveryPDF() {
+  if (state.deliveryDownloading || previewRevisionLocked()) return;
+  state.deliveryDownloading = true;
+  state.deliveryError = '';
+  renderDelivery();
+  try {
+    const base = (state.workspace?.file || 'document').split(/[\\/]/).pop().replace(/\.[^.]+$/, '') || 'document';
+    const scenario = state.scenario ? `&scenario=${encodeURIComponent(state.scenario)}` : '';
+    const response = await api(`/api/export.pdf?revision=${encodeURIComponent(state.revision)}${scenario}`);
+    await downloadStudioResponse(response, `${base}.pdf`);
+  } catch (error) {
+    state.deliveryError = error.message;
+  } finally {
+    state.deliveryDownloading = false;
+    renderDelivery();
+  }
+}
+
+async function downloadStudioResponse(response, fallbackName) {
+  const disposition = response.headers.get('content-disposition') || '';
+  const match = /filename="([A-Za-z0-9._ -]{1,200})"/.exec(disposition);
+  const filename = match ? match[1] : fallbackName;
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  state.objectURLs.add(url);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+    state.objectURLs.delete(url);
+  }, 1000);
 }
 
 function renderPageSetup() {
@@ -926,6 +982,7 @@ function renderOutline(root) {
     const selected = Boolean(node.id && node.id === state.editSelection?.target);
     row.className = 'outline-row';
     row.setAttribute('role', 'treeitem');
+    row.setAttribute('aria-level', String(depth + 1));
     row.setAttribute('aria-selected', String(selected));
     if (selected) row.classList.add('is-selected');
     if (hasChildren) row.setAttribute('aria-expanded', String(!collapsed));
@@ -934,14 +991,15 @@ function renderOutline(root) {
     row.dataset.collapseKey = collapseKey;
     row.dataset.depth = String(depth);
     if (parent) row.dataset.parentKey = outlineNodeKey(parent);
-    row.style.paddingLeft = `${6 + Math.min(depth, 12) * 12}px`;
-    row.innerHTML = `<span class="outline-disclosure" aria-hidden="true"></span><span class="outline-kind"></span><span class="outline-label"></span>`;
-    row.querySelector('.outline-disclosure').textContent = hasChildren ? (collapsed ? '›' : '⌄') : '';
-    row.querySelector('.outline-kind').textContent = node.kind;
+    row.style.setProperty('--outline-indent', `${Math.min(depth, 12) * 17}px`);
+    row.innerHTML = `<span class="outline-disclosure" aria-hidden="true"></span><span class="outline-label"></span><span class="outline-kind"></span>`;
+    row.querySelector('.outline-disclosure').textContent = hasChildren ? (collapsed ? '›' : '⌄') : '·';
     row.querySelector('.outline-label').textContent = nodeLabel(node);
+    const childCount = (node.members || []).filter(member => member.node).length;
+    row.querySelector('.outline-kind').textContent = childCount ? `${node.kind} · ${childCount} ${childCount === 1 ? 'item' : 'items'}` : node.kind;
     row.title = `${node.kind} · ${nodeLabel(node)}`;
     row.addEventListener('click', event => {
-      if (hasChildren && event.offsetX < 24 + Math.min(depth, 12) * 12) {
+      if (hasChildren && event.target.closest('.outline-disclosure')) {
         if (collapsed) state.outlineCollapsed.delete(collapseKey); else state.outlineCollapsed.add(collapseKey);
         renderOutline(root);
         document.querySelector(`.outline-row[data-collapse-key="${CSS.escape(collapseKey)}"]`)?.focus();
@@ -1117,80 +1175,6 @@ function renderIssues(issues) {
     }
     target.append(item);
   }
-}
-
-async function loadPDFTags() {
-  const workspace = state.workspace;
-  if (!workspace?.pages || state.tagsLoading || state.pdfTagsRevision === workspace.revision) return;
-  const revision = workspace.revision;
-  state.tagsLoading = true;
-  state.tagError = '';
-  renderPDFTags();
-  try {
-    const scenario = state.scenario ? `&scenario=${encodeURIComponent(state.scenario)}` : '';
-    const payload = await api(`/api/pdf-tags?revision=${encodeURIComponent(revision)}${scenario}`);
-    if (revision !== state.revision) return;
-    state.pdfTags = PaperStudioTagModel.normalize(payload, state.workspace);
-    state.pdfTagsRevision = revision;
-    state.verificationStale = false;
-  } catch (error) {
-    if (revision === state.revision) state.tagError = error.status === 409 ? 'Plan changed before tag inspection completed.' : error.message;
-  } finally {
-    state.tagsLoading = false;
-    renderPDFTags();
-  }
-}
-
-function renderPDFTags() {
-  const status = $('#tag-status');
-  const summary = $('#tag-summary');
-  const tree = $('#tag-tree');
-  if (!status || !summary || !tree) return;
-  tree.replaceChildren();
-  if (state.tagsLoading) {
-    status.textContent = 'Inspecting…';
-    status.dataset.status = 'loading';
-    summary.textContent = 'Serializing and independently inspecting exact final PDF bytes.';
-    renderVerificationState();
-    return;
-  }
-  if (state.tagError) {
-    status.textContent = 'Inspection failed';
-    status.dataset.status = 'failed';
-    summary.textContent = state.tagError;
-    renderVerificationState();
-    return;
-  }
-  const tags = state.pdfTags;
-  if (!tags || state.pdfTagsRevision !== state.revision) {
-    status.textContent = state.workspace?.pages ? 'Not inspected' : 'Unavailable';
-    status.dataset.status = 'none';
-    summary.textContent = state.workspace?.pages ? 'Open Accessibility to inspect the serialized PDF.' : 'A current plan is required.';
-    renderVerificationState();
-    return;
-  }
-  status.textContent = tags.passed ? 'Tags verified' : 'Invalid tags';
-  status.dataset.status = tags.passed ? 'passed' : 'failed';
-  summary.textContent = tags.passed
-    ? `${tags.structureElements} structure elements · ${tags.contentMarked} marked streams · PDF ${tags.hash.slice(0, 12)}`
-    : tags.failures.join(' · ') || 'Final PDF tag verification failed.';
-  for (const node of tags.rows) {
-    const row = document.createElement('div');
-    row.className = 'tag-node';
-    row.setAttribute('role', 'treeitem');
-    row.setAttribute('aria-level', String(node.depth + 1));
-    row.style.paddingLeft = `${10 + Math.min(node.depth, 12) * 12}px`;
-    const role = document.createElement('span');
-    role.className = 'tag-role';
-    role.textContent = node.role;
-    const evidence = document.createElement('span');
-    evidence.className = 'tag-evidence';
-    const flags = [node.markedContent ? `${node.markedContent} MCID` : '', node.hasAlt ? 'Alt' : '', node.hasActualText ? 'ActualText' : '', node.hasLanguage ? 'Lang' : ''].filter(Boolean);
-    evidence.textContent = flags.join(' · ') || `${node.children} children`;
-    row.append(role, evidence);
-    tree.append(row);
-  }
-  renderVerificationState();
 }
 
 function fontReplacementOffer(selection) {
@@ -1492,6 +1476,7 @@ async function showPage(page) {
     closeOverlapPicker();
     renderStatus();
   } catch (error) {
+    if (error.superseded) return;
     if (error.status === 409) await refresh(); else showFailure(error);
   } finally {
     setPreviewStale(state.loading);
@@ -2667,7 +2652,6 @@ function setMode(mode) {
     document.querySelectorAll('.inspection-toggle').forEach((button) => button.setAttribute('aria-pressed', String(state.overlays.has(button.dataset.overlay))));
     renderInspectionOverlays();
     renderPageInspectionEvidence();
-    loadPDFTags();
   }
 }
 
@@ -2740,7 +2724,7 @@ function scheduleZoomRender() {
       paintWASMPage(rendered);
       renderInspectionOverlays();
       renderSelectionRects();
-    }).catch(error => { if (error.status === 409) refresh(); else showFailure(error); });
+    }).catch(error => { if (error.superseded) return; if (error.status === 409) refresh(); else showFailure(error); });
   }, 140);
 }
 
@@ -2792,20 +2776,15 @@ function renderVerificationState() {
   if (!state.workspace?.pages) {
     label = 'Unavailable';
     className = 'is-stale';
-  } else if (app.classList.contains('is-stale') || state.verificationStale) {
-    label = 'Verification stale';
+  } else if (app.classList.contains('is-stale')) {
+    label = 'Plan stale';
     className = 'is-stale';
-  } else if (state.pdfTagsRevision === state.revision && state.pdfTags?.passed) {
-    label = 'PDF verified';
-    className = 'is-verified';
   }
   badge.textContent = label;
   badge.className = `verification-state ${className}`;
-  badge.title = label === 'PDF verified'
-    ? 'The exact current plan was serialized and independently verified as a final PDF.'
-    : label === 'Plan preview'
-      ? 'The canvas is an exact plan preview; the final PDF has not been independently verified.'
-      : 'The final-PDF verification no longer matches the current plan revision.';
+  badge.title = label === 'Plan preview'
+    ? 'The canvas shows the exact current retained plan.'
+    : 'The canvas no longer matches the current plan revision.';
 }
 
 function showFailure(error) {
@@ -2908,7 +2887,8 @@ if (typeof ResizeObserver === 'function') new ResizeObserver(resizeViewportProje
 else window.addEventListener('resize', resizeViewportProjection);
 
 syncZoomControls();
-bootstrapStudioSession()
-  .then(() => refresh())
+if (!studioSessionToken) showFailure(new Error('Paper Studio session token is missing from the launch URL'));
+else refresh()
   .then(connectChangeStream)
   .catch(showFailure);
+})();

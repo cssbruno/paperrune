@@ -21,14 +21,12 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/cssbruno/paperrune/document"
 	"github.com/cssbruno/paperrune/internal/paperlang"
-	"github.com/cssbruno/paperrune/internal/pdfverify"
 )
 
 const (
@@ -185,14 +183,14 @@ func (s *studioServer) handleReview(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateReviewRevisions(snapshot *studioSnapshot, revision, sourceRevision string) error {
-	if snapshot == nil || revision == "" || sourceRevision == "" || revision != snapshot.revision || sourceRevision != studioSourceRevision(snapshot.source) {
+	if snapshot == nil || revision == "" || sourceRevision == "" || revision != snapshot.revision || sourceRevision != studioSnapshotSourceRevision(snapshot) {
 		return errors.New("paper-studio: review metadata belongs to a stale source or plan")
 	}
 	return nil
 }
 
 func validateReviewMutation(snapshot *studioSnapshot, mutation studioReviewMutation) error {
-	if mutation.SourceRevision != studioSourceRevision(snapshot.source) || mutation.PlanRevision != snapshot.revision {
+	if mutation.SourceRevision != studioSnapshotSourceRevision(snapshot) || mutation.PlanRevision != snapshot.revision {
 		return errors.New("paper-studio: review mutation belongs to a stale source or plan")
 	}
 	if mutation.Scenario != snapshot.scenario {
@@ -244,8 +242,8 @@ func validateReviewMutation(snapshot *studioSnapshot, mutation studioReviewMutat
 }
 
 func validateReviewReference(mutation studioReviewMutation) error {
-	if mutation.ReferenceKind != "image/png" && mutation.ReferenceKind != "image/jpeg" && mutation.ReferenceKind != "application/pdf" {
-		return errors.New("paper-studio: reference must be a PNG, JPEG, or PDF artifact")
+	if mutation.ReferenceKind != "image/png" && mutation.ReferenceKind != "image/jpeg" {
+		return errors.New("paper-studio: reference must be a PNG or JPEG artifact")
 	}
 	if len(mutation.ReferenceDigest) != sha256.Size*2 {
 		return errors.New("paper-studio: reference digest is malformed")
@@ -304,33 +302,16 @@ func (s *studioServer) applyReviewMutation(ctx context.Context, snapshot *studio
 		if err := s.writeReviewArtifact(mutation.ReferenceDigest, data); err != nil {
 			return err
 		}
-		if mutation.ReferenceKind == "application/pdf" {
-			if !bytes.HasPrefix(data, []byte("%PDF-")) {
-				return errors.New("paper-studio: PDF reference does not have a PDF signature")
-			}
-			diff, width, height, changed, err := s.diffReviewPDF(ctx, snapshot, mutation.Page, data)
-			if err != nil {
-				return err
-			}
-			reference.Width, reference.Height, reference.ChangedPixels = width, height, changed
-			reference.DiffStatus = "verified"
-			diffDigest := sha256.Sum256(diff)
-			reference.DiffDigest = hex.EncodeToString(diffDigest[:])
-			if err := s.writeReviewArtifact(reference.DiffDigest, diff); err != nil {
-				return err
-			}
-		} else {
-			diff, width, height, changed, err := s.diffReviewImage(ctx, snapshot, mutation.Page, data)
-			if err != nil {
-				return err
-			}
-			reference.Width, reference.Height, reference.ChangedPixels = width, height, changed
-			reference.DiffStatus = "verified"
-			diffDigest := sha256.Sum256(diff)
-			reference.DiffDigest = hex.EncodeToString(diffDigest[:])
-			if err := s.writeReviewArtifact(reference.DiffDigest, diff); err != nil {
-				return err
-			}
+		diff, width, height, changed, err := s.diffReviewImage(ctx, snapshot, mutation.Page, data)
+		if err != nil {
+			return err
+		}
+		reference.Width, reference.Height, reference.ChangedPixels = width, height, changed
+		reference.DiffStatus = "verified"
+		diffDigest := sha256.Sum256(diff)
+		reference.DiffDigest = hex.EncodeToString(diffDigest[:])
+		if err := s.writeReviewArtifact(reference.DiffDigest, diff); err != nil {
+			return err
 		}
 	}
 	review.Reference = reference
@@ -432,48 +413,6 @@ func (s *studioServer) diffReviewImage(ctx context.Context, snapshot *studioSnap
 	return diffReviewImages(ctx, actualImage, referenceImage)
 }
 
-func (s *studioServer) diffReviewPDF(ctx context.Context, snapshot *studioSnapshot, page uint32, reference []byte) ([]byte, uint32, uint32, uint64, error) {
-	raster, err := snapshot.plan.CaptureRasterPages(ctx, document.DefaultPaperPlanRasterRequest())
-	if err != nil {
-		return nil, 0, 0, 0, fmt.Errorf("paper-studio: capture plan for PDF reference diff: %w", err)
-	}
-	if page == 0 || int(page) > len(raster.Pages) {
-		return nil, 0, 0, 0, errors.New("paper-studio: PDF reference page is absent from the exact plan")
-	}
-	dimensions := make([]image.Point, len(raster.Pages))
-	for index, planPage := range raster.Pages {
-		config, _, err := image.DecodeConfig(bytes.NewReader(planPage.PNG))
-		if err != nil {
-			return nil, 0, 0, 0, fmt.Errorf("paper-studio: decode exact plan raster dimensions: %w", err)
-		}
-		dimensions[index] = image.Point{X: config.Width, Y: config.Height}
-	}
-	binary, err := exec.LookPath("pdftoppm")
-	if err != nil {
-		return nil, 0, 0, 0, errors.New("paper-studio: PDF reference diff requires pdftoppm")
-	}
-	limits := pdfverify.DefaultLimits()
-	output, err := (pdfverify.PopplerRasterizer{
-		Binary: binary, Version: "26.05.0", TempRoot: filepath.Dir(s.reviewSidecarPath()),
-	}).Rasterize(ctx, reference, document.DefaultPaperPlanRasterRequest().DPI, dimensions, limits)
-	if err != nil {
-		return nil, 0, 0, 0, fmt.Errorf("paper-studio: rasterize PDF reference with pinned renderer: %w", err)
-	}
-	if int(page) > len(output.Pages) {
-		return nil, 0, 0, 0, errors.New("paper-studio: PDF reference raster omitted the requested page")
-	}
-	actualImage, err := png.Decode(bytes.NewReader(raster.Pages[page-1].PNG))
-	if err != nil {
-		return nil, 0, 0, 0, fmt.Errorf("paper-studio: decode exact plan raster for PDF diff: %w", err)
-	}
-	referenceImage, err := png.Decode(bytes.NewReader(output.Pages[page-1]))
-	if err != nil {
-		return nil, 0, 0, 0, fmt.Errorf("paper-studio: decode rasterized PDF reference: %w", err)
-	}
-	diff, width, height, changed, err := diffReviewImages(ctx, actualImage, referenceImage)
-	return diff, width, height, changed, err
-}
-
 func diffReviewImages(ctx context.Context, actualImage, referenceImage image.Image) ([]byte, uint32, uint32, uint64, error) {
 	if referenceImage.Bounds().Dx() != actualImage.Bounds().Dx() || referenceImage.Bounds().Dy() != actualImage.Bounds().Dy() {
 		return nil, 0, 0, 0, errors.New("paper-studio: reference image dimensions do not match the exact plan raster")
@@ -568,7 +507,7 @@ func (s *studioServer) handleReviewReference(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Paper-Plan-Revision", snapshot.revision)
-	w.Header().Set("X-Paper-Source-Revision", studioSourceRevision(snapshot.source))
+	w.Header().Set("X-Paper-Source-Revision", studioSnapshotSourceRevision(snapshot))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
 }
@@ -594,30 +533,19 @@ func projectStudioReview(ctx context.Context, snapshot *studioSnapshot, review s
 	for index := range projected.Comments {
 		projected.Comments[index].Resolved = reviewTargetExists(parsed.AST.Root, projected.Comments[index].Target)
 	}
-	return studioReviewResponse{FormatVersion: studioReviewFormatVersion, Revision: snapshot.revision, SourceRevision: studioSourceRevision(snapshot.source), PlanHash: snapshot.plan.Hash(), Scenario: snapshot.scenario, Accessibility: inspectReviewAccessibility(ctx, snapshot), Annotations: projected.Annotations, Comments: projected.Comments, Reference: projected.Reference}
+	return studioReviewResponse{FormatVersion: studioReviewFormatVersion, Revision: snapshot.revision, SourceRevision: studioSnapshotSourceRevision(snapshot), PlanHash: snapshot.plan.Hash(), Scenario: snapshot.scenario, Accessibility: inspectReviewAccessibility(ctx, snapshot), Annotations: projected.Annotations, Comments: projected.Comments, Reference: projected.Reference}
 }
 
 func inspectReviewAccessibility(ctx context.Context, snapshot *studioSnapshot) *studioReviewAccessibility {
-	result := &studioReviewAccessibility{Status: "unavailable", Evidence: "final_serialized_pdf"}
+	_ = ctx
+	result := &studioReviewAccessibility{Status: "unavailable", Evidence: "retained_plan"}
 	if snapshot == nil || snapshot.pages == 0 {
 		return result
 	}
-	pdf, err := renderStudioTaggedPDF(ctx, snapshot.plan)
-	if err != nil {
-		result.Failures = []string{"final PDF could not be serialized for accessibility review"}
-		return result
-	}
-	report, err := pdfverify.InspectTags(ctx, pdf, pdfverify.TagInspectionLimits{})
-	if err != nil {
-		result.Failures = []string{"final PDF tag inspection was unavailable"}
-		return result
-	}
-	result.Passed = report.Passed
-	if report.Passed {
-		result.Status = "verified"
-	} else {
-		result.Status = "failed"
-		result.Failures = append([]string(nil), report.Failures...)
+	result.Status = "planned"
+	result.Passed = len(snapshot.diagnostics) == 0
+	if !result.Passed {
+		result.Failures = []string{"current plan has diagnostics"}
 	}
 	return result
 }

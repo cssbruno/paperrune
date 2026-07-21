@@ -47,13 +47,10 @@ func (state *pdfSerializationState) recordObject(objectNumber, offset int) {
 }
 
 // resourceOwnershipState owns the resource registry and identifiers allocated
-// for imported pages. Keeping it separate makes resource lifetime explicit
-// without changing the Document facade.
+// while generating a document.
 type resourceOwnershipState struct {
 	resources           *resourceStore
-	importedPageSeq     int
 	fontpath            string
-	fontLoader          FontLoader
 	resourceLoader      ResourceLoader
 	utf8FontPathCache   map[string]utf8FontPathInfo
 	utf8FontFileCache   map[sharedUTF8FontFileCacheKey]cachedUTF8Font
@@ -94,29 +91,28 @@ type pageGeometryState struct {
 // documentMetadataState owns catalog presentation, standards metadata, and
 // descriptive information serialized into the PDF.
 type documentMetadataState struct {
-	zoomMode           string
-	layoutMode         string
-	xmp                []byte
-	nXmp               int
-	compliance         ComplianceMetadata
-	outputIntent       outputIntent
-	nOutputIntentICC   int
-	tagged             taggedPDFState
-	producer           string
-	title              string
-	subject            string
-	author             string
-	keywords           string
-	creator            string
-	creationDate       time.Time
-	modDate            time.Time
-	pdfVersion         string
-	catalogSort        bool
-	signatureFieldName string
+	zoomMode         string
+	layoutMode       string
+	xmp              []byte
+	nXmp             int
+	compliance       ComplianceMetadata
+	outputIntent     outputIntent
+	nOutputIntentICC int
+	tagged           taggedPDFState
+	producer         string
+	title            string
+	subject          string
+	author           string
+	keywords         string
+	creator          string
+	creationDate     time.Time
+	modDate          time.Time
+	pdfVersion       string
+	catalogSort      bool
 }
 
 // documentPolicyState owns production limits, security gates, output defaults,
-// diagnostics, and encryption configuration.
+// and diagnostics.
 type documentPolicyState struct {
 	limits            Limits
 	limitsSet         bool
@@ -124,7 +120,6 @@ type documentPolicyState struct {
 	securityPolicySet bool
 	outputPolicy      OutputPolicy
 	hooks             Hooks
-	protect           protectType
 	pageAddGuard      func() error
 }
 

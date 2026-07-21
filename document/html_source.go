@@ -68,11 +68,6 @@ func htmlCollectElementTokens(tokens []htmlSegmentType, start int, tag string) (
 	return tokens[start:], len(tokens) - 1
 }
 
-func htmlSkipElement(tokens []htmlSegmentType, start int, tag string) int {
-	_, end := htmlCollectElementTokens(tokens, start, tag)
-	return end
-}
-
 func htmlSerializeTokens(tokens []htmlSegmentType) string {
 	var out strings.Builder
 	for _, token := range tokens {
@@ -214,20 +209,6 @@ func htmlPlainTextWithMode(tokens []htmlSegmentType, preserveWhitespace bool) st
 		}
 	}
 	return out.String()
-}
-
-func htmlMaxFloat(a, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func minFloat(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func clampFloat(value, minValue, maxValue float64) float64 {

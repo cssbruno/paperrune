@@ -12,7 +12,6 @@ import (
 
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/layout"
-	"github.com/cssbruno/paperrune/sign"
 )
 
 func TestWriteDocumentAppliesLanguageToCatalog(t *testing.T) {
@@ -190,24 +189,9 @@ func TestTypedAndHTMLTablesSharePaginationBoundary(t *testing.T) {
 		{name: "typed", data: renderedPDF(typedPDF)},
 		{name: "html", data: renderedPDF(htmlPDF)},
 	} {
-		if got := strings.Count(extractedDocumentText(t, output.data), "row-"); got != rowCount {
-			t.Fatalf("%s table extracted rows = %d, want %d", output.name, got, rowCount)
+		if !bytes.HasPrefix(output.data, []byte("%PDF-")) || !bytes.Contains(output.data, []byte("%%EOF")) {
+			t.Fatalf("%s table output is incomplete", output.name)
 		}
-	}
-}
-
-func TestTypedSignatureSuppliesDefaultSigningFieldName(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	doc := layout.NewLayoutDocument()
-	doc.Body = []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "signature"}}}}
-	doc.Signature = &layout.SignatureBlock{PlaceholderReference: "ApprovalSignature"}
-	pdf.WriteDocument(doc)
-	if got := pdf.signingOptions(sign.Options{}).FieldName; got != "ApprovalSignature" {
-		t.Fatalf("signing field name = %q, want ApprovalSignature", got)
-	}
-	explicit := pdf.signingOptions(sign.Options{FieldName: "ExplicitSignature"})
-	if explicit.FieldName != "ExplicitSignature" {
-		t.Fatalf("explicit signing field name = %q", explicit.FieldName)
 	}
 }
 

@@ -60,10 +60,6 @@ func TestResourceStoreOwnsDocumentResources(t *testing.T) {
 		t.Fatal("resourceStore did not retain font")
 	}
 
-	resources.addImportedObject("object", []byte("payload"))
-	if string(resources.importedObjectData("object")) != "payload" {
-		t.Fatal("resourceStore did not retain imported object")
-	}
 }
 
 func TestResourceStoreReceivesRegisteredResourceWrites(t *testing.T) {
@@ -81,25 +77,6 @@ func TestResourceStoreReceivesRegisteredResourceWrites(t *testing.T) {
 	pdf.registerTemplate(tpl)
 	if pdf.resources.templates["template"] == nil {
 		t.Fatal("registered template was not stored in resourceStore")
-	}
-
-	objs := map[string][]byte{"object": []byte("payload")}
-	pos := map[string]map[int]string{"object": {1: "old"}}
-	pdf.ImportObjects(objs)
-	pdf.ImportObjPos(pos)
-	pdf.ImportTemplates(map[string]string{"/Tpl1": "object"})
-
-	objs["object"][0] = 'X'
-	pos["object"][1] = "new"
-
-	if got := string(pdf.resources.importedObjs["object"]); got != "payload" {
-		t.Fatalf("imported object in resourceStore = %q, want payload", got)
-	}
-	if got := pdf.resources.importedObjPos["object"][1]; got != "old" {
-		t.Fatalf("imported object position in resourceStore = %q, want old", got)
-	}
-	if got := pdf.resources.importedTplObjs["/Tpl1"]; got != "object" {
-		t.Fatalf("imported template in resourceStore = %q, want object", got)
 	}
 }
 
@@ -195,20 +172,6 @@ func TestResourceStoreDeterministicIterationHelpers(t *testing.T) {
 		t.Fatalf("templateOutputImage() = %#v, want deterministic same-a image", got)
 	}
 
-	store.addImportedObject("z", []byte("z"))
-	store.addImportedObject("a", []byte("a"))
-	hashes := store.importedObjectHashes(true)
-	if len(hashes) != 2 || hashes[0] != "a" || hashes[1] != "z" {
-		t.Fatalf("importedObjectHashes() = %#v, want sorted hashes", hashes)
-	}
-
-	store.addImportedTemplates(map[string]string{"/TplZ": "z", "/TplA": "a"})
-	store.setImportedTemplateObjectID("z", 12)
-	store.setImportedTemplateObjectID("a", 11)
-	refs := store.importedTemplateResourceRefs(true)
-	if len(refs) != 2 || refs[0].name != "/TplA" || refs[0].objectNumber != 11 || refs[1].name != "/TplZ" || refs[1].objectNumber != 12 {
-		t.Fatalf("importedTemplateResourceRefs() = %#v, want sorted PDF resource refs", refs)
-	}
 }
 
 func TestResourceLoaderRegistersImages(t *testing.T) {
@@ -411,47 +374,6 @@ func TestResourceLoaderStableIDCachesSharedUTF8Fonts(t *testing.T) {
 	}
 }
 
-func TestResourceLoaderImportsPDFs(t *testing.T) {
-	source := mustNewPDFDocument(WithUnit(UnitPoint))
-	source.AddPage()
-	source.SetFont("Helvetica", "", 12)
-	source.Text(72, 96, "resource-loaded import")
-	var sourceBytes bytes.Buffer
-	if err := source.Output(&sourceBytes); err != nil {
-		t.Fatalf("source Output() error = %v", err)
-	}
-
-	var gotKind ResourceKind
-	var gotName string
-	loader := ResourceLoaderFunc(func(ctx context.Context, kind ResourceKind, name string) (io.ReadCloser, ResourceInfo, error) {
-		if err := outputCanceledError(ctx); err != nil {
-			return nil, ResourceInfo{}, err
-		}
-		gotKind = kind
-		gotName = name
-		data := sourceBytes.Bytes()
-		return io.NopCloser(bytes.NewReader(data)), ResourceInfo{Size: int64(len(data))}, nil
-	})
-	pdf, err := newPDFDocument(WithResourceLoader(loader))
-	if err != nil {
-		t.Fatalf("NewDocument() error = %v", err)
-	}
-	pageID, err := pdf.ImportPageError("virtual.pdf", 1, "MediaBox")
-	if err != nil {
-		t.Fatalf("ImportPageError() error = %v", err)
-	}
-	if pageID == 0 {
-		t.Fatal("ImportPageError() page ID = 0")
-	}
-	if gotKind != ResourcePDFImport || gotName != "virtual.pdf" {
-		t.Fatalf("loader call = (%q, %q), want (%q, virtual.pdf)", gotKind, gotName, ResourcePDFImport)
-	}
-	sizes := pdf.GetPageSizes("virtual.pdf")
-	if pdf.Err() || len(sizes) != 1 {
-		t.Fatalf("GetPageSizes() = %#v, error = %v; want one page", sizes, pdf.Error())
-	}
-}
-
 type countingReadCloser struct {
 	*bytes.Reader
 	onRead func(int)
@@ -478,7 +400,7 @@ func TestStatsInitializesResourceStoreForBareDocument(t *testing.T) {
 	if pdf.resources == nil {
 		t.Fatal("Stats() did not initialize resource store for bare document")
 	}
-	if pdf.resources.images == nil || pdf.resources.fonts == nil || pdf.resources.templates == nil || pdf.resources.importedPages == nil {
+	if pdf.resources.images == nil || pdf.resources.fonts == nil || pdf.resources.templates == nil {
 		t.Fatal("Stats() did not initialize resource maps for bare document")
 	}
 }

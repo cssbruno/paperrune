@@ -160,15 +160,6 @@ func (f *pdfDocument) putAttachmentStream(stream attachmentStream) {
 		return
 	}
 	defer func() { _ = file.Close() }()
-	if f.protect.encrypted {
-		data, err := io.ReadAll(file)
-		if err != nil {
-			f.SetError(err)
-			return
-		}
-		f.putstream(data)
-		return
-	}
 	f.out("stream")
 	if err := f.outbuf(file); err != nil {
 		return

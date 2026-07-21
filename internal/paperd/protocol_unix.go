@@ -193,8 +193,6 @@ func RoundTripUnixProtocolContext(ctx context.Context, path string, request []by
 	return response, nil
 }
 
-func (listener *UnixProtocolListener) Addr() net.Addr { return listener.listener.Addr() }
-
 // Close closes the listener and removes only the socket created by it.
 func (listener *UnixProtocolListener) Close() error {
 	if listener == nil || listener.listener == nil {

@@ -18,6 +18,11 @@ type ImageFormat string
 const (
 	ImagePNG  ImageFormat = "png"
 	ImageJPEG ImageFormat = "jpeg"
+
+	// ImageResourceMaxDimension and ImageResourceMaxPixels bound intrinsic
+	// image metadata before any renderer attempts a full decode.
+	ImageResourceMaxDimension uint32 = 16_384
+	ImageResourceMaxPixels    uint64 = 64 << 20
 )
 
 func (format ImageFormat) valid() bool { return format == ImagePNG || format == ImageJPEG }
@@ -141,6 +146,10 @@ func validateImageResources(resources []ImageResource) error {
 		}
 		if resource.PixelWidth == 0 || resource.PixelHeight == 0 {
 			return planError(path, "pixel dimensions must be positive")
+		}
+		if resource.PixelWidth > ImageResourceMaxDimension || resource.PixelHeight > ImageResourceMaxDimension ||
+			uint64(resource.PixelWidth) > ImageResourceMaxPixels/uint64(resource.PixelHeight) {
+			return planError(path, "pixel dimensions exceed the decoded-image limit")
 		}
 		digests[resource.Digest] = true
 	}

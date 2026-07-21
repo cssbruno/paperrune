@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/paperrune/inspect"
 	"github.com/cssbruno/paperrune/layout"
 )
 
@@ -35,10 +34,7 @@ func TestNewDocumentModel(t *testing.T) {
 	if err := pdf.Output(&out); err != nil {
 		t.Fatalf("Output() error = %v", err)
 	}
-	text, err := inspect.PageText(out.Bytes(), 1)
-	if err != nil {
-		t.Fatalf("PageText() error = %v", err)
-	}
+	text := extractedDocumentText(t, out.Bytes())
 	for _, want := range []string{"Custom Document", "Body text"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("PDF output missing %q", want)

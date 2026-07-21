@@ -86,17 +86,13 @@ func TestValidateRejectsUnknownOrIncompleteProfilesAndOversizedReports(t *testin
 	}
 }
 
-func TestCheckedAppleM2CalibrationReportPassesDeterministically(t *testing.T) {
-	profile, err := os.ReadFile("../../docs/performance/calibrations/apple-m2-go1.26.json")
+func TestCheckedAppleM2CalibrationProfileIsValid(t *testing.T) {
+	encoded, err := os.ReadFile("../../docs/performance/calibrations/apple-m2-go1.26.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := os.ReadFile("../../docs/performance/baselines/paper-engine-stage0-apple-m2.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	summary, err := Validate(profile, report)
-	if err != nil || summary.Profile != "apple-m2-go1.26-paper-engine-v1" || len(summary.Results) != 11 {
-		t.Fatalf("checked calibration = %#v, %v", summary, err)
+	profile, err := decodeProfile(encoded)
+	if err != nil || profile.Name != "apple-m2-go1.26-paper-engine-v1" || len(profile.Benchmarks) != 11 {
+		t.Fatalf("checked calibration = %#v, %v", profile, err)
 	}
 }

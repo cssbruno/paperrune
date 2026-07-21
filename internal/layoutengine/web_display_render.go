@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 )
 
@@ -195,7 +196,7 @@ func renderWebDisplayPayload(ctx context.Context, encoded []byte, cache *WebDisp
 		return DisplayRasterArtifact{}, fmt.Errorf("%w: plan hash mismatch", ErrWebDisplayRenderPayload)
 	}
 	cache.prepare(payload.PlanHash)
-	plan, err := decodeStoredPlan(payload.Plan, PlanHash(actualPlanHash))
+	plan, err := decodeCanonicalPlan(payload.Plan, PlanHash(actualPlanHash))
 	if err != nil {
 		return DisplayRasterArtifact{}, fmt.Errorf("%w: plan: %w", ErrWebDisplayRenderPayload, err)
 	}
@@ -257,4 +258,76 @@ func renderWebDisplayPayload(ctx context.Context, encoded []byte, cache *WebDisp
 		return DisplayRasterArtifact{}, fmt.Errorf("%w: rendered identity mismatch", ErrWebDisplayRenderPayload)
 	}
 	return artifact, nil
+}
+
+func decodeCanonicalPlan(encoded []byte, expected PlanHash) (LayoutPlan, error) {
+	actual := sha256.Sum256(encoded)
+	if actual != expected {
+		return LayoutPlan{}, fmt.Errorf("canonical plan hash is %s, want %s", PlanHash(actual), expected)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	var projection LayoutPlanProjection
+	if err := decoder.Decode(&projection); err != nil {
+		return LayoutPlan{}, fmt.Errorf("decode canonical plan: %w", err)
+	}
+	if err := ensureJSONEOF(decoder); err != nil {
+		return LayoutPlan{}, err
+	}
+	if projection.SchemaVersion != LayoutPlanSchemaVersion || projection.PlannerVersion != PlannerVersion ||
+		projection.PainterContractVersion != PainterContractVersion {
+		return LayoutPlan{}, errors.New("canonical plan version mismatch")
+	}
+	plan, err := NewLayoutPlan(canonicalPlanInput(projection))
+	if err != nil {
+		return LayoutPlan{}, fmt.Errorf("invalid canonical plan: %w", err)
+	}
+	canonical, err := plan.CanonicalJSON()
+	if err != nil {
+		return LayoutPlan{}, fmt.Errorf("re-encode canonical plan: %w", err)
+	}
+	if !bytes.Equal(canonical, encoded) {
+		return LayoutPlan{}, errors.New("plan is not canonical JSON")
+	}
+	return plan, nil
+}
+
+func ensureJSONEOF(decoder *json.Decoder) error {
+	var trailing json.RawMessage
+	err := decoder.Decode(&trailing)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("decode trailing data: %w", err)
+	}
+	return errors.New("canonical JSON has trailing data")
+}
+
+func canonicalPlanInput(projection LayoutPlanProjection) LayoutPlanInput {
+	return LayoutPlanInput{
+		DeterministicInputs: projection.DeterministicInputs,
+		Pages:               projection.Pages,
+		Fragments:           projection.Fragments,
+		Lines:               projection.Lines,
+		PageRegions:         projection.PageRegions,
+		GridTracks:          projection.GridTracks,
+		Fonts:               projection.Fonts,
+		GlyphRuns:           projection.GlyphRuns,
+		ImageResources:      projection.ImageResources,
+		Images:              projection.Images,
+		Destinations:        projection.Destinations,
+		Links:               projection.Links,
+		Paths:               projection.Paths,
+		Transforms:          projection.Transforms,
+		Clips:               projection.Clips,
+		Fills:               projection.Fills,
+		Strokes:             projection.Strokes,
+		Commands:            projection.Commands,
+		Breaks:              projection.Breaks,
+		Diagnostics:         projection.Diagnostics,
+		SemanticNodes:       projection.SemanticNodes,
+		SemanticFragments:   projection.SemanticFragments,
+		ReadingOrder:        projection.ReadingOrder,
+	}
 }

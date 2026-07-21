@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestCompactProvenanceInternsDeterministicallyAndSurvivesStoreAndQuery(t *testing.T) {
+func TestCompactProvenanceInternsDeterministicallyAndSurvivesQuery(t *testing.T) {
 	plan, err := NewLayoutPlan(testPlanInput())
 	if err != nil {
 		t.Fatal(err)
@@ -49,18 +49,6 @@ func TestCompactProvenanceInternsDeterministicallyAndSurvivesStoreAndQuery(t *te
 	query, err := plan.QueryStructure(StructuralQuery{Node: 7, MaxResults: 8})
 	if err != nil || len(query.Fragments) != 2 || query.Fragments[0].Provenance != 1 || query.Fragments[1].Provenance != 1 {
 		t.Fatalf("query provenance = %+v, %v", query.Fragments, err)
-	}
-	store, err := NewMemoryPlanStore(DefaultPlanStoreLimits())
-	if err != nil {
-		t.Fatal(err)
-	}
-	hash, err := store.Put(plan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	restored, err := store.Get(hash)
-	if err != nil || !reflect.DeepEqual(restored.Projection().Provenance, again.Provenance) || !reflect.DeepEqual(restored.Projection().FragmentProvenance, again.FragmentProvenance) {
-		t.Fatalf("restored provenance = %+v, %v", restored.Projection(), err)
 	}
 }
 

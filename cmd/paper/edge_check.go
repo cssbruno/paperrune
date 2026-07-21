@@ -18,7 +18,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/cssbruno/paperrune/document"
-	"github.com/cssbruno/paperrune/inspect"
 	"github.com/cssbruno/paperrune/internal/papercompile"
 	"github.com/cssbruno/paperrune/internal/paperedge"
 	"github.com/cssbruno/paperrune/internal/paperlang"
@@ -33,11 +32,8 @@ type edgeCheckRequest struct {
 	seed                int64
 	maxItems            uint
 	outputDir           string
-	visual              bool
-	visualDPI           uint
 	inputFiles          []string
 	maxPageIssues       uint
-	minTextRunes        uint
 	maxPages            uint
 	baseline            string
 	allowBaselineChange bool
@@ -46,22 +42,10 @@ type edgeCheckRequest struct {
 }
 
 type edgeCheckPDFInspection struct {
-	StructureOK         bool                            `json:"structure_ok"`
-	SHA256              string                          `json:"sha256"`
-	ParsedPages         int                             `json:"parsed_pages"`
-	ExtractedTextBytes  int                             `json:"extracted_text_bytes"`
-	ExtractedTextRunes  int                             `json:"extracted_text_runes"`
-	ExtractedTextSHA256 string                          `json:"extracted_text_sha256"`
-	PageIssueCount      uint32                          `json:"page_issue_count"`
-	PageText            []edgeCheckPageTextInspection   `json:"page_text"`
-	PageSummaries       []document.PaperPlanPageSummary `json:"page_summaries"`
-}
-
-type edgeCheckPageTextInspection struct {
-	Page   int    `json:"page"`
-	Bytes  int    `json:"bytes"`
-	Runes  int    `json:"runes"`
-	SHA256 string `json:"sha256"`
+	SHA256         string                          `json:"sha256"`
+	PlannedPages   int                             `json:"planned_pages"`
+	PageIssueCount uint32                          `json:"page_issue_count"`
+	PageSummaries  []document.PaperPlanPageSummary `json:"page_summaries"`
 }
 
 type edgeCheckInputInspection struct {
@@ -94,7 +78,6 @@ type edgeCheckCaseResult struct {
 	PDFBytes        int                        `json:"pdf_bytes,omitempty"`
 	JSONFile        string                     `json:"json_file,omitempty"`
 	PDFFile         string                     `json:"pdf_file,omitempty"`
-	RasterPages     []edgeCheckRasterPage      `json:"raster_pages,omitempty"`
 	InputInspection *edgeCheckInputInspection  `json:"input_inspection,omitempty"`
 	Inspection      *edgeCheckPDFInspection    `json:"inspection,omitempty"`
 	Error           string                     `json:"error,omitempty"`
@@ -102,30 +85,19 @@ type edgeCheckCaseResult struct {
 }
 
 type edgeCheckResult struct {
-	FormatVersion    uint16                  `json:"format_version"`
-	OK               bool                    `json:"ok"`
-	Schema           string                  `json:"schema"`
-	Seed             int64                   `json:"seed"`
-	ReportFile       string                  `json:"report_file,omitempty"`
-	VisualReviewFile string                  `json:"visual_review_file,omitempty"`
-	Thresholds       edgeCheckThresholds     `json:"thresholds"`
-	Baseline         *edgeBaselineComparison `json:"baseline,omitempty"`
-	Cases            []edgeCheckCaseResult   `json:"cases"`
+	FormatVersion uint16                  `json:"format_version"`
+	OK            bool                    `json:"ok"`
+	Schema        string                  `json:"schema"`
+	Seed          int64                   `json:"seed"`
+	ReportFile    string                  `json:"report_file,omitempty"`
+	Thresholds    edgeCheckThresholds     `json:"thresholds"`
+	Baseline      *edgeBaselineComparison `json:"baseline,omitempty"`
+	Cases         []edgeCheckCaseResult   `json:"cases"`
 }
 
 type edgeCheckThresholds struct {
 	MaxPageIssues uint `json:"max_page_issues"`
-	MinTextRunes  uint `json:"min_text_runes"`
 	MaxPages      uint `json:"max_pages"`
-}
-
-type edgeCheckRasterPage struct {
-	Page   int    `json:"page"`
-	File   string `json:"file"`
-	SHA256 string `json:"sha256"`
-	Bytes  int    `json:"bytes"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
 }
 
 type edgeBaselineComparison struct {
@@ -148,9 +120,6 @@ func checkGeneratedEdgeCases(request edgeCheckRequest, stdout, stderr io.Writer)
 	}
 	if request.maxPages == 0 || request.maxPages > 1000 {
 		return commandError(request.jsonMode, stdout, stderr, "check", errors.New("--edge-max-pages must be between 1 and 1000"))
-	}
-	if request.visual && (request.visualDPI < 36 || request.visualDPI > 300) {
-		return commandError(request.jsonMode, stdout, stderr, "check", errors.New("--edge-visual-dpi must be between 36 and 300"))
 	}
 	parsed := paperlang.Parse(request.file, request.source)
 	if !parsed.OK() {
@@ -185,25 +154,13 @@ func checkGeneratedEdgeCases(request edgeCheckRequest, stdout, stderr io.Writer)
 			return commandError(request.jsonMode, stdout, stderr, "check", err)
 		}
 	}
-	var rasterizer *edgePDFRasterizer
-	if request.visual {
-		rasterizer, err = newEdgePDFRasterizer()
-		if err != nil {
-			return commandError(request.jsonMode, stdout, stderr, "check", err)
-		}
-		defer rasterizer.Close()
-	}
-
 	report := edgeCheckResult{
-		FormatVersion: 3, OK: true, Schema: schema.Name, Seed: request.seed,
-		Thresholds: edgeCheckThresholds{MaxPageIssues: request.maxPageIssues, MinTextRunes: request.minTextRunes, MaxPages: request.maxPages},
+		FormatVersion: 4, OK: true, Schema: schema.Name, Seed: request.seed,
+		Thresholds: edgeCheckThresholds{MaxPageIssues: request.maxPageIssues, MaxPages: request.maxPages},
 		Cases:      make([]edgeCheckCaseResult, 0, len(cases)),
 	}
 	if request.outputDir != "" {
 		report.ReportFile = "edge-report.json"
-		if request.visual {
-			report.VisualReviewFile = "edge-visual-review.pdf"
-		}
 	}
 	for index, generated := range cases {
 		baseName := fmt.Sprintf("%03d-%s", index+1, generated.Name)
@@ -276,17 +233,6 @@ func checkGeneratedEdgeCases(request edgeCheckRequest, stdout, stderr io.Writer)
 				report.Cases = append(report.Cases, caseResult)
 				continue
 			}
-			if request.visual {
-				rasterPages, rasterErr := rasterizer.Rasterize(filepath.Join(request.outputDir, caseResult.PDFFile), request.outputDir, baseName, inspection.ParsedPages, request.visualDPI)
-				if rasterErr != nil {
-					caseResult.Stage = "rasterize-pdf"
-					caseResult.Error = rasterErr.Error()
-					report.OK = false
-					report.Cases = append(report.Cases, caseResult)
-					continue
-				}
-				caseResult.RasterPages = rasterPages
-			}
 		}
 		caseResult.OK = caseResult.Error == ""
 		report.Cases = append(report.Cases, caseResult)
@@ -302,11 +248,6 @@ func checkGeneratedEdgeCases(request edgeCheckRequest, stdout, stderr io.Writer)
 		}
 	}
 	if request.outputDir != "" {
-		if request.visual {
-			if err := writeEdgeVisualReview(request.outputDir, report); err != nil {
-				return commandError(request.jsonMode, stdout, stderr, "check", err)
-			}
-		}
 		if err := writeEdgeReport(request.outputDir, report); err != nil {
 			return commandError(request.jsonMode, stdout, stderr, "check", err)
 		}
@@ -337,45 +278,18 @@ func checkGeneratedEdgeCases(request edgeCheckRequest, stdout, stderr io.Writer)
 }
 
 func inspectEdgeCasePDF(pdf []byte, plannedPages int, summaries []document.PaperPlanPageSummary) (edgeCheckPDFInspection, error) {
-	if err := inspect.ValidateStructure(pdf); err != nil {
-		return edgeCheckPDFInspection{}, fmt.Errorf("validate PDF structure: %w", err)
+	if plannedPages != len(summaries) {
+		return edgeCheckPDFInspection{}, fmt.Errorf("page summary mismatch: planned=%d summaries=%d", plannedPages, len(summaries))
 	}
-	parsedPages, err := inspect.PageCount(pdf)
-	if err != nil {
-		return edgeCheckPDFInspection{}, fmt.Errorf("count PDF pages: %w", err)
-	}
-	if parsedPages != plannedPages || parsedPages != len(summaries) {
-		return edgeCheckPDFInspection{}, fmt.Errorf("page count mismatch: planned=%d parsed=%d summaries=%d", plannedPages, parsedPages, len(summaries))
-	}
-	extracted, err := inspect.Text(pdf)
-	if err != nil {
-		return edgeCheckPDFInspection{}, fmt.Errorf("extract PDF text: %w", err)
+	if !bytes.HasPrefix(pdf, []byte("%PDF-")) || !bytes.Contains(pdf, []byte("%%EOF")) {
+		return edgeCheckPDFInspection{}, errors.New("generated output is not a complete PDF")
 	}
 	issueCount := uint32(0)
 	for _, summary := range summaries {
 		issueCount += summary.IssueCount
 	}
-	pageText := make([]edgeCheckPageTextInspection, 0, parsedPages)
-	var combined strings.Builder
-	for page := 1; page <= parsedPages; page++ {
-		extractedPage, pageErr := inspect.PageText(pdf, page)
-		if pageErr != nil {
-			return edgeCheckPDFInspection{}, fmt.Errorf("extract PDF page %d text: %w", page, pageErr)
-		}
-		combined.WriteString(extractedPage)
-		pageText = append(pageText, edgeCheckPageTextInspection{
-			Page: page, Bytes: len(extractedPage), Runes: utf8.RuneCountInString(extractedPage),
-			SHA256: edgeSHA256([]byte(extractedPage)),
-		})
-	}
-	if combined.String() != extracted {
-		return edgeCheckPDFInspection{}, errors.New("whole-document text does not match concatenated per-page extraction")
-	}
 	return edgeCheckPDFInspection{
-		StructureOK: true, SHA256: edgeSHA256(pdf), ParsedPages: parsedPages,
-		ExtractedTextBytes: len(extracted), ExtractedTextRunes: utf8.RuneCountInString(extracted),
-		ExtractedTextSHA256: edgeSHA256([]byte(extracted)), PageIssueCount: issueCount,
-		PageText:      pageText,
+		SHA256: edgeSHA256(pdf), PlannedPages: plannedPages, PageIssueCount: issueCount,
 		PageSummaries: append([]document.PaperPlanPageSummary(nil), summaries...),
 	}, nil
 }

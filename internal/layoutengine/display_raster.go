@@ -35,7 +35,7 @@ import (
 
 const (
 	DisplayRasterManifestVersion uint16 = 1
-	DisplayRasterRendererVersion        = "layoutengine/go-display-raster@5"
+	DisplayRasterRendererVersion        = "layoutengine/go-display-raster@6"
 
 	DisplayRasterHardMaxPixels      uint64 = 64 << 20
 	DisplayRasterHardMaxSourceBytes uint64 = 64 << 20
@@ -520,7 +520,7 @@ func preflightDisplayRaster(ctx context.Context, plan LayoutPlan, sources Displa
 	fontFaces := map[FontResourceID]*rasterSizedFace{}
 	decodedImages := map[ImageResourceID]image.Image{}
 	records := make([]DisplayRasterResourceDigest, 0, len(neededFonts)+len(neededImages))
-	var total uint64
+	var total, decodedImageBytes uint64
 	for _, resource := range plan.fonts {
 		if !neededFonts[resource.ID] {
 			continue
@@ -569,20 +569,40 @@ func preflightDisplayRaster(ctx context.Context, plan LayoutPlan, sources Displa
 		if hex.EncodeToString(digest[:]) != string(resource.Digest) {
 			return nil, nil, nil, fmt.Errorf("%w: image digest mismatch", ErrDisplayRasterResource)
 		}
+		config, encodedFormat, configErr := image.DecodeConfig(bytes.NewReader(data))
+		if configErr != nil || config.Width <= 0 || config.Height <= 0 {
+			return nil, nil, nil, fmt.Errorf("%w: image dimensions, format, or encoding", ErrDisplayRasterResource)
+		}
+		if config.Width > int(ImageResourceMaxDimension) || config.Height > int(ImageResourceMaxDimension) ||
+			uint64(config.Width) > request.Limits.MaxPixels/uint64(config.Height) {
+			return nil, nil, nil, fmt.Errorf("%w: decoded image pixels", ErrDisplayRasterLimit)
+		}
+		if encodedFormat != string(resource.Format) || uint32(config.Width) != resource.PixelWidth || uint32(config.Height) != resource.PixelHeight { // #nosec G115 -- dimensions are bounded above before conversion.
+			return nil, nil, nil, fmt.Errorf("%w: image dimensions, format, or encoding", ErrDisplayRasterResource)
+		}
+		pixels := uint64(config.Width) * uint64(config.Height)
+		decodedBytes := pixels * 4
+		maxDecodedBytes := request.Limits.MaxSourceBytes * 4
+		if decodedBytes > maxDecodedBytes-decodedImageBytes {
+			return nil, nil, nil, fmt.Errorf("%w: decoded image bytes", ErrDisplayRasterLimit)
+		}
+		decodedImageBytes += decodedBytes
 		contentHash := hex.EncodeToString(digest[:])
 		decoded := sources.cache.image(contentHash)
+		cached := decoded != nil
 		if decoded == nil {
 			var decodeErr error
-			decoded, _, decodeErr = image.Decode(bytes.NewReader(data))
-			if decodeErr == nil {
-				sources.cache.storeImage(contentHash, decoded)
-			}
-			if decodeErr != nil {
-				return nil, nil, nil, fmt.Errorf("%w: image dimensions or encoding", ErrDisplayRasterResource)
+			var decodedFormat string
+			decoded, decodedFormat, decodeErr = image.Decode(bytes.NewReader(data))
+			if decodeErr != nil || decodedFormat != encodedFormat {
+				return nil, nil, nil, fmt.Errorf("%w: image dimensions, format, or encoding", ErrDisplayRasterResource)
 			}
 		}
 		if decoded.Bounds().Dx() != int(resource.PixelWidth) || decoded.Bounds().Dy() != int(resource.PixelHeight) {
 			return nil, nil, nil, fmt.Errorf("%w: image dimensions or encoding", ErrDisplayRasterResource)
+		}
+		if !cached {
+			sources.cache.storeImage(contentHash, decoded)
 		}
 		decodedImages[resource.ID] = decoded
 		records = append(records, DisplayRasterResourceDigest{Kind: "image", Identity: string(resource.Digest), SHA256: string(resource.Digest), ByteLength: uint64(len(data))})

@@ -108,24 +108,7 @@ func TestLayoutEffectiveReferencesAndImageData(t *testing.T) {
 	}
 }
 
-func TestSignatureAndPageTemplateContracts(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		in   string
-		want string
-	}{
-		{name: "empty", want: "Signature1"},
-		{name: "space", in: " \t", want: "Signature1"},
-		{name: "trimmed", in: " \tApproval\n", want: "Approval"},
-		{name: "interior", in: "Approval Field", want: "Approval Field"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if got := (SignatureBlock{PlaceholderReference: test.in}).PAdESFieldName(); got != test.want {
-				t.Fatalf("PAdESFieldName() = %q, want %q", got, test.want)
-			}
-		})
-	}
-
+func TestPageTemplateContracts(t *testing.T) {
 	defaultHeader := &HeaderBlock{}
 	firstHeader := &HeaderBlock{Height: 10}
 	defaultFooter := &FooterBlock{Height: 12, ReservePageArea: true}

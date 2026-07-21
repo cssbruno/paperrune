@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -34,44 +35,83 @@ const (
 	maxExplain     = 4 << 20
 )
 
+var version = "devel"
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		printUsage(stderr)
-		return exitUsage
+		printUsage(stdout)
+		return exitOK
 	}
-	if args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
+	if args[0] == "-h" || args[0] == "--help" {
 		printUsage(stdout)
 		return exitOK
 	}
 	commands := map[string]func([]string, io.Reader, io.Writer, io.Writer) int{
+		"init":     runInit,
 		"fmt":      runFmt,
 		"check":    runCheck,
 		"render":   runRender,
+		"studio":   runStudio,
 		"capture":  runCapture,
 		"explain":  runExplain,
 		"scenario": runScenario,
 		"workflow": runWorkflow,
+		"version":  runVersion,
+	}
+	if args[0] == "help" {
+		if len(args) == 1 {
+			printUsage(stdout)
+			return exitOK
+		}
+		command, ok := commands[args[1]]
+		if !ok {
+			return unknownCommand(args[1], commands, stderr)
+		}
+		return command([]string{"-h"}, stdin, stdout, stdout)
 	}
 	command, ok := commands[args[0]]
 	if !ok {
-		_, _ = fmt.Fprintf(stderr, "paper: unknown command %q\n", args[0])
-		printUsage(stderr)
-		return exitUsage
+		return unknownCommand(args[0], commands, stderr)
 	}
 	return command(args[1:], stdin, stdout, stderr)
 }
 
 func printUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "usage: paper <fmt|check|render|capture|explain|scenario|workflow> [options] FILE")
+	_, _ = fmt.Fprint(w, `PaperRune compiles .paper documents to PDF or standalone HTML.
+
+Usage:
+  paper <command> [options]
+
+Authoring:
+  init        Create a new Paper project
+  fmt         Format Paper source
+  check       Validate and plan a document
+  render      Render PDF or HTML
+  studio      Open the local visual authoring environment
+
+Inspection:
+  explain     Inspect planned nodes, pages, and layout
+  capture     Capture SVG evidence
+  scenario    List and inspect data scenarios
+
+Validation:
+  workflow    Execute an approved delivery workflow
+
+System:
+  version     Print version and build information
+
+Run "paper help <command>" for command-specific help.
+`)
 }
 
 func flags(name string, stderr io.Writer) *flag.FlagSet {
 	set := flag.NewFlagSet("paper "+name, flag.ContinueOnError)
 	set.SetOutput(stderr)
+	set.Usage = func() { printCommandHelp(set.Output(), name, set) }
 	return set
 }
 
@@ -208,20 +248,18 @@ func runCheck(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	edgeSeed := set.Int64("seed", 1, "seed for reproducible edge-case data")
 	edgeMaxItems := set.Uint("edge-max-items", 64, "maximum generated items per schema list")
 	edgeOutput := set.String("edge-output", "", "write generated JSON and PDF cases under DIR")
-	edgeVisual := set.Bool("edge-visual", false, "rasterize final PDFs and write a PDF review book under --edge-output")
-	edgeVisualDPI := set.Uint("edge-visual-dpi", 144, "rasterization DPI for --edge-visual (36..300)")
 	edgeMaxPageIssues := set.Uint("edge-max-page-issues", 0, "maximum allowed layout issues per case")
-	edgeMinTextRunes := set.Uint("edge-min-text-runes", 0, "minimum extracted text runes per case")
-	edgeMaxPages := set.Uint("edge-max-pages", 64, "maximum allowed PDF pages per case")
+	edgeMaxPages := set.Uint("edge-max-pages", 64, "maximum allowed planned pages per case")
 	edgeBaseline := set.String("edge-baseline", "", "compare results with a previous edge-report.json")
 	edgeAllowBaselineChange := set.Bool("edge-allow-baseline-change", false, "report baseline changes without failing the check")
 	var edgeInputs stringList
 	set.Var(&edgeInputs, "edge-input", "validate a user JSON case from FILE (repeatable)")
 	assets := addAssetFlags(set)
-	file, code := parseOneFile(set, args)
+	file, project, code := parseProjectFile(set, args)
 	if code >= 0 {
 		return code
 	}
+	applyCheckProject(project, set, data, assets)
 	catalog, err := assets.load()
 	if err != nil {
 		return commandError(*jsonMode, stdout, stderr, "check", err)
@@ -244,14 +282,11 @@ func runCheck(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if *scenario != "" || *data.file != "" {
 			return commandError(*jsonMode, stdout, stderr, "check", errors.New("edge-case checks cannot be combined with --scenario or --data"))
 		}
-		if *edgeVisual && *edgeOutput == "" {
-			return commandError(*jsonMode, stdout, stderr, "check", errors.New("--edge-visual requires --edge-output"))
-		}
 		return checkGeneratedEdgeCases(edgeCheckRequest{
 			file: displayFile(file), source: string(source), schema: *data.schema, locale: *data.locale,
-			count: *edgeCases, seed: *edgeSeed, maxItems: *edgeMaxItems, outputDir: *edgeOutput, visual: *edgeVisual,
-			visualDPI: *edgeVisualDPI, inputFiles: edgeInputs, maxPageIssues: *edgeMaxPageIssues,
-			minTextRunes: *edgeMinTextRunes, maxPages: *edgeMaxPages, baseline: *edgeBaseline,
+			count: *edgeCases, seed: *edgeSeed, maxItems: *edgeMaxItems, outputDir: *edgeOutput,
+			inputFiles: edgeInputs, maxPageIssues: *edgeMaxPageIssues,
+			maxPages: *edgeMaxPages, baseline: *edgeBaseline,
 			allowBaselineChange: *edgeAllowBaselineChange, assets: catalog, jsonMode: *jsonMode,
 		}, stdout, stderr)
 	}
@@ -291,17 +326,19 @@ func runCheck(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	set := flags("render", stderr)
-	output := set.String("o", "", "write output atomically to FILE (default: stdout)")
+	output := set.String("o", "", "write output atomically to FILE (use - for stdout)")
+	outputMode := addOutputModeFlags(set, "mode", "file-mode", "output-mode")
 	format := set.String("format", "pdf", "output format: pdf or html")
 	jsonMode := set.Bool("json", false, "write a JSON result; requires -o")
 	scenario := set.String("scenario", "", "plan with the selected scenario")
 	data := addDataFlags(set)
 	assets := addAssetFlags(set)
-	file, code := parseOneFile(set, args)
+	file, project, code := parseProjectFile(set, args)
 	if code >= 0 {
 		return code
 	}
-	if *jsonMode && *output == "" {
+	applyRenderProject(project, set, output, format, data, assets)
+	if *jsonMode && (*output == "" || *output == "-") {
 		return commandError(true, stdout, stderr, "render", errors.New("--json requires -o so JSON and rendered output do not share stdout"))
 	}
 	if *format != "pdf" && *format != "html" {
@@ -350,13 +387,19 @@ func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		var output bytes.Buffer
 		limited := &limitWriter{w: &output, remaining: maxPDFBytes}
-		if outputErr := pdf.OutputWithOptions(limited, document.OutputOptions{Deterministic: true}); outputErr != nil {
-			return commandError(*jsonMode, stdout, stderr, "render", outputErr)
+		if err := pdf.OutputWithOptions(limited, document.OutputOptions{Deterministic: true}); err != nil {
+			return commandError(*jsonMode, stdout, stderr, "render", err)
 		}
 		encoded = append([]byte(nil), output.Bytes()...)
 	}
-	if *output != "" {
-		if err := atomicWrite(*output, encoded, 0o644); err != nil {
+	if *output == "" && outputIsTerminal(stdout) && file != "-" {
+		*output = defaultOutputFile(file, *format)
+	}
+	if *output != "" && *output != "-" {
+		if err := os.MkdirAll(filepath.Dir(*output), 0o755); err != nil {
+			return commandError(*jsonMode, stdout, stderr, "render", err)
+		}
+		if err := atomicWriteOutput(*output, encoded, outputMode); err != nil {
 			return commandError(*jsonMode, stdout, stderr, "render", err)
 		}
 	} else if _, err := stdout.Write(encoded); err != nil {
@@ -372,6 +415,11 @@ func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			Bytes  int    `json:"bytes"`
 			File   string `json:"file"`
 		}{true, *format, pages, plan.Hash(), len(encoded), *output})
+	}
+	if *output != "" && *output != "-" {
+		digest := sha256.Sum256(encoded)
+		label := strings.ToUpper(*format)
+		_, _ = fmt.Fprintf(stdout, "Rendered %s\nPages: %d\nPlan:  sha256:%s\n%s:   sha256:%x\n", *output, pages, plan.Hash(), label, digest)
 	}
 	return exitOK
 }
@@ -462,6 +510,7 @@ func runCapture(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	maxPages := set.Uint("max-pages", 1, "maximum captured pages")
 	maxCrops := set.Uint("max-crops", 32, "maximum captured crops")
 	output := set.String("o", "", "write output atomically to FILE (default: stdout)")
+	outputMode := addOutputModeFlags(set, "file-mode", "output-mode")
 	jsonMode := set.Bool("json", false, "write a JSON capture bundle instead of one SVG")
 	scenario := set.String("scenario", "", "plan with the selected scenario")
 	assets := addAssetFlags(set)
@@ -524,7 +573,7 @@ func runCapture(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return commandError(*jsonMode, stdout, stderr, "capture", err)
 	}
 	if *output != "" {
-		if err := atomicWrite(*output, payload, 0o644); err != nil {
+		if err := atomicWriteOutput(*output, payload, outputMode); err != nil {
 			return commandError(*jsonMode, stdout, stderr, "capture", err)
 		}
 	} else if _, err := stdout.Write(payload); err != nil {
@@ -590,21 +639,71 @@ func planPaperJSON(file, source string, data []byte, schema, locale, name string
 }
 
 func paperFileImportResolver() document.PaperImportResolver {
-	return func(importerFile, importPath string) (string, string, error) {
+	return func(ctx context.Context, importerFile, importPath string) (string, string, error) {
 		base := filepath.Dir(importerFile)
 		if importerFile == "" || importerFile == "stdin.paper" {
 			base = "."
 		}
 		file := filepath.Clean(filepath.Join(base, filepath.FromSlash(importPath)))
-		source, err := os.ReadFile(file)
+		limit := document.PaperImportReadLimit(ctx, maxSourceBytes)
+		source, err := readBoundedRegularFileContext(ctx, file, limit, "imported source")
 		if err != nil {
 			return "", "", err
 		}
-		if len(source) > maxSourceBytes {
-			return "", "", fmt.Errorf("imported source exceeds %d bytes", maxSourceBytes)
-		}
 		return file, string(source), nil
 	}
+}
+
+func readBoundedRegularFileContext(ctx context.Context, file string, limit int64, label string) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	info, err := os.Stat(file) // #nosec G304 -- file is the explicit source-relative import selected by the caller.
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", label)
+	}
+	if info.Size() < 0 || info.Size() > limit {
+		return nil, fmt.Errorf("%s exceeds %d-byte limit", label, limit)
+	}
+	input, err := os.Open(file) // #nosec G304 -- file was resolved from a validated relative import path.
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = input.Close() }()
+	openedInfo, err := input.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !openedInfo.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", label)
+	}
+	encoded, err := io.ReadAll(io.LimitReader(contextBoundReader{ctx: ctx, reader: input}, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(encoded)) > limit {
+		return nil, fmt.Errorf("%s exceeds %d-byte limit", label, limit)
+	}
+	return encoded, nil
+}
+
+type contextBoundReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r contextBoundReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	n, err := r.reader.Read(p)
+	if err == nil {
+		err = r.ctx.Err()
+	}
+	return n, err
 }
 
 func displayFile(file string) string {
@@ -664,7 +763,61 @@ func readBoundedFile(file string, stdin io.Reader, limit int64, label string) ([
 	return data, nil
 }
 
-func atomicWrite(name string, data []byte, mode os.FileMode) (err error) {
+type outputPermissionMode struct {
+	mode os.FileMode
+	set  bool
+}
+
+func (m *outputPermissionMode) String() string {
+	if m == nil || !m.set {
+		return ""
+	}
+	return fmt.Sprintf("%04o", m.mode.Perm())
+}
+
+func (m *outputPermissionMode) Set(value string) error {
+	parsed, err := strconv.ParseUint(strings.TrimPrefix(strings.TrimSpace(value), "0o"), 8, 32)
+	if err != nil || parsed > 0o777 {
+		return errors.New("must be an octal permission mode from 0000 through 0777")
+	}
+	m.mode, m.set = os.FileMode(parsed), true
+	return nil
+}
+
+func addOutputModeFlags(set *flag.FlagSet, names ...string) *outputPermissionMode {
+	mode := &outputPermissionMode{}
+	for _, name := range names {
+		set.Var(mode, name, "set permissions for a newly created output (for example 0600 or 0644)")
+	}
+	return mode
+}
+
+func atomicWriteOutput(name string, data []byte, requested *outputPermissionMode) error {
+	if requested != nil && requested.set {
+		return atomicWriteWithMode(name, data, requested.mode, true)
+	}
+	return atomicWrite(name, data, 0o600)
+}
+
+func atomicWrite(name string, data []byte, mode os.FileMode) error {
+	return atomicWriteWithMode(name, data, mode, false)
+}
+
+func atomicWriteWithMode(name string, data []byte, mode os.FileMode, forceMode bool) (err error) {
+	mode = mode.Perm()
+	if info, statErr := os.Lstat(name); statErr == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to replace symlink output %q", name)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("refusing to replace non-regular output %q", name)
+		}
+		if !forceMode {
+			mode = info.Mode().Perm()
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return statErr
+	}
 	dir := filepath.Dir(name)
 	temporary, err := os.CreateTemp(dir, "."+filepath.Base(name)+".tmp-*")
 	if err != nil {
@@ -675,14 +828,31 @@ func atomicWrite(name string, data []byte, mode os.FileMode) (err error) {
 		_ = temporary.Close()
 		_ = os.Remove(temporaryName)
 	}()
-	if err = temporary.Chmod(mode); err == nil {
-		_, err = temporary.Write(data)
+	_, err = temporary.Write(data)
+	if err == nil {
+		err = temporary.Chmod(mode)
 	}
 	if err == nil {
 		err = temporary.Sync()
 	}
 	if closeErr := temporary.Close(); err == nil {
 		err = closeErr
+	}
+	if err == nil {
+		if info, statErr := os.Lstat(name); statErr == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("refusing to replace symlink output %q", name)
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("refusing to replace non-regular output %q", name)
+			}
+			if !forceMode && info.Mode().Perm() != mode {
+				mode = info.Mode().Perm()
+				err = os.Chmod(temporaryName, mode)
+			}
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			err = statErr
+		}
 	}
 	if err == nil {
 		err = os.Rename(temporaryName, name)

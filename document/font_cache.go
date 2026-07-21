@@ -116,23 +116,6 @@ func (c *FontCache) put(fontKey string, cached cachedUTF8Font) {
 	c.mu.Unlock()
 }
 
-func cachedUTF8FontFromFile(fontKey, fontPath string, size, modTime int64) (cachedUTF8Font, error) {
-	key := sharedUTF8FontFileCacheKey{path: fontPath, size: size, modTime: modTime, fontKey: fontKey}
-	if cached, ok := lookupSharedUTF8FontFile(key); ok {
-		return cached, nil
-	}
-	data, err := readFontResourceFile(fontPath, maxFontSourceBytes)
-	if err != nil {
-		return cachedUTF8Font{}, err
-	}
-	cached, err := newCachedUTF8Font(fontKey, fontPath, data)
-	if err != nil {
-		return cachedUTF8Font{}, err
-	}
-	storeSharedUTF8FontFile(key, cached)
-	return cached, nil
-}
-
 func lookupSharedUTF8FontFile(key sharedUTF8FontFileCacheKey) (cachedUTF8Font, bool) {
 	sharedUTF8FontFileCache.Lock()
 	cached, ok := sharedUTF8FontFileCache.fonts[key]

@@ -55,7 +55,7 @@ func (s *studioServer) handleTypedExperiments(w http.ResponseWriter, r *http.Req
 
 	writeStudioJSON(w, http.StatusOK, studioTypedExperimentsResponse{
 		FormatVersion: 1, Revision: snapshot.revision,
-		SourceRevision: studioSourceRevision(snapshot.source), PlanHash: snapshot.plan.Hash(),
+		SourceRevision: studioSnapshotSourceRevision(snapshot), PlanHash: snapshot.plan.Hash(),
 		Scenario: snapshot.scenario, Projection: projection,
 	})
 }

@@ -162,10 +162,6 @@ func (f *pdfDocument) preflightCoreLayoutPlanPDFContextForTarget(ctx context.Con
 	return prepared, nil
 }
 
-func (f *pdfDocument) preflightCorePlanFont(resource layoutengine.CoreFontResource) (preparedCorePlanFont, error) {
-	return f.preflightCorePlanFontContext(context.Background(), resource)
-}
-
 func (f *pdfDocument) preflightCorePlanFontContext(ctx context.Context, resource layoutengine.CoreFontResource) (preparedCorePlanFont, error) {
 	return f.preflightPlanFontContext(ctx, resource, nil)
 }
@@ -326,27 +322,6 @@ func appendPlannedUTF8GlyphRunActualText(dst []byte, font fontDefinition, pageHe
 	return append(dst, " EMC"...)
 }
 
-func appendPlannedCoreGlyphRunCompact(dst []byte, font fontDefinition, pageHeight layoutengine.Fixed, run layoutengine.CoreGlyphRun) []byte {
-	if !plannedCoreRunUsesNativeAdvances(font, run) {
-		return appendPlannedCoreGlyphRun(dst, font, pageHeight, run)
-	}
-	dst = appendPDFColorComponentSpace(dst, run.Color.R)
-	dst = appendPDFColorComponentSpace(dst, run.Color.G)
-	dst = appendPDFColorComponentSpace(dst, run.Color.B)
-	dst = append(dst, "rg BT /F"...)
-	dst = append(dst, font.i...)
-	dst = append(dst, ' ')
-	dst = appendPDFFixedSpace(dst, run.FontSize)
-	dst = append(dst, "Tf 1 0 0 1 "...)
-	dst = appendPDFFixedSpace(dst, run.Origin.X)
-	dst = appendPDFFixedSpace(dst, pageHeight-run.Origin.Y)
-	dst = append(dst, "Tm ("...)
-	for _, code := range []byte(run.Codes) {
-		dst = appendEscapedPDFLiteralByte(dst, code)
-	}
-	return append(dst, ") Tj ET"...)
-}
-
 // appendPlannedCoreGlyphRunExactTJ retains one authored PDF text sequence while
 // correcting each native font advance to the immutable planned advance. This
 // preserves spaces for extraction without surrendering planned positioning.
@@ -387,22 +362,4 @@ func appendPlannedCoreGlyphRunExactTJ(dst []byte, font fontDefinition, pageHeigh
 		dst = append(dst, ' ')
 	}
 	return append(dst, "] TJ ET EMC"...)
-}
-
-func plannedCoreRunUsesNativeAdvances(font fontDefinition, run layoutengine.CoreGlyphRun) bool {
-	codes := []byte(run.Codes)
-	if len(codes) == 0 || len(codes) != len(run.Advances) || len(font.Cw) < 256 {
-		return false
-	}
-	var planned layoutengine.Fixed
-	var nativeWidth int
-	for index, code := range codes {
-		planned += run.Advances[index]
-		nativeWidth += font.Cw[int(code)]
-		expected, err := layoutengine.FixedFromPoints(float64(nativeWidth) * run.FontSize.Points() / 1000)
-		if err != nil || expected != planned {
-			return false
-		}
-	}
-	return true
 }

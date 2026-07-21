@@ -49,10 +49,6 @@ func readFileLimit(filename string, limit int64) ([]byte, error) {
 	return io.ReadAll(file)
 }
 
-func validImagePixelCount(width, height int) bool {
-	return validateImageDimensions(width, height) == nil
-}
-
 func validateImageDimensions(width, height int) error {
 	if width <= 0 || height <= 0 {
 		return fmt.Errorf("invalid image dimensions: %d x %d", width, height)

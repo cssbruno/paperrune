@@ -16,6 +16,27 @@ import (
 	"testing"
 )
 
+func testAIGeometryPlan(t *testing.T) LayoutPlan {
+	t.Helper()
+	plan, err := PlanParagraphFlow(ParagraphFlowInput{
+		PageSize: Size{Width: 100, Height: 60},
+		Body:     Rect{X: 10, Y: 10, Width: 80, Height: 20},
+		ParagraphLinePlanInput: ParagraphLinePlanInput{
+			Node: 1, Key: "@ai-capture", Instance: "@ai-capture",
+			Lines: []ParagraphLineInput{
+				{Width: 20, Height: 10, Baseline: 8},
+				{Width: 20, Height: 10, Baseline: 8},
+				{Width: 20, Height: 10, Baseline: 8},
+			},
+			Orphans: 1, Widows: 1, Mode: ParagraphBreakPrefer,
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlanParagraphFlow() = %v", err)
+	}
+	return plan
+}
+
 func TestCaptureAgentVisualArtifactsIsDeterministicExactAndDetached(t *testing.T) {
 	plan := testAIGeometryPlan(t)
 	projection := plan.Projection()

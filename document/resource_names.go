@@ -46,14 +46,6 @@ func templatePDFResourceRef(id string, objectNumber int) pdfResourceRef {
 	return pdfResourceRef{name: templatePDFResourceName(id), objectNumber: objectNumber}
 }
 
-func importedPagePDFResourceName(id int) pdfResourceName {
-	return pdfResourceName("/IPG" + strconv.Itoa(id))
-}
-
-func importedPagePDFResourceRef(id, objectNumber int) pdfResourceRef {
-	return pdfResourceRef{name: importedPagePDFResourceName(id), objectNumber: objectNumber}
-}
-
 func graphicsStatePDFResourceName(id int) pdfResourceName {
 	return pdfResourceName("/GS" + strconv.Itoa(id))
 }

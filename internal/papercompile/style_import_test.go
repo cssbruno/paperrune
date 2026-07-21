@@ -4,7 +4,9 @@
 package papercompile
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/paperrune/internal/paperlang"
@@ -46,7 +48,7 @@ func TestCompileNamedStyleAppliesRuleBeforeLocalOverrides(t *testing.T) {
 
 func TestCompileResolverImportsDesignRules(t *testing.T) {
 	mainSource := `document:
-  import: "../styles/design.paper"
+  import: "styles/design.paper"
   page:
     body:
       paragraph:
@@ -59,12 +61,12 @@ func TestCompileResolverImportsDesignRules(t *testing.T) {
     size: 10pt
     line-height: 14pt
 `
-	parsed := paperlang.Parse("docs/main.paper", mainSource)
+	parsed := paperlang.Parse("main.paper", mainSource)
 	if !parsed.OK() {
 		t.Fatalf("parse diagnostics: %#v", parsed.Diagnostics)
 	}
-	compiled := CompileWithResolver(parsed.AST, func(importerFile, importPath string) (string, string, error) {
-		if importerFile != "docs/main.paper" || importPath != "../styles/design.paper" {
+	compiled := CompileWithResolver(parsed.AST, func(_ context.Context, importerFile, importPath string) (string, string, error) {
+		if importerFile != "main.paper" || importPath != "styles/design.paper" {
 			return "", "", fmt.Errorf("unexpected import %s from %s", importPath, importerFile)
 		}
 		return "styles/design.paper", designSource, nil
@@ -76,6 +78,24 @@ func TestCompileResolverImportsDesignRules(t *testing.T) {
 	if paragraph.Style.FontFamily != "Courier" || paragraph.Style.FontSize != 10 || paragraph.Style.LineHeight != 14 {
 		t.Fatalf("imported style = %#v", paragraph.Style)
 	}
+}
+
+func TestCompileRejectsParentImportBeforeCallingResolver(t *testing.T) {
+	parsed := paperlang.Parse("project/main.paper", "document:\n  import: \"../outside.paper\"\n")
+	called := false
+	compiled := CompileWithResolver(parsed.AST, func(_ context.Context, _, _ string) (string, string, error) {
+		called = true
+		return "", "", nil
+	})
+	if compiled.OK() || called {
+		t.Fatalf("compiled OK=%v resolver called=%v", compiled.OK(), called)
+	}
+	for _, diagnostic := range compiled.Diagnostics {
+		if diagnostic.Code == "PAPER_IMPORT_PATH" {
+			return
+		}
+	}
+	t.Fatalf("diagnostics = %#v, want PAPER_IMPORT_PATH", compiled.Diagnostics)
 }
 
 func TestCompileImportRequiresExplicitResolver(t *testing.T) {
@@ -96,4 +116,20 @@ func TestCompileImportRequiresExplicitResolver(t *testing.T) {
 		}
 	}
 	t.Fatalf("diagnostics = %#v, want PAPER_IMPORT_RESOLVER", compiled.Diagnostics)
+}
+
+func TestImportResolverReceivesRemainingCumulativeByteBudget(t *testing.T) {
+	t.Parallel()
+	parsed := paperlang.Parse("main.paper", "document:\n  import: \"one.paper\"\n  import: \"two.paper\"\n")
+	var limits []int64
+	_ = CompileWithResolver(parsed.AST, func(ctx context.Context, _, importPath string) (string, string, error) {
+		limits = append(limits, ImportReadLimit(ctx, 16<<20))
+		if importPath == "one.paper" {
+			return importPath, strings.Repeat(" ", 1024), nil
+		}
+		return importPath, "document:\n", nil
+	})
+	if len(limits) != 2 || limits[0] != 8<<20 || limits[1] != (8<<20)-1024 {
+		t.Fatalf("resolver limits = %v", limits)
+	}
 }

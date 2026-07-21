@@ -113,6 +113,16 @@ func studioSourceRevision(source string) string {
 	return string(paperedit.SourceRevision(source))
 }
 
+func studioSnapshotSourceRevision(snapshot *studioSnapshot) string {
+	if snapshot != nil && snapshot.sourceRevision != "" {
+		return snapshot.sourceRevision
+	}
+	if snapshot == nil {
+		return ""
+	}
+	return studioSourceRevision(snapshot.source)
+}
+
 func (s *studioServer) handleEdit(w http.ResponseWriter, r *http.Request) {
 	s.handleStudioEdit(w, r, true)
 }
@@ -173,7 +183,7 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 		return studioEditResponse{}, err
 	}
 	fontRepair := request.Operation == "text" && request.Property == "font"
-	if request.SourceRevision != studioSourceRevision(snapshot.source) || request.PlanRevision != snapshot.revision || (snapshot.pages == 0 && request.Operation != "template" && request.Operation != "import" && request.Operation != "schema" && request.Operation != "schema-object" && request.Operation != "schema-field" && request.Operation != "scenario" && request.Operation != "scenario-create" && request.Operation != "scenario-matrix" && request.Operation != "scenario-value" && request.Operation != "node" && !fontRepair) {
+	if request.SourceRevision != studioSnapshotSourceRevision(snapshot) || request.PlanRevision != snapshot.revision || (snapshot.pages == 0 && request.Operation != "template" && request.Operation != "import" && request.Operation != "schema" && request.Operation != "schema-object" && request.Operation != "schema-field" && request.Operation != "scenario" && request.Operation != "scenario-create" && request.Operation != "scenario-matrix" && request.Operation != "scenario-value" && request.Operation != "node" && !fontRepair) {
 		return studioEditResponse{}, fmt.Errorf("%w: source or plan changed after selection", errStudioStaleEdit)
 	}
 
@@ -323,7 +333,7 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 		DisclosureDomain:         paperd.DisclosureRestricted,
 		RequireMutationAuthority: true,
 		AssetResources:           assetResources,
-		ImportResolver:           papercompile.ImportResolver(studioFileImportResolver()),
+		ImportResolver:           papercompile.ImportResolver(studioFileImportResolver(snapshot.file)),
 	})
 	if err != nil {
 		return studioEditResponse{}, err
@@ -428,7 +438,7 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 	}
 	return studioEditResponse{
 		OK: true, Operation: request.Operation, Target: request.Target, Property: request.Property,
-		BeforeSourceRevision: request.SourceRevision, SourceRevision: studioSourceRevision(after.source),
+		BeforeSourceRevision: request.SourceRevision, SourceRevision: studioSnapshotSourceRevision(after),
 		BeforePlanRevision: request.PlanRevision, PlanRevision: after.revision,
 		Scenario: afterScenario,
 		Applied:  mutation.Edit.Applied, PatchCount: len(mutation.Edit.Diff.Patches),
@@ -475,7 +485,7 @@ func studioHistoryResult(snapshot *studioSnapshot, journal *paperedit.Journal) s
 	status := journal.Snapshot()
 	return studioHistoryResponse{CanUndo: status.CanUndo, CanRedo: status.CanRedo, UndoCount: status.UndoCount, RedoCount: status.RedoCount,
 		UndoLabel: status.UndoLabel, RedoLabel: status.RedoLabel,
-		SourceRevision: studioSourceRevision(snapshot.source), PlanRevision: snapshot.revision}
+		SourceRevision: studioSnapshotSourceRevision(snapshot), PlanRevision: snapshot.revision}
 }
 
 func studioEditHistoryLabel(request studioEditRequest) string {
@@ -533,7 +543,7 @@ func (s *studioServer) handleHistory(w http.ResponseWriter, r *http.Request) {
 		writeStudioError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	if request.SourceRevision != studioSourceRevision(snapshot.source) || request.PlanRevision != snapshot.revision {
+	if request.SourceRevision != studioSnapshotSourceRevision(snapshot) || request.PlanRevision != snapshot.revision {
 		writeStudioError(w, http.StatusConflict, fmt.Errorf("%w: source or plan changed before history action", errStudioStaleEdit))
 		return
 	}

@@ -41,6 +41,11 @@ func TestImagePlanValidation(t *testing.T) {
 		}},
 		{"format", func(input *LayoutPlanInput) { input.ImageResources[0].Format = "gif" }},
 		{"pixel width", func(input *LayoutPlanInput) { input.ImageResources[0].PixelWidth = 0 }},
+		{"pixel dimension limit", func(input *LayoutPlanInput) { input.ImageResources[0].PixelWidth = ImageResourceMaxDimension + 1 }},
+		{"pixel count limit", func(input *LayoutPlanInput) {
+			input.ImageResources[0].PixelWidth = ImageResourceMaxDimension
+			input.ImageResources[0].PixelHeight = ImageResourceMaxDimension
+		}},
 		{"missing resource", func(input *LayoutPlanInput) { input.Images[0].Resource = 2 }},
 		{"missing fragment", func(input *LayoutPlanInput) { input.Images[0].Fragment = 2 }},
 		{"empty bounds", func(input *LayoutPlanInput) { input.Images[0].Bounds.Width = 0 }},

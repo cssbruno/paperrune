@@ -10,14 +10,7 @@ found=0
 for pdf in assets/generated/pdf/*.pdf; do
 	[ -f "$pdf" ] || continue
 	found=1
-	case "$pdf" in
-		*/Document_SetLegacyProtection.pdf)
-			pdfinfo -upw 123 "$pdf" >/dev/null
-			;;
-		*)
-			pdfinfo "$pdf" >/dev/null
-			;;
-	esac
+	pdfinfo "$pdf" >/dev/null
 done
 
 if [ "$found" -eq 0 ]; then

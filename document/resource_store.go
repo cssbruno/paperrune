@@ -3,28 +3,20 @@
 
 package document
 
-import (
-	"maps"
-	"sort"
-)
+import "sort"
 
 type resourceStore struct {
-	fonts           map[string]fontDefinition
-	fontFiles       map[string]fontFile
-	templates       map[string]TemplateView
-	importedObjs    map[string][]byte
-	importedObjPos  map[string]map[int]string
-	importedTplObjs map[string]string
-	importedPages   map[int]*importedPDFPage
-	images          map[string]*ImageInfo
-	imageAliases    map[string]string
-	objects         resourceObjectNumbers
-	attachments     attachmentResourceStore
+	fonts        map[string]fontDefinition
+	fontFiles    map[string]fontFile
+	templates    map[string]TemplateView
+	images       map[string]*ImageInfo
+	imageAliases map[string]string
+	objects      resourceObjectNumbers
+	attachments  attachmentResourceStore
 }
 
 type resourceObjectNumbers struct {
-	templates         map[string]int
-	importedTemplates map[string]int
+	templates map[string]int
 }
 
 type attachmentResourceStore struct {
@@ -35,19 +27,12 @@ type attachmentResourceStore struct {
 
 func newResourceStore() *resourceStore {
 	return &resourceStore{
-		fonts:           make(map[string]fontDefinition),
-		fontFiles:       make(map[string]fontFile),
-		templates:       make(map[string]TemplateView),
-		importedObjs:    make(map[string][]byte),
-		importedObjPos:  make(map[string]map[int]string),
-		importedTplObjs: make(map[string]string),
-		importedPages:   make(map[int]*importedPDFPage),
-		images:          make(map[string]*ImageInfo),
-		imageAliases:    make(map[string]string),
-		objects: resourceObjectNumbers{
-			templates:         make(map[string]int),
-			importedTemplates: make(map[string]int),
-		},
+		fonts:        make(map[string]fontDefinition),
+		fontFiles:    make(map[string]fontFile),
+		templates:    make(map[string]TemplateView),
+		images:       make(map[string]*ImageInfo),
+		imageAliases: make(map[string]string),
+		objects:      resourceObjectNumbers{templates: make(map[string]int)},
 		attachments: attachmentResourceStore{
 			streams:    make(map[attachmentStreamKey]int),
 			files:      make(map[attachmentFileKey]int),
@@ -256,73 +241,6 @@ func (s *resourceStore) templateOutputImage(tplID, name string, image *ImageInfo
 		}
 	}
 	return image
-}
-
-func (s *resourceStore) addImportedObject(name string, data []byte) {
-	s.importedObjs[name] = append([]byte(nil), data...)
-}
-
-func (s *resourceStore) importedObjectHashes(sorted bool) []string {
-	hashes := make([]string, 0, len(s.importedObjs))
-	for hash := range s.importedObjs {
-		hashes = append(hashes, hash)
-	}
-	if sorted {
-		sort.Strings(hashes)
-	}
-	return hashes
-}
-
-func (s *resourceStore) importedObjectData(hash string) []byte {
-	return s.importedObjs[hash]
-}
-
-func (s *resourceStore) addImportedObjectPositions(name string, positions map[int]string) {
-	copied := make(map[int]string, len(positions))
-	maps.Copy(copied, positions)
-	s.importedObjPos[name] = copied
-}
-
-func (s *resourceStore) importedObjectPositions(hash string) map[int]string {
-	return s.importedObjPos[hash]
-}
-
-func (s *resourceStore) addImportedTemplates(tpls map[string]string) {
-	maps.Copy(s.importedTplObjs, tpls)
-}
-
-func (s *resourceStore) importedTemplateNames(sorted bool) []string {
-	return importedTemplateOutputNames(s.importedTplObjs, sorted)
-}
-
-func (s *resourceStore) setImportedTemplateObjectID(hash string, objID int) {
-	s.objects.importedTemplates[hash] = objID
-}
-
-func (s *resourceStore) importedTemplateResourceRefs(sorted bool) []pdfResourceRef {
-	names := s.importedTemplateNames(sorted)
-	refs := make([]pdfResourceRef, 0, len(names))
-	for _, name := range names {
-		hash := s.importedTplObjs[name]
-		refs = append(refs, pdfResourceRef{
-			name:         pdfResourceName(name),
-			objectNumber: s.objects.importedTemplates[hash],
-		})
-	}
-	return refs
-}
-
-func (s *resourceStore) addImportedPage(id int, page *importedPDFPage) {
-	s.importedPages[id] = page
-}
-
-func (s *resourceStore) hasImportedPages() bool {
-	return len(s.importedPages) > 0
-}
-
-func (s *resourceStore) importedPage(id int) (*importedPDFPage, bool) {
-	page, ok := s.importedPages[id]
-	return page, ok
 }
 
 func (s *resourceStore) compressedAttachment(key attachmentStreamKey) (attachmentStream, bool) {

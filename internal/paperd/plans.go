@@ -314,5 +314,6 @@ func (w *Workspace) RenderPlan(handle PlanHandle) (RenderResult, error) {
 
 func clonePlanResult(result document.PaperPlanResult) document.PaperPlanResult {
 	result.Diagnostics = append([]document.PaperDiagnostic(nil), result.Diagnostics...)
+	result.Dependencies = append([]document.PaperSourceDependency(nil), result.Dependencies...)
 	return result
 }

@@ -6,8 +6,6 @@ package document
 import (
 	"context"
 	"io"
-
-	"github.com/cssbruno/paperrune/sign"
 )
 
 // Document is a PDF build session whose only supported authoring surface is
@@ -166,17 +164,4 @@ func (d *Document) OutputFileStreamWithOptions(file string, options OutputOption
 }
 func (d *Document) OutputFileStreamWithOptionsContext(ctx context.Context, file string, options OutputOptions) error {
 	return d.engine().OutputFileStreamWithOptionsContext(ctx, file, options)
-}
-
-func (d *Document) OutputSigned(w io.Writer, options sign.Options) error {
-	return d.engine().OutputSigned(w, options)
-}
-func (d *Document) OutputSignedContext(ctx context.Context, w io.Writer, options sign.Options) error {
-	return d.engine().OutputSignedContext(ctx, w, options)
-}
-func (d *Document) OutputSignedFile(file string, options sign.Options) error {
-	return d.engine().OutputSignedFile(file, options)
-}
-func (d *Document) OutputSignedFileContext(ctx context.Context, file string, options sign.Options) error {
-	return d.engine().OutputSignedFileContext(ctx, file, options)
 }

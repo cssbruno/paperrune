@@ -11,7 +11,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cssbruno/paperrune/inspect"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/layout"
 )
@@ -297,11 +296,7 @@ func TestHTMLUnifiedFlexFragmentCursorAndDeterministicPDF(t *testing.T) {
 	if firstY != secondY || !bytes.Equal(first, second) {
 		t.Fatalf("deterministic flex render differs: y %.4f/%.4f bytes %d/%d", firstY, secondY, len(first), len(second))
 	}
-	text, err := inspect.PageTextContext(context.Background(), first, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text = strings.ReplaceAll(text, "\x00", "")
+	text := extractedDocumentText(t, first)
 	for _, want := range []string{"Fixed item", "Weighted item"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("PDF text lacks %q: %q", want, text)

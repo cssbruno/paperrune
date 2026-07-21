@@ -322,10 +322,6 @@ func fixedSVGScalarDecimal(value Fixed) string {
 	return result.String()
 }
 
-func preflightDisplaySVGSources(resources []ImageResource, sources DisplaySVGImageSources, maxBytes uint64) (map[ImageResourceID]string, error) {
-	return preflightDisplaySVGSourcesContext(context.Background(), resources, sources, maxBytes)
-}
-
 func preflightDisplaySVGSourcesContext(ctx context.Context, resources []ImageResource, sources DisplaySVGImageSources, maxBytes uint64) (map[ImageResourceID]string, error) {
 	result := make(map[ImageResourceID]string, len(resources))
 	var total uint64

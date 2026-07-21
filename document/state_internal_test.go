@@ -23,10 +23,10 @@ func TestDocumentKeepsSerializationAndResourcesInPrivateOwners(t *testing.T) {
 	}
 	for _, field := range []string{
 		"n", "offsets", "buffer",
-		"resources", "importedPageSeq", "fontCache", "imageCache", "attachments",
+		"resources", "fontCache", "imageCache", "attachments",
 		"page", "k", "pageSizes", "pageBoxes",
 		"xmp", "compliance", "producer", "creationDate",
-		"limits", "securityPolicy", "outputPolicy", "protect",
+		"limits", "securityPolicy", "outputPolicy",
 	} {
 		for i := 0; i < typ.NumField(); i++ {
 			if typ.Field(i).Name == field {

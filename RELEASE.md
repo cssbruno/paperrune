@@ -72,6 +72,10 @@ Makefile runs them with the Go toolchain declared by `tools/go.mod`.
 
 Pushing a tag such as `v0.16.0` or `v0.16.0-rc.1` runs
 `.github/workflows/release.yml`. The workflow runs the release validation,
-extracts the matching changelog section, and creates or updates the GitHub
-Release. Tags containing a prerelease suffix are published as GitHub
-prereleases.
+builds Linux, macOS, and Windows archives for AMD64 and ARM64, generates
+CycloneDX SBOMs and SHA-256 checksums, signs GitHub build-provenance
+attestations, and creates or updates the GitHub Release with those assets. Tags
+containing a prerelease suffix are published as GitHub prereleases.
+
+Build the same archives locally with `make release-artifacts`. Verify a
+downloaded file with `sha256sum -c checksums.txt` and `gh attestation verify`.

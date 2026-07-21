@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 )
 
 // LayoutDocument is the shared model that document assembly helpers and HTML
@@ -603,33 +601,8 @@ func (b MetadataGridBlock) EffectiveBox() BoxStyle { return effectiveBoxStyle(b.
 
 // SignatureBlock groups one or more signature rows.
 type SignatureBlock struct {
-	Rows                 []SignatureRowBlock // Signature rows.
-	KeepTogether         bool                // Whether rows should stay together.
-	PlaceholderReference string              // Preferred PAdES signature field name.
-}
-
-// PAdESFieldName returns the signature field name to use with PAdES signing.
-func (s SignatureBlock) PAdESFieldName() string {
-	name := s.PlaceholderReference
-	if needsTrimSpace(name) {
-		name = strings.TrimSpace(name)
-	}
-	if name == "" {
-		return "Signature1"
-	}
-	return name
-}
-
-func needsTrimSpace(s string) bool {
-	if s == "" {
-		return false
-	}
-	first, _ := utf8.DecodeRuneInString(s)
-	if unicode.IsSpace(first) {
-		return true
-	}
-	last, _ := utf8.DecodeLastRuneInString(s)
-	return unicode.IsSpace(last)
+	Rows         []SignatureRowBlock // Signature rows.
+	KeepTogether bool                // Whether rows should stay together.
 }
 
 // SignatureRowBlock represents one row of signature columns.

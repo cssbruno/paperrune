@@ -544,9 +544,3 @@ func ReplayShapedText(result ShapedText, sink ShapedTextPaintSink) error {
 	}
 	return nil
 }
-
-func sortedShapeFeatures(features []ShapeFeature) []ShapeFeature {
-	result := cloneSlice(features)
-	sort.Slice(result, func(i, j int) bool { return result[i].Tag < result[j].Tag })
-	return result
-}

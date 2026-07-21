@@ -220,11 +220,14 @@ func studioPaperImportPaths(ast paperlang.AST) []string {
 
 func (s *studioServer) studioImportResolver() document.PaperImportResolver {
 	if !isStudioPaperDocument(s.file) {
-		return studioFileImportResolver()
+		return studioFileImportResolver(s.file)
 	}
 	packaged, _, loadErr := readStudioPaperDocument(s.file)
 	prefix := s.file + "!/"
-	return func(importerFile, importPath string) (string, string, error) {
+	return func(ctx context.Context, importerFile, importPath string) (string, string, error) {
+		if err := ctx.Err(); err != nil {
+			return "", "", err
+		}
 		if loadErr != nil {
 			return "", "", loadErr
 		}
@@ -239,6 +242,10 @@ func (s *studioServer) studioImportResolver() document.PaperImportResolver {
 		source, ok := packaged.Imports[relative]
 		if !ok {
 			return "", "", fmt.Errorf("paper-studio: packaged import %q is missing", relative)
+		}
+		limit := document.PaperImportReadLimit(ctx, studioSourceLimit)
+		if int64(len(source)) > limit {
+			return "", "", fmt.Errorf("paper-studio: packaged import exceeds %d bytes", limit)
 		}
 		return prefix + relative, source, nil
 	}

@@ -75,8 +75,8 @@
 
     <main class="workspace">
       <aside id="left-panel" class="left-panel" aria-label="Document outline">
-        <div class="panel-heading">
-          <span>Outline</span>
+        <div class="panel-heading outline-heading">
+          <span class="outline-heading-copy"><span>Outline</span><small>Document structure</small></span>
           <span id="node-count" class="quiet">0 nodes</span>
         </div>
         <div id="outline" class="outline" role="tree"></div>
@@ -86,14 +86,9 @@
         <div id="scenarios" class="scenarios"><span class="quiet">No scenario selected</span></div>
         <div class="panel-heading resources-heading"><span>Resources</span><span class="resource-heading-actions"><span id="resource-count" class="quiet">0</span><button id="resource-add" class="resource-add" type="button" hidden>Add</button></span></div>
         <div id="resources" class="resources" aria-live="polite"><span class="quiet">No catalog assets</span></div>
-        <section id="tag-panel" class="tag-panel" aria-label="Final PDF tag tree">
-          <div class="panel-heading"><span>Final PDF tags</span><span id="tag-status" class="quiet">Not inspected</span></div>
-          <div id="tag-summary" class="tag-summary">Open Accessibility to inspect the serialized PDF.</div>
-          <div id="tag-tree" class="tag-tree" role="tree" aria-label="Verified final PDF structure tree"></div>
-        </section>
         <section id="delivery-panel" class="delivery-panel" aria-label="Delivery status">
           <div class="panel-heading"><span>Delivery</span><span id="delivery-status" class="quiet">Not inspected</span></div>
-          <div id="delivery-summary" class="delivery-summary">Preflight, final PDF verification, export, and publish are separate statuses.</div>
+          <div id="delivery-summary" class="delivery-summary">Planning, export, and publish are separate statuses.</div>
           <div id="delivery-actions" class="delivery-actions"></div>
         </section>
       </aside>
@@ -221,7 +216,6 @@
   <script src="/instance-model.js" defer></script>
   <script src="/inspection-model.js" defer></script>
   <script src="/provenance-model.js" defer></script>
-  <script src="/tag-model.js" defer></script>
   <script src="/syntax-model.js" defer></script>
   <script src="/page-setup-model.js" defer></script>
   <script src="/issue-model.js" defer></script>

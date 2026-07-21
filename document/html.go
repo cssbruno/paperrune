@@ -53,8 +53,7 @@ type htmlRenderer struct {
 	MaxTableRows int
 	// DebugLog receives best-effort diagnostics for unsupported HTML or CSS.
 	// Leave nil to keep rendering quiet.
-	DebugLog             func(message string)
-	renderStartPageCount int
+	DebugLog func(message string)
 }
 
 const (

@@ -11,8 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
-	"strings"
 )
 
 const (
@@ -312,10 +310,4 @@ func cloneSignatureEnvelope(envelope SignatureEnvelope) SignatureEnvelope {
 	copy(signatures, envelope.Signatures)
 	envelope.Signatures = signatures
 	return envelope
-}
-
-func SortEntrySignatures(signatures []EntrySignature) []EntrySignature {
-	clone := append([]EntrySignature(nil), signatures...)
-	sort.Slice(clone, func(i, j int) bool { return strings.Compare(clone[i].KeyID, clone[j].KeyID) < 0 })
-	return clone
 }

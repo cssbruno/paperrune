@@ -106,13 +106,10 @@ compare_verapdf "verapdf-pdfa4.xml" 0 "$out_dir/pdfa4-metadata.pdf"
 compare_verapdf "verapdf-pdfa4e.xml" 0 "$out_dir/pdfa4e-attachment-metadata.pdf"
 compare_verapdf "verapdf-pdfa4f.xml" 0 "$out_dir/pdfa4f-attachment-metadata.pdf"
 compare_verapdf "verapdf-pdfua2.xml" ua2 "$out_dir/pdfua2-arlington-metadata-foundation.pdf"
-compare_verapdf "verapdf-signed-pdfa4f-pdfua2-arlington.xml" 0 "$out_dir/pdfa4f-pdfua2-arlington-signed.pdf"
-compare_verapdf "verapdf-signed-pdfua2.xml" ua2 "$out_dir/pdfa4f-pdfua2-arlington-signed.pdf"
 
 compare_normalized "arlington-pdfa4.json" json "$out_dir/pdfa4-metadata-arlington.json"
 compare_normalized "arlington-pdfa4e.json" json "$out_dir/pdfa4e-attachment-metadata-arlington.json"
 compare_normalized "arlington-pdfa4f.json" json "$out_dir/pdfa4f-attachment-metadata-arlington.json"
 compare_normalized "arlington-pdf20.json" json "$out_dir/pdfua2-arlington-metadata-foundation-arlington.json"
-compare_normalized "arlington-signed-pdfa4f-pdfua2.json" json "$out_dir/pdfa4f-pdfua2-arlington-signed-arlington.json"
 
 echo "compliance baselines match $baseline_dir"

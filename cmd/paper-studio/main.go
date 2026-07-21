@@ -29,6 +29,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +41,8 @@ import (
 	"github.com/cssbruno/paperrune/internal/paperedit"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 )
+
+var version = "devel"
 
 const (
 	studioSourceLimit        = 8 << 20
@@ -51,7 +55,6 @@ const (
 	studioPageRailLimit      = 10_000
 	studioPageIssueLimit     = 16
 	studioSessionTokenBytes  = 32
-	studioSessionCookie      = "paper_studio_session"
 	studioSessionHeader      = "X-Paper-Studio-Token"
 )
 
@@ -63,20 +66,22 @@ const (
 var studioAssets embed.FS
 
 type studioSnapshot struct {
-	sourceHash  [32]byte
-	revision    string
-	file        string
-	scenario    string
-	source      string
-	ast         json.RawMessage
-	diagnostics []document.PaperDiagnostic
-	plan        document.PaperPlan
-	pages       int
-	pageSummary []document.PaperPlanPageSummary
-	baseline    *studioDetachedPlan
-	captures    map[string]document.PaperPlanPageSVG
-	typedMu     sync.Mutex
-	typed       *document.TypedCharacterizationProjection
+	sourceHash     [32]byte
+	sourceRevision string
+	dependencies   []document.PaperSourceDependency
+	revision       string
+	file           string
+	scenario       string
+	source         string
+	ast            json.RawMessage
+	diagnostics    []document.PaperDiagnostic
+	plan           document.PaperPlan
+	pages          int
+	pageSummary    []document.PaperPlanPageSummary
+	baseline       *studioDetachedPlan
+	captures       map[string]document.PaperPlanPageSVG
+	typedMu        sync.Mutex
+	typed          *document.TypedCharacterizationProjection
 }
 
 // studioDetachedPlan is the sole cross-source baseline. PaperPlan owns no
@@ -141,13 +146,18 @@ type studioWorkspaceResponse struct {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "version" {
+		fmt.Printf("paper-studio %s\n", resolvedStudioVersion())
+		return
+	}
 	addr := flag.String("addr", "127.0.0.1:7331", "loopback listen address")
 	scenario := flag.String("scenario", "", "explicit .paper scenario")
 	assetsManifest := flag.String("assets", "", "explicit JSON asset manifest")
 	assetRoot := flag.String("asset-root", "", "asset root (defaults to explicit manifest directory)")
+	noOpen := flag.Bool("no-open", false, "print the protected URL without opening a browser")
 	flag.Parse()
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: paper-studio [-addr 127.0.0.1:7331] [-scenario NAME] FILE.paper|FILE.paperdoc")
+		fmt.Fprintln(os.Stderr, "usage: paper-studio [-addr 127.0.0.1:7331] [-scenario NAME] [-no-open] FILE.paper|FILE.paperdoc")
 		os.Exit(2)
 	}
 	if err := validateStudioListenAddress(*addr); err != nil {
@@ -181,10 +191,26 @@ func main() {
 		log.Fatal(err)
 	}
 	httpServer := &http.Server{Handler: server.routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
-	fmt.Fprintf(os.Stderr, "Paper Studio: http://%s/#token=%s\n", listener.Addr(), url.QueryEscape(server.sessionToken))
+	studioURL := fmt.Sprintf("http://%s/#token=%s", listener.Addr(), url.QueryEscape(server.sessionToken))
+	fmt.Fprintf(os.Stderr, "Paper Studio: %s\n", studioURL)
+	if !*noOpen {
+		if err := openStudioBrowser(studioURL, runtime.GOOS); err != nil {
+			fmt.Fprintf(os.Stderr, "Paper Studio: browser did not open: %v\n", err)
+		}
+	}
 	if err := httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
+}
+
+func resolvedStudioVersion() string {
+	if version != "" && version != "devel" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "devel"
 }
 
 func validateStudioListenAddress(address string) error {
@@ -262,11 +288,36 @@ func newStudioStaticHandler(web fs.FS) (http.Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("paper-studio: read Brotli WASM: %w", err)
 	}
+	wasmRuntime, err := fs.ReadFile(web, "wasm_exec.js")
+	if err != nil {
+		return nil, fmt.Errorf("paper-studio: read WASM runtime: %w", err)
+	}
+	workerSource, err := fs.ReadFile(web, "wasm-renderer-worker.js")
+	if err != nil {
+		return nil, fmt.Errorf("paper-studio: read WASM worker: %w", err)
+	}
+	// The worker is served as one script so its locked-down CSP never needs to
+	// grant importScripts access. This also prevents renderer code from using a
+	// script fetch as an alternate same-origin communication channel.
+	bundledWorker := make([]byte, 0, len(wasmRuntime)+1+len(workerSource))
+	bundledWorker = append(bundledWorker, wasmRuntime...)
+	bundledWorker = append(bundledWorker, '\n')
+	bundledWorker = append(bundledWorker, workerSource...)
 	files := http.FileServer(http.FS(web))
 	var decodeOnce sync.Once
 	var plainWASM []byte
 	var decodeErr error
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/wasm-renderer-worker.js" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Content-Length", strconv.Itoa(len(bundledWorker)))
+			w.WriteHeader(http.StatusOK)
+			if r.Method == http.MethodGet {
+				_, _ = w.Write(bundledWorker)
+			}
+			return
+		}
 		if r.URL.Path != "/paper-studio.wasm" || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
 			files.ServeHTTP(w, r)
 			return
@@ -331,14 +382,12 @@ func acceptsEncoding(value, name string) bool {
 
 func (s *studioServer) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/session", s.handleSession)
 	mux.HandleFunc("/api/workspace", s.handleWorkspace)
 	mux.HandleFunc("/api/changes", s.handleChanges)
 	mux.HandleFunc("/api/page/", s.handlePage)
 	mux.HandleFunc("/api/hit", s.handleHit)
 	mux.HandleFunc("/api/explain", s.handleExplain)
 	mux.HandleFunc("/api/inspect", s.handleInspect)
-	mux.HandleFunc("/api/pdf-tags", s.handlePDFTags)
 	mux.HandleFunc("/api/delivery", s.handleDelivery)
 	mux.HandleFunc("/api/export.pdf", s.handleExportPDF)
 	mux.HandleFunc("/api/export.paperdoc", s.handleExportPaperDocument)
@@ -352,34 +401,13 @@ func (s *studioServer) routes() http.Handler {
 	mux.HandleFunc("/api/review", s.handleReview)
 	mux.HandleFunc("/api/review/reference", s.handleReviewReference)
 	mux.Handle("/", s.static)
-	return studioRoutes{server: s, next: s.securityHeaders(s.requestGuard(mux))}
-}
-
-type studioRoutes struct {
-	server *studioServer
-	next   http.Handler
-}
-
-func (h studioRoutes) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.next.ServeHTTP(w, r)
-}
-
-func (h studioRoutes) studioSessionToken() string {
-	return h.server.sessionToken
+	return s.securityHeaders(s.requestGuard(mux))
 }
 
 func (s *studioServer) requestGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.permitsHost(r.Host) {
 			http.Error(w, "paper-studio: forbidden host", http.StatusForbidden)
-			return
-		}
-		if r.URL.Path == "/session" {
-			if !s.permitsOrigin(r.Header.Get("Origin")) || !s.validSessionToken(r.Header.Get(studioSessionHeader)) {
-				http.Error(w, "paper-studio: forbidden session bootstrap", http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/") {
@@ -405,21 +433,6 @@ func (s *studioServer) requestGuard(next http.Handler) http.Handler {
 	})
 }
 
-func (s *studioServer) handleSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		methodNotAllowed(w, http.MethodPost)
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     studioSessionCookie,
-		Value:    s.sessionToken,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	})
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func (s *studioServer) permitsHost(value string) bool {
 	host, port, err := net.SplitHostPort(strings.TrimSpace(value))
 	if err != nil || port != s.listenPort {
@@ -443,11 +456,7 @@ func (s *studioServer) permitsOrigin(value string) bool {
 }
 
 func (s *studioServer) authenticatesAPIRequest(r *http.Request) bool {
-	if s.validSessionToken(r.Header.Get(studioSessionHeader)) {
-		return true
-	}
-	cookie, err := r.Cookie(studioSessionCookie)
-	return err == nil && s.validSessionToken(cookie.Value)
+	return s.validSessionToken(r.Header.Get(studioSessionHeader))
 }
 
 func (s *studioServer) validSessionToken(value string) bool {
@@ -477,7 +486,13 @@ func hasJSONContentType(value string) bool {
 
 func (s *studioServer) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+		policy := "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		if r.URL.Path == "/wasm-renderer-worker.js" {
+			// The renderer receives a precompiled module and payloads exclusively
+			// through postMessage. It has no network or child-worker authority.
+			policy = "default-src 'none'; script-src 'wasm-unsafe-eval'; connect-src 'none'; child-src 'none'; worker-src 'none'"
+		}
+		w.Header().Set("Content-Security-Policy", policy)
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
@@ -489,16 +504,22 @@ func (s *studioServer) securityHeaders(next http.Handler) http.Handler {
 }
 
 func (s *studioServer) current(ctx context.Context, requestedScenario string) (*studioSnapshot, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	scenario := strings.TrimSpace(requestedScenario)
+	s.mu.Lock()
 	if scenario == "" {
 		scenario = s.scenario
 	}
+	catalog := s.assetCatalog
+	s.mu.Unlock()
+
 	source, hash, err := readStudioSource(s.file)
 	if err != nil {
 		return nil, err
 	}
+	parsed := paperlang.Parse(s.file, source)
+	imports := hasPaperImports(parsed.AST)
+
+	s.mu.Lock()
 	if !s.hasSourceHash || s.sourceHash != hash {
 		s.previous = nil
 		if prior := s.snapshots[scenario]; prior != nil && prior.pages > 0 && prior.revision != "" {
@@ -508,11 +529,20 @@ func (s *studioServer) current(ctx context.Context, requestedScenario string) (*
 		clear(s.snapshots)
 		s.sourceHash, s.hasSourceHash = hash, true
 	}
-	parsed := paperlang.Parse(s.file, source)
-	imports := hasPaperImports(parsed.AST)
-	if snapshot := s.snapshots[scenario]; snapshot != nil && snapshot.sourceHash == hash && !imports {
-		return snapshot, nil
+	cached := s.snapshots[scenario]
+	if cached != nil && cached.sourceHash == hash && !imports {
+		s.mu.Unlock()
+		return cached, nil
 	}
+	baseline := s.previous
+	s.mu.Unlock()
+	if cached != nil && cached.sourceHash == hash && imports {
+		dependencies := append([]document.PaperSourceDependency(nil), cached.dependencies...)
+		if s.watchedSourceRevision(ctx, source, dependencies) == cached.sourceRevision {
+			return cached, nil
+		}
+	}
+
 	ast, astErr := parsed.AST.CanonicalJSON()
 	if astErr != nil {
 		return nil, astErr
@@ -521,9 +551,13 @@ func (s *studioServer) current(ctx context.Context, requestedScenario string) (*
 	var planned document.PaperPlanResult
 	resolver := s.studioImportResolver()
 	if scenario == "" {
-		plan, planned, err = document.PlanPaperWithAssetsAndImportsContext(ctx, s.file, source, s.assetCatalog, resolver)
+		plan, planned, err = document.PlanPaperWithAssetsAndImportsContext(ctx, s.file, source, catalog, resolver)
 	} else {
-		plan, planned, err = document.PlanPaperScenarioWithAssetsAndImportsContext(ctx, s.file, source, scenario, s.assetCatalog, resolver)
+		plan, planned, err = document.PlanPaperScenarioWithAssetsAndImportsContext(ctx, s.file, source, scenario, catalog, resolver)
+	}
+	sourceRevision := planned.SourceRevision
+	if sourceRevision == "" {
+		sourceRevision = studioSourceRevision(source)
 	}
 	revision := "source-" + hex.EncodeToString(hash[:8])
 	pages := 0
@@ -539,11 +573,23 @@ func (s *studioServer) current(ctx context.Context, requestedScenario string) (*
 			return nil, err
 		}
 	}
-	snapshot := &studioSnapshot{sourceHash: hash, revision: revision, file: s.file, scenario: scenario, source: source, ast: ast,
+	snapshot := &studioSnapshot{sourceHash: hash, sourceRevision: sourceRevision, dependencies: append([]document.PaperSourceDependency(nil), planned.Dependencies...),
+		revision: revision, file: s.file, scenario: scenario, source: source, ast: ast,
 		diagnostics: append([]document.PaperDiagnostic(nil), planned.Diagnostics...), plan: plan, pages: pages,
-		pageSummary: pageSummary, baseline: s.previous, captures: make(map[string]document.PaperPlanPageSVG)}
+		pageSummary: pageSummary, baseline: baseline, captures: make(map[string]document.PaperPlanPageSVG)}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cached := s.snapshots[scenario]; cached != nil && cached.sourceHash == hash && cached.sourceRevision == sourceRevision {
+		return cached, nil
+	} else if cached != nil && cached.pages > 0 && cached.revision != "" {
+		s.previous = &studioDetachedPlan{revision: cached.revision, scenario: cached.scenario, plan: cached.plan,
+			pageSummary: append([]document.PaperPlanPageSummary(nil), cached.pageSummary...)}
+		snapshot.baseline = s.previous
+	}
 	_, alreadyCached := s.snapshots[scenario]
-	if !imports && (alreadyCached || len(s.snapshots) < studioScenarioCacheLimit) && (scenario == "" || (err == nil && planned.OK())) {
+	cacheableImports := !imports || (err == nil && planned.OK())
+	if cacheableImports && (alreadyCached || len(s.snapshots) < studioScenarioCacheLimit) && (scenario == "" || (err == nil && planned.OK())) {
 		s.snapshots[scenario] = snapshot
 	}
 	return snapshot, nil
@@ -561,27 +607,104 @@ func hasPaperImports(ast paperlang.AST) bool {
 	return false
 }
 
-func studioFileImportResolver() document.PaperImportResolver {
-	return func(importerFile, importPath string) (string, string, error) {
+func studioFileImportResolver(projectFile string) document.PaperImportResolver {
+	projectRootPath, rootErr := filepath.Abs(filepath.Dir(projectFile))
+	projectRoot := projectRootPath
+	if rootErr == nil {
+		projectRoot, rootErr = filepath.EvalSymlinks(projectRootPath)
+	}
+	return func(ctx context.Context, importerFile, importPath string) (string, string, error) {
+		if err := ctx.Err(); err != nil {
+			return "", "", err
+		}
+		if rootErr != nil {
+			return "", "", fmt.Errorf("paper-studio: resolve project root: %w", rootErr)
+		}
 		if isStudioPaperDocument(importerFile) {
 			return "", "", errors.New("paper-studio: Paper Document v1 cannot resolve external imports")
 		}
 		base := filepath.Dir(importerFile)
-		file := filepath.Clean(filepath.Join(base, filepath.FromSlash(importPath)))
-		input, err := os.Open(file)
+		candidate, err := filepath.Abs(filepath.Clean(filepath.Join(base, filepath.FromSlash(importPath))))
 		if err != nil {
 			return "", "", err
 		}
-		defer func() { _ = input.Close() }()
-		encoded, err := io.ReadAll(io.LimitReader(input, studioSourceLimit+1))
+		if err := requireStudioProjectPath(projectRootPath, candidate); err != nil {
+			return "", "", err
+		}
+		file, err := filepath.EvalSymlinks(candidate)
 		if err != nil {
 			return "", "", err
 		}
-		if len(encoded) > studioSourceLimit {
-			return "", "", fmt.Errorf("imported source exceeds %d bytes", studioSourceLimit)
+		if err := requireStudioProjectPath(projectRoot, file); err != nil {
+			return "", "", err
+		}
+		encoded, err := readStudioImportFileContext(ctx, file)
+		if err != nil {
+			return "", "", err
 		}
 		return file, string(encoded), nil
 	}
+}
+
+func readStudioImportFileContext(ctx context.Context, file string) ([]byte, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	limit := document.PaperImportReadLimit(ctx, studioSourceLimit)
+	info, err := os.Stat(file) // #nosec G304,G703 -- file is a validated source-relative Studio import.
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("paper-studio: imported source is not a regular file")
+	}
+	if info.Size() < 0 || info.Size() > limit {
+		return nil, fmt.Errorf("imported source exceeds %d bytes", limit)
+	}
+	input, err := os.Open(file) // #nosec G304,G703 -- path containment and regular-file type were validated above.
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = input.Close() }()
+	openedInfo, err := input.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !openedInfo.Mode().IsRegular() {
+		return nil, errors.New("paper-studio: imported source is not a regular file")
+	}
+	encoded, err := io.ReadAll(io.LimitReader(&studioContextReader{ctx: ctx, reader: input}, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(encoded)) > limit {
+		return nil, fmt.Errorf("imported source exceeds %d bytes", limit)
+	}
+	return encoded, nil
+}
+
+type studioContextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *studioContextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	n, err := r.reader.Read(p)
+	if err == nil {
+		err = r.ctx.Err()
+	}
+	return n, err
+}
+
+func requireStudioProjectPath(projectRoot, candidate string) error {
+	relative, err := filepath.Rel(projectRoot, candidate)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return errors.New("paper-studio: import path escapes the project root")
+	}
+	return nil
 }
 
 func readStudioSource(file string) (string, [32]byte, error) {
@@ -622,7 +745,7 @@ func (s *studioServer) handleWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	pageRail, baseline := s.pageRail(snapshot)
 	writeStudioJSON(w, http.StatusOK, studioWorkspaceResponse{FormatVersion: 1, File: snapshot.file, Revision: snapshot.revision,
-		SourceRevision: studioSourceRevision(snapshot.source),
+		SourceRevision: studioSnapshotSourceRevision(snapshot),
 		PlanHash:       snapshot.plan.Hash(), Pages: snapshot.pages, Source: snapshot.source, AST: snapshot.ast,
 		Diagnostics: snapshot.diagnostics, Scenario: snapshot.scenario, Preview: status, PageRail: pageRail, Baseline: baseline})
 }
@@ -642,13 +765,18 @@ func (s *studioServer) handleChanges(w http.ResponseWriter, r *http.Request) {
 		writeStudioError(w, http.StatusInternalServerError, errors.New("paper-studio: change stream requires streaming response support"))
 		return
 	}
-	_, sourceHash, err := readStudioSource(s.file)
+	ctx, cancel := context.WithTimeout(r.Context(), studioAPITimeout)
+	snapshot, err := s.current(ctx, r.URL.Query().Get("scenario"))
+	cancel()
 	if err != nil {
 		writeStudioError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	lastRevision := studioSourceRevisionFromHash(sourceHash)
+	lastRevision := studioSnapshotSourceRevision(snapshot)
+	dependencies := append([]document.PaperSourceDependency(nil), snapshot.dependencies...)
 	expectedRevision := strings.TrimSpace(r.URL.Query().Get("source_revision"))
+	controller := http.NewResponseController(w)
+	_ = controller.SetWriteDeadline(time.Time{})
 
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -683,11 +811,11 @@ func (s *studioServer) handleChanges(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-poll.C:
-			_, hash, readErr := readStudioSource(s.file)
+			source, _, readErr := readStudioSource(s.file)
 			if readErr != nil {
 				continue
 			}
-			revision := studioSourceRevisionFromHash(hash)
+			revision := s.watchedSourceRevision(r.Context(), source, dependencies)
 			if revision == lastRevision {
 				continue
 			}
@@ -704,8 +832,36 @@ func (s *studioServer) handleChanges(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func studioSourceRevisionFromHash(hash [32]byte) string {
-	return hex.EncodeToString(hash[:])
+func (s *studioServer) watchedSourceRevision(ctx context.Context, source string, dependencies []document.PaperSourceDependency) string {
+	current := make([]document.PaperSourceDependency, 0, len(dependencies))
+	if isStudioPaperDocument(s.file) {
+		packaged, _, err := readStudioPaperDocument(s.file)
+		if err != nil {
+			return document.PaperSourceManifestRevision(source, nil)
+		}
+		prefix := s.file + "!/"
+		for _, dependency := range dependencies {
+			if !strings.HasPrefix(dependency.File, prefix) {
+				continue
+			}
+			value, ok := packaged.Imports[strings.TrimPrefix(dependency.File, prefix)]
+			if !ok {
+				continue
+			}
+			digest := sha256.Sum256([]byte(value))
+			current = append(current, document.PaperSourceDependency{File: dependency.File, Digest: hex.EncodeToString(digest[:])})
+		}
+		return document.PaperSourceManifestRevision(source, current)
+	}
+	for _, dependency := range dependencies {
+		value, err := readStudioImportFileContext(ctx, dependency.File)
+		if err != nil {
+			continue
+		}
+		digest := sha256.Sum256(value)
+		current = append(current, document.PaperSourceDependency{File: dependency.File, Digest: hex.EncodeToString(digest[:])})
+	}
+	return document.PaperSourceManifestRevision(source, current)
 }
 
 func (s *studioServer) pageRail(snapshot *studioSnapshot) ([]studioPageRailSummary, studioBaselineResponse) {

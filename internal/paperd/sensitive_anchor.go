@@ -14,6 +14,11 @@ import (
 
 var ErrAuditAnchor = errors.New("paperd: sensitive audit anchor failed")
 
+func digestBytes(payload []byte) string {
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
+}
+
 type SensitiveAuditRootStatement struct {
 	Version       uint16 `json:"version"`
 	PartitionHash string `json:"partition_hash"`

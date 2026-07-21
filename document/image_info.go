@@ -27,10 +27,6 @@ type imageParser struct {
 	err           error
 }
 
-func newImageParser(scale float64, compressLevel int, pdfVersion string) *imageParser {
-	return newImageParserWithLimits(scale, compressLevel, pdfVersion, maxImageSourceBytes, maxImageDecodedBytes)
-}
-
 func newImageParserWithLimits(scale float64, compressLevel int, pdfVersion string, sourceLimit, decodedLimit int) *imageParser {
 	if sourceLimit == 0 {
 		sourceLimit = maxImageSourceBytes

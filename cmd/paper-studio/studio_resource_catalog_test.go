@@ -43,8 +43,8 @@ func TestStudioResourceCatalogMutationAddsAndRemovesManifestEntry(t *testing.T) 
 	if err := studio.setProjectManifest(manifest, dir, project); err != nil {
 		t.Fatal(err)
 	}
-	workspace := fetchStudioWorkspace(t, studio.routes())
-	added := postStudioJSON(t, studio.routes(), "/api/resources", map[string]any{
+	workspace := fetchStudioWorkspace(t, studio.testRoutes())
+	added := postStudioJSON(t, studio.testRoutes(), "/api/resources", map[string]any{
 		"source_revision": workspace.SourceRevision, "plan_revision": workspace.Revision, "operation": "add",
 		"name": "hero", "path": "hero.png", "media_type": "image/png", "focus_x": 0.5, "focus_y": 0.25,
 	})
@@ -60,8 +60,8 @@ func TestStudioResourceCatalogMutationAddsAndRemovesManifestEntry(t *testing.T) 
 		t.Fatalf("manifest after add=%s err=%v", manifestBytes, err)
 	}
 
-	updated := fetchStudioWorkspace(t, studio.routes())
-	removed := postStudioJSON(t, studio.routes(), "/api/resources", map[string]any{
+	updated := fetchStudioWorkspace(t, studio.testRoutes())
+	removed := postStudioJSON(t, studio.testRoutes(), "/api/resources", map[string]any{
 		"source_revision": updated.SourceRevision, "plan_revision": updated.Revision, "operation": "remove", "name": "hero",
 	})
 	if removed.StatusCode != http.StatusOK {
@@ -101,8 +101,8 @@ func TestStudioResourceCatalogMutationRejectsReferencedRemovalAndStaleRevision(t
 	if err := studio.setProjectManifest(manifest, dir, project); err != nil {
 		t.Fatal(err)
 	}
-	workspace := fetchStudioWorkspace(t, studio.routes())
-	remove := postStudioJSON(t, studio.routes(), "/api/resources", map[string]any{
+	workspace := fetchStudioWorkspace(t, studio.testRoutes())
+	remove := postStudioJSON(t, studio.testRoutes(), "/api/resources", map[string]any{
 		"source_revision": workspace.SourceRevision, "plan_revision": workspace.Revision, "operation": "remove", "name": "hero",
 	})
 	if remove.StatusCode != http.StatusUnprocessableEntity {
@@ -112,7 +112,7 @@ func TestStudioResourceCatalogMutationRejectsReferencedRemovalAndStaleRevision(t
 	if !bytes.Equal(unchanged, body) {
 		t.Fatalf("referenced remove changed manifest: %s", unchanged)
 	}
-	stale := postStudioJSON(t, studio.routes(), "/api/resources", map[string]any{
+	stale := postStudioJSON(t, studio.testRoutes(), "/api/resources", map[string]any{
 		"source_revision": "stale", "plan_revision": workspace.Revision, "operation": "remove", "name": "hero",
 	})
 	if stale.StatusCode != http.StatusConflict {

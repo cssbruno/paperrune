@@ -66,7 +66,7 @@ func (s *studioServer) handleResourceCatalogMutation(w http.ResponseWriter, r *h
 		writeStudioError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	if request.SourceRevision != studioSourceRevision(snapshot.source) || request.PlanRevision != snapshot.revision {
+	if request.SourceRevision != studioSnapshotSourceRevision(snapshot) || request.PlanRevision != snapshot.revision {
 		writeStudioError(w, http.StatusConflict, errors.New("paper-studio: stale resource catalog revision"))
 		return
 	}
@@ -118,7 +118,7 @@ func (s *studioServer) handleResourceCatalogMutation(w http.ResponseWriter, r *h
 		writeStudioError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	inventory.SourceRevision = studioSourceRevision(after.source)
+	inventory.SourceRevision = studioSnapshotSourceRevision(after)
 	inventory.CatalogEditable = editable
 	writeStudioJSON(w, http.StatusOK, studioResourceCatalogResponse{OK: true, Operation: request.Operation, Name: request.Name, Inventory: inventory})
 }

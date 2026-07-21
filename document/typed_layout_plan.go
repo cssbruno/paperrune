@@ -38,48 +38,44 @@ type LayoutDocumentPlan struct {
 }
 
 // typedLayoutDocumentEnvelope is deliberately private: layout nodes must not
-// acquire PDF serialization, output, compliance, or signing concerns. Every
+// acquire PDF serialization, output, or compliance concerns. Every
 // reference-bearing value in this record is detached while planning so a plan
 // can be reused after its source Document and LayoutDocument are mutated.
-// Signing keys and certificates are intentionally absent; callers supply live
-// credentials only to OutputSigned* after the plan has been painted.
 type typedLayoutDocumentEnvelope struct {
-	producer       string
-	title          string
-	subject        string
-	author         string
-	keywords       string
-	creator        string
-	creationDate   time.Time
-	modDate        time.Time
-	xmp            []byte
-	compliance     ComplianceMetadata
-	outputIntent   outputIntent
-	outputPolicy   OutputPolicy
-	pdfVersion     string
-	catalogSort    bool
-	tagged         bool
-	signatureField string
-	attachments    []Attachment
+	producer     string
+	title        string
+	subject      string
+	author       string
+	keywords     string
+	creator      string
+	creationDate time.Time
+	modDate      time.Time
+	xmp          []byte
+	compliance   ComplianceMetadata
+	outputIntent outputIntent
+	outputPolicy OutputPolicy
+	pdfVersion   string
+	catalogSort  bool
+	tagged       bool
+	attachments  []Attachment
 }
 
 type typedLayoutEnvelopeHash struct {
-	Schema         string             `json:"schema"`
-	LayoutHash     string             `json:"layout_hash"`
-	Producer       string             `json:"producer"`
-	Title          string             `json:"title"`
-	Subject        string             `json:"subject"`
-	Author         string             `json:"author"`
-	Keywords       string             `json:"keywords"`
-	Creator        string             `json:"creator"`
-	XMP            []byte             `json:"xmp"`
-	Compliance     ComplianceMetadata `json:"compliance"`
-	OutputIntent   typedOutputIntent  `json:"output_intent"`
-	OutputPolicy   OutputPolicy       `json:"output_policy"`
-	PDFVersion     string             `json:"pdf_version"`
-	Tagged         bool               `json:"tagged"`
-	SignatureField string             `json:"signature_field"`
-	Attachments    []typedAttachment  `json:"attachments"`
+	Schema       string             `json:"schema"`
+	LayoutHash   string             `json:"layout_hash"`
+	Producer     string             `json:"producer"`
+	Title        string             `json:"title"`
+	Subject      string             `json:"subject"`
+	Author       string             `json:"author"`
+	Keywords     string             `json:"keywords"`
+	Creator      string             `json:"creator"`
+	XMP          []byte             `json:"xmp"`
+	Compliance   ComplianceMetadata `json:"compliance"`
+	OutputIntent typedOutputIntent  `json:"output_intent"`
+	OutputPolicy OutputPolicy       `json:"output_policy"`
+	PDFVersion   string             `json:"pdf_version"`
+	Tagged       bool               `json:"tagged"`
+	Attachments  []typedAttachment  `json:"attachments"`
 }
 
 type typedOutputIntent struct {
@@ -354,7 +350,7 @@ func (f *pdfDocument) WriteLayoutDocumentPlanContext(ctx context.Context, plan L
 	var core preparedCorePlanPDF
 	if withDisplay {
 		var err error
-		display, err = f.preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx, plan.plan, plan.imageSources, plan.fontSources, false)
+		display, err = f.preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx, plan.plan, plan.imageSources, plan.fontSources, false, plan.envelope.tagged)
 		if err != nil {
 			return 0, fmt.Errorf("document: preflight typed layout plan: %w", err)
 		}
@@ -395,16 +391,9 @@ func (f *pdfDocument) validateLayoutDocumentPlanEnvelope(doc *layout.LayoutDocum
 		f.footerFnc != nil || f.footerFncLpi != nil || f.pageAddGuard != nil || len(f.aliasMap) != 0 || f.aliasNbPagesStr != "" {
 		return newTypedShadowUnsupported(typedShadowDocumentPolicy, "custom page lifecycle or deferred aliases are present")
 	}
-	if f.protect.encrypted {
-		return newTypedShadowUnsupported(typedShadowDocumentEnvelope, "live encryption state cannot be retained in an immutable layout plan")
-	}
 	if f.tagged.nextText != (taggedContentOptions{}) || len(f.tagged.stack) != 0 ||
 		f.tagged.pendingLinkElem != nil || f.tagged.pathArtifactOpen || f.tagged.artifactDepth != 0 {
 		return newTypedShadowUnsupported(typedShadowDocumentEnvelope, "live tagged-content state cannot be retained in an immutable layout plan")
-	}
-	if doc.Signature != nil && strings.TrimSpace(f.signatureFieldName) != "" &&
-		strings.TrimSpace(f.signatureFieldName) != doc.Signature.PAdESFieldName() {
-		return newTypedShadowUnsupported(typedShadowDocumentEnvelope, "conflicting signing field identities cannot be retained safely")
 	}
 	return nil
 }
@@ -423,7 +412,7 @@ func (f *pdfDocument) snapshotLayoutDocumentEnvelope(doc *layout.LayoutDocument)
 			identifier: f.outputIntent.identifier, info: f.outputIntent.info,
 		},
 		outputPolicy: f.outputPolicy, pdfVersion: f.pdfVersion, catalogSort: f.catalogSort,
-		tagged: f.tagged.enabled, signatureField: strings.TrimSpace(f.signatureFieldName),
+		tagged:      f.tagged.enabled,
 		attachments: attachments,
 	}
 	if doc.Title != "" {
@@ -452,9 +441,6 @@ func (f *pdfDocument) snapshotLayoutDocumentEnvelope(doc *layout.LayoutDocument)
 	}
 	if envelope.compliance.PDFUA2 {
 		envelope.tagged = true
-	}
-	if doc.Signature != nil {
-		envelope.signatureField = doc.Signature.PAdESFieldName()
 	}
 	if err := validateTypedLayoutDocumentEnvelope(envelope); err != nil {
 		return typedLayoutDocumentEnvelope{}, err
@@ -488,13 +474,6 @@ func (f *pdfDocument) validateLayoutDocumentEnvelopeTarget(envelope typedLayoutD
 		f.clipNest != 0 || f.transformNest != 0 {
 		return newTypedShadowUnsupported(typedShadowDocumentState, "document-envelope replay requires a fresh error-free target")
 	}
-	if f.protect.encrypted {
-		return newTypedShadowUnsupported(typedShadowDocumentEnvelope, "live encryption state on the target cannot be combined with an immutable plan")
-	}
-	if current := strings.TrimSpace(f.signatureFieldName); current != "" &&
-		envelope.signatureField != "" && current != envelope.signatureField {
-		return newTypedShadowUnsupported(typedShadowDocumentEnvelope, "target has a conflicting signing field identity")
-	}
 	if err := validateTypedLayoutDocumentEnvelope(envelope); err != nil {
 		return err
 	}
@@ -522,7 +501,6 @@ func (f *pdfDocument) installLayoutDocumentEnvelope(envelope typedLayoutDocument
 	f.pdfVersion = envelope.pdfVersion
 	f.catalogSort = envelope.catalogSort
 	f.tagged = taggedPDFState{enabled: envelope.tagged}
-	f.signatureFieldName = envelope.signatureField
 	f.SetAttachments(envelope.attachments)
 }
 
@@ -545,7 +523,7 @@ func hashTypedLayoutDocumentEnvelope(layoutHash string, envelope typedLayoutDocu
 			Identifier: envelope.outputIntent.identifier, Info: envelope.outputIntent.info,
 		},
 		OutputPolicy: envelope.outputPolicy, PDFVersion: envelope.pdfVersion, Tagged: envelope.tagged,
-		SignatureField: envelope.signatureField, Attachments: attachments,
+		Attachments: attachments,
 	}
 	encoded, err := json.Marshal(record)
 	if err != nil {
