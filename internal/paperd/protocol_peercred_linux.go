@@ -44,5 +44,5 @@ func unixSocketPeerCredentials(connection *net.UnixConn) (unixProtocolPeer, erro
 	if controlErr != nil {
 		return unixProtocolPeer{}, controlErr
 	}
-	return unixProtocolPeer{PID: credential.PID, UID: credential.UID, GID: credential.GID}, nil
+	return unixProtocolPeer(credential), nil
 }
