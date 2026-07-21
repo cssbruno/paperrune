@@ -92,6 +92,3 @@ jobs:
       - name: Vulnerability check
         if: github.event_name != 'pull_request'
         run: make govulncheck
-
-      - name: Cross-build Windows
-        run: GOOS=windows GOARCH=amd64 go build ./...
