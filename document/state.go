@@ -57,7 +57,6 @@ type resourceOwnershipState struct {
 	fontCache           *FontCache
 	resourceCachePolicy ResourceCachePolicy
 	coreFonts           map[string]bool
-	diffs               []string
 	stringWidthCache    map[stringWidthCacheKey]int
 	stringWidthKeys     []stringWidthCacheKey
 	stringWidthKeyNext  int
@@ -187,7 +186,7 @@ type pdfDocument struct {
 	footerFnc          func()                  // function provided by app to write footer
 	footerFncLpi       func(bool)              // function provided by app to write footer with last page flag
 	aliasNbPagesStr    string                  // alias for total number of pages
-	fontDirStr         string                  // location of font definition files
+	fontDirStr         string                  // location of raw TTF/OTF files
 	capStyle           int                     // line cap style: butt 0, round 1, square 2
 	joinStyle          int                     // line segment join style: miter 0, round 1, bevel 2
 	dashArray          []float64               // dash array

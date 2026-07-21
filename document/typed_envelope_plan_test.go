@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 func TestLayoutDocumentPlanSnapshotsAndReplaysAttachmentEnvelope(t *testing.T) {

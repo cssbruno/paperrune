@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 var htmlUnifiedBlockBoxProperties = func() map[string]bool {

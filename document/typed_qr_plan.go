@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 const typedQRPayloadByteLimit = 4096

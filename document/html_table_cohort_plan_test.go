@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/cssbruno/paperrune/internal/browseroracle"
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 func htmlUnifiedTableStructuredFixture(t testing.TB) string {

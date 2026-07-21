@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 // TestTypedCanonicalPlanPreservesSimpleCompatibilityBaselines compares the

@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/papercompile"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 	"github.com/cssbruno/paperrune/internal/papertheme"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 // PaperPlanSourceSpan identifies the authored source range that caused one
@@ -24,6 +24,81 @@ type PaperPlanSourceSpan struct {
 	StartColumn uint32 `json:"start_column,omitempty"`
 	EndLine     uint32 `json:"end_line,omitempty"`
 	EndColumn   uint32 `json:"end_column,omitempty"`
+}
+
+// PaperPlanColor is a detached optional RGB color in provenance output.
+type PaperPlanColor struct {
+	R   int
+	G   int
+	B   int
+	Set bool
+}
+
+// PaperPlanTextStyle is the public provenance projection of an internal text style.
+type PaperPlanTextStyle struct {
+	FontFamily    string
+	FontSize      float64
+	Bold          bool
+	Italic        bool
+	Underline     bool
+	StrikeThrough bool
+	Color         PaperPlanColor
+	Align         string
+	LineHeight    float64
+	WhiteSpace    string
+	TabSize       uint8
+}
+
+// PaperPlanSpacing is detached block-edge spacing in provenance output.
+type PaperPlanSpacing struct {
+	Top    float64
+	Right  float64
+	Bottom float64
+	Left   float64
+}
+
+// PaperPlanBorderSide is one detached block border edge.
+type PaperPlanBorderSide struct {
+	Width float64
+	Style string
+	Color PaperPlanColor
+}
+
+// PaperPlanBorderStyle is the detached per-side block border projection.
+type PaperPlanBorderStyle struct {
+	Top    PaperPlanBorderSide
+	Right  PaperPlanBorderSide
+	Bottom PaperPlanBorderSide
+	Left   PaperPlanBorderSide
+}
+
+// PaperPlanBoxShadowStyle is the detached supported shadow projection.
+type PaperPlanBoxShadowStyle struct {
+	OffsetX float64
+	OffsetY float64
+	Spread  float64
+	Color   PaperPlanColor
+}
+
+// PaperPlanBoxStyle is the public provenance projection of an internal box style.
+type PaperPlanBoxStyle struct {
+	Margin          PaperPlanSpacing
+	Padding         PaperPlanSpacing
+	Border          PaperPlanBorderStyle
+	BackgroundColor PaperPlanColor
+	Width           float64
+	Height          float64
+	MinWidth        float64
+	MinHeight       float64
+	MaxWidth        float64
+	MaxHeight       float64
+	Overflow        string
+	BorderRadius    float64
+	Shadow          PaperPlanBoxShadowStyle
+	KeepTogether    bool
+	KeepWithNext    bool
+	Orphans         uint32
+	Widows          uint32
 }
 
 // PaperPlanBindingProvenance is the exact data path used by a compiled text
@@ -66,8 +141,8 @@ type PaperPlanComputedStyleProvenance struct {
 	Node      string              `json:"node,omitempty"`
 	Kind      string              `json:"kind"`
 	Source    PaperPlanSourceSpan `json:"source"`
-	TextStyle *layout.TextStyle   `json:"text_style,omitempty"`
-	BoxStyle  *layout.BoxStyle    `json:"box_style,omitempty"`
+	TextStyle *PaperPlanTextStyle `json:"text_style,omitempty"`
+	BoxStyle  *PaperPlanBoxStyle  `json:"box_style,omitempty"`
 }
 
 // PaperPlanExpansionProvenance distinguishes authored definitions from their
@@ -137,16 +212,60 @@ func (p PaperPlan) Provenance() (PaperPlanProvenance, error) {
 	for _, style := range p.mapping.ComputedStyles {
 		entry := PaperPlanComputedStyleProvenance{Node: style.NodeID, Kind: string(style.NodeKind), Source: paperLangSourceSpan(style.Source)}
 		if style.TextStyle != nil {
-			copy := *style.TextStyle
+			copy := paperPlanTextStyle(*style.TextStyle)
 			entry.TextStyle = &copy
 		}
 		if style.BoxStyle != nil {
-			copy := *style.BoxStyle
+			copy := paperPlanBoxStyle(*style.BoxStyle)
 			entry.BoxStyle = &copy
 		}
 		result.ComputedStyles = append(result.ComputedStyles, entry)
 	}
 	return result, nil
+}
+
+func paperPlanTextStyle(style layout.TextStyle) PaperPlanTextStyle {
+	return PaperPlanTextStyle{
+		FontFamily: style.FontFamily, FontSize: style.FontSize, Bold: style.Bold, Italic: style.Italic,
+		Underline: style.Underline, StrikeThrough: style.StrikeThrough, Color: paperPlanColor(style.Color),
+		Align: style.Align, LineHeight: style.LineHeight, WhiteSpace: style.WhiteSpace, TabSize: style.TabSize,
+	}
+}
+
+func paperPlanBoxStyle(style layout.BoxStyle) PaperPlanBoxStyle {
+	return PaperPlanBoxStyle{
+		Margin: paperPlanSpacing(style.Margin), Padding: paperPlanSpacing(style.Padding),
+		Border: paperPlanBorderStyle(style.Border), BackgroundColor: paperPlanColor(style.BackgroundColor),
+		Width: style.Width, Height: style.Height, MinWidth: style.MinWidth, MinHeight: style.MinHeight,
+		MaxWidth: style.MaxWidth, MaxHeight: style.MaxHeight, Overflow: style.Overflow,
+		BorderRadius: style.BorderRadius, Shadow: paperPlanBoxShadowStyle(style.Shadow),
+		KeepTogether: style.KeepTogether, KeepWithNext: style.KeepWithNext, Orphans: style.Orphans, Widows: style.Widows,
+	}
+}
+
+func paperPlanColor(color layout.DocumentColor) PaperPlanColor {
+	return PaperPlanColor{R: color.R, G: color.G, B: color.B, Set: color.Set}
+}
+
+func paperPlanSpacing(spacing layout.Spacing) PaperPlanSpacing {
+	return PaperPlanSpacing{Top: spacing.Top, Right: spacing.Right, Bottom: spacing.Bottom, Left: spacing.Left}
+}
+
+func paperPlanBorderStyle(border layout.BorderStyle) PaperPlanBorderStyle {
+	return PaperPlanBorderStyle{
+		Top: paperPlanBorderSide(border.Top), Right: paperPlanBorderSide(border.Right),
+		Bottom: paperPlanBorderSide(border.Bottom), Left: paperPlanBorderSide(border.Left),
+	}
+}
+
+func paperPlanBorderSide(side layout.BorderSide) PaperPlanBorderSide {
+	return PaperPlanBorderSide{Width: side.Width, Style: side.Style, Color: paperPlanColor(side.Color)}
+}
+
+func paperPlanBoxShadowStyle(shadow layout.BoxShadowStyle) PaperPlanBoxShadowStyle {
+	return PaperPlanBoxShadowStyle{
+		OffsetX: shadow.OffsetX, OffsetY: shadow.OffsetY, Spread: shadow.Spread, Color: paperPlanColor(shadow.Color),
+	}
 }
 
 func clonePaperCompileMapping(input papercompile.CompileMapping) papercompile.CompileMapping {

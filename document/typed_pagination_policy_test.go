@@ -9,8 +9,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 func paginationTestDocument(t *testing.T, height float64, options ...Option) *pdfDocument {

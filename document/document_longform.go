@@ -7,7 +7,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 // LongFormHTMLDocumentModel converts supported long-form HTML into a shared

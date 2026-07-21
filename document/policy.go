@@ -70,7 +70,7 @@ type Hooks struct {
 	OnAttachmentLoaded  func(filename string, bytes int64)
 	OnOutputObject      func(objectNumber int, kind string)
 	OnWarning           func(message string)
-	// OnLayoutEngineRoute reports which implementation served a public layout
+	// OnLayoutEngineRoute reports which implementation served an internal layout
 	// entry point. Automatic layout reports only successful unified routes;
 	// unsupported input fails before this hook is called. Values never contain
 	// authored content or source paths. Callers can audit that no legacy route

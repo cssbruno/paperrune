@@ -3,7 +3,7 @@
 
 package document
 
-import "github.com/cssbruno/paperrune/layout"
+import "github.com/cssbruno/paperrune/internal/layout"
 
 // plannerDefaultTextStyle snapshots the receiver's current text defaults for
 // immutable lowering. It does not estimate a block or choose page geometry.

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 // htmlUnifiedResolvedElement is the selector-free HTML frontend output used

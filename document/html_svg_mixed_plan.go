@@ -15,8 +15,8 @@ import (
 	"math"
 	"sort"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 func htmlUnifiedMixedSVGMetas(compiled *compiledHTML) ([]htmlUnifiedSVGMeta, error) {

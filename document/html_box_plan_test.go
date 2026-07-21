@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 const htmlUnifiedBoxFixture = `<p style="margin:2pt 3pt 4pt 5pt;padding:6pt 7pt 8pt 9pt;` +

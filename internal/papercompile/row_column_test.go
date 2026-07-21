@@ -7,9 +7,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/internal/paperlang"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 func TestCompileRowColumnTracksAndSourceMappings(t *testing.T) {

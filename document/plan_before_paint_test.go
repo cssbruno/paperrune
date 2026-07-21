@@ -8,7 +8,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 type planBeforePaintSnapshot struct {

@@ -5,23 +5,10 @@ package document_test
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/cssbruno/paperrune/document"
 )
-
-func TestAddFontErrorReturnsLatchedError(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument()
-
-	err := pdf.AddFontError("bad", "", "../bad.json")
-	if err == nil {
-		t.Fatal("AddFontError() error = nil")
-	}
-	if !errors.Is(pdf.Error(), err) {
-		t.Fatal("AddFontError() did not return the latched document error")
-	}
-}
 
 func TestAddUTF8FontErrorReturnsLatchedError(t *testing.T) {
 	pdf := document.MustNewTestPDFDocument()
@@ -44,18 +31,6 @@ func TestAddUTF8FontFromBytesErrorReturnsLatchedError(t *testing.T) {
 	}
 	if !errors.Is(pdf.Error(), err) {
 		t.Fatal("AddUTF8FontFromBytesError() did not return the latched document error")
-	}
-}
-
-func TestAddFontFromReaderErrorReturnsLatchedError(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument()
-
-	err := pdf.AddFontFromReaderError("bad", "", strings.NewReader("{"))
-	if err == nil {
-		t.Fatal("AddFontFromReaderError() error = nil")
-	}
-	if !errors.Is(pdf.Error(), err) {
-		t.Fatal("AddFontFromReaderError() did not return the latched document error")
 	}
 }
 

@@ -1,14 +1,13 @@
 #!/bin/sh
 set -eu
 
-output=$(go test ./document ./layout ./font -cover)
+output=$(go test ./document ./internal/layout -cover)
 printf '%s\n' "$output"
 
 printf '%s\n' "$output" | awk '
 BEGIN {
 	minimum["github.com/cssbruno/paperrune/document"] = 80
-	minimum["github.com/cssbruno/paperrune/layout"] = 45
-	minimum["github.com/cssbruno/paperrune/font"] = 65
+	minimum["github.com/cssbruno/paperrune/internal/layout"] = 45
 }
 $1 == "ok" {
 	pkg = $2

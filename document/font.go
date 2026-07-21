@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// getFontKey normalizes the font key used by AddFontFromReader and GetFontDesc.
+// getFontKey normalizes the font key used by font registration and GetFontDesc.
 func getFontKey(familyStr, styleStr string) string {
 	familyStr = strings.ToLower(familyStr)
 	styleStr = strings.ToUpper(styleStr)
@@ -22,7 +22,7 @@ func getFontKey(familyStr, styleStr string) string {
 // find the baseline of a font. If familyStr is empty, the current font
 // descriptor is returned.
 // See FontDescriptor for documentation about the font descriptor.
-// See AddFont for details about familyStr and styleStr.
+// See AddUTF8Font for details about familyStr and styleStr.
 func (f *pdfDocument) GetFontDesc(familyStr, styleStr string) FontDescriptor {
 	if familyStr == "" {
 		return f.currentFont.Desc
@@ -35,21 +35,17 @@ func (f *pdfDocument) GetFontDesc(familyStr, styleStr string) FontDescriptor {
 // call this method at least once before printing text or the resulting
 // document will not be valid.
 //
-// The font can be either a standard one or a font added with AddFont() or
-// AddFontFromReader(). Standard fonts use Windows code page 1252 (Western
-// Europe).
+// The font can be either a standard one or a font added with AddUTF8Font().
+// Standard fonts use Windows code page 1252 (Western Europe).
 //
 // The method can be called before the first page is created and the font is
 // kept from page to page. If you just wish to change the current font size, it
 // is simpler to call SetFontSize().
 //
-// Note: the font definition file must be accessible. An error is set if the
-// file cannot be read.
-//
 // familyStr specifies the font family. It can be either a name defined by
-// AddFont(), AddFontFromReader() or one of the standard families (case
-// insensitive): "Courier" for fixed-width, "Helvetica" or "Arial" for sans
-// serif, "Times" for serif, "Symbol" or "ZapfDingbats" for symbolic.
+// AddUTF8Font() or one of the standard families (case insensitive): "Courier"
+// for fixed-width, "Helvetica" or "Arial" for sans serif, "Times" for serif,
+// "Symbol" or "ZapfDingbats" for symbolic.
 //
 // styleStr can be "B" (bold), "I" (italic), "U" (underscore), "S" (strike-out)
 // or any combination. The default value (specified with an empty string) is

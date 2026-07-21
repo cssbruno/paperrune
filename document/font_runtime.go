@@ -5,7 +5,6 @@ package document
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,52 +16,14 @@ import (
 	"strings"
 )
 
-// SetFontLocation sets the filesystem location of the font and font
-// definition files.
+// SetFontLocation sets the filesystem location of raw font files.
 func (f *pdfDocument) SetFontLocation(fontDirStr string) {
 	f.fontpath = fontDirStr
 	f.utf8FontPathCache = make(map[string]utf8FontPathInfo)
 }
 
-// AddFont imports a TrueType, OpenType or Type1 font and makes it available.
-// It is necessary to generate a font definition file first with the fontmaker
-// utility. You do not need to call this function for the core PDF fonts
-// (courier, helvetica, times, zapfdingbats).
-//
-// The JSON definition file (and the font file itself when embedding) must be
-// present in the font directory. If it is not found, the error "Could not
-// include font definition file" is set.
-//
-// family specifies the font family. The name can be chosen arbitrarily. If it
-// is a standard family name, it will override the corresponding font. This
-// string is used to subsequently set the font with the SetFont method.
-//
-// style specifies the font style. Acceptable values are (case insensitive) the
-// empty string for regular style, "B" for bold, "I" for italic, or "BI" or
-// "IB" for bold and italic combined.
-//
-// fileStr specifies the base name with ".json" extension of the font
-// definition file to be added. The file will be loaded from the font directory
-// specified in the call to New() or SetFontLocation().
-func (f *pdfDocument) AddFont(familyStr, styleStr, fileStr string) {
-	_ = f.AddFontError(familyStr, styleStr, fileStr)
-}
-
-// AddFontError imports a TrueType, OpenType or Type1 font and returns failures
-// directly.
-func (f *pdfDocument) AddFontError(familyStr, styleStr, fileStr string) error {
-	f.addFont(fontFamilyEscape(familyStr), styleStr, fileStr, false)
-	return f.err
-}
-
 // AddUTF8Font imports a TrueType font with UTF-8 symbols and makes it available.
-// It is necessary to generate a font definition file first with the fontmaker
-// utility. You do not need to call this function for the core PDF fonts
-// (courier, helvetica, times, zapfdingbats).
-//
-// The JSON definition file (and the font file itself when embedding) must be
-// present in the font directory. If it is not found, the error "Could not
-// include font definition file" is set.
+// Core PDF fonts do not require registration.
 //
 // family specifies the font family. The name can be chosen arbitrarily. If it
 // is a standard family name, it will override the corresponding font. This
@@ -73,9 +34,8 @@ func (f *pdfDocument) AddFontError(familyStr, styleStr, fileStr string) error {
 // "IB" for bold and italic combined.
 //
 // fileStr specifies the base name with ".ttf" or ".otf" extension of the font
-// file to be added. OpenType files with TrueType outlines are supported. CFF
-// OpenType files are supported by font.Make/AddFont for single-byte
-// encodings, not by this UTF-8 subsetting path.
+// file to be added. OpenType files with TrueType outlines are supported; CFF
+// outlines are not.
 func (f *pdfDocument) AddUTF8Font(familyStr, styleStr, fileStr string) {
 	_ = f.AddUTF8FontError(familyStr, styleStr, fileStr)
 }
@@ -83,95 +43,60 @@ func (f *pdfDocument) AddUTF8Font(familyStr, styleStr, fileStr string) {
 // AddUTF8FontError imports a TrueType font with UTF-8 symbols and returns
 // failures directly.
 func (f *pdfDocument) AddUTF8FontError(familyStr, styleStr, fileStr string) error {
-	f.addFont(fontFamilyEscape(familyStr), styleStr, fileStr, true)
+	f.addUTF8Font(fontFamilyEscape(familyStr), styleStr, fileStr)
 	return f.err
 }
 
-func (f *pdfDocument) addFont(familyStr, styleStr, fileStr string, isUTF8 bool) {
+func (f *pdfDocument) addUTF8Font(familyStr, styleStr, fileStr string) {
 	if fileStr == "" {
-		if isUTF8 {
-			fileStr = strings.ReplaceAll(familyStr, " ", "") + strings.ToLower(styleStr) + ".ttf"
-		} else {
-			fileStr = strings.ReplaceAll(familyStr, " ", "") + strings.ToLower(styleStr) + ".json"
-		}
+		fileStr = strings.ReplaceAll(familyStr, " ", "") + strings.ToLower(styleStr) + ".ttf"
 	}
 	if f.fontpath != "" && !validFontFilePath(fileStr) {
 		f.SetErrorf("invalid font resource name: %s", fileStr)
 		return
 	}
-	if isUTF8 {
-		resources := f.ensureResourceStore()
-		fontKey := getFontKey(familyStr, styleStr)
-		if !validPDFNameFragment(fontKey) {
-			f.SetErrorf("invalid UTF-8 font name: %s", fontKey)
-			return
+	resources := f.ensureResourceStore()
+	fontKey := getFontKey(familyStr, styleStr)
+	if !validPDFNameFragment(fontKey) {
+		f.SetErrorf("invalid UTF-8 font name: %s", fontKey)
+		return
+	}
+	if _, ok := resources.font(fontKey); ok {
+		return
+	}
+	if cached, ok := f.fontCache.font(familyStr, styleStr); ok {
+		if f.hooks.OnResourceCacheHit != nil {
+			f.hooks.OnResourceCacheHit("font", fontKey)
 		}
-		_, ok := resources.font(fontKey)
-		if ok {
-			return
-		}
-		if cached, ok := f.fontCache.font(familyStr, styleStr); ok {
-			if f.hooks.OnResourceCacheHit != nil {
-				f.hooks.OnResourceCacheHit("font", fontKey)
-			}
-			f.addCachedUTF8Font(fontKey, familyStr, styleStr, cached)
-			resources.setFontFile(fontKey, fontFile{length1: int64(len(cached.data)), fontType: "UTF8"})
-			return
-		}
-		if f.resourceLoader != nil {
-			cached, originalSize, err := f.cachedUTF8FontFromResource(context.Background(), fontKey, fileStr)
-			if err != nil {
-				f.SetError(err)
-				return
-			}
-			f.fontCache.put(fontKey, cached)
-			f.addCachedUTF8Font(fontKey, familyStr, styleStr, cached)
-			resources.setFontFile(fontKey, fontFile{length1: originalSize, fontType: "UTF8"})
-			resources.setFontFile(fileStr, fontFile{fontType: "UTF8"})
-			return
-		}
-		fontPath, originalSize, modTime, err := f.resolveUTF8FontPath(fileStr)
-		if err != nil {
-			f.SetError(err)
-			return
-		}
-		if originalSize > maxFontSourceBytes {
-			f.SetError(errors.New("font data exceeds maximum size"))
-			return
-		}
-		cached, err := f.cachedUTF8FontFromFile(fontKey, fontPath, originalSize, modTime)
+		f.addCachedUTF8Font(fontKey, familyStr, styleStr, cached)
+		return
+	}
+	if f.resourceLoader != nil {
+		cached, _, err := f.cachedUTF8FontFromResource(context.Background(), fontKey, fileStr)
 		if err != nil {
 			f.SetError(err)
 			return
 		}
 		f.fontCache.put(fontKey, cached)
 		f.addCachedUTF8Font(fontKey, familyStr, styleStr, cached)
-		resources.setFontFile(fontKey, fontFile{length1: originalSize, fontType: "UTF8"})
-		resources.setFontFile(fontPath, fontFile{fontType: "UTF8"})
-	} else {
-		if !validFontResourceName(fileStr) {
-			f.SetErrorf("invalid font resource name: %s", fileStr)
-			return
-		}
-		if f.resourceLoader != nil {
-			reader, err := f.openFontResource(context.Background(), fileStr, maxFontDefinitionBytes, "font definition")
-			if err != nil {
-				f.SetError(err)
-				return
-			}
-			f.AddFontFromReader(familyStr, styleStr, reader)
-			_ = reader.Close()
-			return
-		}
-		fileStr = joinFontPath(f.fontpath, fileStr)
-		file, err := os.Open(fileStr) // #nosec G304 -- Legacy font-path API resolves caller-selected resources.
-		if err != nil {
-			f.err = err
-			return
-		}
-		defer func() { _ = file.Close() }()
-		f.AddFontFromReader(familyStr, styleStr, file)
+		return
 	}
+	fontPath, originalSize, modTime, err := f.resolveUTF8FontPath(fileStr)
+	if err != nil {
+		f.SetError(err)
+		return
+	}
+	if originalSize > maxFontSourceBytes {
+		f.SetError(errors.New("font data exceeds maximum size"))
+		return
+	}
+	cached, err := f.cachedUTF8FontFromFile(fontKey, fontPath, originalSize, modTime)
+	if err != nil {
+		f.SetError(err)
+		return
+	}
+	f.fontCache.put(fontKey, cached)
+	f.addCachedUTF8Font(fontKey, familyStr, styleStr, cached)
 }
 
 func (f *pdfDocument) cachedUTF8FontFromResource(ctx context.Context, fontKey, name string) (cachedUTF8Font, int64, error) {
@@ -226,11 +151,6 @@ func (f *pdfDocument) cachedUTF8FontFromResource(ctx context.Context, fontKey, n
 		}
 	}
 	return cached, int64(len(data)), nil
-}
-
-func (f *pdfDocument) openFontResource(ctx context.Context, name string, limit int, label string) (io.ReadCloser, error) {
-	reader, _, err := f.openFontResourceInfo(ctx, name, limit, label)
-	return reader, err
 }
 
 func (f *pdfDocument) openFontResourceInfo(ctx context.Context, name string, limit int, label string) (io.ReadCloser, ResourceInfo, error) {
@@ -372,11 +292,6 @@ func (f *pdfDocument) resolveUTF8FontPath(fileStr string) (string, int64, int64,
 	return info.path, info.size, info.modTime, info.err
 }
 
-func validFontResourceName(name string) bool {
-	name = strings.TrimSpace(name)
-	return name != "" && name == path.Base(name) && name != "." && name != ".." && !strings.Contains(name, "\\")
-}
-
 func joinFontPath(fontDirStr, fileStr string) string {
 	if fontDirStr == "" || filepath.IsAbs(fileStr) {
 		return fileStr
@@ -400,92 +315,17 @@ func makeSubsetRange(end int) map[int]int {
 	return make(map[int]int, end)
 }
 
-func validateFontDefinition(info fontDefinition) error {
-	switch info.Tp {
-	case "Core", "Type1", "TrueType", "OpenTypeCFF":
-	default:
-		return fmt.Errorf("invalid font type: %s", info.Tp)
+func validateCoreFontDefinition(info fontDefinition) error {
+	if info.Tp != "Core" {
+		return fmt.Errorf("invalid core font type: %s", info.Tp)
 	}
-	if info.Tp != "Core" && len(info.Cw) < 256 {
-		return errors.New("invalid font width table")
-	}
-	if info.File != "" {
-		if !validFontResourceName(info.File) {
-			return fmt.Errorf("invalid font resource name: %s", info.File)
-		}
-		if len(info.File) < 2 {
-			return fmt.Errorf("invalid font resource name: %s", info.File)
-		}
-		switch {
-		case info.Tp == "TrueType":
-			if info.OriginalSize < 0 {
-				return errors.New("invalid TrueType font size")
-			}
-		case info.Tp == "OpenTypeCFF":
-			if info.OriginalSize < 0 {
-				return errors.New("invalid OpenType/CFF font size")
-			}
-		case info.Size1 < 0 || info.Size2 < 0:
-			return errors.New("invalid Type1 font size")
-		}
+	if len(info.Cw) < 256 {
+		return errors.New("invalid core font width table")
 	}
 	if info.Name != "" && !validPDFNameFragment(info.Name) {
 		return fmt.Errorf("invalid font name: %s", info.Name)
 	}
-	if info.Diff != "" && !validFontDiff(info.Diff) {
-		return errors.New("invalid font encoding differences")
-	}
 	return nil
-}
-
-func validFontDiff(diff string) bool {
-	hasField := false
-	for i := 0; i < len(diff); {
-		for i < len(diff) && isASCIISpace(diff[i]) {
-			i++
-		}
-		if i >= len(diff) {
-			break
-		}
-		start := i
-		for i < len(diff) && !isASCIISpace(diff[i]) {
-			i++
-		}
-		field := diff[start:i]
-		hasField = true
-		if field[0] == '/' {
-			if !validPDFResourceName(field) {
-				return false
-			}
-			continue
-		}
-		n := 0
-		for j := 0; j < len(field); j++ {
-			c := field[j]
-			if c < '0' || c > '9' {
-				return false
-			}
-			n = n*10 + int(c-'0')
-			if n > 255 {
-				return false
-			}
-		}
-		if len(field) == 0 {
-			return false
-		}
-	}
-	return hasField
-}
-
-func isASCIISpace(c byte) bool {
-	return c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == '\f' || c == '\v'
-}
-
-func validPDFResourceName(name string) bool {
-	if len(name) < 2 || name[0] != '/' {
-		return false
-	}
-	return validPDFNameFragment(name[1:])
 }
 
 func validPDFNameFragment(name string) bool {
@@ -527,32 +367,6 @@ func defaultUTF8UsedRunes(alias string) map[int]int {
 	return makeSubsetRange(32)
 }
 
-// AddFontFromBytes imports a TrueType, OpenType or Type1 font from static
-// bytes within the executable and makes it available for use in the generated
-// document.
-//
-// family specifies the font family. The name can be chosen arbitrarily. If it
-// is a standard family name, it will override the corresponding font. This
-// string is used to subsequently set the font with the SetFont method.
-//
-// style specifies the font style. Acceptable values are (case insensitive) the
-// empty string for regular style, "B" for bold, "I" for italic, or "BI" or
-// "IB" for bold and italic combined.
-//
-// jsonFileBytes contains all bytes of the JSON definition file.
-//
-// zFileBytes contains all bytes of the zlib-compressed font file.
-func (f *pdfDocument) AddFontFromBytes(familyStr, styleStr string, jsonFileBytes, zFileBytes []byte) {
-	_ = f.AddFontFromBytesError(familyStr, styleStr, jsonFileBytes, zFileBytes)
-}
-
-// AddFontFromBytesError imports a TrueType, OpenType or Type1 font from static
-// bytes and returns failures directly.
-func (f *pdfDocument) AddFontFromBytesError(familyStr, styleStr string, jsonFileBytes, zFileBytes []byte) error {
-	f.addFontFromBytes(fontFamilyEscape(familyStr), styleStr, jsonFileBytes, zFileBytes, nil)
-	return f.err
-}
-
 // AddUTF8FontFromBytes imports a TrueType font with UTF-8 symbols from static
 // bytes within the executable and makes it available for use in the generated
 // document.
@@ -573,416 +387,167 @@ func (f *pdfDocument) AddUTF8FontFromBytes(familyStr, styleStr string, utf8Bytes
 // AddUTF8FontFromBytesError imports a TrueType font with UTF-8 symbols from
 // static bytes and returns failures directly.
 func (f *pdfDocument) AddUTF8FontFromBytesError(familyStr, styleStr string, utf8Bytes []byte) error {
-	f.addFontFromBytes(fontFamilyEscape(familyStr), styleStr, nil, nil, utf8Bytes)
+	f.addUTF8FontFromBytes(fontFamilyEscape(familyStr), styleStr, utf8Bytes)
 	return f.err
 }
 
-func (f *pdfDocument) addFontFromBytes(familyStr, styleStr string, jsonFileBytes, zFileBytes, utf8Bytes []byte) {
+func (f *pdfDocument) addUTF8FontFromBytes(familyStr, styleStr string, utf8Bytes []byte) {
 	if f.err != nil {
 		return
 	}
-	var ok bool
 	fontkey := getFontKey(familyStr, styleStr)
-	if utf8Bytes != nil && !validPDFNameFragment(fontkey) {
+	if !validPDFNameFragment(fontkey) {
 		f.SetErrorf("invalid UTF-8 font name: %s", fontkey)
 		return
 	}
 	resources := f.ensureResourceStore()
-	_, ok = resources.font(fontkey)
-	if ok {
+	if _, ok := resources.font(fontkey); ok {
 		return
 	}
-	if utf8Bytes != nil {
-		if err := validateFontDataSize(utf8Bytes, maxFontSourceBytes, "font data"); err != nil {
-			f.err = err
-			return
-		}
-		def, err := utf8FontDefinition(fontkey, "", utf8Bytes)
-		if err != nil {
-			f.SetError(err)
-			return
-		}
-		def.usedRunes = defaultUTF8UsedRunes(f.aliasNbPagesStr)
-		resources.setFont(fontkey, def)
-	} else {
-		if err := validateFontDataSize(jsonFileBytes, maxFontDefinitionBytes, "font definition"); err != nil {
-			f.err = err
-			return
-		}
-		if err := validateFontDataSize(zFileBytes, maxFontSourceBytes, "font data"); err != nil {
-			f.err = err
-			return
-		}
-		var info fontDefinition
-		err := json.Unmarshal(jsonFileBytes, &info)
-		if err != nil {
-			f.err = err
-		}
-		if f.err != nil {
-			return
-		}
-		if err = validateFontDefinition(info); err != nil {
-			f.err = err
-			return
-		}
-		if info.i, err = generateFontID(info); err != nil {
-			f.err = err
-			return
-		}
-		if len(info.Diff) > 0 {
-			// Register the encoding differences.
-			n := -1
-			for j, str := range f.diffs {
-				if str == info.Diff {
-					n = j + 1
-					break
-				}
-			}
-			if n < 0 {
-				f.diffs = append(f.diffs, info.Diff)
-				n = len(f.diffs)
-			}
-			info.DiffN = n
-		}
-		if len(info.File) > 0 {
-			switch info.Tp {
-			case "TrueType":
-				resources.setFontFile(info.File, fontFile{length1: int64(info.OriginalSize), embedded: true, content: zFileBytes})
-			case "OpenTypeCFF":
-				resources.setFontFile(info.File, fontFile{embedded: true, content: zFileBytes, fontType: "OpenTypeCFF"})
-			default:
-				resources.setFontFile(info.File, fontFile{length1: int64(info.Size1), length2: int64(info.Size2), embedded: true, content: zFileBytes})
-			}
-		}
-		resources.setFont(fontkey, info)
-	}
-}
-
-// AddFontFromReader imports a TrueType, OpenType or Type1 font and makes it
-// available using a reader that satisfies the io.Reader interface. See AddFont()
-// for details about familyStr and styleStr.
-func (f *pdfDocument) AddFontFromReader(familyStr, styleStr string, r io.Reader) {
-	_ = f.AddFontFromReaderError(familyStr, styleStr, r)
-}
-
-// AddFontFromReaderError imports a TrueType, OpenType or Type1 font from r and
-// returns failures directly.
-func (f *pdfDocument) AddFontFromReaderError(familyStr, styleStr string, r io.Reader) error {
-	if f.err != nil {
-		return f.err
-	}
-	familyStr = fontFamilyEscape(familyStr)
-	var ok bool
-	fontkey := getFontKey(familyStr, styleStr)
-	resources := f.ensureResourceStore()
-	_, ok = resources.font(fontkey)
-	if ok {
-		return nil
-	}
-	info := f.loadfont(r)
-	if f.err != nil {
-		return f.err
-	}
-	if err := validateFontDefinition(info); err != nil {
+	if err := validateFontDataSize(utf8Bytes, maxFontSourceBytes, "font data"); err != nil {
 		f.err = err
-		return f.err
-	}
-	if len(info.Diff) > 0 {
-		n := -1
-		for j, str := range f.diffs {
-			if str == info.Diff {
-				n = j + 1
-				break
-			}
-		}
-		if n < 0 {
-			f.diffs = append(f.diffs, info.Diff)
-			n = len(f.diffs)
-		}
-		info.DiffN = n
-	}
-	if len(info.File) > 0 {
-		switch info.Tp {
-		case "TrueType":
-			resources.setFontFile(info.File, fontFile{length1: int64(info.OriginalSize)})
-		case "OpenTypeCFF":
-			resources.setFontFile(info.File, fontFile{fontType: "OpenTypeCFF"})
-		default:
-			resources.setFontFile(info.File, fontFile{length1: int64(info.Size1), length2: int64(info.Size2)})
-		}
-	}
-	resources.setFont(fontkey, info)
-	return nil
-}
-
-// loadfont loads a font definition file from the given reader.
-func (f *pdfDocument) loadfont(r io.Reader) (def fontDefinition) {
-	if f.err != nil {
 		return
 	}
-	data, err := readFontResourceReader(r, maxFontDefinitionBytes)
+	def, err := utf8FontDefinition(fontkey, "", utf8Bytes)
 	if err != nil {
-		f.err = err
+		f.SetError(err)
 		return
 	}
-	err = json.Unmarshal(data, &def)
-	if err != nil {
-		f.err = err
-		return
-	}
-	if def.i, err = generateFontID(def); err != nil {
-		f.err = err
-	}
-	return
+	def.usedRunes = defaultUTF8UsedRunes(f.aliasNbPagesStr)
+	resources.setFont(fontkey, def)
 }
 
 func (f *pdfDocument) putfonts() {
 	if f.err != nil {
 		return
 	}
-	nf := f.n
-	for _, diff := range f.diffs {
-		f.newPDFDictObject()
-		f.out("/Type /Encoding /BaseEncoding /WinAnsiEncoding")
-		f.outf("/Differences [%s]", diff)
-		f.endPDFDict()
-		f.endPDFObject()
+	var keyList []string
+	var font fontDefinition
+	var key string
+	resources := f.ensureResourceStore()
+	for key = range resources.fonts {
+		keyList = append(keyList, key)
 	}
-	{
-		var fileList []string
-		var info fontFile
-		var file string
-		resources := f.ensureResourceStore()
-		for file = range resources.fontFiles {
-			fileList = append(fileList, file)
-		}
-		if f.catalogSort {
-			sort.SliceStable(fileList, func(i, j int) bool {
-				return fileList[i] < fileList[j]
-			})
-		}
-		for _, file = range fileList {
-			info, _ = resources.fontFile(file)
-			if info.fontType != "UTF8" {
-				f.newobj()
-				info.n = f.n
-				resources.setFontFile(file, info)
-				var font []byte
-				if info.embedded {
-					font = info.content
-				} else {
-					var err error
-					font, err = f.loadFontFile(file)
-					if err != nil {
-						f.err = err
-						return
-					}
-				}
-				compressed := strings.HasSuffix(file, ".z")
-				if !compressed && info.length2 > 0 {
-					if info.length1 < 6 || info.length1 > int64(len(font)) || info.length2 > int64(len(font)) || 6+info.length1+6 > info.length2 {
-						f.err = fmt.Errorf("invalid Type1 font segment lengths: %s", file)
-						return
-					}
-					buf := font[6:info.length1]
-					buf = append(buf, font[6+info.length1+6:info.length2]...)
-					font = buf
-				}
-				f.outf("/Length %d", len(font))
-				if compressed {
-					f.out("/Filter /FlateDecode")
-				}
-				if info.fontType == "OpenTypeCFF" {
-					f.out("/Subtype /Type1C")
-				} else {
-					f.outf("/Length1 %d", info.length1)
-					if info.length2 > 0 {
-						f.outf("/Length2 %d /Length3 0", info.length2)
-					}
-				}
-				f.endPDFDict()
-				f.putstream(font)
-				f.endPDFObject()
+	if f.catalogSort {
+		sort.SliceStable(keyList, func(i, j int) bool {
+			return keyList[i] < keyList[j]
+		})
+	}
+	for _, key = range keyList {
+		font, _ = resources.font(key)
+		font.N = f.n + 1
+		resources.setFont(key, font)
+		tp := font.Tp
+		name := font.Name
+		switch tp {
+		case "Core":
+			f.newPDFDictObject()
+			f.out("/Type /Font")
+			f.outf("/BaseFont /%s", name)
+			f.out("/Subtype /Type1")
+			if name != "Symbol" && name != "ZapfDingbats" {
+				f.out("/Encoding /WinAnsiEncoding")
 			}
-		}
-	}
-	{
-		var keyList []string
-		var font fontDefinition
-		var key string
-		resources := f.ensureResourceStore()
-		for key = range resources.fonts {
-			keyList = append(keyList, key)
-		}
-		if f.catalogSort {
-			sort.SliceStable(keyList, func(i, j int) bool {
-				return keyList[i] < keyList[j]
-			})
-		}
-		for _, key = range keyList {
-			font, _ = resources.font(key)
-			font.N = f.n + 1
-			resources.setFont(key, font)
-			tp := font.Tp
-			name := font.Name
-			switch tp {
-			case "Core":
-				f.newPDFDictObject()
-				f.out("/Type /Font")
-				f.outf("/BaseFont /%s", name)
-				f.out("/Subtype /Type1")
-				if name != "Symbol" && name != "ZapfDingbats" {
-					f.out("/Encoding /WinAnsiEncoding")
-				}
-				f.endPDFDict()
-				f.endPDFObject()
-			case "Type1", "TrueType", "OpenTypeCFF":
-				f.newPDFDictObject()
-				f.out("/Type /Font")
-				f.outf("/BaseFont /%s", name)
-				fontSubtype := tp
-				if tp == "OpenTypeCFF" {
-					fontSubtype = "Type1"
-				}
-				f.outf("/Subtype /%s", fontSubtype)
-				f.out("/FirstChar 32 /LastChar 255")
-				f.outf("/Widths %d 0 R", f.n+1)
-				f.outf("/FontDescriptor %d 0 R", f.n+2)
-				if font.DiffN > 0 {
-					f.outf("/Encoding %d 0 R", nf+font.DiffN)
-				} else {
-					f.out("/Encoding /WinAnsiEncoding")
-				}
-				f.endPDFDict()
-				f.endPDFObject()
-				f.newobj()
-				var s fmtBuffer
-				_, _ = s.WriteString("[")
-				for j := 32; j < 256; j++ {
-					s.printf("%d ", font.Cw[j])
-				}
-				_, _ = s.WriteString("]")
-				f.out(s.String())
-				f.endPDFObject()
-				f.newPDFDictObject()
-				f.outf("/Type /FontDescriptor /FontName /%s", name)
-				f.outf("/Ascent %d", font.Desc.Ascent)
-				f.outf("/Descent %d", font.Desc.Descent)
-				f.outf("/CapHeight %d", font.Desc.CapHeight)
-				f.outf("/Flags %d", font.Desc.Flags)
-				f.outf("/FontBBox [%d %d %d %d]", font.Desc.FontBBox.Xmin, font.Desc.FontBBox.Ymin, font.Desc.FontBBox.Xmax, font.Desc.FontBBox.Ymax)
-				f.outf("/ItalicAngle %d", font.Desc.ItalicAngle)
-				f.outf("/StemV %d", font.Desc.StemV)
-				f.outf("/MissingWidth %d", font.Desc.MissingWidth)
-				var suffix string
-				if tp == "OpenTypeCFF" {
-					suffix = "3"
-				} else if tp != "Type1" {
-					suffix = "2"
-				}
-				fontFileInfo, _ := resources.fontFile(font.File)
-				f.outf("/FontFile%s %d 0 R", suffix, fontFileInfo.n)
-				f.endPDFDict()
-				f.endPDFObject()
-			case "UTF8":
-				fontName := "utf8" + font.Name
-				usedRunes := font.usedRunes
-				delete(usedRunes, 0)
-				utf8FontStream := font.utf8File.GenerateCutFont(usedRunes, f.resourceCachePolicy == ResourceCacheShared)
-				if font.utf8File.fileReader.err != nil {
-					f.err = font.utf8File.fileReader.err
-					return
-				}
-				if utf8FontStream == nil {
-					f.err = errors.New("unable to generate UTF-8 font subset")
-					return
-				}
-				utf8FontSize := len(utf8FontStream)
-				compressedFontStream := f.compressBytes(utf8FontStream)
-				if f.err != nil {
-					return
-				}
-				CodeSignDictionary := font.utf8File.CodeSymbolDictionary
-				delete(CodeSignDictionary, 0)
-				f.newPDFDictObject()
-				f.out("/Type /Font")
-				f.out("/Subtype /Type0")
-				f.outf("/BaseFont /%s", fontName)
-				f.out("/Encoding /Identity-H")
-				f.outf("/DescendantFonts [%d 0 R]", f.n+1)
-				f.outf("/ToUnicode %d 0 R", f.n+2)
-				f.endPDFDict()
-				f.endPDFObject()
-				f.newPDFDictObject()
-				f.out("/Type /Font")
-				f.out("/Subtype /CIDFontType2")
-				f.outf("/BaseFont /%s", fontName)
-				f.outf("/CIDSystemInfo %d 0 R", f.n+2)
-				f.outf("/FontDescriptor %d 0 R", f.n+3)
-				if font.Desc.MissingWidth != 0 {
-					f.outf("/DW %d", font.Desc.MissingWidth)
-				}
-				f.generateCIDFontMap(&font, font.utf8File.LastRune)
-				f.outf("/CIDToGIDMap %d 0 R", f.n+4)
-				f.endPDFDict()
-				f.endPDFObject()
-				toUnicode := utf8ToUnicodeCMap()
-				f.newPDFDictObject()
-				f.outf("/Length %d", len(toUnicode))
-				f.endPDFDict()
-				f.putstream([]byte(toUnicode))
-				f.endPDFObject()
-				f.newPDFDictObject()
-				f.out("/Registry (Adobe)")
-				f.out("/Ordering (UCS)")
-				f.out("/Supplement 0")
-				f.endPDFDict()
-				f.endPDFObject()
-				f.newPDFDictObject()
-				f.outf("/Type /FontDescriptor /FontName /%s", fontName)
-				f.outf("/Ascent %d", font.Desc.Ascent)
-				f.outf("/Descent %d", font.Desc.Descent)
-				f.outf("/CapHeight %d", font.Desc.CapHeight)
-				v := font.Desc.Flags
-				v |= 4
-				v &^= 32
-				f.outf("/Flags %d", v)
-				f.outf("/FontBBox [%d %d %d %d]", font.Desc.FontBBox.Xmin, font.Desc.FontBBox.Ymin, font.Desc.FontBBox.Xmax, font.Desc.FontBBox.Ymax)
-				f.outf("/ItalicAngle %d", font.Desc.ItalicAngle)
-				f.outf("/StemV %d", font.Desc.StemV)
-				f.outf("/MissingWidth %d", font.Desc.MissingWidth)
-				f.outf("/FontFile2 %d 0 R", f.n+2)
-				f.endPDFDict()
-				f.endPDFObject()
-				cidToGidMap := make([]byte, 256*256*2)
-				for cc, glyph := range CodeSignDictionary {
-					if cc < 0 || cc > math.MaxUint16 || glyph < 0 || glyph > math.MaxUint16 {
-						f.err = errors.New("UTF-8 font CID-to-glyph mapping exceeds uint16 range")
-						return
-					}
-					cidToGidMap[cc*2] = byte(glyph >> 8)     // #nosec G115 -- Glyph is explicitly bounded to uint16 above.
-					cidToGidMap[cc*2+1] = byte(glyph & 0xFF) // #nosec G115 -- Glyph is explicitly bounded to uint16 above.
-				}
-				cidToGidMap = f.compressBytes(cidToGidMap)
-				if f.err != nil {
-					return
-				}
-				f.newPDFDictObject()
-				f.outf("/Length %d /Filter /FlateDecode", len(cidToGidMap))
-				f.endPDFDict()
-				f.putstream(cidToGidMap)
-				f.endPDFObject()
-				f.newPDFDictObject()
-				f.outf("/Length %d", len(compressedFontStream))
-				f.out("/Filter /FlateDecode")
-				f.outf("/Length1 %d", utf8FontSize)
-				f.endPDFDict()
-				f.putstream(compressedFontStream)
-				f.endPDFObject()
-			default:
-				f.err = fmt.Errorf("unsupported font type: %s", tp)
+			f.endPDFDict()
+			f.endPDFObject()
+		case "UTF8":
+			fontName := "utf8" + font.Name
+			usedRunes := font.usedRunes
+			delete(usedRunes, 0)
+			utf8FontStream := font.utf8File.GenerateCutFont(usedRunes, f.resourceCachePolicy == ResourceCacheShared)
+			if font.utf8File.fileReader.err != nil {
+				f.err = font.utf8File.fileReader.err
 				return
 			}
+			if utf8FontStream == nil {
+				f.err = errors.New("unable to generate UTF-8 font subset")
+				return
+			}
+			utf8FontSize := len(utf8FontStream)
+			compressedFontStream := f.compressBytes(utf8FontStream)
+			if f.err != nil {
+				return
+			}
+			CodeSignDictionary := font.utf8File.CodeSymbolDictionary
+			delete(CodeSignDictionary, 0)
+			f.newPDFDictObject()
+			f.out("/Type /Font")
+			f.out("/Subtype /Type0")
+			f.outf("/BaseFont /%s", fontName)
+			f.out("/Encoding /Identity-H")
+			f.outf("/DescendantFonts [%d 0 R]", f.n+1)
+			f.outf("/ToUnicode %d 0 R", f.n+2)
+			f.endPDFDict()
+			f.endPDFObject()
+			f.newPDFDictObject()
+			f.out("/Type /Font")
+			f.out("/Subtype /CIDFontType2")
+			f.outf("/BaseFont /%s", fontName)
+			f.outf("/CIDSystemInfo %d 0 R", f.n+2)
+			f.outf("/FontDescriptor %d 0 R", f.n+3)
+			if font.Desc.MissingWidth != 0 {
+				f.outf("/DW %d", font.Desc.MissingWidth)
+			}
+			f.generateCIDFontMap(&font, font.utf8File.LastRune)
+			f.outf("/CIDToGIDMap %d 0 R", f.n+4)
+			f.endPDFDict()
+			f.endPDFObject()
+			toUnicode := utf8ToUnicodeCMap()
+			f.newPDFDictObject()
+			f.outf("/Length %d", len(toUnicode))
+			f.endPDFDict()
+			f.putstream([]byte(toUnicode))
+			f.endPDFObject()
+			f.newPDFDictObject()
+			f.out("/Registry (Adobe)")
+			f.out("/Ordering (UCS)")
+			f.out("/Supplement 0")
+			f.endPDFDict()
+			f.endPDFObject()
+			f.newPDFDictObject()
+			f.outf("/Type /FontDescriptor /FontName /%s", fontName)
+			f.outf("/Ascent %d", font.Desc.Ascent)
+			f.outf("/Descent %d", font.Desc.Descent)
+			f.outf("/CapHeight %d", font.Desc.CapHeight)
+			v := font.Desc.Flags
+			v |= 4
+			v &^= 32
+			f.outf("/Flags %d", v)
+			f.outf("/FontBBox [%d %d %d %d]", font.Desc.FontBBox.Xmin, font.Desc.FontBBox.Ymin, font.Desc.FontBBox.Xmax, font.Desc.FontBBox.Ymax)
+			f.outf("/ItalicAngle %d", font.Desc.ItalicAngle)
+			f.outf("/StemV %d", font.Desc.StemV)
+			f.outf("/MissingWidth %d", font.Desc.MissingWidth)
+			f.outf("/FontFile2 %d 0 R", f.n+2)
+			f.endPDFDict()
+			f.endPDFObject()
+			cidToGidMap := make([]byte, 256*256*2)
+			for cc, glyph := range CodeSignDictionary {
+				if cc < 0 || cc > math.MaxUint16 || glyph < 0 || glyph > math.MaxUint16 {
+					f.err = errors.New("UTF-8 font CID-to-glyph mapping exceeds uint16 range")
+					return
+				}
+				cidToGidMap[cc*2] = byte(glyph >> 8)     // #nosec G115 -- Glyph is explicitly bounded to uint16 above.
+				cidToGidMap[cc*2+1] = byte(glyph & 0xFF) // #nosec G115 -- Glyph is explicitly bounded to uint16 above.
+			}
+			cidToGidMap = f.compressBytes(cidToGidMap)
+			if f.err != nil {
+				return
+			}
+			f.newPDFDictObject()
+			f.outf("/Length %d /Filter /FlateDecode", len(cidToGidMap))
+			f.endPDFDict()
+			f.putstream(cidToGidMap)
+			f.endPDFObject()
+			f.newPDFDictObject()
+			f.outf("/Length %d", len(compressedFontStream))
+			f.out("/Filter /FlateDecode")
+			f.outf("/Length1 %d", utf8FontSize)
+			f.endPDFDict()
+			f.putstream(compressedFontStream)
+			f.endPDFObject()
+		default:
+			f.err = fmt.Errorf("unsupported font type: %s", tp)
+			return
 		}
 	}
 }
@@ -1073,19 +638,4 @@ func appendCIDWidthRun(dst []byte, startCID int, widths []int) []byte {
 		dst = appendPDFInt(dst, width)
 	}
 	return append(dst, " ]\n"...)
-}
-
-func (f *pdfDocument) loadFontFile(name string) ([]byte, error) {
-	if !validFontResourceName(name) {
-		return nil, fmt.Errorf("invalid font resource name: %s", name)
-	}
-	if f.resourceLoader != nil {
-		reader, err := f.openFontResource(context.Background(), name, maxFontSourceBytes, "font data")
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = reader.Close() }()
-		return readFontResourceReader(reader, maxFontSourceBytes)
-	}
-	return readFontResourceFile(joinFontPath(f.fontpath, name), maxFontSourceBytes)
 }

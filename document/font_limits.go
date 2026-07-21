@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	maxFontDefinitionBytes = 4 * 1024 * 1024
-	maxFontSourceBytes     = 64 * 1024 * 1024
+	maxFontSourceBytes = 64 * 1024 * 1024
 )
 
 func validateFontDataSize(data []byte, limit int, label string) error {

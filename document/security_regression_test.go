@@ -166,14 +166,6 @@ func TestSecurityThumbnailHugeDimensionsRejected(t *testing.T) {
 	}
 }
 
-func TestSecurityFontDefinitionReaderSizeLimit(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddFontFromReader("bad", "", strings.NewReader(strings.Repeat(" ", maxFontDefinitionBytes+1)))
-	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "font data exceeds maximum size") {
-		t.Fatalf("AddFontFromReader() error = %v, want font data size limit", pdf.Error())
-	}
-}
-
 func TestSecurityFontCacheFileSizeLimit(t *testing.T) {
 	fontPath := filepath.Join(t.TempDir(), "oversized.ttf")
 	file, err := os.Create(fontPath)
@@ -293,22 +285,6 @@ func TestSecurityInvalidTemplateImageRejected(t *testing.T) {
 	_, err = DeserializeTemplate(encoded)
 	if err == nil || !strings.Contains(err.Error(), "invalid image decode parameters") {
 		t.Fatalf("DeserializeTemplate() error = %v, want invalid image decode params", err)
-	}
-}
-
-func TestSecurityMalformedFontJSONReturnsError(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddFontFromBytes("bad", "", []byte(`{"File":"x"}`), []byte("font"))
-	if pdf.Error() == nil {
-		t.Fatal("expected invalid font definition error")
-	}
-}
-
-func TestSecurityMalformedFontReaderReturnsError(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddFontFromReader("bad", "", strings.NewReader(`{"File":"x"}`))
-	if pdf.Error() == nil {
-		t.Fatal("expected invalid font definition error")
 	}
 }
 
@@ -560,14 +536,6 @@ func TestSecurityAliasReplacementEscaped(t *testing.T) {
 	}
 }
 
-func TestSecurityMalformedFontDiffRejected(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddFontFromBytes("bad", "", []byte(securityFontJSON(`0 /A] >> /Injected <<`)), []byte("font"))
-	if pdf.Error() == nil {
-		t.Fatal("expected invalid font diff error")
-	}
-}
-
 func TestSecurityUnsafeUTF8FontNameRejected(t *testing.T) {
 	fontBytes, err := os.ReadFile(securityFixturePath(t, "assets", "static", "font", "DejaVuSansCondensed.ttf"))
 	if err != nil {
@@ -597,11 +565,6 @@ func TestSecurityNonFiniteDrawingInputsRejected(t *testing.T) {
 	if pdf.Error() == nil {
 		t.Fatal("expected non-finite SubWrite error")
 	}
-}
-
-func securityFontJSON(diff string) string {
-	widths := strings.TrimRight(strings.Repeat("1,", 256), ",")
-	return fmt.Sprintf(`{"Tp":"TrueType","Name":"SafeFont","Cw":[%s],"File":"safe.z","OriginalSize":1,"Diff":%q}`, widths, diff)
 }
 
 func securityPNG(width, height uint32, pdfColor byte, chunks ...[]byte) []byte {

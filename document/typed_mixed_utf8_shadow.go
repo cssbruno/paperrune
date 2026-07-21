@@ -10,8 +10,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 // mixedParagraphUsesEmbeddedFont resolves the exact fonts used by a mixed

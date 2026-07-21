@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/paperlang"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 func TestCompileNamedStyleAppliesRuleBeforeLocalOverrides(t *testing.T) {

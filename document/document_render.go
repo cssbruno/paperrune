@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 // WriteDocument lowers a shared document model to one immutable plan and

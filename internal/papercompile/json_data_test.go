@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 	"github.com/cssbruno/paperrune/internal/paperscenario"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 const jsonDataPaperSource = `document @report:

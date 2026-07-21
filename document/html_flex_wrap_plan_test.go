@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 const htmlUnifiedFlexWrapFixture = `<div style="display:flex;flex-wrap:wrap;height:80pt;gap:4pt 10pt;` +

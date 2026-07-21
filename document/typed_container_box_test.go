@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 func typedContainerTestBox() layout.BoxStyle {

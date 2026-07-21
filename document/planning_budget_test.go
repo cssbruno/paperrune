@@ -8,8 +8,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 func TestTypedPageShellAndCorrectionShareOneRequestBudgetAtomically(t *testing.T) {

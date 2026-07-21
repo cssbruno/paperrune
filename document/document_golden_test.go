@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 func TestWriteDocumentGoldenPDFs(t *testing.T) {
@@ -26,7 +26,7 @@ func TestWriteDocumentGoldenPDFs(t *testing.T) {
 		{name: "statement", doc: goldenStatementDocument(), want: "7643877fffe620edd7ecaf6c02d7d445990ddd8d5f754a5821494280cd310aec"},
 		{name: "generic-free-text", doc: goldenGenericDocument(), want: "f6095689238721c21ca0624833ac44e1fd37e0041a0dac4bbf48acbaf4cc4e8d"},
 		{name: "long-form", doc: goldenLongFormDocument(), want: "07f3ba6fbe620eb2719ee2915c8f6f6284e0513d574efd2f1d2d48f09a426d45"},
-		{name: "form", doc: FormDocumentModel(testFormDocument()), want: "82d02835c36fe094e50db883c00856f84e6d2017cd76c2e88f6ef616bca8ac8c"},
+		{name: "form", doc: formDocumentModel(testFormDocument()), want: "82d02835c36fe094e50db883c00856f84e6d2017cd76c2e88f6ef616bca8ac8c"},
 		{name: "qr-signature", doc: goldenQRSignatureDocument(), want: "f1b172763a2dcabaafb89a6a430911e44dc5a02a77f95d5a59900e15f57b8d15"},
 	}
 

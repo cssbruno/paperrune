@@ -4,6 +4,9 @@
 
 - Removed the public FPDF-style, typed-Go, and HTML-to-PDF authoring surfaces.
   Paper is now the only public content-authoring format.
+- Moved the former public `layout` model under `internal`. Removed the obsolete
+  `fontmaker` command, its generator package, and the private JSON/`.z`
+  single-byte font-definition loader; custom fonts now use raw TTF/OTF input.
 - Added deterministic Paper-to-HTML export through `PaperPlan.ExportHTML` and
   `paper render --format html`; HTML embeds exact planned page SVG.
 - Removed direct-placement and HTML-input examples; maintained examples and

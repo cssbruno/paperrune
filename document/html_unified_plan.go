@@ -12,8 +12,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 // ErrHTMLPlanUnsupported reports that a compiled HTML fragment cannot be

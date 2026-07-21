@@ -7,34 +7,34 @@ import (
 	stdhtml "html"
 	"strings"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
-// FormDocument describes a generic form that can be rendered as supported HTML
-// or converted into shared document blocks.
-type FormDocument struct {
+// formDocument describes a test form that can be rendered as supported HTML or
+// converted into the private layout model.
+type formDocument struct {
 	Title    string        // Form title.
-	Sections []FormSection // Form sections in display order.
+	Sections []formSection // Form sections in display order.
 }
 
-// FormSection groups related form questions.
-type FormSection struct {
+// formSection groups related form questions.
+type formSection struct {
 	Title        string         // Section title.
-	Questions    []FormQuestion // Questions in this section.
+	Questions    []formQuestion // Questions in this section.
 	BreakBefore  bool           // Insert a page break before this section.
 	BreakAfter   bool           // Insert a page break after this section.
 	KeepTogether bool           // Prefer to keep the section on one page.
 }
 
-// FormQuestion stores one question and its answer.
-type FormQuestion struct {
+// formQuestion stores one question and its answer.
+type formQuestion struct {
 	Label    string     // Question label.
-	Answer   FormAnswer // Question answer.
+	Answer   formAnswer // Question answer.
 	Required bool       // Whether the question is required.
 }
 
-// FormAnswer stores a plain, list, or table answer.
-type FormAnswer struct {
+// formAnswer stores a plain, list, or table answer.
+type formAnswer struct {
 	Text  string     // Plain text answer.
 	Items []string   // List answer items.
 	Table [][]string // Table answer rows.
@@ -42,7 +42,7 @@ type FormAnswer struct {
 
 // FormDocumentHTML returns the canonical supported-HTML representation of a
 // form document.
-func formDocumentHTML(form FormDocument) string {
+func formDocumentHTML(form formDocument) string {
 	out := newFormHTMLWriter(estimateFormHTMLSize(form))
 	if strings.TrimSpace(form.Title) != "" {
 		out.elementText("h1", form.Title)
@@ -55,14 +55,14 @@ func formDocumentHTML(form FormDocument) string {
 
 // ValidateFormDocumentHTML validates the canonical form HTML against the
 // supported HTML subset.
-func validateFormDocumentHTML(form FormDocument) []string {
+func validateFormDocumentHTML(form formDocument) []string {
 	pdf := mustNewPDFDocument()
 	html := pdf.htmlNew()
 	return html.validateHTML(formDocumentHTML(form))
 }
 
-// FormDocumentBlocks converts a form into shared document blocks.
-func FormDocumentBlocks(form FormDocument) []layout.Block {
+// formDocumentBlocks converts a form into private layout blocks.
+func formDocumentBlocks(form formDocument) []layout.Block {
 	blocks := make([]layout.Block, 0, 1+len(form.Sections))
 	if strings.TrimSpace(form.Title) != "" {
 		blocks = append(blocks, layout.HeadingBlock{Level: 1, Segments: []layout.TextSegment{{Text: form.Title}}})
@@ -87,11 +87,11 @@ func FormDocumentBlocks(form FormDocument) []layout.Block {
 	return blocks
 }
 
-// FormDocumentModel converts a form into a shared Document.
-func FormDocumentModel(form FormDocument) *layout.LayoutDocument {
+// formDocumentModel converts a form into the private layout model.
+func formDocumentModel(form formDocument) *layout.LayoutDocument {
 	doc := layout.NewLayoutDocument()
 	doc.Title = form.Title
-	doc.Body = FormDocumentBlocks(form)
+	doc.Body = formDocumentBlocks(form)
 	return doc
 }
 
@@ -133,7 +133,7 @@ func (w *formHTMLWriter) elementText(tag, value string) {
 	w.byte('>')
 }
 
-func writeFormSectionHTML(out *formHTMLWriter, section FormSection) {
+func writeFormSectionHTML(out *formHTMLWriter, section formSection) {
 	style := formSectionStyle(section)
 	out.raw(`<section class="form-section"`)
 	if style != "" {
@@ -159,7 +159,7 @@ func writeFormSectionHTML(out *formHTMLWriter, section FormSection) {
 	out.raw("</dl></section>")
 }
 
-func writeFormAnswerHTML(out *formHTMLWriter, answer FormAnswer) {
+func writeFormAnswerHTML(out *formHTMLWriter, answer formAnswer) {
 	switch {
 	case len(answer.Table) > 0:
 		out.raw(`<table class="form-answer-table"><tbody>`)
@@ -182,7 +182,7 @@ func writeFormAnswerHTML(out *formHTMLWriter, answer FormAnswer) {
 	}
 }
 
-func estimateFormHTMLSize(form FormDocument) int {
+func estimateFormHTMLSize(form formDocument) int {
 	size := len(form.Title) + 16
 	for _, section := range form.Sections {
 		size += len(section.Title) + 80
@@ -202,7 +202,7 @@ func estimateFormHTMLSize(form FormDocument) int {
 	return size
 }
 
-func formQuestionBlocks(question FormQuestion) []layout.Block {
+func formQuestionBlocks(question formQuestion) []layout.Block {
 	label := question.Label
 	if question.Required {
 		label += " *"
@@ -218,7 +218,7 @@ func formQuestionBlocks(question FormQuestion) []layout.Block {
 	return blocks
 }
 
-func formAnswerBlocks(answer FormAnswer) []layout.Block {
+func formAnswerBlocks(answer formAnswer) []layout.Block {
 	switch {
 	case len(answer.Table) > 0:
 		rows := make([]layout.TableRow, 0, len(answer.Table))
@@ -243,7 +243,7 @@ func formAnswerBlocks(answer FormAnswer) []layout.Block {
 	}
 }
 
-func formSectionStyle(section FormSection) string {
+func formSectionStyle(section formSection) string {
 	styles := make([]string, 0, 3)
 	if section.BreakBefore {
 		styles = append(styles, "break-before: page")

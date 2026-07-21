@@ -6,55 +6,61 @@
 
 <img src="https://raw.githubusercontent.com/cssbruno/paperrune/main/assets/static/image/gopher_pdf.png" alt="PaperRune gopher" width="160">
 
-Pure-Go `.paper` compiler for PDF and standalone HTML.
+PaperRune turns indentation-sensitive `.paper` templates and JSON data into
+PDF or standalone HTML. It includes a command-line compiler, a local visual
+Studio, and a Go API.
 
-- Strict JSON schemas, reusable styles, themes, tables, images, and pagination.
-- Immutable plans, deterministic PDF generation, compliance metadata, and HTML export.
+```paper
+document @hello:
+  language: "en"
+  title: "Hello"
+  schema:
+    string name
+  page @sheet:
+    size: "A4"
+    margin: 36pt
+    body @content:
+      heading @title:
+        bind: "name"
+        level: 1
+        text: "Hello"
+```
 
-PaperRune is intentionally a **generator**, not a PDF editor. It never accepts
-an existing PDF as input. Operations on existing PDFs live in the independent
-PDFRune project.
+```sh
+paper render --data data.json -o hello.pdf hello.paper
+paper render --format html --data data.json -o hello.html hello.paper
+```
+
+PaperRune supports reusable styles and themes, data binding, tables, images,
+pagination, deterministic output, tagged PDF, and PDF/A and PDF/UA metadata.
+Standards metadata is not a substitute for validating the final document with
+an external compliance checker.
 
 ## Install
 
-### Prebuilt binary
-
-Each GitHub release contains `paper` and `paper-studio` for Linux, macOS, and
-Windows on AMD64 and ARM64. Download the archive for your platform from
-[GitHub Releases][releases], verify it against `checksums.txt`, then place both
-executables on your `PATH`.
-
-Release archives also contain CycloneDX SBOMs. Published files have GitHub
-build-provenance attestations that can be checked with:
+PaperRune does not currently have a tagged release. Install the current main
+branch with the Go version declared in `go.mod`:
 
 ```sh
-gh attestation verify paperrune_0.16.0-rc.1_linux_amd64.tar.gz --repo cssbruno/paperrune
+go install github.com/cssbruno/paperrune/cmd/paper@main
+go install github.com/cssbruno/paperrune/cmd/paper-studio@main
 ```
 
-### Go install
-
-Requires the Go version declared in `go.mod`.
-
-```sh
-go install github.com/cssbruno/paperrune/cmd/paper@latest
-go install github.com/cssbruno/paperrune/cmd/paper-studio@latest
-```
-
-### Build from source
+Or build both commands from a clone:
 
 ```sh
 git clone https://github.com/cssbruno/paperrune.git
 cd paperrune
-make build
+mkdir -p bin
 go build -o ./bin/paper ./cmd/paper
 go build -o ./bin/paper-studio ./cmd/paper-studio
 ```
 
-Confirm either installation with `paper version` and `paper-studio version`.
+Confirm the installation with `paper version` and `paper-studio version`.
 
-## Quick start
+## Start a project
 
-Create and render a complete starter project:
+`paper init` creates a template, sample data, and a `paper.project.json` file:
 
 ```sh
 paper init invoice my-invoice
@@ -64,60 +70,69 @@ paper render
 paper studio
 ```
 
-The project manifest supplies the source, data, format, and output path. CLI
-flags override environment variables, which override the manifest. See the
-[project-file reference](docs/reference/project-file.md).
+The project file supplies the source, data, output format, and output path, so
+the commands do not need repeated arguments. See the
+[project-file reference](docs/reference/project-file.md) for configuration and
+environment-variable precedence.
 
-For a single-file workflow, create `hello.paper`:
-
-```paper
-document @hello:
-  language: "en"
-  title: "Hello"
-  schema:
-    string name
-    optional string subtitle
-  page @sheet:
-    margin: 36pt
-    size: "A4"
-    body @content:
-      heading @title:
-        bind: "name"
-        level: 1
-        text: "Name"
-      paragraph @subtitle:
-        bind: "subtitle"
-        bind-required: false
-        text: ""
-```
-
+For a single-file workflow, save the opening example as `hello.paper`, create
 `data.json`:
 
 ```json
-{"name":"Ada","subtitle":"Generated from JSON"}
+{"name":"Ada Lovelace"}
 ```
+
+Then validate and render it:
 
 ```sh
 paper check --data data.json hello.paper
 paper render --data data.json -o hello.pdf hello.paper
-paper render --format html --data data.json -o hello.html hello.paper
 ```
 
-`subtitle` may be omitted or `null`: schema fields use `optional`; their nodes
-use `bind-required: false`.
+Paper is indentation-sensitive. Format source with:
 
-Paper is indentation-sensitive. Format with `paper fmt -w hello.paper`.
+```sh
+paper fmt -w hello.paper
+```
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `paper init` | Create a project from a built-in template |
+| `paper fmt` | Format Paper source |
+| `paper check` | Parse, validate, and plan a document |
+| `paper render` | Generate PDF or standalone HTML |
+| `paper studio` | Open the local visual authoring environment |
+| `paper explain` | Inspect planned nodes and pages |
+| `paper capture` | Capture planned pages as SVG evidence |
+| `paper scenario` | List or inspect data scenarios |
+| `paper workflow` | Run a configured delivery workflow |
+| `paper version` | Print build and version information |
+
+Run `paper help COMMAND` for command-specific options and examples. The
+[CLI reference](docs/reference/cli.md) documents behavior and exit codes.
+
+## Paper Studio
+
+Studio opens a local editing session for a Paper file or project:
+
+```sh
+paper studio examples/hello-world/hello-world.paper
+```
+
+It listens only on loopback and protects each session with a per-process
+token. Use `--no-open` when running without a desktop browser.
 
 ## Go API
 
-Embed `.paper` files instead of using indented Go strings:
+Applications can embed Paper source and render it with the `document` package:
 
 ```go
 package main
 
 import (
 	_ "embed"
-	"encoding/json"
 	"log"
 
 	"github.com/cssbruno/paperrune/document"
@@ -126,21 +141,9 @@ import (
 //go:embed hello.paper
 var source string
 
-type Input struct {
-	Name     string `json:"name"`
-	Subtitle string `json:"subtitle,omitempty"`
-}
-
 func main() {
 	doc := document.MustNew()
-
-	data, err := json.Marshal(Input{
-		Name:     "Ada",
-		Subtitle: "Generated from Go",
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
+	data := []byte(`{"name":"Ada Lovelace"}`)
 
 	if _, err := doc.WritePaperJSON("hello.paper", source, data); err != nil {
 		log.Fatal(err)
@@ -151,27 +154,13 @@ func main() {
 }
 ```
 
-`Document` is single-owner. `PaperPlan` is immutable and reusable.
+`Document` is a single-owner build session. Compiled `PaperPlan` values are
+immutable and reusable.
 
-## CLI
+## Assets and examples
 
-| Command | Purpose |
-| --- | --- |
-| `paper init` | Create a runnable Paper project |
-| `paper fmt` | Format Paper source |
-| `paper check` | Parse, compile, and plan |
-| `paper render` | Write PDF or export HTML |
-| `paper studio` | Open the local visual authoring environment |
-| `paper capture` | Capture SVG evidence |
-| `paper explain` | Inspect plan nodes and pages |
-| `paper scenario` | List or select scenarios |
-| `paper workflow` | Execute an approved delivery workflow |
-| `paper version` | Print version information |
-
-Run `paper help COMMAND` for options and examples. See the full
-[CLI behavior and exit-code reference](docs/reference/cli.md).
-
-## Assets
+External images and fonts are loaded through a content-addressed asset
+manifest:
 
 ```sh
 paper render \
@@ -180,69 +169,30 @@ paper render \
   -o report.pdf report.paper
 ```
 
-See [`docs/paper-assets.md`](docs/paper-assets.md) and the runnable
-[`examples/`](examples/README.md).
+See the [asset guide](docs/paper-assets.md) and the maintained
+[examples](examples/README.md).
 
-## Paper Studio
+## Scope
 
-```sh
-paper studio examples/hello-world/hello-world.paper
-```
+PaperRune generates new documents from Paper source and data. It does not read,
+edit, sign, sanitize, decrypt, or import existing PDF files, and it does not use
+HTML/CSS or DOCX as authoring input. Those boundaries keep untrusted PDF parsing
+and signing keys out of the generator.
 
-Studio binds only to loopback, opens the protected session URL by default, and
-prints the URL for copying. Pass `--no-open` in headless environments.
-
-## Generator boundary
-
-The boundary is strict and has no deprecated compatibility wrappers:
-
-| PaperRune does | PaperRune does not do |
-| --- | --- |
-| Parse `.paper` source and data | Accept PDF bytes, readers, or file paths as input |
-| Build and inspect an immutable layout plan | Parse or inspect a serialized PDF |
-| Generate a new PDF or standalone HTML | Import pages from an existing PDF |
-| Emit PDF/A and PDF/UA generation metadata | Sign, verify, sanitize, decrypt, or modify an existing PDF |
-
-Use the independent `github.com/cssbruno/pdfrune` module for post-generation
-operations such as CMS/PAdES signing, signature verification, inspection,
-page import, CDR, and final-byte evidence. Neither project imports the other.
-The application server owns their composition:
-
-```go
-var generated bytes.Buffer
-if err := doc.Output(&generated); err != nil {
-	return err
-}
-
-signed, err := sign.AppendBytesContext(ctx, generated.Bytes(), options)
-```
-
-Here `doc` is a PaperRune document and `sign` is PDFRune's signing package.
-Keeping the handoff in the server makes the trust boundary visible and lets a
-deployment provide its own HSM, KMS, PKCS#11, managed `crypto.Signer`, audit,
-authorization, and storage policy. PaperRune itself never handles signing keys.
-
-## Packages
-
-| Package | Purpose |
-| --- | --- |
-| `document` | Paper planning, PDF generation, and HTML export |
-| `font` | Font tooling |
-
-PaperRune does not accept an existing PDF, HTML/CSS input, or provide PDF
-editing, OCR, DOCX conversion, AcroForm editing, signing, or decryption.
+The only public authoring package is `document`; layout and rendering internals
+are private. Custom fonts are supplied directly as TTF/OTF assets.
 
 ## Development
 
 ```sh
-make bootstrap
-make test-fast
-make test
-make ci
+make bootstrap   # install pinned development tools
+make test-fast   # formatting, vet, command, and internal tests
+make test        # complete Go test suite
+make docs-check  # build the CLI and exercise the documented project flow
 ```
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md),
-[`ARCHITECTURE.md`](ARCHITECTURE.md), and [`CHANGELOG.md`](CHANGELOG.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [ARCHITECTURE.md](ARCHITECTURE.md), and
+[CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
@@ -256,4 +206,3 @@ written commercial license.
 [ci]: https://github.com/cssbruno/paperrune/actions/workflows/ci.yml
 [godoc]: https://pkg.go.dev/github.com/cssbruno/paperrune
 [license]: LICENSE
-[releases]: https://github.com/cssbruno/paperrune/releases

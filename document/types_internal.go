@@ -47,14 +47,6 @@ type spotColorType struct {
 type cmykColorType struct {
 	c, m, y, k byte // 0% to 100%
 }
-type fontFile struct {
-	length1, length2 int64
-	n                int
-	embedded         bool
-	content          []byte
-	fontType         string
-}
-
 type pageLink struct {
 	x, y, wd, ht float64
 	link         int    // Auto-generated internal link ID or...

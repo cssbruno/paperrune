@@ -15,9 +15,8 @@ import (
 // core font keyed by family+style (e.g. "courierBI"). The embedded font
 // definitions are constant, so the JSON decode, validation and font-ID hash
 // only need to run once per process instead of once per Document. The cached
-// value is shared by value-copy: the read-only Cw slice is shared safely
-// (it is never mutated), while the per-document fields (N, DiffN) are set on
-// the copy stored in each Document's font map.
+// value is shared by value-copy: the read-only Cw slice is shared safely while
+// per-document object numbers are set on the copy stored in each document.
 var coreFontDefCache sync.Map // map[string]fontDefinition
 
 // loadCoreFontDef returns the cached parsed definition for an embedded core
@@ -35,7 +34,7 @@ func loadCoreFontDef(key string) (fontDefinition, error) {
 	if err := json.Unmarshal([]byte(str), &def); err != nil {
 		return fontDefinition{}, err
 	}
-	if err := validateFontDefinition(def); err != nil {
+	if err := validateCoreFontDefinition(def); err != nil {
 		return fontDefinition{}, err
 	}
 	id, err := generateFontID(def)

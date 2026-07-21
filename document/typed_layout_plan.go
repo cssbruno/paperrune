@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/internal/papercompile"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 // ErrLayoutDocumentPlanUnsupported reports that a typed LayoutDocument uses a

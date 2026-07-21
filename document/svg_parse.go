@@ -22,6 +22,10 @@ const (
 	svgMaxNodeCount   = 100000
 )
 
+func isSVGSpace(value byte) bool {
+	return value == ' ' || value == '\n' || value == '\r' || value == '\t' || value == '\f' || value == '\v'
+}
+
 func svgNumberFields(numStr string) []string {
 	return svgScanFields(numStr, false)
 }
@@ -29,7 +33,7 @@ func svgNumberFields(numStr string) []string {
 func svgScanFields(s string, commands bool) []string {
 	fields := make([]string, 0, 8)
 	for i := 0; i < len(s); {
-		for i < len(s) && (isASCIISpace(s[i]) || s[i] == ',') {
+		for i < len(s) && (isSVGSpace(s[i]) || s[i] == ',') {
 			i++
 		}
 		if i >= len(s) {
@@ -70,7 +74,7 @@ func svgScanFields(s string, commands bool) []string {
 			}
 		}
 		if i == start || (i == start+1 && (s[start] == '-' || s[start] == '+')) {
-			for i < len(s) && !isASCIISpace(s[i]) && s[i] != ',' {
+			for i < len(s) && !isSVGSpace(s[i]) && s[i] != ',' {
 				i++
 			}
 		}
@@ -355,7 +359,7 @@ func pathParse(pathStr string) (segs []SVGSegment, err error) {
 	normalizer := svgPathNormalizer{segs: make([]SVGSegment, 0, svgPathSegmentCapacity(pathStr))}
 	tokenIndex := 0
 	for i := 0; i < len(pathStr); {
-		for i < len(pathStr) && (isASCIISpace(pathStr[i]) || pathStr[i] == ',') {
+		for i < len(pathStr) && (isSVGSpace(pathStr[i]) || pathStr[i] == ',') {
 			i++
 		}
 		if i >= len(pathStr) {
@@ -371,7 +375,7 @@ func pathParse(pathStr string) (segs []SVGSegment, err error) {
 			i = svgScanNumberEnd(pathStr, i)
 			token = pathStr[start:i]
 		} else {
-			for i < len(pathStr) && !isASCIISpace(pathStr[i]) && pathStr[i] != ',' {
+			for i < len(pathStr) && !isSVGSpace(pathStr[i]) && pathStr[i] != ',' {
 				i++
 			}
 			token = pathStr[start:i]
@@ -485,7 +489,7 @@ func svgScanNumberEnd(s string, i int) int {
 		}
 	}
 	if i == start || (i == start+1 && (s[start] == '-' || s[start] == '+')) {
-		for i < len(s) && !isASCIISpace(s[i]) && s[i] != ',' {
+		for i < len(s) && !isSVGSpace(s[i]) && s[i] != ',' {
 			i++
 		}
 	}

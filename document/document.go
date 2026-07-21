@@ -50,7 +50,6 @@ func documentNewWithDefaults(orientationStr, unitStr, sizeStr, fontDirStr string
 	f.initResourceStore()
 	f.utf8FontPathCache = make(map[string]utf8FontPathInfo)
 	f.resourceCachePolicy = ResourceCacheShared
-	f.diffs = make([]string, 0, 8)
 	f.imageCache = sharedImageFileCache
 	f.pageLinks = make([][]pageLink, 0, 8)
 	f.pageLinks = append(f.pageLinks, make([]pageLink, 0)) // pageLinks[0] is unused (1-based)

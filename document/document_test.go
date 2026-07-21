@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/cssbruno/paperrune/document"
-	"github.com/cssbruno/paperrune/font"
 	"github.com/cssbruno/paperrune/internal/testsupport/example"
 )
 
@@ -169,14 +168,6 @@ func TestAddUTF8FontFromBytesTruncatedFontDoesNotPanic(t *testing.T) {
 	}()
 
 	pdf.AddUTF8FontFromBytes("bad", "", []byte{0, 1})
-}
-
-func TestAddFontRejectsPathTraversal(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithFontDir(example.FontDir()))
-	pdf.AddFont("bad", "", "../calligra.json")
-	if pdf.Error() == nil {
-		t.Fatal("expected font traversal error")
-	}
 }
 
 func TestAddUTF8FontRejectsPathTraversal(t *testing.T) {
@@ -1283,20 +1274,6 @@ func ExampleTestPDFDocument_HTMLNewForTest() {
 	// Successfully generated assets/generated/pdf/Document_HTMLNew.pdf
 }
 
-// ExampleTestPDFDocument_AddFont demonstrates the use of a non-standard font.
-func ExampleTestPDFDocument_AddFont() {
-	pdf := document.MustNewTestPDFDocument(document.WithFontDir(example.FontDir()))
-	pdf.AddFont("Calligrapher", "", "calligra.json")
-	pdf.AddPage()
-	pdf.SetFont("Calligrapher", "", 35)
-	pdf.Cell(0, 10, "Enjoy new fonts with Document!")
-	fileStr := example.Filename("Document_AddFont")
-	err := pdf.OutputFileAndClose(fileStr)
-	example.Summary(err, fileStr)
-	// Output:
-	// Successfully generated assets/generated/pdf/Document_AddFont.pdf
-}
-
 // ExampleTestPDFDocument_WriteAligned demonstrates how to align text with the Write function.
 func ExampleTestPDFDocument_WriteAligned() {
 	pdf := document.MustNewTestPDFDocument(document.WithFontDir(example.FontDir()))
@@ -1618,24 +1595,18 @@ func ExampleTestPDFDocument_SetAcceptPageBreakFunc() {
 
 // This example tests corner cases as reported by the gocov tool.
 func ExampleTestPDFDocument_SetKeywords() {
-	var err error
 	fileStr := example.Filename("Document_SetKeywords")
-	err = font.Make(example.FontFile("CalligrapherRegular.pfb"),
-		example.FontFile("cp1252.map"), example.FontDir(), nil, true)
-	if err == nil {
-		pdf := document.MustNewTestPDFDocument()
-		pdf.SetFontLocation(example.FontDir())
-		pdf.SetTitle("世界", true)
-		pdf.SetAuthor("世界", true)
-		pdf.SetSubject("世界", true)
-		pdf.SetCreator("世界", true)
-		pdf.SetKeywords("世界", true)
-		pdf.AddFont("Calligrapher", "", "CalligrapherRegular.json")
-		pdf.AddPage()
-		pdf.SetFont("Calligrapher", "", 16)
-		pdf.Writef(5, "\x95 %s \x95", pdf)
-		err = pdf.OutputFileAndClose(fileStr)
-	}
+	pdf := document.MustNewTestPDFDocument(document.WithFontDir(example.FontDir()))
+	pdf.SetTitle("世界", true)
+	pdf.SetAuthor("世界", true)
+	pdf.SetSubject("世界", true)
+	pdf.SetCreator("世界", true)
+	pdf.SetKeywords("世界", true)
+	pdf.AddUTF8Font("Calligrapher", "", "calligra.ttf")
+	pdf.AddPage()
+	pdf.SetFont("Calligrapher", "", 16)
+	pdf.Writef(5, "• %s •", pdf)
+	err := pdf.OutputFileAndClose(fileStr)
 	example.Summary(err, fileStr)
 	// Output:
 	// Successfully generated assets/generated/pdf/Document_SetKeywords.pdf
@@ -2240,15 +2211,14 @@ func ExampleTestPDFDocument_CellFormat_align() {
 	formatRect(pdf, recListBaseline)
 	var fr fontResourceType
 	pdf.SetResourceLoader(fr)
-	pdf.AddFont("Calligrapher", "", "calligra.json")
+	pdf.AddUTF8Font("Calligrapher", "", "calligra.ttf")
 	pdf.SetFont("Calligrapher", "", 16)
 	formatRect(pdf, recListBaseline)
 	fileStr := example.Filename("Document_CellFormat_align")
 	err := pdf.OutputFileAndClose(fileStr)
 	example.Summary(err, fileStr)
 	// Output:
-	// Generalized font loader reading calligra.json
-	// Generalized font loader reading calligra.z
+	// Generalized font loader reading calligra.ttf
 	// Successfully generated assets/generated/pdf/Document_CellFormat_align.pdf
 }
 
@@ -2278,48 +2248,6 @@ func ExampleTestPDFDocument_CellFormat_codepageescape() {
 	example.Summary(err, fileStr)
 	// Output:
 	// Successfully generated assets/generated/pdf/Document_CellFormat_codepageescape.pdf
-}
-
-// ExampleTestPDFDocument_CellFormat_codepage demonstrates the automatic conversion of UTF-8 strings to an
-// 8-bit font encoding.
-func ExampleTestPDFDocument_CellFormat_codepage() {
-	pdf := document.MustNewTestPDFDocument(document.WithFontDir(example.FontDir())) // A4 210.0 x 297.0
-	// See documentation for details on how to generate fonts
-	pdf.AddFont("Helvetica-1251", "", "helvetica_1251.json")
-	pdf.AddFont("Helvetica-1253", "", "helvetica_1253.json")
-	fontSize := 16.0
-	pdf.SetFont("Helvetica", "", fontSize)
-	ht := pdf.PointConvert(fontSize)
-	tr := pdf.UnicodeTranslatorFromDescriptor("") // "" defaults to "cp1252"
-	write := func(str string) {
-		// pdf.CellFormat(190, ht, tr(str), "", 1, "C", false, 0, "")
-		pdf.MultiCell(190, ht, tr(str), "", "C", false)
-		pdf.Ln(ht)
-	}
-	pdf.AddPage()
-	str := `Document provides a translator that will convert any UTF-8 code point ` +
-		`that is present in the specified code page.`
-	pdf.MultiCell(190, ht, str, "", "L", false)
-	pdf.Ln(2 * ht)
-	write("Voix ambiguë d'un cœur qui au zéphyr préfère les jattes de kiwi.")
-	write("Falsches Üben von Xylophonmusik quält jeden größeren Zwerg.")
-	write("Heizölrückstoßabdämpfung")
-	write("Forårsjævndøgn / Efterårsjævndøgn")
-	write("À noite, vovô Kowalsky vê o ímã cair no pé do pingüim queixoso e vovó" +
-		"põe açúcar no chá de tâmaras do jabuti feliz.")
-	pdf.SetFont("Helvetica-1251", "", fontSize) // Name matches one specified in AddFont()
-	tr = pdf.UnicodeTranslatorFromDescriptor("cp1251")
-	write("Съешь же ещё этих мягких французских булок, да выпей чаю.")
-
-	pdf.SetFont("Helvetica-1253", "", fontSize)
-	tr = pdf.UnicodeTranslatorFromDescriptor("cp1253")
-	write("Θέλει αρετή και τόλμη η ελευθερία. (Ανδρέας Κάλβος)")
-
-	fileStr := example.Filename("Document_CellFormat_codepage")
-	err := pdf.OutputFileAndClose(fileStr)
-	example.Summary(err, fileStr)
-	// Output:
-	// Successfully generated assets/generated/pdf/Document_CellFormat_codepage.pdf
 }
 
 // ExampleTestPDFDocument_Polygon displays equilateral polygons in a demonstration of the Polygon
@@ -2546,7 +2474,7 @@ func ExampleTestPDFDocument_SetResourceLoader() {
 	var fr fontResourceType
 	pdf := document.MustNewTestPDFDocument()
 	pdf.SetResourceLoader(fr)
-	pdf.AddFont("Calligrapher", "", "calligra.json")
+	pdf.AddUTF8Font("Calligrapher", "", "calligra.ttf")
 	pdf.AddPage()
 	pdf.SetFont("Calligrapher", "", 35)
 	pdf.Cell(0, 10, "Load fonts from any source")
@@ -2554,8 +2482,7 @@ func ExampleTestPDFDocument_SetResourceLoader() {
 	err := pdf.OutputFileAndClose(fileStr)
 	example.Summary(err, fileStr)
 	// Output:
-	// Generalized font loader reading calligra.json
-	// Generalized font loader reading calligra.z
+	// Generalized font loader reading calligra.ttf
 	// Successfully generated assets/generated/pdf/Document_SetResourceLoader.pdf
 }
 
@@ -2753,17 +2680,13 @@ func ExampleTestPDFDocument_CreateTemplate() {
 	// Successfully generated assets/generated/pdf/Document_CreateTemplate.pdf
 }
 
-// ExampleTestPDFDocument_AddFontFromBytes demonstrate how to use embedded fonts from byte array
-func ExampleTestPDFDocument_AddFontFromBytes() {
+// ExampleTestPDFDocument_AddUTF8FontFromBytes demonstrates how to use an embedded font byte array.
+func ExampleTestPDFDocument_AddUTF8FontFromBytes() {
 	pdf := document.MustNewTestPDFDocument()
 	pdf.AddPage()
-	jsonBytes, err := os.ReadFile(example.FontFile("calligra.json"))
-	var zBytes []byte
+	fontBytes, err := os.ReadFile(example.FontFile("calligra.ttf"))
 	if err == nil {
-		zBytes, err = os.ReadFile(example.FontFile("calligra.z"))
-	}
-	if err == nil {
-		pdf.AddFontFromBytes("calligra", "", jsonBytes, zBytes)
+		pdf.AddUTF8FontFromBytes("calligra", "", fontBytes)
 		pdf.SetFont("calligra", "", 16)
 		pdf.Cell(40, 10, "Hello World With Embedded Font!")
 	}

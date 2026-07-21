@@ -17,25 +17,25 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 func TestTypedLayoutInventoryPinsEveryBlockFieldAndType(t *testing.T) {
-	want := map[layout.BlockKind][]string{
-		layout.BlockKindParagraph:      {"Segments:[]layout.TextSegment", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindHeading:        {"Level:int", "Segments:[]layout.TextSegment", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindList:           {"Ordered:bool", "MarkerStyle:string", "Start:int", "Items:[]layout.ListItem", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindTable:          {"Caption:string", "CaptionSegments:[]layout.TextSegment", "Columns:[]layout.TableColumn", "Header:[]layout.TableRow", "Body:[]layout.TableRow", "Footer:[]layout.TableRow", "Style:layout.TableStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindImage:          {"Source:string", "Data:[]uint8", "DataRef:*[]uint8", "Format:string", "Alt:string", "Caption:[]layout.TextSegment", "CaptionStyle:layout.TextStyle", "Width:float64", "Height:float64", "MaxWidth:float64", "MaxHeight:float64", "WidthPercent:uint32", "MaxWidthPercent:uint32", "Fit:layout.ImageFitMode", "FocusX:float64", "FocusY:float64", "FocusSet:bool", "Align:string", "DPI:float64", "Decorative:bool", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindSignatureRow:   {"Columns:[]layout.SignatureColumn", "Gap:float64", "KeepTogether:bool", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindMetadataGrid:   {"Fields:[]layout.MetadataField", "Columns:int", "Gap:float64", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindQRVerification: {"QR:layout.QRBlock", "Text:[]layout.TextSegment", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindNoteBox:        {"Title:string", "Body:[]layout.Block", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindSection:        {"Title:string", "Blocks:[]layout.Block", "KeepTitleWithBody:bool", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindClause:         {"Number:string", "Title:string", "Blocks:[]layout.Block", "BreakBefore:bool", "BreakAfter:bool", "KeepTogether:bool", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
-		layout.BlockKindPageBreak:      {"Before:bool", "After:bool"},
-		layout.BlockKindRowColumn:      {"Direction:layout.RowColumnDirection", "Gap:float64", "CrossGap:float64", "CrossSize:float64", "Wrap:string", "MainAlign:string", "CrossAlign:string", "AlignContent:string", "ReverseMain:bool", "Items:[]layout.RowColumnItem"},
-		layout.BlockKindCanvas:         {"Width:float64", "Height:float64", "DefaultHorizontal:string", "DefaultVertical:string", "Items:[]layout.CanvasItem"},
+	want := map[string][]string{
+		string(layout.BlockKindParagraph):      {"Segments:[]layout.TextSegment", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindHeading):        {"Level:int", "Segments:[]layout.TextSegment", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindList):           {"Ordered:bool", "MarkerStyle:string", "Start:int", "Items:[]layout.ListItem", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindTable):          {"Caption:string", "CaptionSegments:[]layout.TextSegment", "Columns:[]layout.TableColumn", "Header:[]layout.TableRow", "Body:[]layout.TableRow", "Footer:[]layout.TableRow", "Style:layout.TableStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindImage):          {"Source:string", "Data:[]uint8", "DataRef:*[]uint8", "Format:string", "Alt:string", "Caption:[]layout.TextSegment", "CaptionStyle:layout.TextStyle", "Width:float64", "Height:float64", "MaxWidth:float64", "MaxHeight:float64", "WidthPercent:uint32", "MaxWidthPercent:uint32", "Fit:layout.ImageFitMode", "FocusX:float64", "FocusY:float64", "FocusSet:bool", "Align:string", "DPI:float64", "Decorative:bool", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindSignatureRow):   {"Columns:[]layout.SignatureColumn", "Gap:float64", "KeepTogether:bool", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindMetadataGrid):   {"Fields:[]layout.MetadataField", "Columns:int", "Gap:float64", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindQRVerification): {"QR:layout.QRBlock", "Text:[]layout.TextSegment", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindNoteBox):        {"Title:string", "Body:[]layout.Block", "Style:layout.TextStyle", "StyleRef:*layout.TextStyle", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindSection):        {"Title:string", "Blocks:[]layout.Block", "KeepTitleWithBody:bool", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindClause):         {"Number:string", "Title:string", "Blocks:[]layout.Block", "BreakBefore:bool", "BreakAfter:bool", "KeepTogether:bool", "Box:layout.BoxStyle", "BoxRef:*layout.BoxStyle"},
+		string(layout.BlockKindPageBreak):      {"Before:bool", "After:bool"},
+		string(layout.BlockKindRowColumn):      {"Direction:layout.RowColumnDirection", "Gap:float64", "CrossGap:float64", "CrossSize:float64", "Wrap:string", "MainAlign:string", "CrossAlign:string", "AlignContent:string", "ReverseMain:bool", "Items:[]layout.RowColumnItem"},
+		string(layout.BlockKindCanvas):         {"Width:float64", "Height:float64", "DefaultHorizontal:string", "DefaultVertical:string", "Items:[]layout.CanvasItem"},
 	}
 	inventory := TypedLayoutInventory()
 	if len(inventory.Blocks) != len(want) {
@@ -63,7 +63,7 @@ func TestTypedLayoutInventoryPinsEveryBlockFieldAndType(t *testing.T) {
 	}
 }
 
-func TestTypedPublicEntryPointsAndBlockImplementationsASTDoNotDrift(t *testing.T) {
+func TestInternalLayoutEntryPointsAndBlockImplementationsASTDoNotDrift(t *testing.T) {
 	wantSignatures := map[string]string{
 		"layout.NewLayoutDocument":          "func() *LayoutDocument",
 		"layout.NewDocumentModel":           "func(title string, blocks ...Block) *LayoutDocument",
@@ -161,7 +161,7 @@ func parseTypedAPISignatures(t *testing.T) map[string]string {
 func typedCharacterizationSourceFiles(t *testing.T) []struct{ pkg, path string } {
 	t.Helper()
 	result := make([]struct{ pkg, path string }, 0)
-	for _, source := range []struct{ pkg, pattern string }{{"layout", "../layout/*.go"}, {"document", "*.go"}} {
+	for _, source := range []struct{ pkg, pattern string }{{"layout", "../internal/layout/*.go"}, {"document", "*.go"}} {
 		paths, err := filepath.Glob(source.pattern)
 		if err != nil {
 			t.Fatal(err)
@@ -195,7 +195,7 @@ func receiverText(t *testing.T, fset *token.FileSet, expression ast.Expr) string
 func parseLayoutBlockImplementations(t *testing.T) []string {
 	t.Helper()
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "../layout/layout_document.go", nil, 0)
+	file, err := parser.ParseFile(fset, "../internal/layout/layout_document.go", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func parseLayoutBlockImplementations(t *testing.T) []string {
 func TestTypedCharacterizationCorpusIsCompleteBoundedAndDeterministic(t *testing.T) {
 	requireDarwinRasterBaseline(t)
 	inventory := TypedLayoutInventory()
-	covered := map[layout.BlockKind]bool{}
+	covered := map[string]bool{}
 	categories := map[string]bool{}
 	for _, fixture := range inventory.Fixtures {
 		for _, kind := range fixture.Blocks {

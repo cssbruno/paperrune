@@ -95,31 +95,44 @@ type FontDescriptor struct {
 }
 
 type fontDefinition struct {
-	Tp           string         // "Core", "TrueType", ...
-	Name         string         // "Courier-Bold", ...
-	Desc         FontDescriptor // Font descriptor
-	Up           int            // Underline position
-	Ut           int            // Underline thickness
-	Cw           []int          // Character width by ordinal
-	Enc          string         // "cp1252", ...
-	Diff         string         // Differences from reference encoding
-	File         string         // "Redressed.z"
-	Size1, Size2 int            // Type1 values
-	OriginalSize int            // Size of uncompressed font file
-	N            int            // Set by font loader
-	DiffN        int            // Position of diff in app array, set by font loader
-	i            string         // 1-based position in font list, set by font loader, not this program
-	utf8File     *utf8FontFile  // UTF-8 font
-	usedRunes    map[int]int    // Array of used runes
+	Tp        string         // "Core" or "UTF8"
+	Name      string         // "Courier-Bold", ...
+	Desc      FontDescriptor // Font descriptor
+	Up        int            // Underline position
+	Ut        int            // Underline thickness
+	Cw        []int          // Character width by ordinal
+	File      string         // Source TTF/OTF path for an imported font
+	N         int            // Set by font loader
+	i         string         // 1-based position in font list, set by font loader, not this program
+	utf8File  *utf8FontFile  // UTF-8 font
+	usedRunes map[int]int    // Array of used runes
 }
 
-// generateFontID generates a font ID from the font definition.
+// generateFontID generates a stable ID from a font resource definition.
 func generateFontID(fdt fontDefinition) (string, error) {
-	// File can differ when the same font is generated in a different instance.
-	fdt.File = ""
-	h := sha1.New() // #nosec G401 -- Compatibility identifier for generated font definitions.
+	// Retain the historical serialized shape so removing the old JSON/Type1
+	// loader does not change deterministic PDF resource names.
+	identity := struct {
+		Tp           string
+		Name         string
+		Desc         FontDescriptor
+		Up           int
+		Ut           int
+		Cw           []int
+		Enc          string
+		Diff         string
+		File         string
+		Size1, Size2 int
+		OriginalSize int
+		N            int
+		DiffN        int
+	}{
+		Tp: fdt.Tp, Name: fdt.Name, Desc: fdt.Desc, Up: fdt.Up, Ut: fdt.Ut,
+		Cw: fdt.Cw, N: fdt.N,
+	}
+	h := sha1.New() // #nosec G401 -- Stable compatibility identifier, never used for authentication.
 	w := hashJSONNoFinalNewline{hash: h}
-	if err := json.NewEncoder(&w).Encode(&fdt); err != nil {
+	if err := json.NewEncoder(&w).Encode(&identity); err != nil {
 		return "", err
 	}
 	w.Flush()

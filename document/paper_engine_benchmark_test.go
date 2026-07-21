@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 const paperEngineBenchmarkParagraphs = 48

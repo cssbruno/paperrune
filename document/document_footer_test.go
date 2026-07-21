@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 func TestExtractHTMLFooterBlock(t *testing.T) {

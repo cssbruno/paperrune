@@ -227,7 +227,7 @@ func (utf *utf8FontFile) parseFile() error {
 		return utf.fileReader.err
 	}
 	if codeType == 0x4F54544F {
-		return errors.New("OpenType/CFF fonts are not supported by AddUTF8Font; use font.Make and AddFont for single-byte encodings")
+		return errors.New("OpenType/CFF fonts are not supported; use a TTF or OTF font with TrueType outlines")
 	}
 	if codeType == 0x74746366 {
 		return errors.New("OpenType font collections are not supported")

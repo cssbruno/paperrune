@@ -8,8 +8,7 @@ intentionally contains no facade package.
 ## Package boundaries
 
 - `document` owns the Paper facade, immutable plan exports, and private PDF construction engine.
-- `layout` owns renderer-independent public document models and measurement.
-- `font` owns standalone font-definition generation.
+- `internal/layout` owns the renderer-independent compiler-to-planner model and measurement.
 - `internal/layoutgeom` owns pure geometry used by private layout machinery.
 
 PaperRune has no package that accepts an existing PDF. Parsing, inspection,
@@ -48,8 +47,9 @@ verification.
 Paper measurement owns track offsets, spans, column constraints, image fitting,
 and pagination comparisons in pure shared geometry.
 
-Public layout fields are behavioral contracts. A field must not be added until
-measurement, rendering, pagination, and regression tests implement it.
+Internal layout fields are cross-stage behavioral contracts. A field must not
+be added until measurement, rendering, pagination, and regression tests
+implement it. They are not a supported caller authoring surface.
 
 PaperRune uses one private planner behind Paper. New automatic layout behavior
 belongs in that planner rather than a second public frontend. Paper resolves

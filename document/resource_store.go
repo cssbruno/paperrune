@@ -7,7 +7,6 @@ import "sort"
 
 type resourceStore struct {
 	fonts        map[string]fontDefinition
-	fontFiles    map[string]fontFile
 	templates    map[string]TemplateView
 	images       map[string]*ImageInfo
 	imageAliases map[string]string
@@ -28,7 +27,6 @@ type attachmentResourceStore struct {
 func newResourceStore() *resourceStore {
 	return &resourceStore{
 		fonts:        make(map[string]fontDefinition),
-		fontFiles:    make(map[string]fontFile),
 		templates:    make(map[string]TemplateView),
 		images:       make(map[string]*ImageInfo),
 		imageAliases: make(map[string]string),
@@ -123,15 +121,6 @@ func (s *resourceStore) fontsByKey(sorted bool) []fontDefinition {
 		fonts = append(fonts, s.fonts[key])
 	}
 	return fonts
-}
-
-func (s *resourceStore) fontFile(file string) (fontFile, bool) {
-	info, ok := s.fontFiles[file]
-	return info, ok
-}
-
-func (s *resourceStore) setFontFile(file string, info fontFile) {
-	s.fontFiles[file] = info
 }
 
 func (s *resourceStore) imagesForOutput(sorted bool) []*ImageInfo {

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 func TestPaintCoreLayoutPlanPDFEmitsOnlyPlannedPagesAndPositionedText(t *testing.T) {

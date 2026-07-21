@@ -6,7 +6,7 @@ package document
 import (
 	"strings"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 // ExtractHTMLFooterBlock removes the first HTML footer element from an HTML

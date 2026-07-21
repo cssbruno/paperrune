@@ -12,8 +12,8 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 const TypedCharacterizationSchemaVersion uint16 = 1
@@ -44,7 +44,7 @@ type TypedFieldInventory struct {
 }
 
 type TypedBlockInventory struct {
-	Kind       layout.BlockKind      `json:"kind"`
+	Kind       string                `json:"kind"`
 	GoType     string                `json:"go_type"`
 	Status     TypedBehaviorStatus   `json:"status"`
 	PlanStatus TypedBehaviorStatus   `json:"exact_plan_status"`
@@ -59,9 +59,9 @@ type TypedBehaviorInventory struct {
 }
 
 type TypedFixtureInventory struct {
-	Name     string             `json:"name"`
-	Coverage []string           `json:"coverage"`
-	Blocks   []layout.BlockKind `json:"blocks,omitempty"`
+	Name     string   `json:"name"`
+	Coverage []string `json:"coverage"`
+	Blocks   []string `json:"blocks,omitempty"`
 }
 
 type TypedCharacterizationInventory struct {
@@ -110,7 +110,7 @@ func TypedLayoutInventory() TypedCharacterizationInventory {
 			field := item.typeOf.Field(index)
 			fields[index] = TypedFieldInventory{Name: field.Name, Type: field.Type.String(), Status: TypedBehaviorDocumented}
 		}
-		blocks = append(blocks, TypedBlockInventory{Kind: item.kind, GoType: item.typeOf.Name(),
+		blocks = append(blocks, TypedBlockInventory{Kind: string(item.kind), GoType: item.typeOf.Name(),
 			Status: TypedBehaviorDocumented, PlanStatus: item.plan, Fields: fields})
 	}
 	behaviors := []TypedBehaviorInventory{

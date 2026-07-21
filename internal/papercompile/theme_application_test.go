@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 	"github.com/cssbruno/paperrune/internal/papertheme"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 func TestCompileAppliesSelectedRootThemeTokensWithProvenance(t *testing.T) {

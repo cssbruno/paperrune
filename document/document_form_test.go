@@ -8,27 +8,27 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
-func testFormDocument() FormDocument {
-	return FormDocument{
+func testFormDocument() formDocument {
+	return formDocument{
 		Title: "Form Title",
-		Sections: []FormSection{
+		Sections: []formSection{
 			{
 				Title:        "Profile",
 				KeepTogether: true,
-				Questions: []FormQuestion{
-					{Label: "Name", Required: true, Answer: FormAnswer{Text: "Alex Example"}},
-					{Label: "Options", Answer: FormAnswer{Items: []string{"One", "Two"}}},
-					{Label: "Scores", Answer: FormAnswer{Table: [][]string{{"Name", "Score"}, {"A", "10"}}}},
+				Questions: []formQuestion{
+					{Label: "Name", Required: true, Answer: formAnswer{Text: "Alex Example"}},
+					{Label: "Options", Answer: formAnswer{Items: []string{"One", "Two"}}},
+					{Label: "Scores", Answer: formAnswer{Table: [][]string{{"Name", "Score"}, {"A", "10"}}}},
 				},
 			},
 			{
 				Title:       "Next page",
 				BreakBefore: true,
-				Questions: []FormQuestion{
-					{Label: "Comment", Answer: FormAnswer{Text: "Continue"}},
+				Questions: []formQuestion{
+					{Label: "Comment", Answer: formAnswer{Text: "Continue"}},
 				},
 			},
 		},
@@ -59,7 +59,7 @@ func TestFormDocumentHTMLValidation(t *testing.T) {
 }
 
 func TestFormDocumentBlocks(t *testing.T) {
-	blocks := FormDocumentBlocks(testFormDocument())
+	blocks := formDocumentBlocks(testFormDocument())
 	if len(blocks) != 3 {
 		t.Fatalf("blocks = %d, want title plus two sections", len(blocks))
 	}
@@ -78,7 +78,7 @@ func TestFormDocumentBlocks(t *testing.T) {
 func TestWriteDocumentRendersFormDocumentModel(t *testing.T) {
 	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)
-	doc := FormDocumentModel(testFormDocument())
+	doc := formDocumentModel(testFormDocument())
 
 	pdf.WriteDocument(doc)
 	var out bytes.Buffer

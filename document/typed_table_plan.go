@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/internal/papercompile"
 	"github.com/cssbruno/paperrune/internal/paperlang"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 type typedTableCellMeasurement struct {

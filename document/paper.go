@@ -14,11 +14,11 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/internal/papercompile"
 	"github.com/cssbruno/paperrune/internal/paperedit"
 	"github.com/cssbruno/paperrune/internal/paperlang"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 // ErrPaperRender reports that a .paper pipeline failed. Inspect

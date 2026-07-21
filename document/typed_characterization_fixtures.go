@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"math"
 
-	"github.com/cssbruno/paperrune/layout"
+	"github.com/cssbruno/paperrune/internal/layout"
 )
 
 type typedCharacterizationFixture struct {
@@ -15,6 +15,14 @@ type typedCharacterizationFixture struct {
 	doc        *layout.LayoutDocument
 	pageHeight float64
 	mode       string
+}
+
+func typedBlockKindNames(kinds ...layout.BlockKind) []string {
+	result := make([]string, len(kinds))
+	for index, kind := range kinds {
+		result[index] = string(kind)
+	}
+	return result
 }
 
 func characterizationParagraph(text string) layout.ParagraphBlock {
@@ -35,38 +43,38 @@ func typedCharacterizationFixtures() []typedCharacterizationFixture {
 	envelope.QR = &layout.QRBlock{Value: "characterization-envelope", Label: "Verify", Size: 24}
 	envelope.Attachments = []layout.AttachmentBlock{{Name: "evidence.txt", MIMEType: "text/plain", Description: "characterization evidence", Data: []byte("typed envelope")}}
 	fixtures := []typedCharacterizationFixture{
-		{TypedFixtureInventory{Name: "block-paragraph", Coverage: []string{"every-block"}, Blocks: []layout.BlockKind{layout.BlockKindParagraph}}, characterizationDocument(p), 200, ""},
-		{TypedFixtureInventory{Name: "block-heading", Coverage: []string{"every-block"}, Blocks: []layout.BlockKind{layout.BlockKindHeading}}, characterizationDocument(layout.HeadingBlock{Level: 1, Segments: []layout.TextSegment{{Text: "Heading"}}, Style: p.Style}), 200, ""},
-		{TypedFixtureInventory{Name: "block-list", Coverage: []string{"every-block", "nested"}, Blocks: []layout.BlockKind{layout.BlockKindList, layout.BlockKindParagraph}}, characterizationDocument(layout.ListBlock{Items: []layout.ListItem{{Blocks: []layout.Block{p}}}}), 200, ""},
-		{TypedFixtureInventory{Name: "block-table", Coverage: []string{"every-block", "table"}, Blocks: []layout.BlockKind{layout.BlockKindTable, layout.BlockKindParagraph}}, characterizationDocument(characterizationTable(false, false)), 200, ""},
-		{TypedFixtureInventory{Name: "block-image", Coverage: []string{"every-block"}, Blocks: []layout.BlockKind{layout.BlockKindImage}}, characterizationDocument(layout.ImageBlock{Data: pixel, Format: "png", Alt: "pixel", Width: 10, Height: 10}), 200, ""},
-		{TypedFixtureInventory{Name: "block-signature-row", Coverage: []string{"every-block"}, Blocks: []layout.BlockKind{layout.BlockKindSignatureRow}}, characterizationDocument(layout.SignatureRowBlock{Columns: []layout.SignatureColumn{{Label: "Sign", Name: "A", Width: 80}}}), 200, ""},
-		{TypedFixtureInventory{Name: "block-metadata-grid", Coverage: []string{"every-block"}, Blocks: []layout.BlockKind{layout.BlockKindMetadataGrid}}, characterizationDocument(layout.MetadataGridBlock{Columns: 2, Fields: []layout.MetadataField{{Label: "A", Value: "1"}, {Label: "B", Value: "2"}}}), 200, ""},
-		{TypedFixtureInventory{Name: "block-qr-verification", Coverage: []string{"every-block"}, Blocks: []layout.BlockKind{layout.BlockKindQRVerification}}, characterizationDocument(layout.QRVerificationBlock{QR: layout.QRBlock{Value: "verify", Size: 24}, Text: []layout.TextSegment{{Text: "Verify"}}}), 200, ""},
-		{TypedFixtureInventory{Name: "block-note-box", Coverage: []string{"every-block", "nested"}, Blocks: []layout.BlockKind{layout.BlockKindNoteBox, layout.BlockKindParagraph}}, characterizationDocument(layout.NoteBoxBlock{Title: "Note", Body: []layout.Block{p}}), 200, ""},
-		{TypedFixtureInventory{Name: "block-section", Coverage: []string{"every-block", "nested"}, Blocks: []layout.BlockKind{layout.BlockKindSection, layout.BlockKindParagraph}}, characterizationDocument(layout.SectionBlock{Title: "Section", Blocks: []layout.Block{p}}), 200, ""},
-		{TypedFixtureInventory{Name: "block-clause", Coverage: []string{"every-block", "nested"}, Blocks: []layout.BlockKind{layout.BlockKindClause, layout.BlockKindParagraph}}, characterizationDocument(layout.ClauseBlock{Number: "1", Title: "Clause", Blocks: []layout.Block{p}}), 200, ""},
-		{TypedFixtureInventory{Name: "block-page-break", Coverage: []string{"every-block", "mixed"}, Blocks: []layout.BlockKind{layout.BlockKindParagraph, layout.BlockKindPageBreak}}, characterizationDocument(p, layout.PageBreakBlock{After: true}, p), 200, ""},
-		{TypedFixtureInventory{Name: "block-row-column", Coverage: []string{"every-block", "nested"}, Blocks: []layout.BlockKind{layout.BlockKindRowColumn, layout.BlockKindParagraph}}, characterizationDocument(layout.RowColumnBlock{Direction: layout.RowDirection, Items: []layout.RowColumnItem{{Block: p, Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFraction, Weight: 1}}, {Block: p, Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFraction, Weight: 1}}}}), 200, ""},
-		{TypedFixtureInventory{Name: "block-canvas", Coverage: []string{"every-block", "local-constraints"}, Blocks: []layout.BlockKind{layout.BlockKindCanvas}}, characterizationDocument(layout.CanvasBlock{Width: 120, Height: 60, DefaultHorizontal: "left", DefaultVertical: "top", Items: []layout.CanvasItem{{ID: "@box", Width: 30, Height: 20, Alt: "positioned box", Box: layout.BoxStyle{BackgroundColor: layout.DocumentColor{R: 51, G: 102, B: 153, Set: true}}, Constraints: []layout.CanvasConstraint{{Anchor: "left", Target: "canvas", TargetAnchor: "left", Offset: 8}, {Anchor: "top", Target: "canvas", TargetAnchor: "top", Offset: 8}}}}}), 200, ""},
-		{TypedFixtureInventory{Name: "document-envelope-fields", Coverage: []string{"envelope", "attachments", "signature", "qr", "mixed"}, Blocks: []layout.BlockKind{layout.BlockKindParagraph, layout.BlockKindSignatureRow, layout.BlockKindQRVerification}}, envelope, 240, ""},
-		{TypedFixtureInventory{Name: "mixed-nested", Coverage: []string{"nested", "mixed"}, Blocks: []layout.BlockKind{layout.BlockKindHeading, layout.BlockKindSection, layout.BlockKindList, layout.BlockKindParagraph}}, characterizationDocument(layout.HeadingBlock{Level: 1, Segments: []layout.TextSegment{{Text: "H"}}, Style: p.Style}, layout.SectionBlock{Blocks: []layout.Block{layout.ListBlock{Items: []layout.ListItem{{Blocks: []layout.Block{p}}}}}}), 200, ""},
-		{TypedFixtureInventory{Name: "internal-links-hierarchy", Coverage: []string{"internal-links", "semantic-hierarchy", "nested"}, Blocks: []layout.BlockKind{layout.BlockKindSection, layout.BlockKindHeading, layout.BlockKindList, layout.BlockKindParagraph}}, characterizationDocument(
+		{TypedFixtureInventory{Name: "block-paragraph", Coverage: []string{"every-block"}, Blocks: typedBlockKindNames(layout.BlockKindParagraph)}, characterizationDocument(p), 200, ""},
+		{TypedFixtureInventory{Name: "block-heading", Coverage: []string{"every-block"}, Blocks: typedBlockKindNames(layout.BlockKindHeading)}, characterizationDocument(layout.HeadingBlock{Level: 1, Segments: []layout.TextSegment{{Text: "Heading"}}, Style: p.Style}), 200, ""},
+		{TypedFixtureInventory{Name: "block-list", Coverage: []string{"every-block", "nested"}, Blocks: typedBlockKindNames(layout.BlockKindList, layout.BlockKindParagraph)}, characterizationDocument(layout.ListBlock{Items: []layout.ListItem{{Blocks: []layout.Block{p}}}}), 200, ""},
+		{TypedFixtureInventory{Name: "block-table", Coverage: []string{"every-block", "table"}, Blocks: typedBlockKindNames(layout.BlockKindTable, layout.BlockKindParagraph)}, characterizationDocument(characterizationTable(false, false)), 200, ""},
+		{TypedFixtureInventory{Name: "block-image", Coverage: []string{"every-block"}, Blocks: typedBlockKindNames(layout.BlockKindImage)}, characterizationDocument(layout.ImageBlock{Data: pixel, Format: "png", Alt: "pixel", Width: 10, Height: 10}), 200, ""},
+		{TypedFixtureInventory{Name: "block-signature-row", Coverage: []string{"every-block"}, Blocks: typedBlockKindNames(layout.BlockKindSignatureRow)}, characterizationDocument(layout.SignatureRowBlock{Columns: []layout.SignatureColumn{{Label: "Sign", Name: "A", Width: 80}}}), 200, ""},
+		{TypedFixtureInventory{Name: "block-metadata-grid", Coverage: []string{"every-block"}, Blocks: typedBlockKindNames(layout.BlockKindMetadataGrid)}, characterizationDocument(layout.MetadataGridBlock{Columns: 2, Fields: []layout.MetadataField{{Label: "A", Value: "1"}, {Label: "B", Value: "2"}}}), 200, ""},
+		{TypedFixtureInventory{Name: "block-qr-verification", Coverage: []string{"every-block"}, Blocks: typedBlockKindNames(layout.BlockKindQRVerification)}, characterizationDocument(layout.QRVerificationBlock{QR: layout.QRBlock{Value: "verify", Size: 24}, Text: []layout.TextSegment{{Text: "Verify"}}}), 200, ""},
+		{TypedFixtureInventory{Name: "block-note-box", Coverage: []string{"every-block", "nested"}, Blocks: typedBlockKindNames(layout.BlockKindNoteBox, layout.BlockKindParagraph)}, characterizationDocument(layout.NoteBoxBlock{Title: "Note", Body: []layout.Block{p}}), 200, ""},
+		{TypedFixtureInventory{Name: "block-section", Coverage: []string{"every-block", "nested"}, Blocks: typedBlockKindNames(layout.BlockKindSection, layout.BlockKindParagraph)}, characterizationDocument(layout.SectionBlock{Title: "Section", Blocks: []layout.Block{p}}), 200, ""},
+		{TypedFixtureInventory{Name: "block-clause", Coverage: []string{"every-block", "nested"}, Blocks: typedBlockKindNames(layout.BlockKindClause, layout.BlockKindParagraph)}, characterizationDocument(layout.ClauseBlock{Number: "1", Title: "Clause", Blocks: []layout.Block{p}}), 200, ""},
+		{TypedFixtureInventory{Name: "block-page-break", Coverage: []string{"every-block", "mixed"}, Blocks: typedBlockKindNames(layout.BlockKindParagraph, layout.BlockKindPageBreak)}, characterizationDocument(p, layout.PageBreakBlock{After: true}, p), 200, ""},
+		{TypedFixtureInventory{Name: "block-row-column", Coverage: []string{"every-block", "nested"}, Blocks: typedBlockKindNames(layout.BlockKindRowColumn, layout.BlockKindParagraph)}, characterizationDocument(layout.RowColumnBlock{Direction: layout.RowDirection, Items: []layout.RowColumnItem{{Block: p, Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFraction, Weight: 1}}, {Block: p, Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFraction, Weight: 1}}}}), 200, ""},
+		{TypedFixtureInventory{Name: "block-canvas", Coverage: []string{"every-block", "local-constraints"}, Blocks: typedBlockKindNames(layout.BlockKindCanvas)}, characterizationDocument(layout.CanvasBlock{Width: 120, Height: 60, DefaultHorizontal: "left", DefaultVertical: "top", Items: []layout.CanvasItem{{ID: "@box", Width: 30, Height: 20, Alt: "positioned box", Box: layout.BoxStyle{BackgroundColor: layout.DocumentColor{R: 51, G: 102, B: 153, Set: true}}, Constraints: []layout.CanvasConstraint{{Anchor: "left", Target: "canvas", TargetAnchor: "left", Offset: 8}, {Anchor: "top", Target: "canvas", TargetAnchor: "top", Offset: 8}}}}}), 200, ""},
+		{TypedFixtureInventory{Name: "document-envelope-fields", Coverage: []string{"envelope", "attachments", "signature", "qr", "mixed"}, Blocks: typedBlockKindNames(layout.BlockKindParagraph, layout.BlockKindSignatureRow, layout.BlockKindQRVerification)}, envelope, 240, ""},
+		{TypedFixtureInventory{Name: "mixed-nested", Coverage: []string{"nested", "mixed"}, Blocks: typedBlockKindNames(layout.BlockKindHeading, layout.BlockKindSection, layout.BlockKindList, layout.BlockKindParagraph)}, characterizationDocument(layout.HeadingBlock{Level: 1, Segments: []layout.TextSegment{{Text: "H"}}, Style: p.Style}, layout.SectionBlock{Blocks: []layout.Block{layout.ListBlock{Items: []layout.ListItem{{Blocks: []layout.Block{p}}}}}}), 200, ""},
+		{TypedFixtureInventory{Name: "internal-links-hierarchy", Coverage: []string{"internal-links", "semantic-hierarchy", "nested"}, Blocks: typedBlockKindNames(layout.BlockKindSection, layout.BlockKindHeading, layout.BlockKindList, layout.BlockKindParagraph)}, characterizationDocument(
 			layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "Jump", Link: "#details"}}, Style: p.Style},
 			layout.SectionBlock{Title: "Details", Blocks: []layout.Block{
 				layout.HeadingBlock{Level: 2, Segments: []layout.TextSegment{{Text: "Target", Destination: "details"}}, Style: p.Style},
 				layout.ListBlock{Items: []layout.ListItem{{Blocks: []layout.Block{p}}}},
 			}},
 		), 200, ""},
-		{TypedFixtureInventory{Name: "page-exact-fit", Coverage: []string{"exact-fit"}, Blocks: []layout.BlockKind{layout.BlockKindParagraph}}, characterizationDocument(layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "fit"}}, Style: layout.TextStyle{FontFamily: "Helvetica", FontSize: 10, LineHeight: 180}}), 200, ""},
-		{TypedFixtureInventory{Name: "page-one-unit-over", Coverage: []string{"one-unit-over"}, Blocks: []layout.BlockKind{layout.BlockKindParagraph}}, characterizationDocument(layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "over"}}, Style: layout.TextStyle{FontFamily: "Helvetica", FontSize: 10, LineHeight: 180 + 1.0/1024.0}}), 200, ""},
-		{TypedFixtureInventory{Name: "table-wide-rowspan", Coverage: []string{"table", "wide", "rowspan"}, Blocks: []layout.BlockKind{layout.BlockKindTable}}, characterizationDocument(characterizationTable(true, true)), 120, ""},
-		{TypedFixtureInventory{Name: "table-large", Coverage: []string{"table", "large"}, Blocks: []layout.BlockKind{layout.BlockKindTable}}, characterizationDocument(characterizationLargeTable()), 120, ""},
-		{TypedFixtureInventory{Name: "page-regions-first-even", Coverage: []string{"page-regions", "first", "odd", "even"}, Blocks: []layout.BlockKind{layout.BlockKindParagraph, layout.BlockKindPageBreak}}, characterizationPageRegionDocument(), 100, ""},
-		{TypedFixtureInventory{Name: "malformed-heading", Coverage: []string{"malformed", "recovery"}, Blocks: []layout.BlockKind{layout.BlockKindHeading}}, characterizationDocument(layout.HeadingBlock{Level: 99, Segments: []layout.TextSegment{{Text: "bad"}}, Style: layout.TextStyle{FontFamily: "Helvetica", FontSize: math.NaN(), LineHeight: 12}}), 200, "malformed"},
-		{TypedFixtureInventory{Name: "cancellation", Coverage: []string{"cancellation"}, Blocks: []layout.BlockKind{layout.BlockKindParagraph}}, characterizationDocument(p), 200, "cancel"},
-		{TypedFixtureInventory{Name: "resource-limit", Coverage: []string{"limits"}, Blocks: []layout.BlockKind{layout.BlockKindParagraph}}, characterizationDocument(p, p, p), 200, "limit"},
-		{TypedFixtureInventory{Name: "concurrent-plan-reuse", Coverage: []string{"concurrent-reuse"}, Blocks: []layout.BlockKind{layout.BlockKindParagraph}}, characterizationDocument(p), 200, "concurrent"},
+		{TypedFixtureInventory{Name: "page-exact-fit", Coverage: []string{"exact-fit"}, Blocks: typedBlockKindNames(layout.BlockKindParagraph)}, characterizationDocument(layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "fit"}}, Style: layout.TextStyle{FontFamily: "Helvetica", FontSize: 10, LineHeight: 180}}), 200, ""},
+		{TypedFixtureInventory{Name: "page-one-unit-over", Coverage: []string{"one-unit-over"}, Blocks: typedBlockKindNames(layout.BlockKindParagraph)}, characterizationDocument(layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: "over"}}, Style: layout.TextStyle{FontFamily: "Helvetica", FontSize: 10, LineHeight: 180 + 1.0/1024.0}}), 200, ""},
+		{TypedFixtureInventory{Name: "table-wide-rowspan", Coverage: []string{"table", "wide", "rowspan"}, Blocks: typedBlockKindNames(layout.BlockKindTable)}, characterizationDocument(characterizationTable(true, true)), 120, ""},
+		{TypedFixtureInventory{Name: "table-large", Coverage: []string{"table", "large"}, Blocks: typedBlockKindNames(layout.BlockKindTable)}, characterizationDocument(characterizationLargeTable()), 120, ""},
+		{TypedFixtureInventory{Name: "page-regions-first-even", Coverage: []string{"page-regions", "first", "odd", "even"}, Blocks: typedBlockKindNames(layout.BlockKindParagraph, layout.BlockKindPageBreak)}, characterizationPageRegionDocument(), 100, ""},
+		{TypedFixtureInventory{Name: "malformed-heading", Coverage: []string{"malformed", "recovery"}, Blocks: typedBlockKindNames(layout.BlockKindHeading)}, characterizationDocument(layout.HeadingBlock{Level: 99, Segments: []layout.TextSegment{{Text: "bad"}}, Style: layout.TextStyle{FontFamily: "Helvetica", FontSize: math.NaN(), LineHeight: 12}}), 200, "malformed"},
+		{TypedFixtureInventory{Name: "cancellation", Coverage: []string{"cancellation"}, Blocks: typedBlockKindNames(layout.BlockKindParagraph)}, characterizationDocument(p), 200, "cancel"},
+		{TypedFixtureInventory{Name: "resource-limit", Coverage: []string{"limits"}, Blocks: typedBlockKindNames(layout.BlockKindParagraph)}, characterizationDocument(p, p, p), 200, "limit"},
+		{TypedFixtureInventory{Name: "concurrent-plan-reuse", Coverage: []string{"concurrent-reuse"}, Blocks: typedBlockKindNames(layout.BlockKindParagraph)}, characterizationDocument(p), 200, "concurrent"},
 	}
 	return fixtures
 }

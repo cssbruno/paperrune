@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 	"github.com/cssbruno/paperrune/internal/paperrepeat"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 const loopScenarioSource = `document:

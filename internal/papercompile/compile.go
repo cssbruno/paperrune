@@ -15,11 +15,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 	"github.com/cssbruno/paperrune/internal/paperscenario"
 	"github.com/cssbruno/paperrune/internal/papertheme"
-	"github.com/cssbruno/paperrune/layout"
 )
 
 // PageSpec is the point-based physical page selected during compilation.
