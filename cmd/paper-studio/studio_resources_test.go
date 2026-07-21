@@ -163,7 +163,8 @@ func TestStudioResourcesEndpointBindsExactPlanWithoutReturningBytes(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodGet, "/api/resources?revision="+snapshot.revision+"&source_revision="+studioSourceRevision(snapshot.source), nil)
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/resources?revision="+snapshot.revision+"&source_revision="+studioSourceRevision(snapshot.source), nil)
+	request.Header.Set(studioSessionHeader, studio.sessionToken)
 	response := httptest.NewRecorder()
 	studio.routes().ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
@@ -176,7 +177,8 @@ func TestStudioResourcesEndpointBindsExactPlanWithoutReturningBytes(t *testing.T
 	if err := json.Unmarshal(response.Body.Bytes(), &inventory); err != nil || len(inventory.Items) != 1 || len(inventory.Items[0].Usages) != 1 {
 		t.Fatalf("inventory=%#v %v", inventory, err)
 	}
-	stale := httptest.NewRequest(http.MethodGet, "/api/resources?revision=stale&source_revision="+studioSourceRevision(snapshot.source), nil)
+	stale := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/resources?revision=stale&source_revision="+studioSourceRevision(snapshot.source), nil)
+	stale.Header.Set(studioSessionHeader, studio.sessionToken)
 	staleResponse := httptest.NewRecorder()
 	studio.routes().ServeHTTP(staleResponse, stale)
 	if staleResponse.Code != http.StatusConflict {

@@ -349,9 +349,9 @@ func authoringFlowTemplate(template, id string) (paperedit.NodeSpec, error) {
 		properties := []paperedit.PropertySpec{{Name: "text", Value: paperedit.StringValue(value)}, {Name: "size", Value: paperedit.UnitValue(8.5, "pt")}, {Name: "line-height", Value: paperedit.UnitValue(11, "pt")}, {Name: "padding", Value: paperedit.UnitValue(6, "pt")}, {Name: "color", Value: paperedit.StringValue(authoringText)}, {Name: "border-width", Value: paperedit.UnitValue(0.5, "pt")}, {Name: "border-color", Value: paperedit.StringValue(authoringBorder)}}
 		if header {
 			properties = mergeProperties(properties, []paperedit.PropertySpec{
-				paperedit.PropertySpec{Name: "bold", Value: paperedit.BoolValue(true)},
-				paperedit.PropertySpec{Name: "color", Value: paperedit.StringValue("#FFFFFF")},
-				paperedit.PropertySpec{Name: "background", Value: paperedit.StringValue(authoringAccentStrong)},
+				{Name: "bold", Value: paperedit.BoolValue(true)},
+				{Name: "color", Value: paperedit.StringValue("#FFFFFF")},
+				{Name: "background", Value: paperedit.StringValue(authoringAccentStrong)},
 			})
 		}
 		return paperedit.NodeSpec{Kind: paperlang.NodeTableCell, ID: childID(suffix), Properties: properties}

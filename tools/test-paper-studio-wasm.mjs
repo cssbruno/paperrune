@@ -5,6 +5,9 @@ import vm from 'node:vm';
 
 const baseURL = process.argv[2];
 if (!baseURL) throw new Error('Paper Studio base URL is required');
+const sessionToken = process.argv[3];
+if (!sessionToken) throw new Error('Paper Studio session token is required');
+const apiHeaders = {'X-Paper-Studio-Token': sessionToken};
 
 const runtimeResponse = await fetch(`${baseURL}/wasm_exec.js`);
 if (!runtimeResponse.ok) throw new Error(`wasm_exec.js returned ${runtimeResponse.status}`);
@@ -22,10 +25,10 @@ for (let attempt = 0; attempt < 100 && !globalThis.PaperStudioWASM; attempt += 1
 if (runtimeFailure) throw runtimeFailure;
 if (!globalThis.PaperStudioWASM?.render) throw new Error('WASM renderer did not initialize');
 
-const workspaceResponse = await fetch(`${baseURL}/api/workspace`);
+const workspaceResponse = await fetch(`${baseURL}/api/workspace`, {headers: apiHeaders});
 if (!workspaceResponse.ok) throw new Error(`workspace returned ${workspaceResponse.status}`);
 const workspace = await workspaceResponse.json();
-const payloadResponse = await fetch(`${baseURL}/api/page/1.render?revision=${encodeURIComponent(workspace.revision)}`);
+const payloadResponse = await fetch(`${baseURL}/api/page/1.render?revision=${encodeURIComponent(workspace.revision)}`, {headers: apiHeaders});
 if (!payloadResponse.ok) throw new Error(`render payload returned ${payloadResponse.status}`);
 const result = await globalThis.PaperStudioWASM.render(new Uint8Array(await payloadResponse.arrayBuffer()));
 const png = result.png;

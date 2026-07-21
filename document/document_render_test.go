@@ -259,6 +259,31 @@ func TestCellFormatUTF8JustifiedSingleWordDoesNotWriteInvalidNumber(t *testing.T
 	}
 }
 
+func TestInspectRoundTripsGeneratedBOMLessUTF16BEText(t *testing.T) {
+	pdf := mustNewPDFDocument()
+	pdf.SetCompression(false)
+	fontBytes, err := os.ReadFile("../assets/static/font/DejaVuSansCondensed.ttf")
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	pdf.AddUTF8FontFromBytes("dejavu", "", fontBytes)
+	pdf.SetFont("dejavu", "", 12)
+	pdf.AddPage()
+	pdf.CellFormat(120, 8, "Relatório clínico em Português", "", 1, "L", false, 0, "")
+
+	var out bytes.Buffer
+	if err := pdf.Output(&out); err != nil {
+		t.Fatalf("Output() error = %v", err)
+	}
+	text, err := inspect.PageText(out.Bytes(), 1)
+	if err != nil {
+		t.Fatalf("PageText() error = %v", err)
+	}
+	if !strings.Contains(text, "Relatório clínico em Português") {
+		t.Fatalf("PageText() = %q, want generated Portuguese text", text)
+	}
+}
+
 func TestWriteDocumentAppliesPageTemplateMargins(t *testing.T) {
 	pdf := mustNewPDFDocument()
 	doc := layout.NewLayoutDocument()

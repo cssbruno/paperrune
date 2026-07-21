@@ -10,8 +10,11 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"embed"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,8 +23,10 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -45,6 +50,9 @@ const (
 	studioInspectionLimit    = 128
 	studioPageRailLimit      = 10_000
 	studioPageIssueLimit     = 16
+	studioSessionTokenBytes  = 32
+	studioSessionCookie      = "paper_studio_session"
+	studioSessionHeader      = "X-Paper-Studio-Token"
 )
 
 // Keep the raw WASM build artifact out of the native server binary. The
@@ -83,6 +91,9 @@ type studioDetachedPlan struct {
 type studioServer struct {
 	file             string
 	scenario         string
+	sessionToken     string
+	listenHost       string
+	listenPort       string
 	mu               sync.Mutex
 	editMu           sync.RWMutex
 	reviewMu         sync.Mutex
@@ -166,8 +177,11 @@ func main() {
 			log.Fatal(loadErr)
 		}
 	}
-	httpServer := &http.Server{Handler: server.routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
-	log.Printf("Paper Studio: http://%s", listener.Addr())
+	if err := server.setListenerAddress(listener.Addr().String()); err != nil {
+		log.Fatal(err)
+	}
+	httpServer := &http.Server{Handler: server.routes(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
+	fmt.Fprintf(os.Stderr, "Paper Studio: http://%s/#token=%s\n", listener.Addr(), url.QueryEscape(server.sessionToken))
 	if err := httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
@@ -204,13 +218,39 @@ func newStudioServer(file, scenario string) (*studioServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	server := &studioServer{file: abs, scenario: strings.TrimSpace(scenario), snapshots: make(map[string]*studioSnapshot), static: static}
+	token, err := newStudioSessionToken()
+	if err != nil {
+		return nil, err
+	}
+	server := &studioServer{file: abs, scenario: strings.TrimSpace(scenario), sessionToken: token, listenHost: "127.0.0.1", listenPort: "7331", snapshots: make(map[string]*studioSnapshot), static: static}
 	if isStudioPaperDocument(abs) {
 		if err := server.loadPaperDocument(); err != nil {
 			return nil, err
 		}
 	}
 	return server, nil
+}
+
+func newStudioSessionToken() (string, error) {
+	raw := make([]byte, studioSessionTokenBytes)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("paper-studio: create session token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func (s *studioServer) setListenerAddress(address string) error {
+	host, port, err := net.SplitHostPort(strings.TrimSpace(address))
+	if err != nil || port == "" {
+		return errors.New("paper-studio: listener address has no port")
+	}
+	host = strings.Trim(host, "[]")
+	if ip := net.ParseIP(host); ip != nil {
+		host = ip.String()
+	}
+	s.listenHost = host
+	s.listenPort = port
+	return nil
 }
 
 func newStudioStaticHandler(web fs.FS) (http.Handler, error) {
@@ -277,6 +317,7 @@ func acceptsGzip(value string) bool {
 
 func (s *studioServer) routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/session", s.handleSession)
 	mux.HandleFunc("/api/workspace", s.handleWorkspace)
 	mux.HandleFunc("/api/changes", s.handleChanges)
 	mux.HandleFunc("/api/page/", s.handlePage)
@@ -297,7 +338,127 @@ func (s *studioServer) routes() http.Handler {
 	mux.HandleFunc("/api/review", s.handleReview)
 	mux.HandleFunc("/api/review/reference", s.handleReviewReference)
 	mux.Handle("/", s.static)
-	return s.securityHeaders(mux)
+	return studioRoutes{server: s, next: s.securityHeaders(s.requestGuard(mux))}
+}
+
+type studioRoutes struct {
+	server *studioServer
+	next   http.Handler
+}
+
+func (h studioRoutes) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.next.ServeHTTP(w, r)
+}
+
+func (h studioRoutes) studioSessionToken() string {
+	return h.server.sessionToken
+}
+
+func (s *studioServer) requestGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.permitsHost(r.Host) {
+			http.Error(w, "paper-studio: forbidden host", http.StatusForbidden)
+			return
+		}
+		if r.URL.Path == "/session" {
+			if !s.permitsOrigin(r.Header.Get("Origin")) || !s.validSessionToken(r.Header.Get(studioSessionHeader)) {
+				http.Error(w, "paper-studio: forbidden session bootstrap", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			if !s.authenticatesAPIRequest(r) {
+				http.Error(w, "paper-studio: forbidden API session", http.StatusForbidden)
+				return
+			}
+			origin := r.Header.Get("Origin")
+			if origin != "" && !s.permitsOrigin(origin) {
+				http.Error(w, "paper-studio: forbidden origin", http.StatusForbidden)
+				return
+			}
+			if isStudioMutation(r) && origin == "" {
+				http.Error(w, "paper-studio: mutation origin is required", http.StatusForbidden)
+				return
+			}
+			if isStudioJSONMutation(r) && !hasJSONContentType(r.Header.Get("Content-Type")) {
+				http.Error(w, "paper-studio: application/json is required", http.StatusUnsupportedMediaType)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *studioServer) handleSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		methodNotAllowed(w, http.MethodPost)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     studioSessionCookie,
+		Value:    s.sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *studioServer) permitsHost(value string) bool {
+	host, port, err := net.SplitHostPort(strings.TrimSpace(value))
+	if err != nil || port != s.listenPort {
+		return false
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	listenIP := net.ParseIP(s.listenHost)
+	return ip != nil && listenIP != nil && ip.IsLoopback() && ip.Equal(listenIP)
+}
+
+func (s *studioServer) permitsOrigin(value string) bool {
+	origin, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || origin.Scheme != "http" || origin.User != nil || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" {
+		return false
+	}
+	return s.permitsHost(origin.Host)
+}
+
+func (s *studioServer) authenticatesAPIRequest(r *http.Request) bool {
+	if s.validSessionToken(r.Header.Get(studioSessionHeader)) {
+		return true
+	}
+	cookie, err := r.Cookie(studioSessionCookie)
+	return err == nil && s.validSessionToken(cookie.Value)
+}
+
+func (s *studioServer) validSessionToken(value string) bool {
+	return len(value) == len(s.sessionToken) && subtle.ConstantTimeCompare([]byte(value), []byte(s.sessionToken)) == 1
+}
+
+func isStudioMutation(r *http.Request) bool {
+	return r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
+}
+
+func isStudioJSONMutation(r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	switch r.URL.Path {
+	case "/api/hit", "/api/explain", "/api/inspect", "/api/edit", "/api/validate-edit", "/api/history", "/api/resources", "/api/review":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasJSONContentType(value string) bool {
+	mediaType, _, err := mime.ParseMediaType(value)
+	return err == nil && mediaType == "application/json"
 }
 
 func (s *studioServer) securityHeaders(next http.Handler) http.Handler {

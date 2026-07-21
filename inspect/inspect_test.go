@@ -94,6 +94,118 @@ func TestTextFromContentStreamPrefersActualTextWithoutDuplicatingVisibleGlyphs(t
 	}
 }
 
+func TestTextFromContentStreamHonorsEmptyActualText(t *testing.T) {
+	stream := []byte(`/Span << /ActualText () >> BDC BT (secret) Tj ET EMC`)
+	text, err := textFromContentStreamContext(context.Background(), stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "" {
+		t.Fatalf("text = %q, want empty ActualText to suppress enclosed glyphs", text)
+	}
+}
+
+func TestTextFromContentStreamKeepsOuterActualTextAcrossNestedMarkedContent(t *testing.T) {
+	stream := []byte(`/Span << /ActualText (replacement) >> BDC /Artifact BMC BT (hidden1) Tj ET EMC BT (hidden2) Tj ET EMC`)
+	text, err := textFromContentStreamContext(context.Background(), stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "replacement" {
+		t.Fatalf("text = %q, want outer ActualText replacement only", text)
+	}
+}
+
+func TestTextFromContentStreamSkipsInlineImageData(t *testing.T) {
+	stream := []byte("q BI /W 1 /H 1 /BPC 8 /CS /G ID binary EI not-an-operator BT (image-secret) Tj ET binary EI Q BT (visible) Tj ET")
+	text, err := textFromContentStreamContext(context.Background(), stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "visible" {
+		t.Fatalf("text = %q, want only text after inline image", text)
+	}
+}
+
+func TestTextFromContentStreamBoundsPendingOperands(t *testing.T) {
+	stream := bytes.Repeat([]byte("()"), 1_000_000)
+	var err error
+	allocations := testing.AllocsPerRun(3, func() {
+		_, err = textFromContentStreamContext(context.Background(), stream)
+	})
+	if !errors.Is(err, ErrTextLimitExceeded) {
+		t.Fatalf("error = %v, want ErrTextLimitExceeded", err)
+	}
+	if allocations > 1024 {
+		t.Fatalf("allocations = %.0f, want at most 1024 for one million operands", allocations)
+	}
+}
+
+func TestTextFromContentStreamBoundsArrayElements(t *testing.T) {
+	stream := append([]byte("BT ["), bytes.Repeat([]byte("()"), maxTextArrayElements+1)...)
+	stream = append(stream, []byte("] TJ ET")...)
+	if _, err := textFromContentStreamContext(context.Background(), stream); !errors.Is(err, ErrTextLimitExceeded) {
+		t.Fatalf("error = %v, want ErrTextLimitExceeded", err)
+	}
+}
+
+func TestTextFromContentStreamClearsOperandsAfterUnknownOperator(t *testing.T) {
+	text, err := textFromContentStreamContext(context.Background(), []byte(`BT (secret) XX Tj ET`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "" {
+		t.Fatalf("text = %q, want unknown operator to consume pending operands", text)
+	}
+}
+
+func TestTextFromContentStreamChecksContextInsideLongToken(t *testing.T) {
+	ctx := &cancelAfterErrChecksContext{remaining: 2}
+	stream := append([]byte{'('}, bytes.Repeat([]byte{'a'}, 32*1024)...)
+	stream = append(stream, ')')
+	if _, err := textFromContentStreamContext(ctx, stream); !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled during literal scan", err)
+	}
+}
+
+func TestDecodePDFTextBytesBOMLessUTF16BE(t *testing.T) {
+	if got := decodePDFTextBytes([]byte{0x00, 'O', 0x00, 'l', 0x00, 0xe1}); got != "Olá" {
+		t.Fatalf("decodePDFTextBytes() = %q, want Olá", got)
+	}
+}
+
+func TestDecodePDFTextBytesBOMLessUTF16BENegatives(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []byte
+	}{
+		{name: "windows-1252 with zero bytes", raw: []byte{'A', 0x00, 'B', 0x00, 'C', 0x00}},
+		{name: "short UTF-16-like bytes", raw: []byte{0x00, 'A', 0x00, 'B'}},
+		{name: "odd length", raw: []byte{0x00, 'O', 0x00, 'l', 0x00}},
+		{name: "malformed surrogate", raw: []byte{0xd8, 0x00, 0x00, 'A', 0x00, 0xe1}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if looksLikeBOMLessUTF16BE(test.raw) {
+				t.Fatalf("looksLikeBOMLessUTF16BE(% x) = true", test.raw)
+			}
+		})
+	}
+}
+
+type cancelAfterErrChecksContext struct {
+	context.Context
+	remaining int
+}
+
+func (c *cancelAfterErrChecksContext) Err() error {
+	if c.remaining == 0 {
+		return context.Canceled
+	}
+	c.remaining--
+	return nil
+}
+
 func TestFirstPageSizePointsUsesMediaBoxDimensions(t *testing.T) {
 	pdfBytes := inspectTestPDF(t)
 	pdfBytes = bytes.Replace(

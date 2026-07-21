@@ -224,7 +224,7 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 	if wasmModule.StatusCode != http.StatusOK || len(wasmModule.Body) < 8 || !bytes.Equal(wasmModule.Body[:4], []byte{'\x00', 'a', 's', 'm'}) {
 		t.Fatalf("wasm module = %d / %d bytes", wasmModule.StatusCode, len(wasmModule.Body))
 	}
-	gzipRequest, err := http.NewRequest(http.MethodGet, "http://paper-studio.local/paper-studio.wasm", nil)
+	gzipRequest, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:7331/paper-studio.wasm", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,8 @@ func TestPaperStudioChangeStreamSignalsSourceRevision(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	request := httptest.NewRequest(http.MethodGet, "/api/changes?source_revision="+workspace.SourceRevision, nil).WithContext(ctx)
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/changes?source_revision="+workspace.SourceRevision, nil).WithContext(ctx)
+	request.Header.Set(studioSessionHeader, studio.sessionToken)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,6 +545,100 @@ func TestPaperStudioListenAddressIsLoopbackOnly(t *testing.T) {
 		if err := validateStudioListenAddress(address); err == nil {
 			t.Errorf("validateStudioListenAddress(%q) accepted a non-loopback address", address)
 		}
+	}
+}
+
+func TestPaperStudioRejectsRebindingHostsAndOrigins(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "fixture.paper")
+	if err := os.WriteFile(file, []byte(studioFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	studio, err := newStudioServer(file, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := studio.routes()
+
+	tests := []struct {
+		name   string
+		host   string
+		origin string
+	}{
+		{name: "attacker host", host: "attacker.example", origin: "https://attacker.example"},
+		{name: "attacker origin", host: "127.0.0.1:7331", origin: "https://attacker.example"},
+		{name: "wrong listener port", host: "127.0.0.1:7332", origin: "http://127.0.0.1:7332"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/workspace", nil)
+			request.Host = test.host
+			request.Header.Set("Origin", test.origin)
+			request.Header.Set(studioSessionHeader, studio.sessionToken)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want 403", response.Code)
+			}
+		})
+	}
+}
+
+func TestPaperStudioRequiresSessionAndMutationMetadata(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "fixture.paper")
+	if err := os.WriteFile(file, []byte(studioFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	studio, err := newStudioServer(file, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := studio.routes()
+
+	unauthenticated := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/workspace", nil)
+	unauthenticatedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticatedResponse, unauthenticated)
+	if unauthenticatedResponse.Code != http.StatusForbidden {
+		t.Fatalf("unauthenticated status = %d, want 403", unauthenticatedResponse.Code)
+	}
+
+	bootstrap := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:7331/session", nil)
+	bootstrap.Header.Set("Origin", "http://127.0.0.1:7331")
+	bootstrap.Header.Set(studioSessionHeader, studio.sessionToken)
+	bootstrapResponse := httptest.NewRecorder()
+	handler.ServeHTTP(bootstrapResponse, bootstrap)
+	if bootstrapResponse.Code != http.StatusNoContent {
+		t.Fatalf("bootstrap status = %d, want 204", bootstrapResponse.Code)
+	}
+	cookies := bootstrapResponse.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
+		t.Fatalf("bootstrap cookies = %#v, want one HttpOnly SameSite=Strict cookie", cookies)
+	}
+
+	authenticated := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7331/api/workspace", nil)
+	authenticated.AddCookie(cookies[0])
+	authenticatedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(authenticatedResponse, authenticated)
+	if authenticatedResponse.Code != http.StatusOK {
+		t.Fatalf("cookie-authenticated status = %d, want 200", authenticatedResponse.Code)
+	}
+
+	missingOrigin := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:7331/api/edit", strings.NewReader(`{}`))
+	missingOrigin.Header.Set(studioSessionHeader, studio.sessionToken)
+	missingOrigin.Header.Set("Content-Type", "application/json")
+	missingOriginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingOriginResponse, missingOrigin)
+	if missingOriginResponse.Code != http.StatusForbidden {
+		t.Fatalf("missing-origin mutation status = %d, want 403", missingOriginResponse.Code)
+	}
+
+	wrongContentType := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:7331/api/edit", strings.NewReader(`{}`))
+	wrongContentType.Header.Set(studioSessionHeader, studio.sessionToken)
+	wrongContentType.Header.Set("Origin", "http://127.0.0.1:7331")
+	wrongContentType.Header.Set("Content-Type", "text/plain")
+	wrongContentTypeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(wrongContentTypeResponse, wrongContentType)
+	if wrongContentTypeResponse.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("wrong-content-type mutation status = %d, want 415", wrongContentTypeResponse.Code)
 	}
 }
 
@@ -734,7 +829,7 @@ type studioRecordedResponse struct {
 }
 
 func studioRequest(t *testing.T, handler http.Handler, method, target string, body io.Reader, contentType string) studioRecordedResponse {
-	request, err := http.NewRequest(method, "http://paper-studio.local"+target, body)
+	request, err := http.NewRequest(method, "http://127.0.0.1:7331"+target, body)
 	if err != nil {
 		if t != nil {
 			t.Fatal(err)
@@ -743,6 +838,12 @@ func studioRequest(t *testing.T, handler http.Handler, method, target string, bo
 	}
 	if contentType != "" {
 		request.Header.Set("Content-Type", contentType)
+	}
+	if source, ok := handler.(interface{ studioSessionToken() string }); ok {
+		request.Header.Set(studioSessionHeader, source.studioSessionToken())
+	}
+	if isStudioMutation(request) {
+		request.Header.Set("Origin", "http://127.0.0.1:7331")
 	}
 	recorder := &memoryResponseWriter{header: make(http.Header)}
 	handler.ServeHTTP(recorder, request)

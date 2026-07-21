@@ -141,7 +141,9 @@ make paper-studio \
   PAPER_STUDIO_FILE=examples/hello-world/hello-world.paper
 ```
 
-Open <http://127.0.0.1:7331>. Studio accepts loopback hosts only.
+Open the session URL printed by the command. Studio accepts only the exact
+loopback listener port, and its API requires the per-process token carried in
+that URL fragment.
 
 ## Packages
 

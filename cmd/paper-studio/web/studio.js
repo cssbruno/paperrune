@@ -57,6 +57,7 @@ const inspectionLayer = $('#inspection-layer');
 const overlapPicker = $('#overlap-picker');
 const selectionLayer = $('#selection-layer');
 const canvasScroll = $('#canvas-scroll');
+const studioSessionToken = new URLSearchParams(window.location.hash.slice(1)).get('token') || '';
 
 function previewRevisionLocked() {
   return PaperStudioMutationGate.revisionsLocked(
@@ -83,7 +84,9 @@ function setPreviewStale(stale) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {cache: 'no-store', ...options});
+  const headers = new Headers(options.headers || {});
+  if (studioSessionToken) headers.set('X-Paper-Studio-Token', studioSessionToken);
+  const response = await fetch(path, {cache: 'no-store', ...options, headers});
   const type = response.headers.get('content-type') || '';
   if (!response.ok) {
     const failure = type.includes('json') ? await response.json() : {error: await response.text()};
@@ -92,6 +95,16 @@ async function api(path, options = {}) {
     throw error;
   }
   return type.includes('json') ? response.json() : response;
+}
+
+async function bootstrapStudioSession() {
+  if (!studioSessionToken) throw new Error('Paper Studio session token is missing from the launch URL');
+  const response = await fetch('/session', {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {'X-Paper-Studio-Token': studioSessionToken},
+  });
+  if (!response.ok) throw new Error(`Paper Studio session bootstrap failed (${response.status})`);
 }
 
 async function refresh({quiet = false} = {}) {
@@ -2895,4 +2908,7 @@ if (typeof ResizeObserver === 'function') new ResizeObserver(resizeViewportProje
 else window.addEventListener('resize', resizeViewportProjection);
 
 syncZoomControls();
-refresh().finally(connectChangeStream);
+bootstrapStudioSession()
+  .then(() => refresh())
+  .then(connectChangeStream)
+  .catch(showFailure);

@@ -26,7 +26,9 @@ go build -o "$server_binary" ./cmd/paper-studio
 server_pid=$!
 
 attempt=0
-until curl -fsS http://127.0.0.1:17331/api/workspace >/dev/null 2>&1; do
+session_token=""
+until [ -n "$session_token" ] && curl -fsS -H "X-Paper-Studio-Token: $session_token" http://127.0.0.1:17331/api/workspace >/dev/null 2>&1; do
+	session_token=$(sed -n 's/.*#token=//p' "$server_log")
 	attempt=$((attempt + 1))
 	if [ "$attempt" -ge 100 ]; then
 		cat "$server_log"
@@ -35,4 +37,4 @@ until curl -fsS http://127.0.0.1:17331/api/workspace >/dev/null 2>&1; do
 	sleep 0.05
 done
 
-node tools/test-paper-studio-wasm.mjs http://127.0.0.1:17331
+node tools/test-paper-studio-wasm.mjs http://127.0.0.1:17331 "$session_token"

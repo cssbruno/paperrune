@@ -7,13 +7,16 @@ import {performance} from 'node:perf_hooks';
 
 const baseURL = String(process.argv[2] || '').replace(/\/$/, '');
 const sampleCount = Number(process.argv[3] || process.env.PAPER_STUDIO_BENCH_SAMPLES || 10);
+const sessionToken = process.argv[4] || '';
 if (!baseURL) throw new Error('Paper Studio base URL is required');
+if (!sessionToken) throw new Error('Paper Studio session token is required');
 if (!Number.isInteger(sampleCount) || sampleCount < 1 || sampleCount > 100) {
   throw new Error('sample count must be an integer from 1 through 100');
 }
 
 const sourceFile = process.env.PAPER_STUDIO_BENCH_SOURCE || '';
 const optionalScenario = process.env.PAPER_STUDIO_BENCH_SCENARIO || '';
+const apiHeaders = {'X-Paper-Studio-Token': sessionToken};
 
 function now() {
   return performance.now();
@@ -26,13 +29,13 @@ async function timed(operation) {
 }
 
 async function responseBytes(path) {
-  const response = await fetch(`${baseURL}${path}`, {cache: 'no-store'});
+  const response = await fetch(`${baseURL}${path}`, {cache: 'no-store', headers: apiHeaders});
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   return new Uint8Array(await response.arrayBuffer());
 }
 
 async function responseJSON(path) {
-  const response = await fetch(`${baseURL}${path}`, {cache: 'no-store'});
+  const response = await fetch(`${baseURL}${path}`, {cache: 'no-store', headers: apiHeaders});
   if (!response.ok) throw new Error(`${path} returned ${response.status}`);
   return response.json();
 }
@@ -115,7 +118,7 @@ async function readUntil(reader, marker, timeoutMilliseconds = 5000) {
 async function measureChangeNotification(workspace) {
   if (!sourceFile) return {status: 'not-run'};
   const controller = new AbortController();
-  const response = await fetch(`${baseURL}/api/changes${query({source_revision: workspace.source_revision})}`, {signal: controller.signal});
+  const response = await fetch(`${baseURL}/api/changes${query({source_revision: workspace.source_revision})}`, {signal: controller.signal, headers: apiHeaders});
   if (!response.ok || !response.body) throw new Error(`change stream returned ${response.status}`);
   const reader = response.body.getReader();
   await readUntil(reader, ': connected');

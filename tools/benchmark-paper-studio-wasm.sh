@@ -27,7 +27,9 @@ go build -o "$server_binary" ./cmd/paper-studio
 server_pid=$!
 
 attempt=0
-until curl -fsS "http://127.0.0.1:$port/api/workspace" >/dev/null 2>&1; do
+session_token=""
+until [ -n "$session_token" ] && curl -fsS -H "X-Paper-Studio-Token: $session_token" "http://127.0.0.1:$port/api/workspace" >/dev/null 2>&1; do
+	session_token=$(sed -n 's/.*#token=//p' "$server_log")
 	attempt=$((attempt + 1))
 	if [ "$attempt" -ge 200 ]; then
 		cat "$server_log"
@@ -39,8 +41,8 @@ done
 if [ -n "${PAPER_STUDIO_LATENCY_REPORT:-}" ]; then
 	mkdir -p "$(dirname "$PAPER_STUDIO_LATENCY_REPORT")"
 	PAPER_STUDIO_BENCH_SOURCE="$source_file" \
-		node tools/benchmark-paper-studio-wasm.mjs "http://127.0.0.1:$port" "$samples" | tee "$PAPER_STUDIO_LATENCY_REPORT"
+		node tools/benchmark-paper-studio-wasm.mjs "http://127.0.0.1:$port" "$samples" "$session_token" | tee "$PAPER_STUDIO_LATENCY_REPORT"
 else
 	PAPER_STUDIO_BENCH_SOURCE="$source_file" \
-		node tools/benchmark-paper-studio-wasm.mjs "http://127.0.0.1:$port" "$samples"
+		node tools/benchmark-paper-studio-wasm.mjs "http://127.0.0.1:$port" "$samples" "$session_token"
 fi
