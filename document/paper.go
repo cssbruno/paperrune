@@ -844,24 +844,37 @@ func (f *pdfDocument) planPaperTextBlocksMappedContext(ctx context.Context, doc 
 	return f.planPaperTextBlocksMappedBodiesContext(ctx, doc, mapping, nil)
 }
 
+func paperPlanningBody(doc *layout.LayoutDocument) ([]layout.Block, int, layout.RowColumnBlock, bool, error) {
+	if doc == nil {
+		return nil, 0, layout.RowColumnBlock{}, false, newTypedShadowUnsupported(typedShadowDocumentEnvelope, "layout document is nil")
+	}
+	blocks := layout.NormalizeBlocks(doc.Body)
+	if len(blocks) == 0 {
+		return nil, 0, layout.RowColumnBlock{}, false, newTypedShadowUnsupported(typedShadowDocumentEnvelope, "requires at least one text block")
+	}
+	for bodyIndex, block := range blocks {
+		container, ok := block.(layout.RowColumnBlock)
+		if !ok {
+			continue
+		}
+		if len(blocks) != 1 {
+			return nil, 0, layout.RowColumnBlock{}, false, newTypedShadowUnsupported(typedShadowBlockKind, "initial row/column planning requires the container to be the only body block")
+		}
+		return blocks, bodyIndex, container, true, nil
+	}
+	return blocks, 0, layout.RowColumnBlock{}, false, nil
+}
+
 func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, selectBody paperBodySelector) (layoutengine.LayoutPlan, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if doc == nil {
-		return layoutengine.LayoutPlan{}, newTypedShadowUnsupported(typedShadowDocumentEnvelope, "layout document is nil")
+	blocks, bodyIndex, container, rowColumn, err := paperPlanningBody(doc)
+	if err != nil {
+		return layoutengine.LayoutPlan{}, err
 	}
-	blocks := layout.NormalizeBlocks(doc.Body)
-	if len(blocks) == 0 {
-		return layoutengine.LayoutPlan{}, newTypedShadowUnsupported(typedShadowDocumentEnvelope, "requires at least one text block")
-	}
-	for bodyIndex, block := range blocks {
-		if container, ok := block.(layout.RowColumnBlock); ok {
-			if len(blocks) != 1 {
-				return layoutengine.LayoutPlan{}, newTypedShadowUnsupported(typedShadowBlockKind, "initial row/column planning requires the container to be the only body block")
-			}
-			return f.planPaperRowColumnMapped(ctx, doc, mapping, bodyIndex, container, selectBody)
-		}
+	if rowColumn {
+		return f.planPaperRowColumnMapped(ctx, doc, mapping, bodyIndex, container, selectBody)
 	}
 
 	left, top, right, bottom := typedShadowMargins(f, doc.PageTemplate.Margins)

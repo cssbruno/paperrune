@@ -73,7 +73,7 @@ func writeSBOM(binary, output, name, version string) error {
 		return err
 	}
 	encoded = append(encoded, '\n')
-	return os.WriteFile(output, encoded, 0o644)
+	return os.WriteFile(output, encoded, 0o644) // #nosec G306 -- release SBOMs are intentionally public artifacts.
 }
 
 func moduleComponent(path, version, sum, kind string) component {

@@ -71,7 +71,7 @@ func evaluateEdgeThresholds(inspection edgeCheckPDFInspection, request edgeCheck
 	if uint64(inspection.PageIssueCount) > uint64(request.maxPageIssues) {
 		return fmt.Errorf("page issue count %d exceeds maximum %d", inspection.PageIssueCount, request.maxPageIssues)
 	}
-	if uint64(inspection.PlannedPages) > uint64(request.maxPages) {
+	if inspection.PlannedPages < 0 || uint(inspection.PlannedPages) > request.maxPages { // #nosec G115 -- the negative case is rejected before conversion.
 		return fmt.Errorf("planned page count %d exceeds maximum %d", inspection.PlannedPages, request.maxPages)
 	}
 	return nil

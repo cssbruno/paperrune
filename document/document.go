@@ -23,6 +23,7 @@ func documentNew(orientationStr, unitStr, sizeStr, fontDirStr string, size Size)
 
 func documentNewWithDefaults(orientationStr, unitStr, sizeStr, fontDirStr string, size Size, defaults Defaults) (f *pdfDocument) {
 	f = new(pdfDocument)
+	f.planningCaches = new(documentPlanningCaches)
 	if orientationStr == "" {
 		orientationStr = "p"
 	} else {

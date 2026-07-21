@@ -396,7 +396,7 @@ func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		*output = defaultOutputFile(file, *format)
 	}
 	if *output != "" && *output != "-" {
-		if err := os.MkdirAll(filepath.Dir(*output), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(*output), 0o750); err != nil {
 			return commandError(*jsonMode, stdout, stderr, "render", err)
 		}
 		if err := atomicWriteOutput(*output, encoded, outputMode); err != nil {

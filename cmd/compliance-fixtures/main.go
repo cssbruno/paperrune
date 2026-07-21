@@ -238,23 +238,27 @@ func baseDocument(_, _ string) *document.Document {
 }
 
 func complianceLogoDataURI(root string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(root, "assets", "static", "image", "logo.png"))
+	rootDir, err := os.OpenRoot(root)
+	if err != nil {
+		return "", fmt.Errorf("open compliance root: %w", err)
+	}
+	defer func() { _ = rootDir.Close() }()
+	data, err := rootDir.ReadFile("assets/static/image/logo.png")
 	if err != nil {
 		return "", fmt.Errorf("read compliance logo: %w", err)
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(data), nil
 }
 
-func compliancePaperFontCatalog(fontPath, boldFontPath string) (document.PaperAssetCatalog, error) {
+func compliancePaperFontCatalog(fontPath, _ string) (document.PaperAssetCatalog, error) {
 	// Paper manifests deliberately cap each immutable resource at 512 KiB. The
 	// compact checked-in TrueType fixture covers this ASCII compliance content.
 	compact := filepath.Join(filepath.Dir(fontPath), "calligra.ttf")
-	fontPath, boldFontPath = compact, compact
 	resources := make([]document.PaperAssetResource, 0, 2)
 	for _, item := range []struct {
 		name, path, style string
 		weight            uint16
-	}{{"body-font", fontPath, "normal", 400}, {"body-font-bold", boldFontPath, "normal", 700}} {
+	}{{"body-font", compact, "normal", 400}, {"body-font-bold", compact, "normal", 700}} {
 		data, err := os.ReadFile(item.path)
 		if err != nil {
 			return document.PaperAssetCatalog{}, fmt.Errorf("read compliance font: %w", err)

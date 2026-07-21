@@ -228,7 +228,8 @@ func (f *astFormatter) writeNode(node *Node, path string, depth int) error {
 	if err := f.writeIndent(depth); err != nil {
 		return err
 	}
-	if node.Kind == NodeField {
+	switch node.Kind {
+	case NodeField:
 		if node.Optional {
 			if err := f.write("optional "); err != nil {
 				return err
@@ -253,11 +254,11 @@ func (f *astFormatter) writeNode(node *Node, path string, depth int) error {
 				return err
 			}
 		}
-	} else if node.Kind == NodeObjectType {
+	case NodeObjectType:
 		if err := f.write("object " + strings.TrimPrefix(node.ID, "@") + ":"); err != nil {
 			return err
 		}
-	} else {
+	default:
 		if err := f.write(string(node.Kind)); err != nil {
 			return err
 		}

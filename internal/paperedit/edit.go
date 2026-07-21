@@ -1265,7 +1265,8 @@ func renderNode(node NodeSpec, indent int, newline string) (string, error) {
 	var builder strings.Builder
 	pad := strings.Repeat(" ", indent)
 	builder.WriteString(pad)
-	if node.Kind == paperlang.NodeField {
+	switch node.Kind {
+	case paperlang.NodeField:
 		if node.TypeRef != "" {
 			if node.FieldType != "" || !validSchemaTypeName(node.TypeRef) {
 				return "", fmt.Errorf("custom object reference %q is invalid", node.TypeRef)
@@ -1305,14 +1306,14 @@ func renderNode(node NodeSpec, indent int, newline string) (string, error) {
 		if node.FieldType == paperlang.FieldObject || node.FieldType == paperlang.FieldList {
 			builder.WriteByte(':')
 		}
-	} else if node.Kind == paperlang.NodeObjectType {
+	case paperlang.NodeObjectType:
 		if node.FieldType != "" || node.TypeRef != "" || node.ItemType != "" || node.ItemTypeRef != "" || node.Optional {
 			return "", errors.New("custom object declarations cannot carry field type state")
 		}
 		builder.WriteString("object ")
 		builder.WriteString(strings.TrimPrefix(node.ID, "@"))
 		builder.WriteByte(':')
-	} else {
+	default:
 		if node.FieldType != "" || node.TypeRef != "" || node.ItemType != "" || node.ItemTypeRef != "" || node.Optional {
 			return "", errors.New("only schema fields can carry a field type or optional state")
 		}

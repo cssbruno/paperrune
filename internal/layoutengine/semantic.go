@@ -293,8 +293,8 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 		return err
 	}
 	fragmentIndex := newSemanticFragmentIndex(fragments, fragmentIDs)
-	var ownedDense []SemanticNodeID
-	var ownedSparse map[FragmentID]SemanticNodeID
+	ownedDense := make([]SemanticNodeID, 0)
+	ownedSparse := make(map[FragmentID]SemanticNodeID)
 	if fragmentIndex.dense {
 		ownedDense = make([]SemanticNodeID, len(fragments))
 	} else {
@@ -372,8 +372,8 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 			return planError(fmt.Sprintf("semantic_nodes[%d].attributes.link_destination", node.ID-1), "does not match an owned planned link")
 		}
 	}
-	var readDense []bool
-	var readSparse map[FragmentID]bool
+	readDense := make([]bool, 0)
+	readSparse := make(map[FragmentID]bool)
 	if fragmentIndex.dense {
 		readDense = make([]bool, len(fragments))
 	} else {
@@ -404,7 +404,7 @@ func validateSemantics(nodes []SemanticNode, associations []SemanticFragmentAsso
 		if node.Role == SemanticRoleArtifact {
 			return planIndexedError("reading_order", index, "", "artifact fragments must not appear in reading order")
 		}
-		alreadyRead := false
+		var alreadyRead bool
 		if fragmentIndex.dense {
 			alreadyRead = readDense[occurrence.Fragment-1]
 			readDense[occurrence.Fragment-1] = true

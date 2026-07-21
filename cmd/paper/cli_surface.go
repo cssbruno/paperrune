@@ -152,7 +152,7 @@ func runStudio(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if err != nil {
 		return commandError(false, stdout, stderr, "studio", err)
 	}
-	command := exec.Command(executable, resolved...) // #nosec G204 -- executable is a fixed sibling or PATH lookup; arguments are passed without a shell.
+	command := exec.Command(executable, resolved...) // #nosec G204,G702 -- executable is a fixed sibling or PATH lookup; arguments are passed without a shell.
 	command.Stdin, command.Stdout, command.Stderr = stdin, stdout, stderr
 	if err := command.Run(); err != nil {
 		var exited *exec.ExitError
@@ -172,7 +172,7 @@ func resolveStudioArgs(args []string) ([]string, error) {
 			continue
 		}
 		if !strings.HasPrefix(arg, "-") {
-			info, err := os.Stat(arg)
+			info, err := os.Stat(arg) // #nosec G703 -- this explicitly supplied CLI path is only classified as a directory before constrained project loading.
 			if err == nil && info.IsDir() {
 				project, loadErr := loadDiscoveredProject(arg)
 				if loadErr != nil {

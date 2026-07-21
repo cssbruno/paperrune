@@ -44,8 +44,8 @@ func NewDocumentWithDefaults(defaults Defaults, options ...Option) (*Document, e
 }
 
 func (d *Document) engine() *pdfDocument {
-	if d == nil {
-		return nil
+	if d == nil || d.core == nil {
+		panic("document: nil Document")
 	}
 	return d.core
 }

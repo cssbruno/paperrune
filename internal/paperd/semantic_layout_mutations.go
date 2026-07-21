@@ -731,9 +731,10 @@ func (w *Workspace) PaperSetLayoutItem(request PaperSetLayoutItemRequest) (Paper
 		value = paperedit.NumberValue(request.Factor)
 	case PaperLayoutItemAlignSelf:
 		align := strings.ToLower(strings.TrimSpace(request.Kind))
-		if align == "flex-start" {
+		switch align {
+		case "flex-start":
 			align = "start"
-		} else if align == "flex-end" {
+		case "flex-end":
 			align = "end"
 		}
 		if align != "start" && align != "center" && align != "end" && align != "stretch" || request.Points != 0 || request.Length != "" || request.Factor != 0 {

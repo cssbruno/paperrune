@@ -55,10 +55,12 @@ func appendPDFFixed(dst []byte, value layoutengine.Fixed) []byte {
 		return strconv.AppendFloat(dst, value.Points(), 'f', 10, 64)
 	}
 	negative := value < 0
-	magnitude := uint64(value)
+	var magnitude uint64
 	if negative {
-		magnitude = uint64(-(value + 1)) + 1
+		magnitude = uint64(-(value + 1)) + 1 // #nosec G115 -- the adjusted negative magnitude is non-negative and bounded above.
 		dst = append(dst, '-')
+	} else {
+		magnitude = uint64(value) // #nosec G115 -- this branch proves value is non-negative.
 	}
 	dst = strconv.AppendUint(dst, magnitude/uint64(layoutengine.FixedScale), 10)
 	dst = append(dst, '.')

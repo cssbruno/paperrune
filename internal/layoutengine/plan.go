@@ -427,7 +427,7 @@ func (p LayoutPlan) Validate() error {
 			break
 		}
 	}
-	var fragmentIDs map[FragmentID]Fragment
+	fragmentIDs := make(map[FragmentID]Fragment)
 	if !denseFragmentIDs {
 		fragmentIDs = make(map[FragmentID]Fragment, len(p.fragments))
 	}

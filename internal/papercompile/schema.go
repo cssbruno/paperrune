@@ -189,7 +189,11 @@ func analyzeSchemas(ast paperlang.AST, limits SchemaLimits) schemaAnalysis {
 		analysis.objectTypeOrder = append(analysis.objectTypeOrder, name)
 	}
 	for _, name := range analysis.objectTypeOrder {
-		analysis.ensureObjectType(name, analysis.objectTypes[name].HeaderSpan)
+		node := analysis.objectTypes[name]
+		if node == nil {
+			continue
+		}
+		analysis.ensureObjectType(name, node.HeaderSpan)
 	}
 	schemaCount := 0
 	for _, member := range ast.Root.Members {

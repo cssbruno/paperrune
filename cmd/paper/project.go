@@ -307,7 +307,7 @@ func createProject(dir, name string, template initTemplate) error {
 			return errors.New("destination directory is not empty")
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return err
 		}
 	} else {

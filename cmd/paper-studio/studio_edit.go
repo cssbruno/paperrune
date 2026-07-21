@@ -553,11 +553,12 @@ func (s *studioServer) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	expected := paperedit.SourceRevision(snapshot.source)
-	if request.Action == "undo" {
+	switch request.Action {
+	case "undo":
 		_, _, err = journal.Undo(expected)
-	} else if request.Action == "redo" {
+	case "redo":
 		_, _, err = journal.Redo(expected)
-	} else {
+	default:
 		writeStudioError(w, http.StatusBadRequest, fmt.Errorf("%w: history action must be undo or redo", errStudioInvalidEdit))
 		return
 	}
@@ -567,9 +568,10 @@ func (s *studioServer) handleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	source, revision := journal.Source()
 	if err = writeStudioSourceCAS(snapshot.file, snapshot.sourceHash, source); err != nil {
-		if request.Action == "undo" {
+		switch request.Action {
+		case "undo":
 			_, _, _ = journal.Redo(revision)
-		} else {
+		case "redo":
 			_, _, _ = journal.Undo(revision)
 		}
 		writeStudioError(w, http.StatusConflict, err)
@@ -840,11 +842,12 @@ func applyStudioSemanticMutation(workspace *paperd.Workspace, guard paperd.Paper
 			points = *request.Points
 		}
 		item := paperd.PaperSetCanvasItemRequest{Guard: guard, Property: request.Property}
-		if request.Property == "width" || request.Property == "height" {
+		switch request.Property {
+		case "width", "height":
 			item.Points = points
-		} else if request.Property == "alt" {
+		case "alt":
 			item.Text = request.Text
-		} else {
+		default:
 			item.Reference, item.TargetAnchor, item.Offset = request.Text, paperd.PaperCanvasAnchorProperty(request.Kind), points
 		}
 		return workspace.PaperSetCanvasItem(item)

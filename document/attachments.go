@@ -842,7 +842,7 @@ func (f *pdfDocument) putAttachmentsContext(ctx context.Context) {
 }
 
 // getEmbeddedFiles returns the /EmbeddedFiles name-tree catalog entry.
-func (f pdfDocument) getEmbeddedFiles() string {
+func (f *pdfDocument) getEmbeddedFiles() string {
 	var names strings.Builder
 	for i, as := range f.attachments {
 		if i > 0 {

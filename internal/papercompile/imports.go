@@ -51,7 +51,7 @@ func ImportReadLimit(ctx context.Context, fallback int64) int64 {
 	if !ok || remaining >= uint64(fallback) {
 		return fallback
 	}
-	return int64(remaining)
+	return int64(remaining) // #nosec G115 -- remaining is strictly below a non-negative int64 fallback.
 }
 
 func defaultImportLimits() ImportLimits {

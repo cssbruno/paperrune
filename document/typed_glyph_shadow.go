@@ -154,15 +154,16 @@ func (f *pdfDocument) typedCachedCoreFontResource(font fontDefinition) (layouten
 	if len(font.Cw) != 256 {
 		return typedCoreFontResource(font)
 	}
+	cache := f.planningCache()
 	key := typedCoreFontResourceCacheKey{name: font.Name, widths: &font.Cw[0], up: font.Up, ut: font.Ut}
-	if cached, ok := f.typedCoreFontResources.Load(key); ok {
+	if cached, ok := cache.typedCoreFontResources.Load(key); ok {
 		return cached.(layoutengine.CoreFontResource), nil
 	}
 	resource, err := typedCoreFontResource(font)
 	if err != nil {
 		return layoutengine.CoreFontResource{}, err
 	}
-	actual, _ := f.typedCoreFontResources.LoadOrStore(key, resource)
+	actual, _ := cache.typedCoreFontResources.LoadOrStore(key, resource)
 	return actual.(layoutengine.CoreFontResource), nil
 }
 

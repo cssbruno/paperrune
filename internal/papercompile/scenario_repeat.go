@@ -271,7 +271,7 @@ func (e *repeatExpansionContext) expandRepeat(node *paperlang.Node, prior map[*p
 		e.add("PAPER_REPEAT_MAX_ITEMS", "repeat max-items must be a positive integer", "add max-items within repeat limits", propertySpan(properties["max-items"], node.HeaderSpan))
 		return nil
 	}
-	canonicalSource := source
+	var canonicalSource string
 	var itemFields []FieldDescriptor
 	var items []paperscenario.Item
 	var err error

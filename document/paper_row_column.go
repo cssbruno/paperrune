@@ -5,6 +5,7 @@ package document
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -186,7 +187,11 @@ func (f *pdfDocument) planPaperRowColumnMappedDepth(ctx context.Context, doc *la
 			}
 			return layoutengine.LayoutPlan{}, fmt.Errorf("document: resolve row tracks: %w", probeErr)
 		}
-		measureWidths = probe.MainSizes()
+		resolvedWidths := probe.MainSizes()
+		if len(resolvedWidths) != len(measureWidths) {
+			return layoutengine.LayoutPlan{}, errors.New("document: resolved row track count does not match its children")
+		}
+		copy(measureWidths, resolvedWidths)
 	} else {
 		for index := range measureWidths {
 			measureWidths[index] = body.Width

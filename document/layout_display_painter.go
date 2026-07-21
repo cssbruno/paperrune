@@ -282,8 +282,8 @@ func plannedDisplayPageContentCapacity(projection layoutengine.LayoutPlanProject
 	pathCost := func(path layoutengine.PlannedPath) int {
 		return 32 + len(path.Segments)*72
 	}
-	commandEnd := int(uint64(page.Commands.Start) + uint64(page.Commands.Count))
-	for commandIndex := int(page.Commands.Start); commandIndex < commandEnd; commandIndex++ {
+	for commandOffset := uint32(0); commandOffset < page.Commands.Count; commandOffset++ {
+		commandIndex := page.Commands.Start + commandOffset
 		command := projection.Commands[commandIndex]
 		add(1) // command newline
 		if tagged && (command.Kind == layoutengine.CommandGlyphRun || command.Kind == layoutengine.CommandImage || command.Kind == layoutengine.CommandLink) {
@@ -326,11 +326,11 @@ func (f *pdfDocument) paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared pr
 		resources.setImage(image.key, image.info)
 		f.requirePDFVersion(image.minVersion)
 	}
-	var destinationLinks map[layoutengine.DestinationID]int
+	destinationLinks := make(map[layoutengine.DestinationID]int)
 	if len(projection.Destinations) != 0 {
 		destinationLinks = make(map[layoutengine.DestinationID]int, len(projection.Destinations))
 	}
-	var semanticElements map[layoutengine.SemanticNodeID]*taggedElement
+	semanticElements := make(map[layoutengine.SemanticNodeID]*taggedElement)
 	if f.tagged.enabled && len(projection.SemanticNodes) != 0 {
 		semanticElements = make(map[layoutengine.SemanticNodeID]*taggedElement, len(projection.SemanticNodes))
 	}
@@ -349,8 +349,8 @@ func (f *pdfDocument) paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared pr
 		_ = f.pageContentCommandBuffer(plannedDisplayPageContentCapacity(projection, page, f.tagged.enabled))
 		var previousRun layoutengine.CoreGlyphRun
 		previousRunSet := false
-		commandEnd := int(uint64(page.Commands.Start) + uint64(page.Commands.Count))
-		for commandIndex := int(page.Commands.Start); commandIndex < commandEnd; commandIndex++ {
+		for commandOffset := uint32(0); commandOffset < page.Commands.Count; commandOffset++ {
+			commandIndex := page.Commands.Start + commandOffset
 			command := projection.Commands[commandIndex]
 			switch command.Kind {
 			case layoutengine.CommandSaveState:
@@ -505,7 +505,7 @@ func (f *pdfDocument) preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx
 			}
 		}
 		for _, association := range projection.SemanticFragments {
-			semanticPaths[association.Fragment] = preparedDisplaySemanticPath(projection.SemanticNodes, association.Semantic, nil)
+			semanticPaths[association.Fragment] = preparedDisplaySemanticPath(projection.SemanticNodes, association.Semantic, make([]preparedDisplaySemantic, 0, 4))
 		}
 	}
 	if f.limits.MaxPages > 0 && len(projection.Pages) > f.limits.MaxPages {
