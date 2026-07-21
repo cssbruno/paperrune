@@ -32,7 +32,7 @@ func unixSocketPeerCredentials(connection *net.UnixConn) (unixProtocolPeer, erro
 	var controlErr error
 	err = raw.Control(func(fd uintptr) {
 		size := uint32(unsafe.Sizeof(credential))
-		_, _, errno := syscall.Syscall6(syscall.SYS_GETSOCKOPT, fd, uintptr(syscall.SOL_SOCKET), uintptr(linuxSOPeerCred), uintptr(unsafe.Pointer(&credential)), uintptr(unsafe.Pointer(&size)), 0)
+		_, _, errno := syscall.Syscall6(syscall.SYS_GETSOCKOPT, fd, uintptr(syscall.SOL_SOCKET), uintptr(linuxSOPeerCred), uintptr(unsafe.Pointer(&credential)), uintptr(unsafe.Pointer(&size)), 0) // #nosec G103 -- SO_PEERCRED requires fixed-size kernel ABI pointers; the returned size is validated below.
 		if errno != 0 {
 			controlErr = errno
 			return
