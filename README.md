@@ -30,20 +30,37 @@ From a clone, use `go run ./cmd/paper` instead of `paper`.
 document @hello:
   language: "en"
   title: "Hello"
+  schema:
+    string name
+    optional string subtitle
   page @sheet:
     margin: 36pt
     size: "A4"
     body @content:
       heading @title:
+        bind: "name"
         level: 1
-        text: "Hello, world"
+        text: "Name"
+      paragraph @subtitle:
+        bind: "subtitle"
+        bind-required: false
+        text: ""
+```
+
+`data.json`:
+
+```json
+{"name":"Ada","subtitle":"Generated from JSON"}
 ```
 
 ```sh
-paper check hello.paper
-paper render -o hello.pdf hello.paper
-paper render --format html -o hello.html hello.paper
+paper check --data data.json hello.paper
+paper render --data data.json -o hello.pdf hello.paper
+paper render --format html --data data.json -o hello.html hello.paper
 ```
+
+`subtitle` may be omitted or `null`: schema fields use `optional`; their nodes
+use `bind-required: false`.
 
 Paper is indentation-sensitive. Format with `paper fmt -w hello.paper`.
 
@@ -56,6 +73,7 @@ package main
 
 import (
 	_ "embed"
+	"encoding/json"
 	"log"
 
 	"github.com/cssbruno/paperrune/document"
@@ -64,10 +82,23 @@ import (
 //go:embed hello.paper
 var source string
 
+type Input struct {
+	Name     string `json:"name"`
+	Subtitle string `json:"subtitle,omitempty"`
+}
+
 func main() {
 	doc := document.MustNew()
 
-	if _, err := doc.WritePaper("hello.paper", source); err != nil {
+	data, err := json.Marshal(Input{
+		Name:     "Ada",
+		Subtitle: "Generated from Go",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if _, err := doc.WritePaperJSON("hello.paper", source, data); err != nil {
 		log.Fatal(err)
 	}
 	if err := doc.OutputFile("hello.pdf"); err != nil {
@@ -91,14 +122,9 @@ func main() {
 
 Run `paper COMMAND -h` for all options.
 
-## Data and assets
+## Assets
 
 ```sh
-# JSON data
-paper check --data data.json report.paper
-paper render --data data.json -o report.pdf report.paper
-
-# Assets
 paper render \
   --assets project.assets.json \
   --asset-root . \
