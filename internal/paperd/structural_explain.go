@@ -115,7 +115,7 @@ func (w *Workspace) ExplainLayoutIssue(ctx context.Context, request LayoutIssueE
 	}
 	if request.MaxItems == 0 || int(request.MaxItems) > w.limits.MaxSearchResults ||
 		request.MaxBytes == 0 || int(request.MaxBytes) > w.limits.MaxContextBytes ||
-		request.MaxWork == 0 || request.MaxWork > uint64(w.limits.MaxScenarioWork) { // #nosec G115 -- fixed-width conversion is bounded by the surrounding parser, planner, or resource invariant
+		request.MaxWork == 0 || request.MaxWork > uint64(w.limits.MaxStructuralWork) { // #nosec G115 -- fixed-width conversion is bounded by the surrounding parser, planner, or resource invariant
 		return LayoutIssueExplainResult{}, workspaceError("LAYOUT_EXPLAIN_LIMIT", "layout explanation bounds are outside configured limits", ErrLimit)
 	}
 	selector := request.Selector
@@ -165,7 +165,7 @@ func (w *Workspace) ExplainLayoutIssue(ctx context.Context, request LayoutIssueE
 		result.Source = sourceCauses(revision.compiled.Mapping, keys, request.MaxItems)
 		result.Styles = styleCauses(revision.compiled.Mapping, keys, request.MaxItems)
 	}
-	sanitizeLayoutIssueProtocol(&result)
+	sanitizeLayoutIssueOutput(&result)
 	if err := ctx.Err(); err != nil {
 		return LayoutIssueExplainResult{}, err
 	}
@@ -209,9 +209,9 @@ func (w *Workspace) exactOpenRevisionPlan(request LayoutIssueExplainRequest) (*o
 }
 
 func sanitizeLayoutTarget(target *layoutengine.ExplainLayoutTarget) {
-	target.Selector.Key = layoutengine.NodeKey(protocolIdentityOrDigest(string(target.Selector.Key)))
-	target.Selector.Instance = layoutengine.InstanceID(protocolIdentityOrDigest(string(target.Selector.Instance)))
-	target.Selector.DiagnosticCode = layoutengine.DiagnosticCode(protocolIdentityOrDigest(string(target.Selector.DiagnosticCode)))
+	target.Selector.Key = layoutengine.NodeKey(outputIdentityOrDigest(string(target.Selector.Key)))
+	target.Selector.Instance = layoutengine.InstanceID(outputIdentityOrDigest(string(target.Selector.Instance)))
+	target.Selector.DiagnosticCode = layoutengine.DiagnosticCode(outputIdentityOrDigest(string(target.Selector.DiagnosticCode)))
 	sanitizeSourceIdentity := func(identity *layoutengine.ExplainSourceIdentity) {
 		identity.Source.File = redactedOptional(identity.Source.File)
 	}
@@ -257,39 +257,52 @@ func sanitizeLayoutTarget(target *layoutengine.ExplainLayoutTarget) {
 	}
 }
 
-func sanitizeLayoutIssueProtocol(result *LayoutIssueExplainResult) {
+func sanitizeLayoutIssueOutput(result *LayoutIssueExplainResult) {
 	result.Revision.File = redactedOptional(result.Revision.File)
-	result.Selector.Key = protocolIdentityOrDigest(result.Selector.Key)
-	result.Selector.Instance = protocolIdentityOrDigest(result.Selector.Instance)
-	result.Selector.DiagnosticCode = protocolIdentityOrDigest(result.Selector.DiagnosticCode)
+	result.Selector.Key = outputIdentityOrDigest(result.Selector.Key)
+	result.Selector.Instance = outputIdentityOrDigest(result.Selector.Instance)
+	result.Selector.DiagnosticCode = outputIdentityOrDigest(result.Selector.DiagnosticCode)
 	for index := range result.Source {
-		result.Source[index].ID = protocolIdentityOrDigest(result.Source[index].ID)
-		result.Source[index].InstancePath = protocolIdentityOrDigest(result.Source[index].InstancePath)
-		result.Source[index].BindingPath = protocolIdentityOrDigest(result.Source[index].BindingPath)
+		result.Source[index].ID = outputIdentityOrDigest(result.Source[index].ID)
+		result.Source[index].InstancePath = outputIdentityOrDigest(result.Source[index].InstancePath)
+		result.Source[index].BindingPath = outputIdentityOrDigest(result.Source[index].BindingPath)
 	}
 	for index := range result.Styles {
 		style := &result.Styles[index]
-		style.Property = protocolIdentityOrDigest(style.Property)
-		style.Theme = protocolIdentityOrDigest(style.Theme)
-		style.Token = protocolIdentityOrDigest(style.Token)
+		style.Property = outputIdentityOrDigest(style.Property)
+		style.Theme = outputIdentityOrDigest(style.Theme)
+		style.Token = outputIdentityOrDigest(style.Token)
 		style.Value.String = redactedOptional(style.Value.String)
 		style.Provenance.Property.File = redactedOptional(style.Provenance.Property.File)
 		for step := range style.Provenance.Chain {
-			style.Provenance.Chain[step].Theme = protocolIdentityOrDigest(style.Provenance.Chain[step].Theme)
-			style.Provenance.Chain[step].Token = protocolIdentityOrDigest(style.Provenance.Chain[step].Token)
+			style.Provenance.Chain[step].Theme = outputIdentityOrDigest(style.Provenance.Chain[step].Theme)
+			style.Provenance.Chain[step].Token = outputIdentityOrDigest(style.Provenance.Chain[step].Token)
 			style.Provenance.Chain[step].Source.File = redactedOptional(style.Provenance.Chain[step].Source.File)
 			for scope := range style.Provenance.Chain[step].Scope {
-				style.Provenance.Chain[step].Scope[scope] = protocolIdentityOrDigest(style.Provenance.Chain[step].Scope[scope])
+				style.Provenance.Chain[step].Scope[scope] = outputIdentityOrDigest(style.Provenance.Chain[step].Scope[scope])
 			}
 		}
 	}
 }
 
-func protocolIdentityOrDigest(value string) string {
-	if value == "" || safeProtocolIdentity(value) {
+func outputIdentityOrDigest(value string) string {
+	if value == "" || safeOutputIdentity(value) {
 		return value
 	}
 	return redactedDigest(value)
+}
+
+func safeOutputIdentity(value string) bool {
+	if value == "" || len(value) > 1024 || strings.TrimSpace(value) != value {
+		return false
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || strings.ContainsRune("@_./:#[]-", r) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func redactedOptional(value string) string {

@@ -17,7 +17,7 @@ import (
 
 func retainedExplainFixture(t *testing.T, source string) (*Workspace, PaperCreateResult, PaperOpenSnapshot, PlanSnapshot) {
 	t.Helper()
-	workspace := mustWorkspace(t, Limits{MaxContextBytes: 1 << 20, MaxSearchResults: 32, MaxScenarioWork: 1_000_000})
+	workspace := mustWorkspace(t, Limits{MaxContextBytes: 1 << 20, MaxSearchResults: 32, MaxStructuralWork: 1_000_000})
 	created, err := workspace.PaperCreate(PaperCreateRequest{File: "explain.paper", Source: source})
 	if err != nil {
 		t.Fatal(err)

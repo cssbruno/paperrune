@@ -120,25 +120,22 @@ the retained first/even/odd selector state plus actual fragment regions and
 repetition state; Studio does not invent an authored master identity absent
 from the plan.
 
-## Agent transport boundary
+## Editing state ownership
 
-`internal/paperd.ProtocolServer` owns authenticated envelopes, version
-negotiation, replay rejection, capability-filtered dispatch, and redacted
-responses. Concrete transports may only add stricter boundaries; they do not
-deserialize workspace handles or bypass the dispatcher.
+PaperRune does not provide durable document version control. A source revision
+or plan revision is an exact content digest used for optimistic concurrency,
+cache identity, and stale-result rejection; it is not a stored user-visible
+version.
 
-The Unix-domain adapter uses a length-prefixed, one-request connection with
-bounded concurrency and deadlines. It refuses existing paths, requires a
-non-group/world-writable parent, creates the endpoint as `0600`, and verifies
-Linux `SO_PEERCRED` or macOS `LOCAL_PEERCRED`/`LOCAL_PEERPID` against an
-explicit UID allowlist before reading the envelope. Platforms without a proven
-peer-credential implementation fail closed. A TCP or web adapter would require
-a separately reviewed mutually authenticated TLS identity boundary; loopback
-location alone is not authority.
-The matching Unix client applies the same restricted-path checks and verifies
-the kernel-reported server UID before transmitting an authenticated envelope;
-filesystem ownership or loopback location alone is never treated as server
-identity.
+Paper Studio owns only session-level editing state, including undo and redo.
+That state exists to make local authoring usable and is not a durable revision
+repository. Long-term history, branching, collaboration, and recovery belong
+to the host application or an external system such as Git.
+
+Structured and automated edits follow the same rule as human edits: they
+consume exact source bytes plus an expected source digest and return updated
+source, diagnostics, and a bounded diff. PaperRune does not maintain a
+separate AI history or AI-specific version domain.
 
 ## Performance workflow
 

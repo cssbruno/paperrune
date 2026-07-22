@@ -6,85 +6,10 @@ package paperd
 import (
 	"encoding/json"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/cssbruno/paperrune/internal/paperedit"
 	"github.com/cssbruno/paperrune/internal/paperlang"
-	"github.com/cssbruno/paperrune/internal/paperscenario"
 )
-
-// PaperScenarioMutationGuard belongs exclusively to the scenario revision
-// domain. Open authorizes the operation but contributes no source revision to
-// the scenario compare-and-swap.
-type PaperScenarioMutationGuard struct {
-	Open           OpenHandle              `json:"-"`
-	Candidate      ScenarioCandidateHandle `json:"-"`
-	ExpectedHead   ScenarioRevisionHandle  `json:"-"`
-	ExpectedDigest string                  `json:"expected_digest"`
-	IdempotencyKey string                  `json:"idempotency_key"`
-}
-
-type PaperSetScenarioValueRequest struct {
-	Guard    PaperScenarioMutationGuard `json:"guard"`
-	Scenario string                     `json:"scenario"`
-	Path     string                     `json:"path"`
-	// Key selects one existing stable-keyed list item. Empty Key addresses an
-	// ordinary object field path and never implies a positional list index.
-	Key   string              `json:"key,omitempty"`
-	Value paperscenario.Value `json:"value"`
-}
-
-type PaperScenarioSemanticDiff struct {
-	Domain       string `json:"domain"`
-	Operation    string `json:"operation"`
-	Scenario     string `json:"scenario"`
-	Path         string `json:"path"`
-	StableKey    string `json:"stable_key,omitempty"`
-	BeforeDigest string `json:"before_digest"`
-	AfterDigest  string `json:"after_digest"`
-}
-
-type PaperScenarioMutationResult struct {
-	Candidate ScenarioCandidateSnapshot `json:"candidate"`
-	Revision  ScenarioRevisionSnapshot  `json:"revision"`
-	Applied   int                       `json:"applied"`
-	Semantic  PaperScenarioSemanticDiff `json:"semantic_diff"`
-}
-
-// PaperSetScenarioValue updates one object field or one existing stable-keyed
-// list item. It cannot publish or alter a source revision.
-func (w *Workspace) PaperSetScenarioValue(request PaperSetScenarioValueRequest) (PaperScenarioMutationResult, error) {
-	if err := w.requireEditCapability(request.Guard.Open); err != nil {
-		return PaperScenarioMutationResult{}, err
-	}
-	if request.Guard.IdempotencyKey == "" || len(request.Guard.IdempotencyKey) > w.limits.MaxQueryBytes || !utf8.ValidString(request.Guard.IdempotencyKey) {
-		return PaperScenarioMutationResult{}, workspaceError("INVALID_IDEMPOTENCY_KEY", "scenario mutation idempotency key is invalid or exceeds configured bounds", ErrInvalidQuery)
-	}
-	if request.Scenario == "" || len(request.Scenario) > w.limits.MaxQueryBytes ||
-		request.Path == "" || len(request.Path) > w.limits.MaxScenarioPathBytes ||
-		len(request.Key) > w.limits.MaxQueryBytes {
-		return PaperScenarioMutationResult{}, workspaceError("INVALID_SCENARIO_OPERATION", "scenario name, path, or stable key exceeds configured bounds", ErrInvalidQuery)
-	}
-	kind := ScenarioOperationSetValue
-	if request.Key != "" {
-		kind = ScenarioOperationReplaceListItem
-	}
-	result, err := w.ApplyScenario(ScenarioApplyRequest{
-		Candidate: request.Guard.Candidate, ExpectedHead: request.Guard.ExpectedHead,
-		ExpectedDigest: request.Guard.ExpectedDigest, IdempotencyKey: request.Guard.IdempotencyKey,
-		Operations: []ScenarioOperation{{Kind: kind, Scenario: request.Scenario, Path: request.Path, Key: request.Key, Value: request.Value}},
-	})
-	if err != nil {
-		return PaperScenarioMutationResult{}, err
-	}
-	return PaperScenarioMutationResult{
-		Candidate: result.Candidate, Revision: result.Revision, Applied: result.Applied,
-		Semantic: PaperScenarioSemanticDiff{
-			Domain: "scenario", Operation: "set_scenario_value", Scenario: request.Scenario,
-			Path: request.Path, StableKey: request.Key, BeforeDigest: request.Guard.ExpectedDigest, AfterDigest: result.Revision.Digest,
-		},
-	}, nil
-}
 
 type PaperFillSlotRequest struct {
 	Guard   PaperMutationGuard   `json:"guard"`
@@ -92,9 +17,8 @@ type PaperFillSlotRequest struct {
 	Content []paperedit.NodeSpec `json:"content"`
 }
 
-// PaperFillSlot adds the sole fill for one declared component slot. It
-// resolves the use's referenced component, validates slot type/cardinality,
-// and semantically compiles the complete candidate before publication.
+// PaperFillSlot validates one component slot fill and publishes it as a
+// transient semantic edit. It creates no durable history.
 func (w *Workspace) PaperFillSlot(request PaperFillSlotRequest) (PaperMutationResult, error) {
 	opened, revision, err := w.mutationRevision(request.Guard)
 	if err != nil {
@@ -158,22 +82,6 @@ func (w *Workspace) prepareSlotFill(revision *revisionRecord, target, slotID str
 	return paperedit.InsertNode{Parent: target, Node: fill}, []string{target, target + "/" + slotID}, nil
 }
 
-func (w *Workspace) requireEditCapability(handle OpenHandle) error {
-	if w == nil {
-		return workspaceError("INVALID_WORKSPACE", "workspace is nil", ErrInvalidHandle)
-	}
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	opened, err := w.openLocked(handle)
-	if err != nil {
-		return err
-	}
-	if opened.mode != CapabilityEdit {
-		return workspaceError("CAPABILITY_DENIED", "mutation requires an edit-capable open handle", ErrInvalidHandle)
-	}
-	return nil
-}
-
 func countNodeSpecBounded(node paperedit.NodeSpec, count *int, limit int) bool {
 	(*count)++
 	if *count > limit {
@@ -218,7 +126,7 @@ func uniqueComponentDefinition(root *paperlang.Node, id string) (*paperlang.Node
 		}
 	}
 	if found == nil {
-		return nil, workspaceError("INVALID_SLOT_FILL", "referenced component definition was not found", paperedit.ErrInvalidOperation)
+		return nil, workspaceError("INVALID_COMPONENT", "referenced component definition was not found", paperedit.ErrInvalidOperation)
 	}
 	return found, nil
 }

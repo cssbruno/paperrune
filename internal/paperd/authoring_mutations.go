@@ -26,7 +26,7 @@ type PaperInsertTemplateRequest struct {
 }
 
 // PaperInsertTemplate inserts one closed, typed starter shape beneath an
-// exact layout container. The journal renders one minimal CST insertion.
+// exact layout container. The edit renders one minimal CST insertion.
 func (w *Workspace) PaperInsertTemplate(request PaperInsertTemplateRequest) (PaperMutationResult, error) {
 	opened, revision, err := w.mutationRevision(request.Guard)
 	if err != nil {
@@ -1045,7 +1045,7 @@ func authoringNodeLifecycleAllowed(kind paperlang.NodeKind) bool {
 
 // PaperManageScenario provides the bounded lifecycle operations needed by a
 // scenario matrix after creation. Rename and delete remain source edits, so
-// they preserve comments and participate in the same exact-revision journal.
+// they preserve comments and participate in the same exact-revision edit.
 func (w *Workspace) PaperManageScenario(request PaperManageScenarioRequest) (PaperMutationResult, error) {
 	opened, revision, err := w.mutationRevision(request.Guard)
 	if err != nil {

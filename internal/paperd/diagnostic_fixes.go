@@ -13,7 +13,7 @@ import (
 	"github.com/cssbruno/paperrune/internal/paperlang"
 )
 
-// DiagnosticRemedyCode is a closed protocol allowlist. It is deliberately not
+// DiagnosticRemedyCode is a closed authoring allowlist. It is deliberately not
 // a free-form patch name or compiler diagnostic code.
 type DiagnosticRemedyCode string
 

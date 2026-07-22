@@ -113,7 +113,6 @@ properties, visibility, switches, optional data, and component selection.
 | `paper explain` | Inspect planned nodes and pages |
 | `paper capture` | Capture planned pages as SVG evidence |
 | `paper scenario` | List or inspect data scenarios |
-| `paper workflow` | Run a configured delivery workflow |
 | `paper version` | Print build and version information |
 
 Run `paper help COMMAND` for command-specific options and examples. The
@@ -128,7 +127,9 @@ paper studio examples/hello-world/hello-world.paper
 ```
 
 It listens only on loopback and protects each session with a per-process
-token. Use `--no-open` when running without a desktop browser.
+token. Undo and redo belong to that local Studio session; use Git or another
+host system for durable history and collaboration. Use `--no-open` when
+running without a desktop browser.
 
 ## Go API
 

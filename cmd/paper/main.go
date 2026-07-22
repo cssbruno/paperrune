@@ -59,7 +59,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		"capture":  runCapture,
 		"explain":  runExplain,
 		"scenario": runScenario,
-		"workflow": runWorkflow,
 		"version":  runVersion,
 	}
 	if args[0] == "help" {
@@ -97,9 +96,6 @@ Inspection:
   explain     Inspect planned nodes, pages, and layout
   capture     Capture SVG evidence
   scenario    List and inspect data scenarios
-
-Validation:
-  workflow    Execute an approved delivery workflow
 
 System:
   version     Print version and build information

@@ -14,7 +14,6 @@ Run `paper help COMMAND` for exact flags and examples.
 | `explain FILE` | Inspect plan structure | one or more of `--node`, `--key`, `--instance`, `--fragment`, `--page`; `--max-results` |
 | `capture FILE` | Capture SVG plan evidence | `--node`, `--fragment`, `--mode`, `--contact-sheet`, `--columns`, `--max-pages`, `--max-crops`, `-o`, `--json` |
 | `scenario FILE` | List or resolve scenarios | `--scenario`, `--json` |
-| `workflow FILE` | Execute an approved delivery workflow | run `paper workflow -h` for the required review inputs |
 | `version` | Print build version | `--json` |
 
 ## Shared selection options
@@ -74,7 +73,7 @@ SHA-256. Use `--json` with `-o FILE` for machine-readable render metadata.
 | Code | Meaning |
 | --- | --- |
 | `0` | Command completed successfully |
-| `1` | Parsing, validation, rendering, I/O, or workflow operation failed |
+| `1` | Parsing, validation, rendering, or I/O failed |
 | `2` | Command name, flags, or positional arguments were invalid |
 
 In JSON mode, diagnostics use standard output; process failures use standard

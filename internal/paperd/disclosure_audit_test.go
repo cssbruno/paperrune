@@ -5,19 +5,17 @@ package paperd
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"testing"
 )
 
-func TestDisclosureDenialsAreHashOnlyAuditedPersistedAndEmitted(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "state")
+func TestDisclosureDenialsAreHashOnlyAuditedAndEmitted(t *testing.T) {
 	var emitted []DisclosureAuditEntry
-	options := persistenceOptions(root)
-	options.DisclosureAuditSink = func(entry DisclosureAuditEntry) { emitted = append(emitted, entry) }
-	workspace, err := OpenWorkspace(context.Background(), options)
+	workspace, err := NewWorkspaceWithOptions(WorkspaceOptions{
+		DisclosureDomain:    DisclosureRestricted,
+		DisclosureAuditSink: func(entry DisclosureAuditEntry) { emitted = append(emitted, entry) },
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +28,8 @@ func TestDisclosureDenialsAreHashOnlyAuditedPersistedAndEmitted(t *testing.T) {
 		t.Fatalf("disclosure denial = %v", err)
 	}
 	audit, err := workspace.DisclosureAudit(8)
-	if err != nil || len(audit) != 1 || len(emitted) != 1 || audit[0] != emitted[0] || audit[0].Reason != "domain_mismatch" || !validSHA256(audit[0].RequestedHash) || !validSHA256(audit[0].ExpectedHash) {
+	if err != nil || len(audit) != 1 || len(emitted) != 1 || audit[0] != emitted[0] || audit[0].Reason != "domain_mismatch" ||
+		audit[0].RequestedHash != disclosureIdentityHash("customer-secret-domain") || audit[0].ExpectedHash != disclosureIdentityHash(string(DisclosureRestricted)) {
 		t.Fatalf("audit/emitted = %#v / %#v / %v", audit, emitted, err)
 	}
 	encoded, err := json.Marshal(audit)
@@ -39,17 +38,6 @@ func TestDisclosureDenialsAreHashOnlyAuditedPersistedAndEmitted(t *testing.T) {
 	}
 	if bytes.Contains(encoded, []byte("customer-secret-domain")) || bytes.Contains(encoded, []byte(DisclosureRestricted)) {
 		t.Fatalf("disclosure audit leaked raw domains: %s", encoded)
-	}
-	if err := workspace.SaveSnapshot(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	recovered, err := OpenWorkspace(context.Background(), options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	restored, err := recovered.DisclosureAudit(8)
-	if err != nil || len(restored) != 1 || restored[0] != audit[0] {
-		t.Fatalf("restored audit = %#v, %v", restored, err)
 	}
 }
 

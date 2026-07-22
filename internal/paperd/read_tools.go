@@ -67,11 +67,7 @@ func (w *Workspace) PaperCreate(request PaperCreateRequest) (PaperCreateResult, 
 	w.nextCandidate++
 	candidate := &candidateRecord{
 		handle: CandidateHandle{value: w.newHandle(handleCandidate, capabilityEdit, w.nextCandidate)},
-		head:   prepared.handle, idempotency: make(map[string]sourceIdempotencyRecord), acceptanceIdempotency: make(map[string]candidateAcceptanceIdempotencyRecord), expires: w.expiresAt(w.handleTTL), disclosure: w.disclosureDomain, partition: w.partition,
-	}
-	candidate.journal, err = paperedit.NewJournal(prepared.file, prepared.source, w.journalLimits())
-	if err != nil {
-		return PaperCreateResult{}, workspaceError("JOURNAL_LIMIT", "candidate working-copy journal cannot retain its initial source", ErrLimit)
+		head:   prepared.handle, idempotency: make(map[string]sourceIdempotencyRecord), expires: w.expiresAt(w.handleTTL), disclosure: w.disclosureDomain, partition: w.partition,
 	}
 	w.candidates[w.nextCandidate] = candidate
 	return PaperCreateResult{

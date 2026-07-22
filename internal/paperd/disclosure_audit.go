@@ -63,22 +63,3 @@ func (w *Workspace) DisclosureAudit(limit int) ([]DisclosureAuditEntry, error) {
 	}
 	return append([]DisclosureAuditEntry(nil), w.disclosureAudit[start:]...), nil
 }
-
-func (w *Workspace) restoreDisclosureAudit(entries []DisclosureAuditEntry, next uint64) error {
-	if len(entries) > w.limits.MaxAuthorizationAudit {
-		return workspaceError("PERSISTENCE_DISCLOSURE_AUDIT", "persisted disclosure audit exceeds configured limits", ErrLimit)
-	}
-	var previous uint64
-	for _, entry := range entries {
-		if entry.Sequence == 0 || entry.Sequence <= previous || entry.At.IsZero() || entry.At.Location() != time.UTC || !validProtocolLabel(entry.Action) || !validProtocolLabel(entry.Reason) || !validSHA256(entry.RequestedHash) || !validSHA256(entry.ExpectedHash) {
-			return workspaceError("PERSISTENCE_DISCLOSURE_AUDIT", "persisted disclosure audit is invalid", ErrPersistenceCorrupt)
-		}
-		previous = entry.Sequence
-	}
-	if (len(entries) == 0 && next != 0) || (len(entries) != 0 && next != entries[len(entries)-1].Sequence) {
-		return workspaceError("PERSISTENCE_DISCLOSURE_AUDIT", "persisted disclosure audit sequence is invalid", ErrPersistenceCorrupt)
-	}
-	w.disclosureAudit = append([]DisclosureAuditEntry(nil), entries...)
-	w.nextDisclosureAudit = next
-	return nil
-}

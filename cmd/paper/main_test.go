@@ -764,33 +764,3 @@ func TestRunInitCreatesRenderableProjects(t *testing.T) {
 		})
 	}
 }
-
-func TestRunWorkflowCompletesApprovedHeadlessEditReviewAndExport(t *testing.T) {
-	dir := t.TempDir()
-	source := filepath.Join(dir, "workflow.paper")
-	literal := filepath.Join(dir, "literal.txt")
-	output := filepath.Join(dir, "workflow.pdf")
-	if err := os.WriteFile(source, []byte(validSource), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(literal, []byte("Headless edited value"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	font := "../../assets/static/font/DejaVuSansCondensed.ttf"
-	hash := strings.Repeat("a", 64)
-	code, stdout, stderr := invoke([]string{"workflow", "--target", "@intro", "--literal-file", literal,
-		"--font", font, "-o", output, "--actor", "agent:test", "--scenario-result-hash", hash,
-		"--validator-hash", hash, "--approval-nonce", "cli-reviewer-nonce-0001", "--approve", source}, "")
-	if code != exitOK || stderr != "" || strings.Contains(stdout, "Headless edited value") ||
-		!strings.Contains(stdout, `"acceptance_hash":"`) || !strings.Contains(stdout, `"export_audit_hash":"`) {
-		t.Fatalf("workflow = %d, %q, %q", code, stdout, stderr)
-	}
-	pdf, err := os.ReadFile(output)
-	if err != nil || !bytes.HasPrefix(pdf, []byte("%PDF-")) {
-		t.Fatalf("workflow PDF = %d bytes, %v", len(pdf), err)
-	}
-	info, err := os.Stat(output)
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("workflow PDF mode = %v, %v", info, err)
-	}
-}

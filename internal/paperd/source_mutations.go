@@ -470,10 +470,9 @@ func sourceApplyFingerprint(request ApplyRequest, operations []paperedit.Operati
 	payload := struct {
 		HeadSerial    uint64                         `json:"head_serial"`
 		Revision      paperedit.Revision             `json:"revision"`
-		Group         string                         `json:"group,omitempty"`
 		Preconditions []paperedit.TargetPrecondition `json:"preconditions"`
 		Operations    []encodedOperation             `json:"operations"`
-	}{request.ExpectedHead.value.serial, request.ExpectedRevision, request.Group, ordered, encodedOperations}
+	}{request.ExpectedHead.value.serial, request.ExpectedRevision, ordered, encodedOperations}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return "", workspaceError("INVALID_OPERATION", "source mutation cannot be fingerprinted", paperedit.ErrInvalidOperation)

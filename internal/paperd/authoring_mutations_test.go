@@ -25,7 +25,7 @@ const authoringMutationFixture = `document @report:
         text: "Invoice"
 `
 
-func TestPaperInsertTemplateUsesOneJournalPatchAndPreservesTrivia(t *testing.T) {
+func TestPaperInsertTemplateUsesOnePatchAndPreservesTrivia(t *testing.T) {
 	workspace := mustWorkspace(t, Limits{})
 	guard, _, _ := mutationGuard(t, workspace, authoringMutationFixture, "@body", "insert-template", CapabilityEdit)
 	result, err := workspace.PaperInsertTemplate(PaperInsertTemplateRequest{Guard: guard, Template: "section", ID: "@summary"})

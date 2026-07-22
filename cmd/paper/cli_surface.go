@@ -34,7 +34,6 @@ var commandHelpText = map[string]commandHelp{
 	"capture":  {"Capture deterministic SVG evidence from a planned document.", "paper capture [options] FILE", []string{"paper capture -o page.svg report.paper", "paper capture --json --contact-sheet report.paper"}},
 	"explain":  {"Inspect selected nodes, fragments, instances, or pages.", "paper explain [options] FILE", []string{"paper explain --page 1 report.paper", "paper explain --key totals report.paper"}},
 	"scenario": {"List scenarios or inspect one resolved fixture.", "paper scenario [options] FILE", []string{"paper scenario report.paper", "paper scenario --scenario enterprise --json report.paper"}},
-	"workflow": {"Execute an approved document-delivery workflow.", "paper workflow [options] FILE", []string{"paper workflow -h"}},
 	"version":  {"Print PaperRune version and build information.", "paper version [--json]", []string{"paper version", "paper version --json"}},
 }
 
