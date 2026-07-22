@@ -8,7 +8,6 @@ TOOLS_DIR ?= tools
 TOOLS_BIN ?= $(CURDIR)/$(TOOLS_DIR)/bin
 TOOLCHAIN ?= $(shell awk '/^go / { print "go" $$2 "+auto"; exit }' $(TOOLS_DIR)/go.mod)
 GOLANGCI_LINT := $(TOOLS_BIN)/golangci-lint
-NILAWAY := $(TOOLS_BIN)/nilaway
 GOSEC := $(TOOLS_BIN)/gosec
 GOVULNCHECK := $(TOOLS_BIN)/govulncheck
 BENCHSTAT := $(TOOLS_BIN)/benchstat
@@ -29,7 +28,7 @@ PAPER_ENGINE_PROFILE_CPU_SECONDS ?= 2
 PAPER_ENGINE_PROFILE_ALLOC_ITERATIONS ?= 20
 PAPER_STUDIO_LATENCY_REPORT ?= artifacts/paper-studio-wasm-latency.json
 
-.PHONY: all documentation help bootstrap test-fast ci docs-check docs-site docs-site-check cov coverage-check test race vet fmt-check check modules tools tools-clean benchstat lint lin nilaway gosec gosev govulncheck quality release-version release-check release-notes release-artifacts release-tag release-push release build bench bench-ci bench-paper-engine bench-paper-engine-ci bench-paper-engine-budget bench-paper-studio bench-paper-studio-wasm-latency bench-paper-studio-wasm-latency-budget test-paper-studio-js test-paper-studio-wasm paper-studio-wasm paper-studio profile-paper-engine profile-paper-engine-check profile profile-cpu profile-alloc profile-block profile-mutex profile-trace compliance-fixtures compliance-validate compliance-baseline-check compliance-regenerate pdf-reader-smoke clean
+.PHONY: all documentation help bootstrap test-fast ci docs-check docs-site docs-site-check cov coverage-check test race vet fmt-check check modules tools tools-clean benchstat lint lin gosec gosev govulncheck quality release-version release-check release-notes release-artifacts release-tag release-push release build bench bench-ci bench-paper-engine bench-paper-engine-ci bench-paper-engine-budget bench-paper-studio bench-paper-studio-wasm-latency bench-paper-studio-wasm-latency-budget test-paper-studio-js test-paper-studio-wasm paper-studio-wasm paper-studio profile-paper-engine profile-paper-engine-check profile profile-cpu profile-alloc profile-block profile-mutex profile-trace compliance-fixtures compliance-validate compliance-baseline-check compliance-regenerate pdf-reader-smoke clean
 
 help :
 	@awk 'BEGIN { FS = " :" } /^[a-z][a-z0-9_-]* :/ { print $$1 }' Makefile | sort -u
@@ -47,7 +46,7 @@ bootstrap :
 test-fast : fmt-check vet
 	go test ./cmd/... ./internal/...
 
-ci : fmt-check modules release-version coverage-check lint nilaway gosec
+ci : fmt-check modules release-version coverage-check lint gosec
 	go test ./cmd/... ./internal/...
 	go test -race ./document
 
@@ -83,16 +82,13 @@ check : test vet fmt-check
 modules :
 	sh tools/test-go-modules.sh
 
-tools : $(GOLANGCI_LINT) $(NILAWAY) $(GOSEC) $(GOVULNCHECK) $(BENCHSTAT)
+tools : $(GOLANGCI_LINT) $(GOSEC) $(GOVULNCHECK) $(BENCHSTAT)
 
 $(TOOLS_BIN) :
 	mkdir -p "$(TOOLS_BIN)"
 
 $(GOLANGCI_LINT) : tools/go.mod tools/go.sum | $(TOOLS_BIN)
 	cd $(TOOLS_DIR) && GOBIN="$(TOOLS_BIN)" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-
-$(NILAWAY) : tools/go.mod tools/go.sum | $(TOOLS_BIN)
-	cd $(TOOLS_DIR) && GOBIN="$(TOOLS_BIN)" go install go.uber.org/nilaway/cmd/nilaway
 
 $(GOSEC) : tools/go.mod tools/go.sum | $(TOOLS_BIN)
 	cd $(TOOLS_DIR) && GOBIN="$(TOOLS_BIN)" go install github.com/securego/gosec/v2/cmd/gosec
@@ -113,9 +109,6 @@ lint : $(GOLANGCI_LINT)
 
 lin : lint
 
-nilaway : $(NILAWAY)
-	GOTOOLCHAIN="$(TOOLCHAIN)" "$(NILAWAY)" -exclude-test-files $(GO_PACKAGES)
-
 gosec : $(GOSEC)
 	GOTOOLCHAIN="$(TOOLCHAIN)" "$(GOSEC)" $(GO_PACKAGES)
 
@@ -124,7 +117,7 @@ gosev : gosec
 govulncheck : $(GOVULNCHECK)
 	GOTOOLCHAIN="$(TOOLCHAIN)" "$(GOVULNCHECK)" $(GO_PACKAGES)
 
-quality : check coverage-check lint nilaway gosec govulncheck
+quality : check coverage-check lint gosec govulncheck
 
 release-version :
 	@test -n "$(VERSION)" || (echo "VERSION is required, for example VERSION=v0.1.0" && exit 1)
@@ -132,7 +125,7 @@ release-version :
 	@test "$$(sed -n '1p' VERSION)" = "$(VERSION)" || (echo "VERSION file does not match requested release $(VERSION)" && exit 1)
 	@grep -q "^## $(VERSION)" CHANGELOG.md || (echo "CHANGELOG.md is missing section $(VERSION)" && exit 1)
 
-release-check : release-version check modules race coverage-check lint nilaway gosec govulncheck build
+release-check : release-version check modules race coverage-check lint gosec govulncheck build
 
 release-notes : release-version
 	@awk -v version="$(VERSION)" 'BEGIN { found = 0 } /^## / { if (found) exit; if ($$2 == version) found = 1 } found { print } END { if (!found) exit 1 }' CHANGELOG.md

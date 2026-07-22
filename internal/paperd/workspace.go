@@ -512,12 +512,9 @@ func (w *Workspace) Apply(request ApplyRequest) (ApplyResult, error) {
 	if editErr != nil {
 		return ApplyResult{Edit: cloneEditResult(edit)}, wrapEditError(editErr)
 	}
-	var prepared *revisionRecord
-	if edit.Applied && edit.Diff != nil {
-		prepared, err = w.prepareRevision(file, edit.Source)
-		if err != nil {
-			return ApplyResult{Edit: cloneEditResult(edit)}, err
-		}
+	prepared, err := w.prepareRevision(file, edit.Source)
+	if err != nil {
+		return ApplyResult{Edit: cloneEditResult(edit)}, err
 	}
 
 	w.mu.Lock()
