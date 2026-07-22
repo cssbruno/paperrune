@@ -25,8 +25,8 @@ export const playgroundSamples = [
 
   style @display:
     style: "@base"
-    size: 34pt
-    line-height: 38pt
+    size: 39pt
+    line-height: 42pt
     bold: true
     color: "#111A21"
 
@@ -38,38 +38,45 @@ export const playgroundSamples = [
 
   page @sheet:
     size: "A4"
-    margin: 36pt
+    margin: 54pt
     body @content:
       paragraph @masthead:
         style: "@label"
-        padding: 13pt
-        background: "#111A21"
-        color: "#F7F2E9"
-        text: "PAPERRUNE                         FIELD NOTE 01 / 2026"
+        padding-bottom: 11pt
+        border-bottom-width: 2pt
+        border-color: "#111A21"
+        color: "#111A21"
+        text: "PAPERRUNE / FIELD NOTE 01                         2026"
 
       paragraph @edition:
         style: "@label"
-        margin-top: 32pt
+        margin-top: 38pt
         text: premium ? "THE PREMIUM DOCUMENT WORKSPACE" : "THE DOCUMENT WORKSPACE"
 
       heading @title:
         level: 1
         style: "@display"
         margin-top: 8pt
-        margin-bottom: 12pt
+        padding: 22pt
+        background: "#111A21"
+        color: "#FFFFFF"
+        border-left-width: 7pt
+        border-color: "#D94F2B"
         text: name
 
       paragraph @deck:
         style: "@base"
         size: 14pt
         line-height: 21pt
+        margin-top: 16pt
         margin-bottom: 26pt
         color: "#56616A"
         text: "A page with a point of view, compiled from typed data and exact decisions."
 
       paragraph @manifesto:
         style: "@base"
-        padding: 20pt
+        padding: 15pt
+        padding-left: 18pt
         background: "#F2EEE6"
         border-left-width: 4pt
         border-color: "#D94F2B"
@@ -80,7 +87,7 @@ export const playgroundSamples = [
 
       paragraph @principles-label:
         style: "@label"
-        margin-top: 30pt
+        margin-top: 36pt
         margin-bottom: 8pt
         text: "THREE RULES FOR A SERIOUS DOCUMENT"
 
@@ -132,27 +139,27 @@ export const playgroundSamples = [
 
       paragraph @closing-label:
         style: "@label"
-        margin-top: 30pt
+        margin-top: 34pt
         text: "DESIGNED IN PAPER / RENDERED IN GO WASM"
 
       heading @closing:
         level: 2
         margin-top: 7pt
-        size: 21pt
-        line-height: 26pt
+        size: 23pt
+        line-height: 28pt
         color: "#111A21"
         text: "The browser is the press. The plan is the contract."
 
       paragraph @footer:
         style: "@small"
-        margin-top: 34pt
+        margin-top: 42pt
         padding-top: 10pt
         border-top-width: 1pt
         border-color: "#CDC7BD"
         text: "Edit the Paper source or JSON. The WebAssembly renderer rebuilds this page automatically."
 `,
     data: `{
-  "name": "The page is the product.",
+  "name": "Make the page impossible to ignore.",
   "premium": true,
   "note": "A document should feel authored, not assembled. Give it one voice, one hierarchy, and no accidental decoration."
 }`,
@@ -182,8 +189,8 @@ export const playgroundSamples = [
 
   style @display:
     style: "@base"
-    size: 31pt
-    line-height: 35pt
+    size: 34pt
+    line-height: 38pt
     bold: true
     color: "#111A21"
 
@@ -195,18 +202,18 @@ export const playgroundSamples = [
 
   page @sheet:
     size: "A4"
-    margin: 36pt
+    margin: 54pt
     body @content:
       paragraph @masthead:
         style: "@label"
-        padding: 13pt
-        background: "#111A21"
-        color: "#F7F2E9"
-        text: "PAPERRUNE                         GEOMETRY SPECIMEN / 02"
+        padding: 14pt
+        background: "#D94F2B"
+        color: "#FFFFFF"
+        text: "02 / GEOMETRY                         PAPERRUNE"
 
       paragraph @section:
         style: "@label"
-        margin-top: 30pt
+        margin-top: 36pt
         text: "LAYOUT AS AN EXPLICIT SYSTEM"
 
       heading @title:
@@ -218,35 +225,42 @@ export const playgroundSamples = [
       paragraph @intro:
         style: "@base"
         margin-top: 10pt
-        margin-bottom: 28pt
+        margin-bottom: 32pt
         size: 13pt
         line-height: 19pt
         color: "#59636B"
         text: "Fractions, physical units, and typed expressions resolve before a single pixel is painted."
 
-      row @ratio:
-        gap: compact ? 8pt : 16pt
-        height: 72pt
-        paragraph @primary:
-          width: columns * 1fr
-          style: "@display"
-          color: "#111A21"
-          text: "2fr / PRIMARY"
-        paragraph @support:
-          width: 1fr
-          style: "@display"
-          color: "#D94F2B"
-          text: "1fr"
+      table @ratio:
+        split: "avoid"
+        table-column:
+          width: 67%
+        table-column:
+          width: 33%
+        table-row:
+          cell:
+            style: "@display"
+            padding: 18pt
+            background: "#111A21"
+            color: "#FFFFFF"
+            text: columns == 2 ? "2fr / PRIMARY" : "3fr / PRIMARY"
+          cell:
+            style: "@display"
+            padding: 18pt
+            background: "#F2EEE6"
+            color: "#D94F2B"
+            text: "1fr"
 
       paragraph @formula-label:
         style: "@label"
+        margin-top: 24pt
         margin-bottom: 8pt
         text: "THE DECLARED RELATIONSHIP"
 
       paragraph @formula:
         style: "@mono"
         padding: 17pt
-        margin-bottom: 26pt
+        margin-bottom: 30pt
         background: "#111A21"
         color: "#F7F2E9"
         text: "available width - 16pt gap = 2fr primary + 1fr support"
@@ -294,7 +308,7 @@ export const playgroundSamples = [
             padding: 10pt
             border-bottom-width: 1pt
             border-color: "#CDC7BD"
-            text: "36pt"
+            text: "54pt"
           cell:
             style: "@base"
             padding: 10pt
@@ -361,7 +375,7 @@ export const playgroundSamples = [
 
       paragraph @footer:
         style: "@label"
-        margin-top: 30pt
+        margin-top: 38pt
         padding-top: 10pt
         border-top-width: 1pt
         border-color: "#CDC7BD"
@@ -396,7 +410,7 @@ export const playgroundSamples = [
 
   style @base:
     font: "Helvetica"
-    size: 9pt
+    size: 9.5pt
     line-height: 14pt
     color: "#25313A"
 
@@ -423,7 +437,7 @@ export const playgroundSamples = [
 
   page @invoice-page:
     size: "A4"
-    margin: 34pt
+    margin: 48pt
     page-numbers: true
     page-number-format: "Invoice / Page %d of {pages}"
     page-total-alias: "{pages}"
@@ -431,11 +445,13 @@ export const playgroundSamples = [
     body @invoice-content:
       paragraph @masthead:
         style: "@label"
-        padding: 13pt
-        margin-bottom: 24pt
+        padding-bottom: 12pt
+        margin-bottom: 30pt
         background: "#111A21"
         color: "#F7F2E9"
-        text: "PAPERRUNE STUDIO                   BILLING DOCUMENT / 2026"
+        border-bottom-width: 5pt
+        border-color: "#D94F2B"
+        text: "PAPERRUNE STUDIO                         BILLING / 2026"
 
       row @title-row:
         gap: 16pt
@@ -452,6 +468,12 @@ export const playgroundSamples = [
           bold: true
           align: "right"
           text: "INV-0000"
+
+      paragraph @title-gap:
+        size: 1pt
+        line-height: 20pt
+        color: "#FFFFFF"
+        text: "."
 
       table @parties:
         split: "avoid"
@@ -506,6 +528,12 @@ export const playgroundSamples = [
               color: "#697078"
               text: "Address"
 
+      paragraph @parties-gap:
+        size: 1pt
+        line-height: 14pt
+        color: "#FFFFFF"
+        text: "."
+
       table @dates:
         split: "avoid"
         table-column:
@@ -536,6 +564,12 @@ export const playgroundSamples = [
             padding: 9pt
             bold: true
             text: "Due date"
+
+      paragraph @dates-gap:
+        size: 1pt
+        line-height: 24pt
+        color: "#FFFFFF"
+        text: "."
 
       table @items-table:
         repeat-header: true
@@ -642,7 +676,7 @@ export const playgroundSamples = [
 
       paragraph @terms:
         style: "@base"
-        margin-top: 22pt
+        margin-top: 28pt
         padding-top: 10pt
         border-top-width: 1pt
         border-color: "#CDC7BD"
@@ -652,7 +686,7 @@ export const playgroundSamples = [
 
       paragraph @footer:
         style: "@label"
-        margin-top: 26pt
+        margin-top: 34pt
         text: "PAPERRUNE / TYPED BILLING / DETERMINISTIC OUTPUT"
 `,
     data: `{
@@ -699,15 +733,15 @@ export const playgroundSamples = [
 
   style @display:
     style: "@base"
-    size: 32pt
-    line-height: 36pt
+    size: 36pt
+    line-height: 40pt
     bold: true
     color: "#111A21"
 
   style @score:
     style: "@base"
-    size: 40pt
-    line-height: 44pt
+    size: 46pt
+    line-height: 50pt
     bold: true
     color: "#D94F2B"
 
@@ -741,18 +775,20 @@ export const playgroundSamples = [
 
   page @sheet:
     size: "A4"
-    margin: 36pt
+    margin: 54pt
     body @content:
       paragraph @masthead:
         style: "@label"
-        padding: 13pt
+        padding: 14pt
         background: "#111A21"
         color: "#F7F2E9"
-        text: "PAPERRUNE                         RELEASE CONTROL / BRIEF 04"
+        border-bottom-width: 5pt
+        border-color: "#D94F2B"
+        text: "04 / RELEASE CONTROL                         PAPERRUNE"
 
       paragraph @brief-label:
         style: "@label"
-        margin-top: 30pt
+        margin-top: 36pt
         text: "SHIP / HOLD DECISION"
 
       heading @product:
@@ -764,35 +800,43 @@ export const playgroundSamples = [
       paragraph @subtitle:
         style: "@base"
         margin-top: 10pt
-        margin-bottom: 26pt
+        margin-bottom: 30pt
         size: 13pt
         line-height: 19pt
         color: "#59636B"
         text: "A typed decision record for the people responsible for publication."
 
-      row @scoreboard:
-        gap: 18pt
-        height: 68pt
-        paragraph @score-value:
-          width: 1fr
-          style: "@score"
-          bind: "score"
-          format: "decimal"
-          format-locale: "en-US"
-          format-min-fraction: 0
-          format-max-fraction: 0
-          text: "0"
-        paragraph @rating:
-          width: 2fr
-          style: "@base"
-          bold: true
-          text: switch:
-            case score >= 90: "EXCELLENT / all release evidence is complete"
-            case score >= 70: "REVIEW / inspect the remaining open gate"
-            default: "AT RISK / intervention is required"
+      table @scoreboard:
+        split: "avoid"
+        table-column:
+          width: 34%
+        table-column:
+          width: 66%
+        table-row:
+          cell:
+            style: "@score"
+            padding: 16pt
+            background: "#D94F2B"
+            color: "#FFFFFF"
+            bind: "score"
+            format: "decimal"
+            format-locale: "en-US"
+            format-min-fraction: 0
+            format-max-fraction: 0
+            text: "0"
+          cell:
+            style: "@base"
+            padding: 20pt
+            background: "#F2EEE6"
+            bold: true
+            text: switch:
+              case score >= 90: "EXCELLENT / all release evidence is complete"
+              case score >= 70: "REVIEW / inspect the remaining open gate"
+              default: "AT RISK / intervention is required"
 
       paragraph @score-label:
         style: "@label"
+        margin-top: 8pt
         text: "READINESS SCORE / 100"
 
       use @decision:
@@ -810,7 +854,7 @@ export const playgroundSamples = [
 
       paragraph @gates-label:
         style: "@label"
-        margin-top: 28pt
+        margin-top: 34pt
         margin-bottom: 8pt
         text: "RELEASE GATES"
 
@@ -908,7 +952,7 @@ export const playgroundSamples = [
 
       paragraph @footer:
         style: "@label"
-        margin-top: 30pt
+        margin-top: 38pt
         padding-top: 10pt
         border-top-width: 1pt
         border-color: "#CDC7BD"
