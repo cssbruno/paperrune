@@ -79,6 +79,7 @@ func (f *pdfDocument) paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared prepa
 				return f.err
 			}
 		}
+		_ = f.pageContentCommandBuffer(plannedDisplayPageContentCapacity(prepared.projection, plannedPage, false))
 		var previousRun layoutengine.CoreGlyphRun
 		previousRunSet := false
 		commandEnd := int(plannedPage.Commands.Start + plannedPage.Commands.Count)
@@ -355,10 +356,8 @@ func appendPlannedCoreGlyphRunExactTJ(dst []byte, font fontDefinition, pageHeigh
 		if index+1 == len(run.Advances) {
 			continue
 		}
-		native := float64(font.Cw[int(code)]) * run.FontSize.Points() / 1000
-		adjustment := (native - run.Advances[index].Points()) * 1000 / run.FontSize.Points()
 		dst = append(dst, ' ')
-		dst = appendPDFNumber(dst, adjustment, 10)
+		dst = appendPDFTJAdjustment(dst, font.Cw[int(code)], run.FontSize, run.Advances[index])
 		dst = append(dst, ' ')
 	}
 	return append(dst, "] TJ ET EMC"...)

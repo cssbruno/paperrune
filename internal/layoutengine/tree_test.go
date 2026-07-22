@@ -129,6 +129,13 @@ func TestCanonicalTreeRejectsCollisionsLimitsOverflowAndCancellation(t *testing.
 	if _, err := NewCanonicalTree(context.Background(), input, CanonicalTreeLimits{}); !errors.Is(err, ErrCanonicalTreeInvalid) {
 		t.Fatalf("parent overflow = %v", err)
 	}
+	input = canonicalTreeFixture()
+	invalidStyle := *input.Nodes[1].Style
+	invalidStyle.FontSize = -1
+	input.Nodes[1].Style = &invalidStyle
+	if _, err := NewCanonicalTree(context.Background(), input, CanonicalTreeLimits{}); !errors.Is(err, ErrCanonicalTreeInvalid) {
+		t.Fatalf("negative font size = %v", err)
+	}
 }
 
 func TestCanonicalTreeConcurrentReadersAreStable(t *testing.T) {

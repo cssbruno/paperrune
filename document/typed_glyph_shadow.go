@@ -20,6 +20,8 @@ type coreFontMetricsDigestInput struct {
 	Face               layoutengine.CoreFontFace `json:"face"`
 	BaseFont           string                    `json:"base_font"`
 	Encoding           string                    `json:"encoding"`
+	Ascent             int16                     `json:"ascent"`
+	Descent            int16                     `json:"descent"`
 	UnderlinePosition  int                       `json:"underline_position"`
 	UnderlineThickness int                       `json:"underline_thickness"`
 	Widths             []int                     `json:"widths"`
@@ -72,7 +74,7 @@ func (f *pdfDocument) typedLayoutFontSourcesContext(ctx context.Context, plan la
 		ctx = context.Background()
 	}
 	wanted := make(map[layoutengine.CoreFontMetricsDigest]layoutengine.EmbeddedUTF8Font)
-	for _, resource := range plan.Projection().Fonts {
+	for _, resource := range plan.ReadOnlyProjection().Fonts {
 		if resource.EmbeddedUTF8 != nil {
 			wanted[resource.EmbeddedUTF8.Digest] = *resource.EmbeddedUTF8
 		}
@@ -128,8 +130,13 @@ func typedCoreFontResource(font fontDefinition) (layoutengine.CoreFontResource, 
 			return layoutengine.CoreFontResource{}, fmt.Errorf("core font width %d is negative", index)
 		}
 	}
+	vertical, ok := face.VerticalMetrics()
+	if !ok {
+		return layoutengine.CoreFontResource{}, errors.New("canonical PDF core font has no vertical metrics")
+	}
 	encoded, err := json.Marshal(coreFontMetricsDigestInput{
-		SchemaVersion: 1, Face: face, BaseFont: font.Name, Encoding: encoding,
+		SchemaVersion: 2, Face: face, BaseFont: font.Name, Encoding: encoding,
+		Ascent: vertical.Ascent, Descent: vertical.Descent,
 		UnderlinePosition: font.Up, UnderlineThickness: font.Ut, Widths: widths,
 	})
 	if err != nil {

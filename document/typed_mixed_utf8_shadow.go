@@ -291,14 +291,26 @@ func (f *pdfDocument) planTypedParagraphMixedTextShadowContext(ctx context.Conte
 	lineInputs := make([]layoutengine.ParagraphLineInput, len(lines))
 	lineTopUser := 0.0
 	for index, line := range lines {
-		lineHeightUser, maxFontSize := layout.ResolvedLineHeight(base), base.FontSize
-		if maxFontSize <= 0 {
-			maxFontSize = f.fontSizePt
+		lineHeightUser := layout.ResolvedLineHeight(base)
+		baseMetric, metricErr := f.mixedTextFontMetrics(base)
+		if metricErr != nil {
+			return typedLineShadowResult{}, metricErr
 		}
+		maxAscent, maxDescent, metricOK := typedFontVerticalExtents(baseMetric.font, baseMetric.fontSizeUser)
 		for cursor := line.start; cursor < line.end; cursor++ {
-			style := metrics[styles[cursor]].style
+			metric := metrics[styles[cursor]]
+			style := metric.style
 			lineHeightUser = maxFloat(lineHeightUser, layout.ResolvedLineHeight(style))
-			maxFontSize = maxFloat(maxFontSize, style.FontSize)
+			ascent, descent, ok := typedFontVerticalExtents(metric.font, metric.fontSizeUser)
+			if !ok {
+				metricOK = false
+				continue
+			}
+			maxAscent, maxDescent = maxFloat(maxAscent, ascent), maxFloat(maxDescent, descent)
+		}
+		baselineUser, baselineOK := typedMetricBaseline(lineHeightUser, maxAscent, maxDescent)
+		if !metricOK || !baselineOK {
+			return typedLineShadowResult{}, newTypedShadowUnsupported(typedShadowGeometry, fmt.Sprintf("mixed UTF-8 line %d font metrics do not fit the line box", index))
 		}
 		lineHeight, heightErr := fixedFromDocumentUnits(f, lineHeightUser)
 		if heightErr != nil || lineHeight <= 0 || lineHeight > body.Height {
@@ -322,7 +334,7 @@ func (f *pdfDocument) planTypedParagraphMixedTextShadowContext(ctx context.Conte
 		absoluteX, xErr := fixedFromDocumentUnits(f, left+offsetUser)
 		absoluteTop, topErr := fixedFromDocumentUnits(f, top+lineTopUser)
 		absoluteBottom, bottomErr := fixedFromDocumentUnits(f, top+lineTopUser+lineHeightUser)
-		absoluteBaseline, baselineErr := fixedFromDocumentUnits(f, top+lineTopUser+0.5*lineHeightUser+0.3*maxFontSize)
+		absoluteBaseline, baselineErr := fixedFromDocumentUnits(f, top+lineTopUser+baselineUser)
 		if xErr != nil || topErr != nil || bottomErr != nil || baselineErr != nil {
 			return typedLineShadowResult{}, newTypedShadowUnsupported(typedShadowGeometry, fmt.Sprintf("mixed UTF-8 line %d position is invalid", index))
 		}

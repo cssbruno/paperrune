@@ -6,7 +6,7 @@ package layoutengine
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strconv"
@@ -141,6 +141,17 @@ func NewParagraphLinePlan(input ParagraphLinePlanInput) (ParagraphLinePlan, erro
 // NewParagraphLinePlanContext validates and fingerprints the paragraph while
 // charging the cumulative request meter carried by ctx.
 func NewParagraphLinePlanContext(ctx context.Context, input ParagraphLinePlanInput) (ParagraphLinePlan, error) {
+	return newParagraphLinePlanContext(ctx, input, false)
+}
+
+// NewOwnedParagraphLinePlanContext is NewParagraphLinePlanContext with
+// explicit ownership transfer for freshly built planner input. The caller must
+// not mutate input.Lines after the call.
+func NewOwnedParagraphLinePlanContext(ctx context.Context, input ParagraphLinePlanInput) (ParagraphLinePlan, error) {
+	return newParagraphLinePlanContext(ctx, input, true)
+}
+
+func newParagraphLinePlanContext(ctx context.Context, input ParagraphLinePlanInput, takeOwnership bool) (ParagraphLinePlan, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -170,7 +181,10 @@ func NewParagraphLinePlanContext(ctx context.Context, input ParagraphLinePlanInp
 		uint64(input.Orphans) > maxInt || uint64(input.Widows) > maxInt || !input.Mode.valid() {
 		return ParagraphLinePlan{}, ErrParagraphPolicy
 	}
-	lines := cloneSlice(input.Lines)
+	lines := input.Lines
+	if !takeOwnership {
+		lines = cloneSlice(input.Lines)
+	}
 	var total Fixed
 	for i, line := range lines {
 		if line.Width < 0 || line.Height <= 0 || line.Baseline < 0 || line.Baseline > line.Height {
@@ -189,21 +203,54 @@ func NewParagraphLinePlanContext(ctx context.Context, input ParagraphLinePlanInp
 		node: input.Node, key: input.Key, instance: input.Instance, source: input.Source,
 		lines: lines, orphans: input.Orphans, widows: input.Widows, mode: input.Mode,
 	}
-	encoded, err := json.Marshal(struct {
-		Node     NodeID               `json:"node"`
-		Key      NodeKey              `json:"key"`
-		Instance InstanceID           `json:"instance"`
-		Source   SourceSpan           `json:"source"`
-		Lines    []ParagraphLineInput `json:"lines"`
-		Orphans  uint32               `json:"orphans"`
-		Widows   uint32               `json:"widows"`
-		Mode     ParagraphBreakMode   `json:"mode"`
-	}{input.Node, input.Key, input.Instance, input.Source, lines, input.Orphans, input.Widows, input.Mode})
-	if err != nil {
-		return ParagraphLinePlan{}, fmt.Errorf("layoutengine: paragraph fingerprint: %w", err)
-	}
-	plan.fingerprint = sha256.Sum256(encoded)
+	plan.fingerprint = paragraphFingerprint(input, lines)
 	return plan, nil
+}
+
+// paragraphFingerprint streams a compact, length-delimited binary identity
+// into SHA-256. Break tokens are internal and opaque, so reflecting the whole
+// paragraph through JSON only added encoding buffers and field-walking cost.
+func paragraphFingerprint(input ParagraphLinePlanInput, lines []ParagraphLineInput) [sha256.Size]byte {
+	hasher := sha256.New()
+	var number [8]byte
+	writeUint64 := func(value uint64) {
+		binary.LittleEndian.PutUint64(number[:], value)
+		_, _ = hasher.Write(number[:])
+	}
+	writeString := func(value string) {
+		writeUint64(uint64(len(value)))
+		_, _ = hasher.Write([]byte(value))
+	}
+	writePosition := func(position SourcePosition) {
+		writeUint64(position.Offset)
+		writeUint64(uint64(position.Line))
+		writeUint64(uint64(position.Column))
+	}
+	writeSource := func(source SourceSpan) {
+		writeString(source.File)
+		writePosition(source.Start)
+		writePosition(source.End)
+	}
+
+	writeString("paperrune.paragraph-break-token.v1")
+	writeUint64(uint64(input.Node))
+	writeString(string(input.Key))
+	writeString(string(input.Instance))
+	writeSource(input.Source)
+	writeUint64(uint64(len(lines)))
+	for _, line := range lines {
+		writeUint64(uint64(line.OffsetX))
+		writeUint64(uint64(line.Width))
+		writeUint64(uint64(line.Height))
+		writeUint64(uint64(line.Baseline))
+		writeSource(line.Source)
+	}
+	writeUint64(uint64(input.Orphans))
+	writeUint64(uint64(input.Widows))
+	writeUint64(uint64(input.Mode))
+	var digest [sha256.Size]byte
+	hasher.Sum(digest[:0])
+	return digest
 }
 
 // Start returns the only valid initial token for this immutable plan.
@@ -455,13 +502,30 @@ func PlanParagraphFlow(input ParagraphFlowInput) (LayoutPlan, error) {
 // PlanParagraphFlowContext propagates cancellation and one cumulative request
 // work meter through validation and every fragmentation attempt.
 func PlanParagraphFlowContext(ctx context.Context, input ParagraphFlowInput) (LayoutPlan, error) {
+	return planParagraphFlowContext(ctx, input, false)
+}
+
+// PlanOwnedParagraphFlowContext transfers ownership of the freshly built line
+// metrics while preserving the same validation and pagination behavior as
+// PlanParagraphFlowContext.
+func PlanOwnedParagraphFlowContext(ctx context.Context, input ParagraphFlowInput) (LayoutPlan, error) {
+	return planParagraphFlowContext(ctx, input, true)
+}
+
+func planParagraphFlowContext(ctx context.Context, input ParagraphFlowInput, takeOwnership bool) (LayoutPlan, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if err := validateParagraphFlowGeometry(input.PageSize, input.Body); err != nil {
 		return LayoutPlan{}, err
 	}
-	paragraph, err := NewParagraphLinePlanContext(ctx, input.ParagraphLinePlanInput)
+	var paragraph ParagraphLinePlan
+	var err error
+	if takeOwnership {
+		paragraph, err = NewOwnedParagraphLinePlanContext(ctx, input.ParagraphLinePlanInput)
+	} else {
+		paragraph, err = NewParagraphLinePlanContext(ctx, input.ParagraphLinePlanInput)
+	}
 	if err != nil {
 		return LayoutPlan{}, err
 	}
@@ -609,7 +673,7 @@ func PlanParagraphFlowContext(ctx context.Context, input ParagraphFlowInput) (La
 			},
 		})
 	}
-	return NewLayoutPlan(planInput)
+	return NewTrustedGeometryPlan(planInput)
 }
 
 func validateParagraphFlowGeometry(pageSize Size, body Rect) error {

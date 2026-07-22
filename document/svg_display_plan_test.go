@@ -346,6 +346,16 @@ func TestAttachSVGDisplayPlanTextImageAndClip(t *testing.T) {
 	if got := projection.GlyphRuns[0]; got.Codes != "OK" || got.Color != (layoutengine.CoreRGBColor{R: 17, G: 34, B: 51, Set: true}) {
 		t.Fatalf("glyph run = %+v", got)
 	}
+	fontSize := layoutengine.Fixed(8 * layoutengine.FixedScale)
+	ascent, descent, ok := layoutengine.CoreFontHelvetica.VerticalExtents(fontSize)
+	if !ok {
+		t.Fatal("Helvetica vertical metrics unavailable")
+	}
+	line := projection.Lines[0]
+	if line.Baseline-line.Bounds.Y != ascent || line.Bounds.Height != ascent+descent ||
+		projection.GlyphRuns[0].Origin.Y != line.Baseline {
+		t.Fatalf("SVG text font box = line %+v run %+v, want ascent/descent %d/%d", line, projection.GlyphRuns[0], ascent, descent)
+	}
 	images := svgDisplayImageSources(&svg)
 	captureImages := make(layoutengine.DisplaySVGImageSources, len(images))
 	for digest, encoded := range images {

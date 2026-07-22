@@ -93,6 +93,29 @@ func TestTypedMetadataAndSignatureMultiColumnGeometryMixedPlanCaptureAndPDF(t *t
 		left.BorderBox.Y != flex.BorderBox.Y || flex.BorderBox.Y != right.BorderBox.Y {
 		t.Fatalf("signature geometry = left %+v flex %+v right %+v", left.BorderBox, flex.BorderBox, right.BorderBox)
 	}
+	checkedSignatureText := false
+	for _, run := range projection.GlyphRuns {
+		line := projection.Lines[run.Line]
+		if line.Fragment != left.ID && line.Fragment != flex.ID && line.Fragment != right.ID {
+			continue
+		}
+		if line.Bounds.Height != layoutengine.Fixed(9*layoutengine.FixedScale) {
+			t.Fatalf("signature line was compressed below its declared height: %+v", line)
+		}
+		font := projection.Fonts[run.Font-1]
+		ascent, descent, ok := font.Face.VerticalExtents(run.FontSize)
+		bottom, bottomErr := line.Bounds.Bottom()
+		glyphTop, topErr := line.Baseline.Sub(ascent)
+		glyphBottom, glyphBottomErr := line.Baseline.Add(descent)
+		if !ok || bottomErr != nil || topErr != nil || glyphBottomErr != nil ||
+			glyphTop < line.Bounds.Y || glyphBottom > bottom {
+			t.Fatalf("signature glyph box escapes its line: line=%+v run=%+v ascent/descent=%d/%d", line, run, ascent, descent)
+		}
+		checkedSignatureText = true
+	}
+	if !checkedSignatureText {
+		t.Fatal("signature text runs were not retained")
+	}
 	for page, readingIndex := uint32(1), uint32(0); readingIndex < uint32(len(projection.ReadingOrder)); readingIndex++ {
 		occurrence := projection.ReadingOrder[readingIndex]
 		if occurrence.Page != page || occurrence.ReadingIndex != readingIndex {

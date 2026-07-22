@@ -796,9 +796,14 @@ func svgDisplayTextGeometry(plan layoutengine.LayoutPlan, svg *SVG, placement SV
 		default:
 			return layoutengine.LayoutPlan{}, nil, nil, nil, fmt.Errorf("element %d: %w: text anchor", index, ErrSVGDisplayPlanUnsupported)
 		}
-		top, topErr := baseline.Sub(fontSize)
-		bounds, boundsErr := layoutengine.NewRect(x, top, width, fontSize)
-		if topErr != nil || boundsErr != nil {
+		ascent, descent, metricsOK := font.Face.VerticalExtents(fontSize)
+		if !metricsOK {
+			return layoutengine.LayoutPlan{}, nil, nil, nil, fmt.Errorf("element %d: %w: text vertical metrics", index, ErrSVGDisplayPlanUnsupported)
+		}
+		top, topErr := baseline.Sub(ascent)
+		height, heightErr := ascent.Add(descent)
+		bounds, boundsErr := layoutengine.NewRect(x, top, width, height)
+		if topErr != nil || heightErr != nil || boundsErr != nil {
 			return layoutengine.LayoutPlan{}, nil, nil, nil, fmt.Errorf("element %d: %w: text bounds", index, ErrSVGDisplayPlanUnsupported)
 		}
 		advances, advanceErr := typedCoreGlyphAdvances(scratch, text.Text, width)

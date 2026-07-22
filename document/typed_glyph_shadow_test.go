@@ -54,8 +54,8 @@ func TestTypedCoreFontResourceCanonicalFacesAndDigests(t *testing.T) {
 	for _, golden := range []struct {
 		key, digest string
 	}{
-		{"helvetica", "83e2f281391b2cb70e113f03880ff75b9aa9aa70304899d24701ed2a4259bd94"},
-		{"symbol", "4f652487dcf79a1a89450997e82eff7cf29282bb37e3d287adb31593780e991a"},
+		{"helvetica", "bac4e397d6118d8be8b8b6785658282ff0345316fa22e37dcfc72ada97de7a04"},
+		{"symbol", "60c07b4e68f3bb5bdc0be49cd10e62a21d4f60040150523eb26c940e85fa4a95"},
 	} {
 		font, _ := loadCoreFontDef(golden.key)
 		resource, _ := typedCoreFontResource(font)

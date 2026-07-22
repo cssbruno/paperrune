@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
 
-  const RENDERER_VERSION = 'layoutengine/go-display-raster@6';
+  const RENDERER_VERSION = 'layoutengine/go-display-raster@7';
   const RENDER_TIMEOUT_MS = 15000;
   const MAX_PIXEL_DIMENSION = 16384;
   const MAX_PIXELS = 64 * 1024 * 1024;

@@ -104,7 +104,7 @@ func TestLayoutPlanProjectionAndHashAreDeterministic(t *testing.T) {
 	if firstHash != secondHash {
 		t.Fatalf("hashes differ: %s != %s", firstHash, secondHash)
 	}
-	if got, want := firstHash.String(), "b76f4922fd0609b7d8e3d285f4f3abf3b76a98f050d26e8302154caaa793055a"; got != want {
+	if got, want := firstHash.String(), "9a266dff20e695de23cfbf97cf521eb3729667b5a196f48c9675a7a2609bf2d2"; got != want {
 		t.Fatalf("Hash() = %s, want %s", got, want)
 	}
 }

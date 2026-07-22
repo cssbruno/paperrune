@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../web/wasm-renderer.js'), 'utf8');
-const rendererVersion = 'layoutengine/go-display-raster@6';
+const rendererVersion = 'layoutengine/go-display-raster@7';
 
 class MockWorker {
   constructor(url) {

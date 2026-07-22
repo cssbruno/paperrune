@@ -35,7 +35,7 @@ import (
 
 const (
 	DisplayRasterManifestVersion uint16 = 1
-	DisplayRasterRendererVersion        = "layoutengine/go-display-raster@6"
+	DisplayRasterRendererVersion        = "layoutengine/go-display-raster@7"
 
 	DisplayRasterHardMaxPixels      uint64 = 64 << 20
 	DisplayRasterHardMaxSourceBytes uint64 = 64 << 20
@@ -640,7 +640,7 @@ func (face *rasterSizedFace) draw(dst *image.RGBA, resource CoreFontResource, ru
 		colorValue.R, colorValue.G, colorValue.B = run.Color.R, run.Color.G, run.Color.B
 	}
 	if !resource.IsEmbeddedUTF8() {
-		return drawRasterCoreFontRun(dst, actual, run, transform, crop, colorValue, clip)
+		return drawRasterCoreFontRun(dst, actual, resource.Face, run, transform, crop, colorValue, clip)
 	}
 	x := origin.X
 	var target draw.Image = dst
@@ -669,7 +669,7 @@ func (face *rasterSizedFace) draw(dst *image.RGBA, resource CoreFontResource, ru
 // unrelated side bearings collide. Shape the substitute naturally as one run,
 // then fit only its horizontal extent to the already-planned run width. The
 // authoritative baseline, width, pagination, and hit geometry stay unchanged.
-func drawRasterCoreFontRun(dst *image.RGBA, face xfont.Face, run CoreGlyphRun, transform Transform, crop Rect, colorValue color.NRGBA, clip image.Rectangle) error {
+func drawRasterCoreFontRun(dst *image.RGBA, face xfont.Face, coreFace CoreFontFace, run CoreGlyphRun, transform Transform, crop Rect, colorValue color.NRGBA, clip image.Rectangle) error {
 	var text strings.Builder
 	text.Grow(len(run.Codes))
 	for index := 0; index < len(run.Codes); index++ {
@@ -711,9 +711,19 @@ func drawRasterCoreFontRun(dst *image.RGBA, face xfont.Face, run CoreGlyphRun, t
 	if addErr != nil {
 		return fmt.Errorf("%w: glyph run destination overflow", ErrDisplayRasterUnsupported)
 	}
-	x1 := pageToRaster26_6(xEnd, crop.X, uint32(dst.Bounds().Dx()), crop.Width)            // #nosec G115 -- fixed-width conversion is bounded by the surrounding parser, planner, or resource invariant
-	baseline := pageToRaster26_6(origin.Y, crop.Y, uint32(dst.Bounds().Dy()), crop.Height) // #nosec G115 -- fixed-width conversion is bounded by the surrounding parser, planner, or resource invariant
-	destination := image.Rect(x0.Floor(), (baseline - metrics.Ascent).Floor(), x1.Ceil(), (baseline-metrics.Ascent).Floor()+sourceHeight)
+	x1 := pageToRaster26_6(xEnd, crop.X, uint32(dst.Bounds().Dx()), crop.Width) // #nosec G115 -- fixed-width conversion is bounded by the surrounding parser, planner, or resource invariant
+	ascent, descent, ok := coreFace.VerticalExtents(run.FontSize)
+	if !ok {
+		return fmt.Errorf("%w: core font vertical metrics overflow", ErrDisplayRasterUnsupported)
+	}
+	top, topErr := origin.Y.Sub(ascent)
+	bottom, bottomErr := origin.Y.Add(descent)
+	if topErr != nil || bottomErr != nil || bottom <= top {
+		return fmt.Errorf("%w: core font vertical extent overflow", ErrDisplayRasterUnsupported)
+	}
+	y0 := pageToRaster26_6(top, crop.Y, uint32(dst.Bounds().Dy()), crop.Height)    // #nosec G115 -- fixed-width conversion is bounded by the surrounding parser, planner, or resource invariant
+	y1 := pageToRaster26_6(bottom, crop.Y, uint32(dst.Bounds().Dy()), crop.Height) // #nosec G115 -- fixed-width conversion is bounded by the surrounding parser, planner, or resource invariant
+	destination := image.Rect(x0.Floor(), y0.Floor(), x1.Ceil(), y1.Ceil())
 	if destination.Empty() || destination.Intersect(clip).Empty() {
 		return nil
 	}

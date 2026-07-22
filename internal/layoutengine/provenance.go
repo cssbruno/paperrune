@@ -18,14 +18,54 @@ type ProvenanceEntry struct {
 
 func buildCompactProvenance(fragments []Fragment, lines []PlannedLine) ([]ProvenanceEntry, []ProvenanceID, []ProvenanceID) {
 	table := make([]ProvenanceEntry, 0, len(fragments))
-	ids := make(map[ProvenanceEntry]ProvenanceID, len(fragments))
+	var maxNode NodeID
+	for _, fragment := range fragments {
+		if fragment.Node > maxNode {
+			maxNode = fragment.Node
+		}
+	}
+	var denseNodeIDs []ProvenanceID
+	var sparseNodeIDs map[NodeID]ProvenanceID
+	if uint64(maxNode) <= uint64(len(fragments))*4+1 {
+		denseNodeIDs = make([]ProvenanceID, int(maxNode)+1)
+	} else {
+		sparseNodeIDs = make(map[NodeID]ProvenanceID, len(fragments))
+	}
+	var variants map[NodeID][]ProvenanceID
+	firstForNode := func(node NodeID) ProvenanceID {
+		if denseNodeIDs != nil {
+			return denseNodeIDs[node]
+		}
+		return sparseNodeIDs[node]
+	}
+	setFirstForNode := func(node NodeID, id ProvenanceID) {
+		if denseNodeIDs != nil {
+			denseNodeIDs[node] = id
+		} else {
+			sparseNodeIDs[node] = id
+		}
+	}
 	intern := func(entry ProvenanceEntry) ProvenanceID {
-		if id := ids[entry]; id.Valid() {
-			return id
+		if first := firstForNode(entry.Node); first.Valid() {
+			if table[first-1] == entry {
+				return first
+			}
+			for _, id := range variants[entry.Node] {
+				if table[id-1] == entry {
+					return id
+				}
+			}
 		}
 		id := ProvenanceID(len(table) + 1) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 		table = append(table, entry)
-		ids[entry] = id
+		if firstForNode(entry.Node).Valid() {
+			if variants == nil {
+				variants = make(map[NodeID][]ProvenanceID)
+			}
+			variants[entry.Node] = append(variants[entry.Node], id)
+		} else {
+			setFirstForNode(entry.Node, id)
+		}
 		return id
 	}
 	fragmentRefs := make([]ProvenanceID, len(fragments))

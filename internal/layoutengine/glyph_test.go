@@ -29,9 +29,40 @@ func TestCoreGlyphPlanOwnsNestedAdvances(t *testing.T) {
 	}
 	encoded, err := plan.CanonicalJSON()
 	if err != nil || !strings.Contains(string(encoded), `"schema_version":16`) ||
-		!strings.Contains(string(encoded), `"planner_version":"layoutengine/0.1"`) ||
+		!strings.Contains(string(encoded), `"planner_version":"layoutengine/0.2"`) ||
 		!strings.Contains(string(encoded), `"glyph_runs"`) || !strings.Contains(string(encoded), `"payload":0`) {
 		t.Fatalf("CanonicalJSON() = %s, %v", encoded, err)
+	}
+}
+
+func TestCoreFontVerticalMetricsAreCanonical(t *testing.T) {
+	tests := []struct {
+		face            CoreFontFace
+		ascent, descent int16
+	}{
+		{CoreFontCourier, 629, -157},
+		{CoreFontHelvetica, 718, -207},
+		{CoreFontTimesRoman, 683, -217},
+		{CoreFontSymbol, 1010, -293},
+	}
+	for _, test := range tests {
+		metrics, ok := test.face.VerticalMetrics()
+		if !ok || metrics.Ascent != test.ascent || metrics.Descent != test.descent {
+			t.Errorf("%s metrics = %+v, %t", test.face, metrics, ok)
+		}
+	}
+	if _, ok := CoreFontFace("missing").VerticalMetrics(); ok {
+		t.Fatal("unknown core font returned vertical metrics")
+	}
+	ascent, descent, ok := CoreFontHelvetica.VerticalExtents(Fixed(10 * FixedScale))
+	if !ok || ascent != 7352 || descent != 2119 {
+		t.Fatalf("scaled Helvetica extents = %d/%d, %t", ascent, descent, ok)
+	}
+	if _, _, ok := CoreFontHelvetica.VerticalExtents(0); ok {
+		t.Fatal("zero font size returned vertical extents")
+	}
+	if _, _, ok := CoreFontHelvetica.VerticalExtents(MaxFixed); ok {
+		t.Fatal("overflowing font size returned vertical extents")
 	}
 }
 
@@ -147,6 +178,45 @@ func TestAttachCoreGlyphRunsBuildsPageCommandRanges(t *testing.T) {
 	}
 	if got := projection.Commands[0]; got.Kind != CommandGlyphRun || got.Payload != 0 || got.Fragment != 1 {
 		t.Fatalf("glyph command = %+v", got)
+	}
+}
+
+func TestAttachOwnedCoreGlyphRunsMatchesCopyingAPI(t *testing.T) {
+	input := coreGlyphPlanInput()
+	input.Pages[0].Commands = IndexRange{}
+	geometry, err := NewTrustedGeometryPlan(LayoutPlanInput{
+		Pages: input.Pages, Fragments: input.Fragments, Lines: input.Lines,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned, err := AttachOwnedCoreGlyphRuns(geometry, input.Fonts, input.GlyphRuns)
+	if err != nil {
+		t.Fatalf("AttachOwnedCoreGlyphRuns() = %v", err)
+	}
+
+	wantInput := coreGlyphPlanInput()
+	wantInput.Pages[0].Commands = IndexRange{}
+	wantGeometry, err := NewLayoutPlan(LayoutPlanInput{
+		Pages: wantInput.Pages, Fragments: wantInput.Fragments, Lines: wantInput.Lines,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := AttachCoreGlyphRuns(wantGeometry, wantInput.Fonts, wantInput.GlyphRuns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownedHash, err := owned.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantHash, err := want.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ownedHash != wantHash {
+		t.Fatalf("owned hash = %s, want %s", ownedHash, wantHash)
 	}
 }
 

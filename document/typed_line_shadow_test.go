@@ -83,10 +83,10 @@ func TestTypedParagraphLineShadowMatchesLegacyPageAllocationWithoutMutation(t *t
 	}
 	fixedMargin, _ := layoutengine.FixedFromPoints(10)
 	fixedCellMargin, _ := layoutengine.FixedFromPoints(pdf.UnitToPointConvert(pdf.cMargin))
-	fixedBaseline, _ := layoutengine.FixedFromPoints(8)
+	fixedBaseline, _ := layoutengine.FixedFromPoints(7.36)
 	if projection.Lines[0].Bounds.X != fixedMargin+fixedCellMargin ||
 		projection.Lines[0].Baseline != fixedMargin+fixedBaseline {
-		t.Fatalf("first line geometry = %#v, want cell-margin x and compatibility baseline", projection.Lines[0])
+		t.Fatalf("first line geometry = %#v, want cell-margin x and metric baseline", projection.Lines[0])
 	}
 
 	pdf.WriteDocument(doc)
@@ -156,8 +156,8 @@ func TestTypedParagraphLineShadowConvertsLineGeometryAcrossUnits(t *testing.T) {
 			projection := shadow.Plan.Projection()
 			line := projection.Lines[0]
 			wantHeight, _ := layoutengine.FixedFromPoints(12)
-			wantWidth, _ := layoutengine.FixedFromPoints(12)   // two Courier 600-unit glyphs at 10pt
-			wantBaseline, _ := layoutengine.FixedFromPoints(9) // .5*12pt + .3*10pt
+			wantWidth, _ := layoutengine.FixedFromPoints(12)      // two Courier 600-unit glyphs at 10pt
+			wantBaseline, _ := layoutengine.FixedFromPoints(8.36) // centered Courier ascent/descent in 12pt
 			bodyRight, _ := projection.Fragments[0].ContentBox.Right()
 			cellMargin, _ := layoutengine.FixedFromPoints(pdf.UnitToPointConvert(pdf.cMargin))
 			if line.Bounds.Height != wantHeight || line.Bounds.Width != wantWidth ||

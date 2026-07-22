@@ -181,7 +181,10 @@ func (f *pdfDocument) planTypedParagraphLineShadowContext(ctx context.Context, d
 	// the exact metric state that produced these line widths for glyph lowering.
 	metrics := *scratch
 	lineHeightUser := layout.ResolvedLineHeight(style)
-	baselineUser := 0.5*lineHeightUser + 0.3*metrics.fontSize
+	baselineUser, baselineOK := typedFontMetricBaseline(lineHeightUser, metrics.currentFont, metrics.fontSize)
+	if !baselineOK {
+		return typedLineShadowResult{}, newTypedShadowUnsupported(typedShadowGeometry, "font metrics do not fit the line box")
+	}
 	toFixed := func(userUnits float64) (layoutengine.Fixed, error) {
 		return fixedFromDocumentUnits(f, userUnits)
 	}
@@ -192,7 +195,7 @@ func (f *pdfDocument) planTypedParagraphLineShadowContext(ctx context.Context, d
 	}
 	baseline, err := toFixed(baselineUser)
 	if err != nil || baseline < 0 || baseline > lineHeight {
-		return typedLineShadowResult{}, newTypedShadowUnsupported(typedShadowGeometry, "compatibility baseline lies outside the line box")
+		return typedLineShadowResult{}, newTypedShadowUnsupported(typedShadowGeometry, "font-metric baseline lies outside the line box")
 	}
 
 	legacyLineCounts := typedLineShadowLegacyPageLineCounts(len(wrapped.Lines), top, f.h-bottom, lineHeightUser)
@@ -249,7 +252,7 @@ func (f *pdfDocument) planTypedParagraphLineShadowContext(ctx context.Context, d
 		}
 	}
 
-	plan, err := layoutengine.PlanParagraphFlowContext(ctx, layoutengine.ParagraphFlowInput{
+	plan, err := layoutengine.PlanOwnedParagraphFlowContext(ctx, layoutengine.ParagraphFlowInput{
 		PageSize: pageSize,
 		Body:     body,
 		ParagraphLinePlanInput: layoutengine.ParagraphLinePlanInput{
@@ -310,7 +313,7 @@ func (f *pdfDocument) planTypedParagraphLineShadowContext(ctx context.Context, d
 	if len(glyphRuns) != 0 {
 		fontResources = []layoutengine.CoreFontResource{fontResource}
 	}
-	plan, err = layoutengine.AttachCoreGlyphRuns(plan, fontResources, glyphRuns)
+	plan, err = layoutengine.AttachOwnedCoreGlyphRuns(plan, fontResources, glyphRuns)
 	if err != nil {
 		return typedLineShadowResult{}, fmt.Errorf("document: attach typed paragraph glyph runs: %w", err)
 	}

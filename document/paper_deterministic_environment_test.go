@@ -66,7 +66,7 @@ func TestPlanPaperIdentityExcludesAmbientProcessEnvironment(t *testing.T) {
 		}
 	}
 	sum := sha256.Sum256(first)
-	const fixtureSHA256 = "cdf113949cec477176cc426bf0ec44973c533d72ce68a8bf41f671b0bf9757f5"
+	const fixtureSHA256 = "a57c525397aae6fc7d3b593e8130d5a6b7166c2b320b2ee70b2944a292e09fa7"
 	if got := hex.EncodeToString(sum[:]); got != fixtureSHA256 {
 		t.Fatalf("deterministic paper identity fixture hash = %s", got)
 	}

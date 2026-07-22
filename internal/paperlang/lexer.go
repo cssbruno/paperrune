@@ -51,7 +51,18 @@ type sourceLine struct {
 
 // Lex tokenizes source without applying the document-node grammar.
 func Lex(file, source string) LexResult {
-	lexer := paperLexer{file: file, source: source, indents: []int{0}, lineStarts: sourceLineStarts(source)}
+	lineStarts := sourceLineStarts(source)
+	// Paper source is line-oriented and ordinary property lines produce three to
+	// six tokens. Reserve that common case once while keeping the estimate
+	// bounded by the maximum token count implied by the source bytes.
+	tokenCapacity := len(lineStarts)*6 + 1
+	if maximum := len(source) + 1; tokenCapacity > maximum {
+		tokenCapacity = maximum
+	}
+	lexer := paperLexer{
+		file: file, source: source, indents: []int{0}, lineStarts: lineStarts,
+		tokens: make([]Token, 0, tokenCapacity),
+	}
 	for _, line := range splitSourceLines(source) {
 		lexer.lexLine(line)
 	}

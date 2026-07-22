@@ -17,7 +17,7 @@ const (
 	LayoutPlanSchemaVersion uint16 = 16
 	// PlannerVersion pins automatic measurement, fragmentation, and pagination
 	// semantics independently from the storage shape.
-	PlannerVersion = "layoutengine/0.1"
+	PlannerVersion = "layoutengine/0.2"
 	// PainterContractVersion pins the meaning of exact display commands. A
 	// painter may have its own implementation version, but it must implement
 	// this contract to consume the plan without performing layout.
@@ -421,24 +421,31 @@ func (p LayoutPlan) Validate() error {
 		return err
 	}
 	denseFragmentIDs := true
+	hasRepeatedFragments := false
 	for index, fragment := range p.fragments {
 		if fragment.ID != FragmentID(index+1) {
 			denseFragmentIDs = false
-			break
 		}
+		hasRepeatedFragments = hasRepeatedFragments || fragment.Repeated
 	}
 	fragmentIDs := make(map[FragmentID]Fragment)
 	if !denseFragmentIDs {
 		fragmentIDs = make(map[FragmentID]Fragment, len(p.fragments))
 	}
 	fragmentIndex := semanticFragmentIndex{fragments: p.fragments, sparse: fragmentIDs, dense: denseFragmentIDs}
-	fragmentLineCounts := make(map[FragmentID]uint32, len(p.fragments))
-	nodeKeys := make(map[NodeID]NodeKey)
-	keyNodes := make(map[NodeKey]NodeID)
-	seenFragmentInstances := make(map[struct {
+	fragmentLineCounts := newFragmentLineCountIndex(len(p.fragments), denseFragmentIDs)
+	nodeKeys := make(map[NodeID]NodeKey, len(p.fragments))
+	keyNodes := make(map[NodeKey]NodeID, len(p.fragments))
+	var seenFragmentInstances map[struct {
 		node     NodeID
 		instance InstanceID
-	}]struct{})
+	}]struct{}
+	if hasRepeatedFragments {
+		seenFragmentInstances = make(map[struct {
+			node     NodeID
+			instance InstanceID
+		}]struct{}, len(p.fragments))
+	}
 	for i, fragment := range p.fragments {
 		if !fragment.ID.Valid() || !fragment.Node.Valid() || !fragment.Instance.Valid() {
 			return planIndexedError("fragments", i, "", "has an absent identity")
@@ -496,7 +503,9 @@ func (p LayoutPlan) Validate() error {
 				return planIndexedError("fragments", i, "", "repeated fragment has no earlier original")
 			}
 		}
-		seenFragmentInstances[identity] = struct{}{}
+		if hasRepeatedFragments {
+			seenFragmentInstances[identity] = struct{}{}
+		}
 		if !denseFragmentIDs {
 			fragmentIDs[fragment.ID] = fragment
 		}
@@ -507,8 +516,8 @@ func (p LayoutPlan) Validate() error {
 	lineIndexes := make(map[struct {
 		node     NodeID
 		instance InstanceID
-	}]uint32)
-	closedLineFragments := make(map[FragmentID]struct{})
+	}]uint32, len(p.fragments))
+	closedLineFragments := newFragmentIDSet(len(p.fragments), denseFragmentIDs)
 	fragmentCursor, lineCursor, commandCursor := 0, 0, 0
 	commandPages := make([]uint32, len(p.commands))
 	for i, page := range p.pages {
@@ -541,11 +550,11 @@ func (p LayoutPlan) Validate() error {
 				return planIndexedError("lines", j, "", "references a missing or cross-page fragment")
 			}
 			if activeLineFragment != line.Fragment {
-				if _, closed := closedLineFragments[line.Fragment]; closed {
+				if closedLineFragments.contains(line.Fragment) {
 					return planIndexedError("lines", j, "", "returns to a non-contiguous fragment line group")
 				}
 				if activeLineFragment.Valid() {
-					closedLineFragments[activeLineFragment] = struct{}{}
+					closedLineFragments.add(activeLineFragment)
 				}
 				activeLineFragment = line.Fragment
 			}
@@ -564,7 +573,7 @@ func (p LayoutPlan) Validate() error {
 				instance InstanceID
 			}{fragment.Node, fragment.Instance}
 			if fragment.Repeated {
-				want := fragmentLineCounts[line.Fragment]
+				want := fragmentLineCounts.get(line.Fragment)
 				if line.Index != want {
 					return planIndexedError("lines", j, "", fmt.Sprintf("repeated fragment line index is %d, want %d", line.Index, want))
 				}
@@ -577,10 +586,10 @@ func (p LayoutPlan) Validate() error {
 				return planIndexedError("lines", j, "", "first paragraph line index is not zero")
 			}
 			lineIndexes[identity] = line.Index
-			fragmentLineCounts[line.Fragment]++
+			fragmentLineCounts.increment(line.Fragment)
 		}
 		if activeLineFragment.Valid() {
-			closedLineFragments[activeLineFragment] = struct{}{}
+			closedLineFragments.add(activeLineFragment)
 		}
 		lineCursor = lineEnd
 
@@ -900,16 +909,71 @@ type planParagraphIdentity struct {
 	instance InstanceID
 }
 
+type fragmentLineCountIndex struct {
+	dense  []uint32
+	sparse map[FragmentID]uint32
+}
+
+func newFragmentLineCountIndex(fragmentCount int, dense bool) fragmentLineCountIndex {
+	if dense {
+		return fragmentLineCountIndex{dense: make([]uint32, fragmentCount+1)}
+	}
+	return fragmentLineCountIndex{sparse: make(map[FragmentID]uint32, fragmentCount)}
+}
+
+func (c fragmentLineCountIndex) get(id FragmentID) uint32 {
+	if c.dense != nil {
+		return c.dense[id]
+	}
+	return c.sparse[id]
+}
+
+func (c fragmentLineCountIndex) increment(id FragmentID) {
+	if c.dense != nil {
+		c.dense[id]++
+		return
+	}
+	c.sparse[id]++
+}
+
+type fragmentIDSet struct {
+	dense  []bool
+	sparse map[FragmentID]struct{}
+}
+
+func newFragmentIDSet(fragmentCount int, dense bool) fragmentIDSet {
+	if dense {
+		return fragmentIDSet{dense: make([]bool, fragmentCount+1)}
+	}
+	return fragmentIDSet{sparse: make(map[FragmentID]struct{}, fragmentCount)}
+}
+
+func (s fragmentIDSet) contains(id FragmentID) bool {
+	if s.dense != nil {
+		return s.dense[id]
+	}
+	_, exists := s.sparse[id]
+	return exists
+}
+
+func (s fragmentIDSet) add(id FragmentID) {
+	if s.dense != nil {
+		s.dense[id] = true
+		return
+	}
+	s.sparse[id] = struct{}{}
+}
+
 type planParagraphValidationState struct {
 	continuation FragmentContinuation
 	source       SourceSpan
 }
 
-func validateParagraphContinuations(fragments []Fragment, lineCounts map[FragmentID]uint32) error {
-	states := make(map[planParagraphIdentity]planParagraphValidationState, len(lineCounts))
-	order := make([]planParagraphIdentity, 0, len(lineCounts))
+func validateParagraphContinuations(fragments []Fragment, lineCounts fragmentLineCountIndex) error {
+	states := make(map[planParagraphIdentity]planParagraphValidationState, len(fragments))
+	order := make([]planParagraphIdentity, 0, len(fragments))
 	for _, fragment := range fragments {
-		if lineCounts[fragment.ID] == 0 {
+		if lineCounts.get(fragment.ID) == 0 {
 			continue
 		}
 		identity := planParagraphIdentity{fragment.Node, fragment.Instance}
@@ -924,7 +988,7 @@ func validateParagraphContinuations(fragments []Fragment, lineCounts map[Fragmen
 		if !exists {
 			continue
 		}
-		if lineCounts[fragment.ID] == 0 {
+		if lineCounts.get(fragment.ID) == 0 {
 			return planIndexedError("fragments", i, "", "paragraph fragment owns no planned lines")
 		}
 		if fragment.Repeated {
@@ -1242,9 +1306,9 @@ func (p LayoutPlan) CanonicalJSON() ([]byte, error) {
 
 // Hash returns the deterministic digest of CanonicalJSON.
 func (p LayoutPlan) Hash() (PlanHash, error) {
-	encoded, err := p.CanonicalJSON()
+	digest, err := canonicalJSONHash(p.ReadOnlyProjection())
 	if err != nil {
 		return PlanHash{}, err
 	}
-	return sha256.Sum256(encoded), nil
+	return PlanHash(digest), nil
 }

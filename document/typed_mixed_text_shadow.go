@@ -37,13 +37,15 @@ func typedParagraphNeedsMixedCoreShadow(paragraph layout.ParagraphBlock, f *pdfD
 }
 
 type mixedCoreFontMetrics struct {
-	style      layout.TextStyle
-	resource   layoutengine.CoreFontResource
-	fontSize   layoutengine.Fixed
-	fontSizePt float64
-	up         int
-	ut         int
-	charWidths [256]float64
+	style        layout.TextStyle
+	resource     layoutengine.CoreFontResource
+	font         fontDefinition
+	fontSize     layoutengine.Fixed
+	fontSizeUser float64
+	fontSizePt   float64
+	up           int
+	ut           int
+	charWidths   [256]float64
 }
 
 type mixedTextFontMetrics struct {
@@ -262,14 +264,26 @@ func (f *pdfDocument) planTypedParagraphMixedCoreShadowContext(ctx context.Conte
 	lineInputs := make([]layoutengine.ParagraphLineInput, len(lines))
 	lineTopUser := 0.0
 	for index, line := range lines {
-		lineHeightUser, maxFontSize := layout.ResolvedLineHeight(base), base.FontSize
-		if maxFontSize <= 0 {
-			maxFontSize = f.fontSizePt
+		lineHeightUser := layout.ResolvedLineHeight(base)
+		baseMetric, metricErr := f.mixedCoreFontMetrics(base)
+		if metricErr != nil {
+			return typedLineShadowResult{}, metricErr
 		}
+		maxAscent, maxDescent, metricOK := typedFontVerticalExtents(baseMetric.font, baseMetric.fontSizeUser)
 		for cursor := line.start; cursor < line.end; cursor++ {
-			style := metrics[styles[cursor]].style
+			metric := metrics[styles[cursor]]
+			style := metric.style
 			lineHeightUser = maxFloat(lineHeightUser, layout.ResolvedLineHeight(style))
-			maxFontSize = maxFloat(maxFontSize, style.FontSize)
+			ascent, descent, ok := typedFontVerticalExtents(metric.font, metric.fontSizeUser)
+			if !ok {
+				metricOK = false
+				continue
+			}
+			maxAscent, maxDescent = maxFloat(maxAscent, ascent), maxFloat(maxDescent, descent)
+		}
+		baselineUser, baselineOK := typedMetricBaseline(lineHeightUser, maxAscent, maxDescent)
+		if !metricOK || !baselineOK {
+			return typedLineShadowResult{}, newTypedShadowUnsupported(typedShadowGeometry, fmt.Sprintf("mixed line %d font metrics do not fit the line box", index))
 		}
 		lineHeight, heightErr := fixedFromDocumentUnits(f, lineHeightUser)
 		if heightErr != nil || lineHeight <= 0 || lineHeight > body.Height {
@@ -293,7 +307,7 @@ func (f *pdfDocument) planTypedParagraphMixedCoreShadowContext(ctx context.Conte
 		absoluteX, xErr := fixedFromDocumentUnits(f, left+offsetUser)
 		absoluteTop, topErr := fixedFromDocumentUnits(f, top+lineTopUser)
 		absoluteBottom, bottomErr := fixedFromDocumentUnits(f, top+lineTopUser+lineHeightUser)
-		absoluteBaseline, baselineErr := fixedFromDocumentUnits(f, top+lineTopUser+0.5*lineHeightUser+0.3*maxFontSize)
+		absoluteBaseline, baselineErr := fixedFromDocumentUnits(f, top+lineTopUser+baselineUser)
 		if xErr != nil || topErr != nil || bottomErr != nil || baselineErr != nil {
 			return typedLineShadowResult{}, newTypedShadowUnsupported(typedShadowGeometry, fmt.Sprintf("mixed line %d position is invalid", index))
 		}
@@ -413,8 +427,8 @@ func (f *pdfDocument) mixedCoreFontMetrics(style layout.TextStyle) (*mixedCoreFo
 		}
 	}
 	result := &mixedCoreFontMetrics{
-		style: style, resource: resource, fontSize: fontSize,
-		fontSizePt: scratch.fontSizePt, up: scratch.currentFont.Up, ut: scratch.currentFont.Ut,
+		style: style, resource: resource, font: scratch.currentFont, fontSize: fontSize,
+		fontSizeUser: scratch.fontSize, fontSizePt: scratch.fontSizePt, up: scratch.currentFont.Up, ut: scratch.currentFont.Ut,
 	}
 	if result.ut <= 0 && (style.Underline || style.StrikeThrough) {
 		return nil, newTypedShadowUnsupported(typedShadowFont, "mixed inline decoration has no canonical core-font thickness")

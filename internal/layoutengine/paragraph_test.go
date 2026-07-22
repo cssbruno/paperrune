@@ -4,6 +4,7 @@
 package layoutengine
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -422,6 +423,28 @@ func TestPlanParagraphFlowDeterminismAndSmallStateSpace(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestPlanOwnedParagraphFlowMatchesCopyingAPI(t *testing.T) {
+	copying, err := PlanParagraphFlow(testParagraphFlowInput(8, 3, 2, 2, ParagraphBreakPrefer))
+	if err != nil {
+		t.Fatalf("PlanParagraphFlow() = %v", err)
+	}
+	owned, err := PlanOwnedParagraphFlowContext(context.Background(), testParagraphFlowInput(8, 3, 2, 2, ParagraphBreakPrefer))
+	if err != nil {
+		t.Fatalf("PlanOwnedParagraphFlowContext() = %v", err)
+	}
+	copyingHash, err := copying.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownedHash, err := owned.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ownedHash != copyingHash {
+		t.Fatalf("owned hash = %s, want %s", ownedHash, copyingHash)
 	}
 }
 

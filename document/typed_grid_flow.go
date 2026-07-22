@@ -127,28 +127,6 @@ func (f *pdfDocument) measurePaperGridRow(ctx context.Context, doc *layout.Layou
 			if measureErr != nil {
 				return paperMeasuredGridRow{}, fmt.Errorf("%s: %w", cell.path, measureErr)
 			}
-			if cell.compactLineHeight > 0 {
-				lineHeight, lineErr := layoutengine.FixedFromPoints(cell.compactLineHeight)
-				if cell.compactLineHeightInDocumentUnits {
-					lineHeight, lineErr = fixedFromDocumentUnits(f, cell.compactLineHeight)
-				}
-				if lineErr != nil || lineHeight <= 0 {
-					return paperMeasuredGridRow{}, fmt.Errorf("%s: compact line height is invalid", cell.path)
-				}
-				for lineIndex := range measurement.plan.Lines {
-					y, yErr := measurement.body.Y.Add(layoutengine.Fixed(int64(lineHeight) * int64(lineIndex)))
-					if yErr != nil {
-						return paperMeasuredGridRow{}, fmt.Errorf("%s: compact line position overflows", cell.path)
-					}
-					line := &measurement.plan.Lines[lineIndex]
-					line.Bounds.Y, line.Bounds.Height = y, lineHeight
-					line.Baseline, yErr = y.Add(layoutengine.Fixed(int64(lineHeight) * 4 / 5))
-					if yErr != nil {
-						return paperMeasuredGridRow{}, fmt.Errorf("%s: compact baseline overflows", cell.path)
-					}
-				}
-				measurement.height = layoutengine.Fixed(int64(lineHeight) * int64(len(measurement.plan.Lines)))
-			}
 		}
 		*fallback = *fallback + 1
 		identity := paperBlockIdentity(mapping, block.bodyIndex, cell.segmentIndex, index, *fallback)

@@ -45,6 +45,71 @@ func appendPDFNumberSpace(dst []byte, value float64, precision int) []byte {
 	return append(dst, ' ')
 }
 
+// appendPDFTJAdjustment emits the ten-decimal text-space correction used by a
+// PDF TJ array directly from fixed-point geometry. The common path avoids the
+// floating-point formatter for every glyph; extreme values fall back to the
+// established formatter rather than risking integer overflow.
+func appendPDFTJAdjustment(dst []byte, fontWidth int, fontSize, advance layoutengine.Fixed) []byte {
+	fallback := func() []byte {
+		native := float64(fontWidth) * fontSize.Points() / 1000
+		adjustment := (native - advance.Points()) * 1000 / fontSize.Points()
+		return appendPDFNumber(dst, adjustment, 10)
+	}
+	if fontWidth < 0 || fontSize <= 0 {
+		return fallback()
+	}
+	const (
+		maxInt64 = int64(^uint64(0) >> 1)
+		scale    = int64(10_000_000_000)
+	)
+	width := int64(fontWidth)
+	size := int64(fontSize)
+	metric := int64(advance)
+	if width != 0 && size > maxInt64/width || metric > maxInt64/1000 || metric < -maxInt64/1000 {
+		return fallback()
+	}
+	numerator := width*size - metric*1000
+	if numerator == -maxInt64-1 {
+		return fallback()
+	}
+	negative := numerator < 0
+	if negative {
+		numerator = -numerator
+	}
+	if numerator > maxInt64/scale {
+		return fallback()
+	}
+	product := numerator * scale
+	scaled, remainder := product/size, product%size
+	opposite := size - remainder
+	distanceFromHalf := remainder - opposite
+	if distanceFromHalf < 0 {
+		distanceFromHalf = -distanceFromHalf
+	}
+	// The historical contract is the decimal form of a sequence of binary64
+	// operations, not the mathematically exact rational. Very near a decimal
+	// rounding midpoint, those operations can land on the opposite side; retain
+	// the established formatter for that small cohort.
+	if distanceFromHalf <= size/500+1 {
+		return fallback()
+	}
+	// Match strconv's round-to-nearest, ties-to-even behavior.
+	if remainder > opposite || remainder == opposite && scaled&1 != 0 {
+		scaled++
+	}
+	if negative {
+		dst = append(dst, '-')
+	}
+	dst = strconv.AppendInt(dst, scaled/scale, 10)
+	dst = append(dst, '.')
+	fraction := scaled % scale
+	for divisor := int64(1_000_000_000); divisor != 0; divisor /= 10 {
+		dst = append(dst, byte('0'+fraction/divisor))
+		fraction %= divisor
+	}
+	return dst
+}
+
 // appendPDFFixed emits the exact ten-decimal representation previously
 // produced by strconv.AppendFloat(value.Points(), 'f', 10, 64). FixedScale is
 // 1024, whose reciprocal terminates after ten decimal places, so the decimal

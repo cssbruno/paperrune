@@ -20,6 +20,15 @@ func (id FontResourceID) Valid() bool { return id != 0 }
 // initial no-layout painter contract.
 type CoreFontFace string
 
+// FontVerticalMetrics describes the canonical vertical extents of a font in
+// thousandths of an em. Descent is negative, matching PDF font descriptors.
+// These metrics let planners and non-PDF painters agree on the same baseline
+// even when a Standard-14 font needs a substitute outline for preview.
+type FontVerticalMetrics struct {
+	Ascent  int16
+	Descent int16
+}
+
 const (
 	CoreFontCourier              CoreFontFace = "courier"
 	CoreFontCourierBold          CoreFontFace = "courier_bold"
@@ -48,6 +57,58 @@ func (face CoreFontFace) valid() bool {
 	default:
 		return false
 	}
+}
+
+// VerticalMetrics returns the canonical Standard-14 ascent and descent for
+// face. Symbol faces do not publish ascender fields in their AFM data, so
+// their font bounding-box extents are used instead.
+func (face CoreFontFace) VerticalMetrics() (FontVerticalMetrics, bool) {
+	switch face {
+	case CoreFontCourier, CoreFontCourierBold, CoreFontCourierOblique, CoreFontCourierBoldOblique:
+		return FontVerticalMetrics{Ascent: 629, Descent: -157}, true
+	case CoreFontHelvetica, CoreFontHelveticaBold, CoreFontHelveticaOblique, CoreFontHelveticaBoldOblique:
+		return FontVerticalMetrics{Ascent: 718, Descent: -207}, true
+	case CoreFontTimesRoman:
+		return FontVerticalMetrics{Ascent: 683, Descent: -217}, true
+	case CoreFontTimesBold:
+		return FontVerticalMetrics{Ascent: 676, Descent: -205}, true
+	case CoreFontTimesItalic:
+		return FontVerticalMetrics{Ascent: 683, Descent: -205}, true
+	case CoreFontTimesBoldItalic:
+		return FontVerticalMetrics{Ascent: 699, Descent: -205}, true
+	case CoreFontSymbol:
+		return FontVerticalMetrics{Ascent: 1010, Descent: -293}, true
+	case CoreFontZapfDingbats:
+		return FontVerticalMetrics{Ascent: 820, Descent: -143}, true
+	default:
+		return FontVerticalMetrics{}, false
+	}
+}
+
+// VerticalExtents scales the face's canonical ascent and positive descent to
+// a fixed-point font size. Keeping this conversion beside VerticalMetrics
+// prevents plan builders and painters from rounding the same font box in
+// different ways.
+func (face CoreFontFace) VerticalExtents(fontSize Fixed) (ascent, descent Fixed, ok bool) {
+	metrics, ok := face.VerticalMetrics()
+	if !ok || fontSize <= 0 {
+		return 0, 0, false
+	}
+	ascent, err := fontSize.MulInt(int64(metrics.Ascent))
+	if err == nil {
+		ascent, err = ascent.DivInt(1000)
+	}
+	if err != nil || ascent <= 0 {
+		return 0, 0, false
+	}
+	descent, err = fontSize.MulInt(-int64(metrics.Descent))
+	if err == nil {
+		descent, err = descent.DivInt(1000)
+	}
+	if err != nil || descent < 0 {
+		return 0, 0, false
+	}
+	return ascent, descent, true
 }
 
 // CoreFontMetricsDigest is a lowercase SHA-256 digest of the exact metrics
@@ -160,44 +221,55 @@ func cloneCoreGlyphRuns(runs []CoreGlyphRun) []CoreGlyphRun {
 }
 
 func validateCoreFonts(fonts []CoreFontResource) error {
-	seen := make(map[string]bool, len(fonts))
-	seenEmbeddedNames := make(map[string]bool, len(fonts))
+	type fontIdentity struct {
+		face     CoreFontFace
+		embedded CoreFontMetricsDigest
+	}
+	var seen map[fontIdentity]struct{}
+	var seenEmbeddedNames map[string]struct{}
+	if len(fonts) > 1 {
+		seen = make(map[fontIdentity]struct{}, len(fonts))
+		seenEmbeddedNames = make(map[string]struct{}, len(fonts))
+	}
 	for index, font := range fonts {
-		path := fmt.Sprintf("fonts[%d]", index)
 		if font.ID != FontResourceID(index+1) {
-			return planError(path, "font IDs are not consecutive and one-based")
+			return planIndexedError("fonts", index, "", "font IDs are not consecutive and one-based")
 		}
 		if err := font.MetricsDigest.validate(); err != nil {
-			return planError(path+".metrics_digest", err.Error())
+			return planIndexedError("fonts", index, ".metrics_digest", err.Error())
 		}
-		identity := "core\x00" + string(font.Face)
+		identity := fontIdentity{face: font.Face}
 		if font.EmbeddedUTF8 == nil {
 			if !font.Face.valid() {
-				return planError(path+".face", "is not a canonical core font face")
+				return planIndexedError("fonts", index, ".face", "is not a canonical core font face")
 			}
 		} else {
 			if font.Face != "" {
-				return planError(path+".face", "must be empty for an embedded UTF-8 font")
+				return planIndexedError("fonts", index, ".face", "must be empty for an embedded UTF-8 font")
 			}
 			if !validEmbeddedFontName(font.EmbeddedUTF8.Name) {
-				return planError(path+".embedded_utf8.name", "must be a bounded ASCII resource name")
+				return planIndexedError("fonts", index, ".embedded_utf8.name", "must be a bounded ASCII resource name")
 			}
 			if err := font.EmbeddedUTF8.Digest.validate(); err != nil {
-				return planError(path+".embedded_utf8.digest", err.Error())
+				return planIndexedError("fonts", index, ".embedded_utf8.digest", err.Error())
 			}
 			if font.EmbeddedUTF8.ByteLength == 0 {
-				return planError(path+".embedded_utf8.byte_length", "must be positive")
+				return planIndexedError("fonts", index, ".embedded_utf8.byte_length", "must be positive")
 			}
-			if seenEmbeddedNames[font.EmbeddedUTF8.Name] {
-				return planError(path+".embedded_utf8.name", "duplicates an embedded font resource name")
+			if _, duplicate := seenEmbeddedNames[font.EmbeddedUTF8.Name]; duplicate {
+				return planIndexedError("fonts", index, ".embedded_utf8.name", "duplicates an embedded font resource name")
 			}
-			seenEmbeddedNames[font.EmbeddedUTF8.Name] = true
-			identity = "embedded\x00" + string(font.EmbeddedUTF8.Digest)
+			if seenEmbeddedNames != nil {
+				seenEmbeddedNames[font.EmbeddedUTF8.Name] = struct{}{}
+			}
+			identity = fontIdentity{embedded: font.EmbeddedUTF8.Digest}
 		}
-		if seen[identity] {
-			return planError(path, "duplicates a font resource")
+		if _, duplicate := seen[identity]; duplicate {
+			return planIndexedError("fonts", index, "", "duplicates a font resource")
 		}
-		seen[identity] = true
+		if seen != nil {
+			seen[identity] = struct{}{}
+		}
 	}
 	return nil
 }
@@ -220,6 +292,17 @@ func validEmbeddedFontName(name string) bool {
 // font plan without invoking layout. Runs must be ordered by their global line
 // index. Empty planned lines are represented by the absence of a run.
 func AttachCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreGlyphRun) (LayoutPlan, error) {
+	return attachCoreGlyphRuns(plan, fonts, runs, false)
+}
+
+// AttachOwnedCoreGlyphRuns is AttachCoreGlyphRuns with explicit ownership
+// transfer. The caller must not mutate fonts, runs, or nested run advances
+// after the call.
+func AttachOwnedCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreGlyphRun) (LayoutPlan, error) {
+	return attachCoreGlyphRuns(plan, fonts, runs, true)
+}
+
+func attachCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreGlyphRun, takeOwnership bool) (LayoutPlan, error) {
 	if len(plan.pages) == 0 {
 		return LayoutPlan{}, errors.New("layoutengine: core glyph runs require a non-empty plan")
 	}
@@ -263,8 +346,13 @@ func AttachCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreG
 	}
 	result := plan
 	result.pages = pages
-	result.fonts = cloneFontResources(fonts)
-	result.glyphRuns = cloneCoreGlyphRuns(runs)
+	if takeOwnership {
+		result.fonts = fonts
+		result.glyphRuns = runs
+	} else {
+		result.fonts = cloneFontResources(fonts)
+		result.glyphRuns = cloneCoreGlyphRuns(runs)
+	}
 	result.commands = commands
 	if plan.hasDeterministicInputs {
 		result.deterministicInputs = DeterministicInputManifest{}

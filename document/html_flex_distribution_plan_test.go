@@ -145,7 +145,7 @@ func TestHTMLUnifiedFlexReverseMainKeepsReadingOrderAndRenders(t *testing.T) {
 	if err != nil || status != "captured" || raster == nil || len(raster.Pages) != 1 || raster.Pages[0].PNGSHA256 == "" {
 		t.Fatalf("reverse-main raster = %q %+v, %v", status, raster, err)
 	}
-	if got := raster.Pages[0].PNGSHA256; got != "b85fe789b1b199aed8049818031e405ee2fa400876fa242f51bc34281f6f0e5d" {
+	if got := raster.Pages[0].PNGSHA256; got != "c06ad01c1620b61e01616a520686ce4825cbc9b9ffee3071a549130541631be7" {
 		t.Fatalf("reverse-main raster drift = %s", got)
 	}
 

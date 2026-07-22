@@ -781,18 +781,16 @@ type typedSemanticAncestor struct {
 }
 
 type paperPlanningGridCell struct {
-	paragraph                        layout.ParagraphBlock
-	image                            *layout.ImageBlock
-	path                             string
-	semanticText                     string
-	semanticRole                     layoutengine.SemanticRole
-	requestedWidth                   float64
-	segmentIndex                     int
-	topInsetPoints                   float64
-	topInsetInDocumentUnits          bool
-	compactLineHeight                float64
-	compactLineHeightInDocumentUnits bool
-	artifactOnly                     bool
+	paragraph               layout.ParagraphBlock
+	image                   *layout.ImageBlock
+	path                    string
+	semanticText            string
+	semanticRole            layoutengine.SemanticRole
+	requestedWidth          float64
+	segmentIndex            int
+	topInsetPoints          float64
+	topInsetInDocumentUnits bool
+	artifactOnly            bool
 }
 
 type paperPlanningGridRow struct {
@@ -1811,11 +1809,11 @@ func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context
 	}
 
 	geometry.Diagnostics = diagnostics
-	plan, err := layoutengine.NewLayoutPlan(geometry)
+	plan, err := layoutengine.NewTrustedGeometryPlan(geometry)
 	if err != nil {
 		return layoutengine.LayoutPlan{}, fmt.Errorf("document: paper text geometry: %w", err)
 	}
-	plan, err = layoutengine.AttachDisplayList(plan, layoutengine.DisplayListInput{
+	plan, err = layoutengine.AttachOwnedDisplayList(plan, layoutengine.DisplayListInput{
 		Fonts: fonts, GlyphRuns: runs, ImageResources: imageResources, Images: images,
 		Paths: paths, Fills: fills, Strokes: strokes, Items: displayItems,
 	})
@@ -2036,7 +2034,7 @@ func (m *paperBlockMeasurer) measureParagraph(block paperPlanningBlock, identity
 		}
 		return paperMeasuredBlock{}, measuredLines, fmt.Errorf("%s: %w", path, err)
 	}
-	measurement := paperRowColumnMeasurement{plan: shadow.Plan.Projection()}
+	measurement := paperRowColumnMeasurement{plan: shadow.Plan.ReadOnlyProjection()}
 	if !mixedCoreShadow {
 		measurement, err = m.pdf.restylePaperMeasurement(measurement, paragraph.Style, authoredSegments)
 		if err != nil {
@@ -2144,7 +2142,7 @@ func (m *paperBlockMeasurer) measureParagraph(block paperPlanningBlock, identity
 }
 
 func attachPlanSemantics(plan layoutengine.LayoutPlan, measured []paperMeasuredBlock, language string, mapping papercompile.CompileMapping) (layoutengine.LayoutPlan, error) {
-	projection := plan.Projection()
+	projection := plan.ReadOnlyProjection()
 	rootKey := layoutengine.NodeKey("@typed-document")
 	rootInstance := layoutengine.InstanceID("@typed-document")
 	var rootSource layoutengine.SourceSpan
@@ -2255,7 +2253,7 @@ func attachPlanSemantics(plan layoutengine.LayoutPlan, measured []paperMeasuredB
 			pageIndex[fragment.Page]++
 		}
 	}
-	return layoutengine.AttachSemantics(plan, nodes, associations, reading)
+	return layoutengine.AttachOwnedSemantics(plan, nodes, associations, reading)
 }
 
 func typedContainerSemanticAttributes(role layoutengine.SemanticRole, text string) layoutengine.SemanticAttributes {
@@ -2630,8 +2628,7 @@ func paperExpandPlanningBlock(ctx context.Context, expanded *[]paperPlanningBloc
 				path: fmt.Sprintf("%s.columns[%d]", path, columnIndex), semanticText: strings.ReplaceAll(text, "\n", "; "),
 				semanticRole:   layoutengine.SemanticRoleCell,
 				requestedWidth: column.Width, segmentIndex: columnIndex,
-				topInsetPoints: 14, topInsetInDocumentUnits: true,
-				compactLineHeight: 4, compactLineHeightInDocumentUnits: true, artifactOnly: text == "",
+				topInsetPoints: 14, topInsetInDocumentUnits: true, artifactOnly: text == "",
 			})
 		}
 		*expanded = append(*expanded, paperPlanningBlock{bodyIndex: bodyIndex, segmentIndex: segmentIndex,

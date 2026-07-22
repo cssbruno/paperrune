@@ -39,6 +39,13 @@ func AttachDisplayList(plan LayoutPlan, input DisplayListInput) (LayoutPlan, err
 	return attachDisplayList(plan, input, true, false)
 }
 
+// AttachOwnedDisplayList validates a display list while taking ownership of
+// every freshly built payload slice. The caller must not mutate input after the
+// call.
+func AttachOwnedDisplayList(plan LayoutPlan, input DisplayListInput) (LayoutPlan, error) {
+	return attachDisplayList(plan, input, true, true)
+}
+
 // AttachTrustedDisplayList composes payloads produced from already validated
 // immutable plans and planner-owned primitives. It validates item indexes,
 // page ownership, and paint ordering while avoiding a second validation of the

@@ -108,3 +108,37 @@ func TestAttachOwnedTrustedDisplayListProducesValidPlan(t *testing.T) {
 		t.Fatalf("owned trusted display attachment produced invalid plan: %v", err)
 	}
 }
+
+func TestAttachOwnedDisplayListKeepsValidation(t *testing.T) {
+	input := coreGlyphPlanInput()
+	input.Pages[0].Commands = IndexRange{}
+	geometry, err := NewTrustedGeometryPlan(LayoutPlanInput{Pages: input.Pages, Fragments: input.Fragments, Lines: input.Lines})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := AttachOwnedDisplayList(geometry, DisplayListInput{
+		Fonts: input.Fonts, GlyphRuns: input.GlyphRuns,
+		Items: []DisplayItem{{Kind: CommandGlyphRun}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := plan.Validate(); err != nil {
+		t.Fatalf("owned display attachment produced invalid plan: %v", err)
+	}
+
+	invalidInput := coreGlyphPlanInput()
+	invalidInput.Pages[0].Commands = IndexRange{}
+	invalidGeometry, err := NewTrustedGeometryPlan(LayoutPlanInput{
+		Pages: invalidInput.Pages, Fragments: invalidInput.Fragments, Lines: invalidInput.Lines,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AttachOwnedDisplayList(invalidGeometry, DisplayListInput{
+		Fonts: invalidInput.Fonts, GlyphRuns: invalidInput.GlyphRuns,
+		Items: []DisplayItem{{Kind: CommandGlyphRun, Payload: 1}},
+	}); err == nil {
+		t.Fatal("owned display attachment accepted a missing payload")
+	}
+}

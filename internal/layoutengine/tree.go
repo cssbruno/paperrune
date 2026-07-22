@@ -6,7 +6,6 @@ package layoutengine
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -198,9 +197,11 @@ func NewCanonicalTree(ctx context.Context, input CanonicalTreeInput, limits Cano
 	if uint64(len(input.Nodes)) > uint64(limits.MaxNodes) || uint64(len(input.Nodes)) > math.MaxUint32 {
 		return CanonicalTree{}, ErrCanonicalTreeLimit
 	}
-	b := treeBuilder{ctx: ctx, limits: limits, strings: map[string]TreeStringID{}, styles: map[TreeStyle]TreeStyleID{},
+	b := treeBuilder{ctx: ctx, limits: limits, tree: CanonicalTree{
+		nodes: make([]TreeNode, 0, len(input.Nodes)), children: make([]TreeNodeIndex, 0, max(0, len(input.Nodes)-1)),
+	}, strings: map[string]TreeStringID{}, styles: map[TreeStyle]TreeStyleID{},
 		tracks: map[TreeTrack]TreeTrackID{}, resources: map[TreeResource]TreeResourceID{}, resourceKeys: map[string]TreeResource{},
-		semantics: map[TreeSemantic]TreeSemanticID{}, nodeIDs: map[NodeID]struct{}{}, nodeKeys: map[NodeKey]struct{}{},
+		semantics: map[TreeSemantic]TreeSemanticID{}, nodeIDs: make(map[NodeID]struct{}, len(input.Nodes)), nodeKeys: make(map[NodeKey]struct{}, len(input.Nodes)),
 		childLists: make([][]TreeNodeIndex, len(input.Nodes))}
 	for index, spec := range input.Nodes {
 		if err := b.charge(1); err != nil {
@@ -228,9 +229,9 @@ func NewCanonicalTree(ctx context.Context, input CanonicalTreeInput, limits Cano
 		b.tree.nodes[index].ChildCount = uint32(len(list))            // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 		b.tree.children = append(b.tree.children, list...)
 	}
-	if err := validateCanonicalTree(b.tree); err != nil {
-		return CanonicalTree{}, err
-	}
+	// Every value in b.tree was validated and interned by treeBuilder. The full
+	// projection validator remains mandatory for decoded JSON, but rerunning it
+	// here would only rebuild the same uniqueness maps over trusted output.
 	return b.tree, nil
 }
 
@@ -333,6 +334,9 @@ func validTreeLength(v TreeLength) bool {
 	return v.Kind == TreeLengthAuto && v.Value == 0 || (v.Kind == TreeLengthFixed || v.Kind == TreeLengthPercent || v.Kind == TreeLengthFraction) && v.Value >= 0
 }
 func (b *treeBuilder) style(in TreeStyleInput) (TreeStyleID, error) {
+	if in.FontSize < 0 || in.LineHeight < 0 {
+		return 0, ErrCanonicalTreeInvalid
+	}
 	f, e := b.intern(in.FontFamily)
 	if e != nil {
 		return 0, e
@@ -434,6 +438,9 @@ func (b *treeBuilder) semantic(in TreeSemanticInput) (TreeSemanticID, error) {
 func (t CanonicalTree) Projection() CanonicalTreeProjection {
 	return CanonicalTreeProjection{CanonicalTreeSchemaVersion, cloneSlice(t.nodes), cloneSlice(t.children), cloneSlice(t.strings), cloneSlice(t.styles), cloneSlice(t.tracks), cloneSlice(t.resources), cloneSlice(t.semantics)}
 }
+func (t CanonicalTree) readOnlyProjection() CanonicalTreeProjection {
+	return CanonicalTreeProjection{CanonicalTreeSchemaVersion, t.nodes, t.children, t.strings, t.styles, t.tracks, t.resources, t.semantics}
+}
 func (t CanonicalTree) Node(index TreeNodeIndex) (TreeNode, bool) {
 	if uint64(index) >= uint64(len(t.nodes)) {
 		return TreeNode{}, false
@@ -453,12 +460,11 @@ func (t CanonicalTree) CanonicalJSON() ([]byte, error) {
 	return json.Marshal(t.Projection())
 }
 func (t CanonicalTree) Hash() (string, error) {
-	b, e := t.CanonicalJSON()
-	if e != nil {
-		return "", e
+	digest, err := canonicalJSONHash(t.readOnlyProjection())
+	if err != nil {
+		return "", err
 	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:]), nil
+	return hex.EncodeToString(digest[:]), nil
 }
 
 // SemanticHash identifies compiled meaning while deliberately excluding
@@ -468,18 +474,18 @@ func (t CanonicalTree) SemanticHash() (string, error) {
 	if err := validateCanonicalTree(t); err != nil {
 		return "", err
 	}
-	projection := t.Projection()
+	projection := t.readOnlyProjection()
+	projection.Nodes = cloneSlice(projection.Nodes)
 	for index := range projection.Nodes {
 		projection.Nodes[index].Source = SourceSpan{}
 	}
-	encoded, err := json.Marshal(struct {
+	digest, err := canonicalJSONHash(struct {
 		Domain string                  `json:"domain"`
 		Tree   CanonicalTreeProjection `json:"tree"`
 	}{Domain: "paperrune.semantic-template.v1", Tree: projection})
 	if err != nil {
 		return "", err
 	}
-	digest := sha256.Sum256(encoded)
 	return hex.EncodeToString(digest[:]), nil
 }
 
@@ -532,7 +538,7 @@ func DecodeCanonicalTree(ctx context.Context, encoded []byte, limits CanonicalTr
 }
 
 func validateCanonicalTree(t CanonicalTree) error {
-	stringsSeen := map[string]struct{}{}
+	stringsSeen := make(map[string]struct{}, len(t.strings))
 	var bytes uint64
 	for _, s := range t.strings {
 		if s == "" {
@@ -549,8 +555,8 @@ func validateCanonicalTree(t CanonicalTree) error {
 	}
 	_ = bytes
 	incoming := make([]uint8, len(t.nodes))
-	ids := map[NodeID]struct{}{}
-	keys := map[NodeKey]struct{}{}
+	ids := make(map[NodeID]struct{}, len(t.nodes))
+	keys := make(map[NodeKey]struct{}, len(t.nodes))
 	for i, n := range t.nodes {
 		if !n.ID.Valid() || n.Key == "" || n.Kind == 0 || uint64(n.Kind) > uint64(len(t.strings)) || uint64(n.ChildStart)+uint64(n.ChildCount) > uint64(len(t.children)) {
 			return ErrCanonicalTreeInvalid
@@ -582,7 +588,7 @@ func validateCanonicalTree(t CanonicalTree) error {
 			return ErrCanonicalTreeInvalid
 		}
 	}
-	styleSeen := map[TreeStyle]struct{}{}
+	styleSeen := make(map[TreeStyle]struct{}, len(t.styles))
 	for _, s := range t.styles {
 		if _, exists := styleSeen[s]; exists {
 			return ErrCanonicalTreeCollision
@@ -600,7 +606,7 @@ func validateCanonicalTree(t CanonicalTree) error {
 			}
 		}
 	}
-	trackSeen := map[TreeTrack]struct{}{}
+	trackSeen := make(map[TreeTrack]struct{}, len(t.tracks))
 	for _, v := range t.tracks {
 		if _, exists := trackSeen[v]; exists {
 			return ErrCanonicalTreeCollision
@@ -610,8 +616,8 @@ func validateCanonicalTree(t CanonicalTree) error {
 			return ErrCanonicalTreeInvalid
 		}
 	}
-	resourceSeen := map[TreeResource]struct{}{}
-	resourceKeys := map[TreeStringID]TreeResource{}
+	resourceSeen := make(map[TreeResource]struct{}, len(t.resources))
+	resourceKeys := make(map[TreeStringID]TreeResource, len(t.resources))
 	for _, v := range t.resources {
 		if v.Kind == 0 || v.Key == 0 || v.Digest == 0 || v.Kind > TreeStringID(len(t.strings)) || v.Key > TreeStringID(len(t.strings)) || v.Digest > TreeStringID(len(t.strings)) { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 			return ErrCanonicalTreeInvalid
@@ -625,7 +631,7 @@ func validateCanonicalTree(t CanonicalTree) error {
 		}
 		resourceKeys[v.Key] = v
 	}
-	semanticSeen := map[TreeSemantic]struct{}{}
+	semanticSeen := make(map[TreeSemantic]struct{}, len(t.semantics))
 	for _, v := range t.semantics {
 		if _, exists := semanticSeen[v]; exists {
 			return ErrCanonicalTreeCollision
