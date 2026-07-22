@@ -51,15 +51,17 @@ The request accepts:
 | `source` | required string | Complete Paper source, at most 1 MiB |
 | `data` | string | Strict JSON, at most 4 MiB |
 | `scenario` | string | Declared scenario name, with or without `@` |
-| `page` | positive uint32 | One-based SVG page to capture; defaults to 1 |
+| `page` | positive uint32 | One-based page to rasterize; defaults to 1 |
 | `dataName` | string | Name attached to JSON data diagnostics |
 | `schema` | string | Explicit schema selection when needed |
 | `locale` | string | Explicit JSON formatting locale |
 
-`data` and `scenario` are mutually exclusive. Results contain `ok`, `pages`,
-`page`, `hash`, `diagnostics`, `error`, `svg`, `page_width`, `page_height`, and
-`fixed_scale`. Authoring errors resolve with `ok: false`; invalid requests and
-runtime failures reject.
+`data` and `scenario` are mutually exclusive. Successful results contain `ok`,
+`pages`, `page`, `hash`, base64-encoded `png`, `pixel_width`, `pixel_height`,
+`dpi`, and `renderer`. The Go WebAssembly renderer paints the immutable display
+list directly; the playground does not use an SVG or browser-layout preview.
+Results also contain `diagnostics` and `error` when relevant. Authoring errors
+resolve with `ok: false`; invalid requests and runtime failures reject.
 
 WASM supports inline data and scenarios, but not files, network access,
 imports, or asset catalogs.

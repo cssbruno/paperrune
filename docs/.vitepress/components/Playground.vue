@@ -12,7 +12,7 @@ const activeEditor = ref('source');
 const state = ref('loading');
 const status = ref('Loading compiler…');
 const diagnostics = ref([]);
-const svg = ref('');
+const png = ref('');
 const pages = ref(0);
 const page = ref(1);
 const planHash = ref('');
@@ -20,7 +20,7 @@ let compileSequence = 0;
 let debounceTimer;
 
 const sourceLines = computed(() => source.value.split('\n').length);
-const previewDocument = computed(() => svg.value ? `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;min-height:100%;background:#d8d3c8}body{display:grid;place-items:center;padding:16px;box-sizing:border-box}svg{display:block;width:100%;max-width:760px;height:auto;box-shadow:0 18px 50px rgba(20,22,27,.18)}</style></head><body>${svg.value}</body></html>` : '');
+const documentImage = computed(() => png.value ? `data:image/png;base64,${png.value}` : '');
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -79,19 +79,19 @@ async function compile(targetPage = page.value) {
     diagnostics.value = result.diagnostics || [];
     pages.value = result.pages || 0;
     planHash.value = result.hash || '';
-    if (!result.ok || !result.svg) {
-      svg.value = '';
+    if (!result.ok || !result.png) {
+      png.value = '';
       state.value = 'error';
       status.value = diagnostics.value.length ? `${diagnostics.value.length} diagnostic${diagnostics.value.length === 1 ? '' : 's'}` : (result.error || 'Compilation failed');
       return;
     }
     page.value = result.page;
-    svg.value = result.svg;
+    png.value = result.png;
     state.value = diagnostics.value.length ? 'warning' : 'ready';
     status.value = `${result.pages} page${result.pages === 1 ? '' : 's'} · plan ${result.hash.slice(0, 10)}`;
   } catch (error) {
     if (sequence !== compileSequence) return;
-    svg.value = '';
+    png.value = '';
     diagnostics.value = [];
     state.value = 'error';
     status.value = error instanceof Error ? error.message : String(error);
@@ -149,17 +149,19 @@ onBeforeUnmount(() => clearTimeout(debounceTimer));
 
       <div class="preview-pane">
         <div class="preview-toolbar">
-          <span>Exact SVG preview</span>
+          <span>Generated document · WebAssembly</span>
           <div v-if="pages > 1" class="page-controls" aria-label="Preview pages">
             <button type="button" :disabled="page <= 1 || state === 'compiling'" @click="compile(page - 1)">←</button>
             <span>{{ page }} / {{ pages }}</span>
             <button type="button" :disabled="page >= pages || state === 'compiling'" @click="compile(page + 1)">→</button>
           </div>
         </div>
-        <iframe v-if="previewDocument" :srcdoc="previewDocument" sandbox="" title="Compiled Paper document preview"></iframe>
+        <div v-if="documentImage" class="document-stage">
+          <img :src="documentImage" alt="Generated Paper document rendered by WebAssembly">
+        </div>
         <div v-else class="preview-empty">
-          <strong>{{ state === 'loading' || state === 'compiling' ? 'Planning document' : 'No preview' }}</strong>
-          <span>{{ state === 'error' ? 'Fix the diagnostics below and compile again.' : 'The exact page appears here.' }}</span>
+          <strong>{{ state === 'loading' || state === 'compiling' ? 'Generating document' : 'No document' }}</strong>
+          <span>{{ state === 'error' ? 'Fix the diagnostics below; generation resumes automatically.' : 'The generated page appears here.' }}</span>
         </div>
       </div>
     </div>
@@ -223,7 +225,8 @@ textarea { display: block; width: 100%; height: 100%; min-height: 0; resize: non
 .preview-toolbar { padding: 0 18px; border-bottom: 1px solid var(--play-border); font: 650 .76rem/1 var(--vp-font-family-mono); text-transform: uppercase; letter-spacing: .06em; }
 .page-controls { display: flex; align-items: center; gap: 8px; }
 .page-controls button { width: 27px; height: 27px; border: 1px solid #aaa59d; border-radius: 50%; }
-iframe { display: block; width: 100%; height: 100%; min-height: 0; border: 0; background: #d8d3c8; }
+.document-stage { min-height: 0; overflow: auto; padding: 16px; background: #d8d3c8; }
+.document-stage img { display: block; width: 100%; max-width: 760px; height: auto; margin: 0 auto; box-shadow: 0 18px 50px rgba(20,22,27,.18); }
 .preview-empty { display: grid; place-content: center; gap: 5px; text-align: center; color: #66645f; }
 .preview-empty strong { color: #2c2e32; }
 .diagnostic-list { max-height: min(28svh, 260px); padding: 0 max(20px, calc((100vw - 1320px) / 2)); overflow-y: auto; background: #f4f0e7; }

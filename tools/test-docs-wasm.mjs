@@ -41,11 +41,11 @@ const compiled = await globalThis.PaperStudioWASM.compile({
   dataName: 'input',
   page: 1,
 });
-const renderedText = [...(compiled.svg || '').matchAll(/<text[^>]*>(.*?)<\/text>/g)]
-  .map((match) => match[1])
-  .join('');
-if (!compiled.ok || compiled.pages !== 1 || compiled.page !== 1 ||
-    !compiled.hash || renderedText !== 'WASM documentation smoke') {
+const renderedPNG = Buffer.from(compiled.png || '', 'base64');
+if (!compiled.ok || 'svg' in compiled || compiled.pages !== 1 || compiled.page !== 1 || !compiled.hash ||
+    compiled.renderer !== globalThis.PaperStudioWASM.rendererVersion || compiled.dpi <= 0 ||
+    compiled.pixel_width <= 0 || compiled.pixel_height <= 0 || renderedPNG.length < 8 ||
+    renderedPNG[0] !== 0x89 || renderedPNG[1] !== 0x50 || renderedPNG[2] !== 0x4e || renderedPNG[3] !== 0x47) {
   throw new Error(`documentation compiler returned invalid evidence: ${JSON.stringify(compiled)}`);
 }
 
@@ -61,7 +61,9 @@ if (invalid.ok || !invalid.diagnostics?.some((diagnostic) => diagnostic.code ===
 
 for (const sample of playgroundSamples) {
   const result = await globalThis.PaperStudioWASM.compile({source: sample.source, data: sample.data, dataName: 'playground', page: 1});
-  if (!result.ok || !result.svg || result.diagnostics?.length) {
+  const samplePNG = Buffer.from(result.png || '', 'base64');
+  if (!result.ok || 'svg' in result || samplePNG.length < 8 || samplePNG[0] !== 0x89 || samplePNG[1] !== 0x50 ||
+      samplePNG[2] !== 0x4e || samplePNG[3] !== 0x47 || result.diagnostics?.length) {
     throw new Error(`playground sample ${JSON.stringify(sample.name)} failed: ${JSON.stringify(result)}`);
   }
 }

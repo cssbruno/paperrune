@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"math"
@@ -45,10 +46,11 @@ type playgroundCompileResult struct {
 	Hash        string                     `json:"hash,omitempty"`
 	Diagnostics []document.PaperDiagnostic `json:"diagnostics,omitempty"`
 	Error       string                     `json:"error,omitempty"`
-	SVG         string                     `json:"svg,omitempty"`
-	PageWidth   int64                      `json:"page_width,omitempty"`
-	PageHeight  int64                      `json:"page_height,omitempty"`
-	FixedScale  int64                      `json:"fixed_scale,omitempty"`
+	PNG         string                     `json:"png,omitempty"`
+	PixelWidth  uint32                     `json:"pixel_width,omitempty"`
+	PixelHeight uint32                     `json:"pixel_height,omitempty"`
+	DPI         uint32                     `json:"dpi,omitempty"`
+	Renderer    string                     `json:"renderer,omitempty"`
 }
 
 func compilePaper(_ js.Value, arguments []js.Value) any {
@@ -127,12 +129,20 @@ func compilePlaygroundRequest(source, data, scenario string, page uint32, option
 	if page == 0 || int(page) > plan.PageCount() {
 		return result, errors.New("paper-studio-wasm: requested page is outside the compiled plan")
 	}
-	capture, err := plan.CaptureDisplayPageSVG(context.Background(), page, nil)
+	request := document.DefaultPaperPlanWebRenderRequest(page)
+	payload, err := plan.WebDisplayRenderPayload(context.Background(), request)
 	if err != nil {
 		return result, err
 	}
-	result.Page, result.SVG = page, string(capture.SVG)
-	result.PageWidth, result.PageHeight, result.FixedScale = capture.PageWidth, capture.PageHeight, capture.FixedScale
+	artifact, err := layoutengine.RenderWebDisplayPayloadCached(context.Background(), payload, &renderCache)
+	if err != nil {
+		return result, err
+	}
+	manifest := artifact.Manifest()
+	result.Page = page
+	result.PNG = base64.StdEncoding.EncodeToString(artifact.PNG())
+	result.PixelWidth, result.PixelHeight = manifest.PixelWidth, manifest.PixelHeight
+	result.DPI, result.Renderer = manifest.Profile.DPI, manifest.Identity.RendererVersion
 	return result, nil
 }
 
