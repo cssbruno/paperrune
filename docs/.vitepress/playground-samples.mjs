@@ -231,25 +231,32 @@ export const playgroundSamples = [
         color: "#59636B"
         text: "Fractions, physical units, and typed expressions resolve before a single pixel is painted."
 
-      table @ratio:
-        split: "avoid"
-        table-column:
-          width: 67%
-        table-column:
-          width: 33%
-        table-row:
-          cell:
-            style: "@display"
-            padding: 18pt
-            background: "#111A21"
-            color: "#FFFFFF"
-            text: columns == 2 ? "2fr / PRIMARY" : "3fr / PRIMARY"
-          cell:
-            style: "@display"
-            padding: 18pt
-            background: "#F2EEE6"
-            color: "#D94F2B"
-            text: "1fr"
+      row @ratio:
+        gap: compact ? 8pt : 16pt
+        table @primary:
+          width: columns == 2 ? 2fr : 3fr
+          split: "avoid"
+          table-column:
+            width: 100%
+          table-row:
+            cell:
+              style: "@display"
+              padding: 18pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: columns == 2 ? "2fr / PRIMARY" : "3fr / PRIMARY"
+        table @support:
+          width: 1fr
+          split: "avoid"
+          table-column:
+            width: 100%
+          table-row:
+            cell:
+              style: "@display"
+              padding: 18pt
+              background: "#F2EEE6"
+              color: "#D94F2B"
+              text: "1fr"
 
       paragraph @formula-label:
         style: "@label"
@@ -263,7 +270,7 @@ export const playgroundSamples = [
         margin-bottom: 30pt
         background: "#111A21"
         color: "#F7F2E9"
-        text: "available width - 16pt gap = 2fr primary + 1fr support"
+        text: compact ? (columns == 2 ? "available width - 8pt gap = 2fr primary + 1fr support" : "available width - 8pt gap = 3fr primary + 1fr support") : (columns == 2 ? "available width - 16pt gap = 2fr primary + 1fr support" : "available width - 16pt gap = 3fr primary + 1fr support")
 
       table @measurements:
         split: "avoid"
@@ -346,7 +353,7 @@ export const playgroundSamples = [
             padding: 10pt
             border-bottom-width: 1pt
             border-color: "#CDC7BD"
-            text: "2fr / 1fr"
+            text: columns == 2 ? "2fr / 1fr" : "3fr / 1fr"
           cell:
             style: "@base"
             padding: 10pt

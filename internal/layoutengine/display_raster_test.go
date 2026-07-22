@@ -50,7 +50,7 @@ func TestCaptureDisplayPlanPNGDeterministicLosslessPageAndManifest(t *testing.T)
 	if manifest.PNGSHA256 != hex.EncodeToString(digest[:]) || manifest.PNGByteLength != uint64(len(first.PNG())) {
 		t.Fatalf("PNG evidence = %+v", manifest)
 	}
-	if manifest.PNGSHA256 != "3b7cdd59a6cb06596129dfd9ccde42563f40f9d8cff8573222340788cdc54350" {
+	if manifest.PNGSHA256 != "1ae3aaa8f39b2195fe7287873a991aa5dcf65d50d995e58f3b1d0a56c3e73f4b" {
 		t.Fatalf("fixture raster hash = %s", manifest.PNGSHA256)
 	}
 	decoded, err := png.Decode(bytes.NewReader(first.PNG()))
@@ -279,6 +279,74 @@ func TestRasterCoreFontSubstituteFitsPlannedRunWithoutGlyphCollisions(t *testing
 	if !ink {
 		t.Fatal("core-font substitute painted no visible glyphs")
 	}
+}
+
+func TestRasterCoreFontSubstitutePreservesNaturalVerticalProportions(t *testing.T) {
+	fontBytes, err := os.ReadFile("../../assets/static/font/DejaVuSansCondensed.ttf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := opentype.Parse(fontBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newCanvas := func() *image.RGBA {
+		canvas := image.NewRGBA(image.Rect(0, 0, 200, 120))
+		for y := 0; y < canvas.Bounds().Dy(); y++ {
+			for x := 0; x < canvas.Bounds().Dx(); x++ {
+				canvas.SetRGBA(x, y, color.RGBA{255, 255, 255, 255})
+			}
+		}
+		return canvas
+	}
+	unit := Fixed(FixedScale)
+	run := CoreGlyphRun{
+		Font: 1, FontSize: 20 * unit, Origin: Point{X: 10 * unit, Y: 40 * unit},
+		Codes: "Hg", Advances: []Fixed{15 * unit, 12 * unit},
+	}
+	page := Rect{Width: 100 * unit, Height: 60 * unit}
+	face := &rasterSizedFace{font: parsed}
+	core, embedded := newCanvas(), newCanvas()
+	if err := face.draw(core, CoreFontResource{ID: 1, Face: CoreFontHelvetica}, run,
+		IdentityTransform(), page, 144, core.Bounds()); err != nil {
+		t.Fatal(err)
+	}
+	if err := face.draw(embedded, CoreFontResource{ID: 1, EmbeddedUTF8: &EmbeddedUTF8Font{}}, run,
+		IdentityTransform(), page, 144, embedded.Bounds()); err != nil {
+		t.Fatal(err)
+	}
+	coreInk, embeddedInk := rasterTestInkBounds(core), rasterTestInkBounds(embedded)
+	if coreInk.Empty() || embeddedInk.Empty() {
+		t.Fatalf("missing raster ink: core=%v embedded=%v", coreInk, embeddedInk)
+	}
+	if rasterTestIntegerDistance(coreInk.Min.Y, embeddedInk.Min.Y) > 1 || rasterTestIntegerDistance(coreInk.Max.Y, embeddedInk.Max.Y) > 1 {
+		t.Fatalf("core substitute changed natural vertical ink bounds: core=%v embedded=%v", coreInk, embeddedInk)
+	}
+}
+
+func rasterTestInkBounds(canvas *image.RGBA) image.Rectangle {
+	bounds := image.Rectangle{}
+	found := false
+	for y := 0; y < canvas.Bounds().Dy(); y++ {
+		for x := 0; x < canvas.Bounds().Dx(); x++ {
+			if canvas.RGBAAt(x, y) == (color.RGBA{255, 255, 255, 255}) {
+				continue
+			}
+			if !found {
+				bounds, found = image.Rect(x, y, x+1, y+1), true
+			} else {
+				bounds = bounds.Union(image.Rect(x, y, x+1, y+1))
+			}
+		}
+	}
+	return bounds
+}
+
+func rasterTestIntegerDistance(left, right int) int {
+	if left < right {
+		return right - left
+	}
+	return left - right
 }
 
 func rasterRequest() DisplayRasterRequest {

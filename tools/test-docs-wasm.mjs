@@ -4,6 +4,7 @@
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
+import {inflateSync} from 'node:zlib';
 
 import {playgroundSamples} from '../docs/.vitepress/playground-samples.mjs';
 
@@ -59,6 +60,8 @@ if (invalid.ok || !invalid.diagnostics?.some((diagnostic) => diagnostic.code ===
   throw new Error(`documentation compiler did not preserve diagnostics: ${JSON.stringify(invalid)}`);
 }
 
+let layoutSample;
+let layoutResult;
 for (const sample of playgroundSamples) {
   const result = await globalThis.PaperStudioWASM.compile({source: sample.source, data: sample.data, dataName: 'playground', page: 1});
   const samplePNG = Buffer.from(result.png || '', 'base64');
@@ -66,7 +69,94 @@ for (const sample of playgroundSamples) {
       samplePNG[2] !== 0x4e || samplePNG[3] !== 0x47 || result.diagnostics?.length) {
     throw new Error(`playground sample ${JSON.stringify(sample.name)} failed: ${JSON.stringify(result)}`);
   }
+  if (sample.name === 'Layout specimen') {
+    layoutSample = sample;
+    layoutResult = result;
+  }
 }
+
+if (!layoutSample) throw new Error('layout specimen sample is missing');
+assertFractionBand(Buffer.from(layoutResult.png || '', 'base64'), 2, 32);
+const compactLayout = await globalThis.PaperStudioWASM.compile({
+  source: layoutSample.source,
+  data: '{"columns":3,"compact":true}',
+  dataName: 'playground',
+  page: 1,
+});
+if (!compactLayout.ok || compactLayout.diagnostics?.length) {
+  throw new Error(`alternate layout specimen failed: ${JSON.stringify(compactLayout)}`);
+}
+assertFractionBand(Buffer.from(compactLayout.png || '', 'base64'), 3, 16);
 
 console.log(`docs WASM smoke: ${compiled.pages} page, ${playgroundSamples.length} samples, plan ${compiled.hash.slice(0, 12)}`);
 process.exit(0);
+
+function assertFractionBand(png, ratio, expectedGap) {
+  const image = decodeRasterPNG(png);
+  const primary = [0x11, 0x1a, 0x21, 0xff];
+  const support = [0xf2, 0xee, 0xe6, 0xff];
+  let best;
+  for (let y = 0; y < image.height; y += 1) {
+    const primaryRun = longestColorRun(image, y, primary);
+    const supportRun = longestColorRun(image, y, support);
+    if (!primaryRun || !supportRun || primaryRun.end > supportRun.start) continue;
+    const candidate = {primary: primaryRun, support: supportRun, gap: supportRun.start - primaryRun.end};
+    if (!best || primaryRun.width + supportRun.width > best.primary.width + best.support.width) best = candidate;
+  }
+  if (!best || Math.abs(best.gap - expectedGap) > 2 || Math.abs(best.primary.width - ratio * best.support.width) > ratio + 1) {
+    throw new Error(`layout specimen fraction band is wrong: ratio=${ratio}, expected_gap=${expectedGap}, actual=${JSON.stringify(best)}`);
+  }
+}
+
+function longestColorRun(image, y, color) {
+  const row = y * image.rowBytes;
+  let best;
+  for (let x = 0; x < image.width;) {
+    const offset = row + 1 + x * 4;
+    if (image.raw[offset] !== color[0] || image.raw[offset + 1] !== color[1] ||
+        image.raw[offset + 2] !== color[2] || image.raw[offset + 3] !== color[3]) {
+      x += 1;
+      continue;
+    }
+    const start = x;
+    while (x < image.width) {
+      const current = row + 1 + x * 4;
+      if (image.raw[current] !== color[0] || image.raw[current + 1] !== color[1] ||
+          image.raw[current + 2] !== color[2] || image.raw[current + 3] !== color[3]) break;
+      x += 1;
+    }
+    const run = {start, end: x, width: x - start};
+    if (!best || run.width > best.width) best = run;
+  }
+  return best;
+}
+
+function decodeRasterPNG(png) {
+  if (png.length < 33 || !png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    throw new Error('layout specimen returned an invalid PNG');
+  }
+  let width = 0;
+  let height = 0;
+  const compressed = [];
+  for (let offset = 8; offset + 12 <= png.length;) {
+    const length = png.readUInt32BE(offset);
+    const type = png.toString('ascii', offset + 4, offset + 8);
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      if (data[8] !== 8 || data[9] !== 6) throw new Error('layout specimen PNG is not 8-bit RGBA');
+    } else if (type === 'IDAT') {
+      compressed.push(data);
+    }
+    offset += length + 12;
+    if (type === 'IEND') break;
+  }
+  const raw = inflateSync(Buffer.concat(compressed));
+  const rowBytes = 1 + width * 4;
+  if (!width || !height || raw.length !== rowBytes * height) throw new Error('layout specimen PNG dimensions are inconsistent');
+  for (let y = 0; y < height; y += 1) {
+    if (raw[y * rowBytes] !== 0) throw new Error('layout specimen PNG used an unexpected row filter');
+  }
+  return {width, height, rowBytes, raw};
+}
