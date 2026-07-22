@@ -120,9 +120,12 @@ onBeforeUnmount(() => clearTimeout(debounceTimer));
 <template>
   <section class="playground-shell" aria-label="PaperRune WebAssembly playground">
     <header class="playground-bar">
-      <div class="playground-status">
-        <span class="status-dot" :class="state" aria-hidden="true"></span>
-        <span aria-live="polite">{{ status }}</span>
+      <div class="playground-heading">
+        <a class="back-link" :href="withBase('/')" aria-label="Back to PaperRune documentation">← PaperRune</a>
+        <div class="playground-status">
+          <span class="status-dot" :class="state" aria-hidden="true"></span>
+          <span aria-live="polite">{{ status }}</span>
+        </div>
       </div>
       <div class="playground-actions">
         <label>
@@ -131,7 +134,6 @@ onBeforeUnmount(() => clearTimeout(debounceTimer));
             <option v-for="(sample, index) in samples" :key="sample.name" :value="index">{{ sample.name }}</option>
           </select>
         </label>
-        <button type="button" class="compile-button" :disabled="state === 'compiling'" @click="compile(page)">Compile</button>
       </div>
     </header>
 
@@ -194,7 +196,11 @@ onBeforeUnmount(() => clearTimeout(debounceTimer));
   justify-content: space-between;
 }
 .playground-bar { min-height: 58px; padding: 10px max(20px, calc((100vw - 1320px) / 2)); border-bottom: 1px solid var(--play-border); }
-.playground-status, .playground-actions { display: flex; align-items: center; gap: 10px; }
+.playground-heading, .playground-status, .playground-actions { display: flex; align-items: center; gap: 10px; }
+.playground-heading { gap: 14px; }
+.back-link { color: inherit; font-weight: 750; text-decoration: none; }
+.back-link:hover { color: #2459d3; }
+.back-link::after { content: ''; display: inline-block; width: 1px; height: 18px; margin-left: 14px; vertical-align: middle; background: var(--play-border); }
 .playground-status { font: 600 0.78rem/1.2 var(--vp-font-family-mono); text-transform: uppercase; letter-spacing: 0.06em; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #777; transition: background .2s, transform .2s; }
 .status-dot.compiling, .status-dot.loading { background: #2459d3; animation: pulse 1s infinite alternate; }
@@ -205,8 +211,6 @@ select, button { font: inherit; color: inherit; }
 select { max-width: 180px; border: 0; border-bottom: 1px solid #8f8b83; background: transparent; padding: 7px 22px 7px 4px; }
 button { border: 0; background: none; cursor: pointer; }
 button:disabled { cursor: wait; opacity: .48; }
-.compile-button { padding: 9px 16px; border-radius: 4px; background: #2459d3; color: white; font-weight: 700; transition: transform .15s, background .15s; }
-.compile-button:hover:not(:disabled) { transform: translateY(-1px); background: #1746b7; }
 .playground-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr); min-height: 0; overflow: hidden; }
 .editor-pane, .preview-pane { min-width: 0; min-height: 0; }
 .editor-pane { display: grid; grid-template-rows: 48px 1fr; border-right: 1px solid var(--play-border); background: #171a1f; }
@@ -230,13 +234,15 @@ iframe { display: block; width: 100%; height: 100%; min-height: 0; border: 0; ba
 .diagnostic-list p { margin: 8px 0 3px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 @keyframes pulse { to { transform: scale(1.45); opacity: .55; } }
-@media (prefers-reduced-motion: reduce) { .status-dot, .compile-button { animation: none; transition: none; } }
+@media (prefers-reduced-motion: reduce) { .status-dot { animation: none; transition: none; } }
 @media (max-width: 900px) {
   .playground-workspace { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
   .editor-pane { border-right: 0; border-bottom: 1px solid var(--play-border); }
 }
 @media (max-width: 560px) {
   .playground-bar { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px 16px; }
+  .playground-heading { justify-content: space-between; }
+  .back-link::after { display: none; }
   .playground-actions { justify-content: space-between; width: 100%; }
   .playground-actions label { flex: 1; }
   select { width: 100%; max-width: none; }
