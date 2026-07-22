@@ -1,9 +1,9 @@
 export const playgroundSamples = [
   {
-    name: 'Typed greeting',
-    source: `document @hello:
+    name: 'Editorial welcome',
+    source: `document @welcome:
   language: "en"
-  title: "A typed welcome"
+  title: "Editorial welcome"
 
   schema input:
     string name
@@ -12,124 +12,156 @@ export const playgroundSamples = [
 
   style @base:
     font: "Helvetica"
-    size: 11pt
-    line-height: 17pt
-    color: "#24313D"
+    size: 10pt
+    line-height: 15pt
+    color: "#25313A"
 
-  style @eyebrow:
+  style @label:
     style: "@base"
     size: 8pt
-    line-height: 11pt
+    line-height: 10pt
     bold: true
-    color: "#E85D3F"
+    color: "#D94F2B"
 
   style @display:
     style: "@base"
-    size: 32pt
-    line-height: 36pt
+    size: 34pt
+    line-height: 38pt
     bold: true
-    color: "#132238"
+    color: "#111A21"
 
   style @small:
     style: "@base"
     size: 8pt
     line-height: 12pt
-    color: "#607080"
+    color: "#687078"
 
   page @sheet:
     size: "A4"
-    margin: 38pt
+    margin: 36pt
     body @content:
       paragraph @masthead:
-        style: "@eyebrow"
-        padding: 12pt
-        background: "#132238"
-        color: "#FFB29F"
-        border-radius: 8pt
-        text: "PAPERRUNE  /  BROWSER EDITION"
+        style: "@label"
+        padding: 13pt
+        background: "#111A21"
+        color: "#F7F2E9"
+        text: "PAPERRUNE                         FIELD NOTE 01 / 2026"
 
       paragraph @edition:
-        style: "@eyebrow"
+        style: "@label"
         margin-top: 32pt
-        text: premium ? "PREMIUM DOCUMENT WORKSPACE" : "PERSONAL DOCUMENT WORKSPACE"
+        text: premium ? "THE PREMIUM DOCUMENT WORKSPACE" : "THE DOCUMENT WORKSPACE"
 
       heading @title:
         level: 1
         style: "@display"
         margin-top: 8pt
-        margin-bottom: 10pt
-        color: premium ? "#2459D3" : "#132238"
+        margin-bottom: 12pt
         text: name
 
-      paragraph @message:
+      paragraph @deck:
         style: "@base"
         size: 14pt
         line-height: 21pt
-        margin-bottom: 34pt
-        color: "#536171"
-        text: premium ? "Your typed data became a deterministic page: locally, instantly, beautifully." : "Readable documents, planned exactly and rendered locally."
+        margin-bottom: 26pt
+        color: "#56616A"
+        text: "A page with a point of view, compiled from typed data and exact decisions."
 
-      table @facts:
+      paragraph @manifesto:
+        style: "@base"
+        padding: 20pt
+        background: "#F2EEE6"
+        border-left-width: 4pt
+        border-color: "#D94F2B"
+        size: 13pt
+        line-height: 20pt
+        bold: true
+        text: note != null ? note : "Make the hierarchy obvious. Make every measurement intentional."
+
+      paragraph @principles-label:
+        style: "@label"
+        margin-top: 30pt
+        margin-bottom: 8pt
+        text: "THREE RULES FOR A SERIOUS DOCUMENT"
+
+      table @principles:
         split: "avoid"
         table-column:
-          width: 33%
+          width: 23%
         table-column:
-          width: 34%
-        table-column:
-          width: 33%
+          width: 77%
         table-row:
-          cell @typed:
-            style: "@small"
-            padding: 14pt
-            background: "#EEF2FF"
-            bold: true
-            color: "#3D57A3"
-            text: "01  TYPED INPUT"
-          cell @local:
-            style: "@small"
-            padding: 14pt
-            background: "#FFF0EB"
-            bold: true
-            color: "#B94730"
-            text: "02  LOCAL WASM"
-          cell @exact:
-            style: "@small"
-            padding: 14pt
-            background: "#EAF7F0"
-            bold: true
-            color: "#287052"
-            text: "03  EXACT OUTPUT"
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "01 / STRUCTURE"
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Lead with meaning. Let spacing and scale establish the reading order."
+        table-row:
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "02 / RHYTHM"
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Alternate dense evidence with quiet space so the page can breathe."
+        table-row:
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "03 / PROOF"
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Compile the same inputs into the same pixels, every single time."
 
-      paragraph @note:
-        visible: note != null
-        style: "@base"
-        margin-top: 24pt
-        padding: 18pt
-        background: "#F5F2EA"
-        border-left-width: 3pt
-        border-color: "#E85D3F"
-        color: "#45515E"
-        text: note != null ? note : ""
+      paragraph @closing-label:
+        style: "@label"
+        margin-top: 30pt
+        text: "DESIGNED IN PAPER / RENDERED IN GO WASM"
+
+      heading @closing:
+        level: 2
+        margin-top: 7pt
+        size: 21pt
+        line-height: 26pt
+        color: "#111A21"
+        text: "The browser is the press. The plan is the contract."
 
       paragraph @footer:
         style: "@small"
-        margin-top: 30pt
-        border-top-width: 1pt
-        border-color: "#D8DEE5"
+        margin-top: 34pt
         padding-top: 10pt
-        text: "Edit the source or JSON. This page redraws itself as you type."
+        border-top-width: 1pt
+        border-color: "#CDC7BD"
+        text: "Edit the Paper source or JSON. The WebAssembly renderer rebuilds this page automatically."
 `,
     data: `{
-  "name": "Hello, document maker.",
+  "name": "The page is the product.",
   "premium": true,
-  "note": "A document is more than text on a page. Give it rhythm, hierarchy, and a clear reason to exist."
+  "note": "A document should feel authored, not assembled. Give it one voice, one hierarchy, and no accidental decoration."
 }`,
   },
   {
-    name: 'Calculated layout',
-    source: `document @layout:
+    name: 'Layout specimen',
+    source: `document @layout-specimen:
   language: "en"
-  title: "Geometry report"
+  title: "Layout specimen"
 
   schema metrics:
     number columns
@@ -139,109 +171,201 @@ export const playgroundSamples = [
     font: "Helvetica"
     size: 10pt
     line-height: 15pt
-    color: "#28343E"
+    color: "#25313A"
 
   style @label:
     style: "@base"
     size: 8pt
     line-height: 10pt
     bold: true
-    color: "#6C7680"
+    color: "#D94F2B"
 
-  style @metric:
+  style @display:
     style: "@base"
-    size: 19pt
-    line-height: 23pt
+    size: 31pt
+    line-height: 35pt
     bold: true
-    color: "#152A3B"
+    color: "#111A21"
 
-  page:
+  style @mono:
+    font: "Courier"
+    size: 9pt
+    line-height: 13pt
+    color: "#111A21"
+
+  page @sheet:
     size: "A4"
-    margin: 38pt
-    body:
-      paragraph @report-label:
+    margin: 36pt
+    body @content:
+      paragraph @masthead:
         style: "@label"
-        color: "#D45C3B"
-        text: "LAYOUT SYSTEMS  /  REPORT 07"
+        padding: 13pt
+        background: "#111A21"
+        color: "#F7F2E9"
+        text: "PAPERRUNE                         GEOMETRY SPECIMEN / 02"
 
-      heading:
+      paragraph @section:
+        style: "@label"
+        margin-top: 30pt
+        text: "LAYOUT AS AN EXPLICIT SYSTEM"
+
+      heading @title:
         level: 1
+        style: "@display"
         margin-top: 8pt
-        size: 30pt
-        line-height: 34pt
-        color: "#152A3B"
-        text: "Geometry that explains itself."
+        text: "A measured page."
 
       paragraph @intro:
         style: "@base"
         margin-top: 10pt
         margin-bottom: 28pt
-        size: 12pt
-        line-height: 18pt
-        color: "#596773"
-        text: "Fractions, physical units, and typed expressions resolve into one stable composition."
+        size: 13pt
+        line-height: 19pt
+        color: "#59636B"
+        text: "Fractions, physical units, and typed expressions resolve before a single pixel is painted."
 
-      row @metric-columns:
-        gap: compact ? 8pt : 14pt
-        height: 94pt
-        paragraph @fraction-card:
+      row @ratio:
+        gap: compact ? 8pt : 16pt
+        height: 72pt
+        paragraph @primary:
           width: columns * 1fr
-          style: "@metric"
-          color: "#3D57A3"
-          text: "2fr  /  Primary column"
-        paragraph @fixed-card:
+          style: "@display"
+          color: "#111A21"
+          text: "2fr / PRIMARY"
+        paragraph @support:
           width: 1fr
-          style: "@metric"
-          color: "#B94730"
-          text: "1fr  /  Support"
+          style: "@display"
+          color: "#D94F2B"
+          text: "1fr"
 
       paragraph @formula-label:
         style: "@label"
-        margin-top: 30pt
         margin-bottom: 8pt
-        text: "THE LAYOUT FORMULA"
+        text: "THE DECLARED RELATIONSHIP"
 
       paragraph @formula:
-        font: "Courier"
-        size: 12pt
-        line-height: 18pt
-        padding: 16pt
-        margin-bottom: 24pt
-        background: "#152A3B"
-        color: "#F7F2E8"
-        border-radius: 7pt
-        text: "available width - gap  >  2fr + 1fr  >  exact points"
+        style: "@mono"
+        padding: 17pt
+        margin-bottom: 26pt
+        background: "#111A21"
+        color: "#F7F2E9"
+        text: "available width - 16pt gap = 2fr primary + 1fr support"
 
-      table @principles:
+      table @measurements:
         split: "avoid"
         table-column:
-          width: 33%
+          width: 31%
         table-column:
-          width: 34%
+          width: 24%
         table-column:
-          width: 33%
+          width: 45%
+        table-header:
+          table-row:
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#D94F2B"
+              color: "#FFFFFF"
+              text: "TOKEN"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#D94F2B"
+              color: "#FFFFFF"
+              text: "VALUE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#D94F2B"
+              color: "#FFFFFF"
+              text: "PURPOSE"
         table-row:
-          cell @units:
+          cell:
+            style: "@mono"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "page.margin"
+          cell:
             style: "@base"
-            padding: 12pt
-            background: "#EEF2FF"
-            bold: true
-            color: "#3D57A3"
-            text: "Physical units / pt, mm, in, and percentages"
-          cell @expressions:
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "36pt"
+          cell:
             style: "@base"
-            padding: 12pt
-            background: "#FFF0EB"
-            bold: true
-            color: "#B94730"
-            text: "Typed expressions / no stringly layout decisions"
-          cell @determinism:
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Stable outer rhythm"
+        table-row:
+          cell:
+            style: "@mono"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "row.gap"
+          cell:
             style: "@base"
-            padding: 12pt
-            background: "#EAF7F0"
-            bold: true
-            color: "#287052"
-            text: "Deterministic output / the browser does not improvise"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: compact ? "8pt" : "16pt"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Data-dependent spacing"
+        table-row:
+          cell:
+            style: "@mono"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "column.width"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "2fr / 1fr"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Exact proportional allocation"
+        table-row:
+          cell:
+            style: "@mono"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "renderer.dpi"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "144"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Pinned WASM raster profile"
+
+      paragraph @footer:
+        style: "@label"
+        margin-top: 30pt
+        padding-top: 10pt
+        border-top-width: 1pt
+        border-color: "#CDC7BD"
+        text: "NO BROWSER LAYOUT DECISIONS / NO HIDDEN MEASUREMENTS"
 `,
     data: `{
   "columns": 2,
@@ -249,9 +373,9 @@ export const playgroundSamples = [
 }`,
   },
   {
-    name: 'Production invoice',
+    name: 'Studio invoice',
     source: `document @invoice:
-  title: "Invoice"
+  title: "Studio invoice"
   language: "en"
 
   schema billing:
@@ -272,46 +396,54 @@ export const playgroundSamples = [
 
   style @base:
     font: "Helvetica"
-    size: 10pt
-    line-height: 15pt
-    color: "#2F3D47"
-
-  style @title:
-    style: "@base"
-    size: 30pt
-    line-height: 34pt
-    bold: true
-    color: "#142D3D"
+    size: 9pt
+    line-height: 14pt
+    color: "#25313A"
 
   style @label:
     style: "@base"
-    size: 8pt
-    line-height: 11pt
+    size: 7pt
+    line-height: 10pt
     bold: true
-    color: "#D45C3B"
+    color: "#D94F2B"
+
+  style @display:
+    style: "@base"
+    size: 31pt
+    line-height: 35pt
+    bold: true
+    color: "#111A21"
 
   style @total:
     style: "@base"
-    size: 20pt
-    line-height: 24pt
+    size: 19pt
+    line-height: 23pt
     bold: true
-    color: "#142D3D"
+    color: "#FFFFFF"
 
   page @invoice-page:
     size: "A4"
-    margin: 36pt
+    margin: 34pt
     page-numbers: true
-    page-number-format: "Invoice | Page %d of {pages}"
+    page-number-format: "Invoice / Page %d of {pages}"
     page-total-alias: "{pages}"
 
-    header @invoice-header:
-      row @invoice-masthead:
+    body @invoice-content:
+      paragraph @masthead:
+        style: "@label"
+        padding: 13pt
+        margin-bottom: 24pt
+        background: "#111A21"
+        color: "#F7F2E9"
+        text: "PAPERRUNE STUDIO                   BILLING DOCUMENT / 2026"
+
+      row @title-row:
         gap: 16pt
-        align-items: "center"
+        align-items: "end"
         heading @invoice-heading:
           width: 2fr
           level: 1
-          style: "@title"
+          style: "@display"
           text: "INVOICE"
         paragraph @number:
           width: 1fr
@@ -320,12 +452,6 @@ export const playgroundSamples = [
           bold: true
           align: "right"
           text: "INV-0000"
-
-    body @invoice-content:
-      paragraph @project-label:
-        style: "@label"
-        margin-top: 18pt
-        text: "DOCUMENT SYSTEMS / JULY 2026"
 
       table @parties:
         split: "avoid"
@@ -339,20 +465,19 @@ export const playgroundSamples = [
               header-cell: true
               style: "@label"
               padding: 8pt
-              background: "#142D3D"
-              color: "#FFB19E"
+              border-bottom-width: 2pt
+              border-color: "#111A21"
               text: "FROM"
             cell:
               header-cell: true
               style: "@label"
               padding: 8pt
-              background: "#142D3D"
-              color: "#FFB19E"
+              border-bottom-width: 2pt
+              border-color: "#111A21"
               text: "BILL TO"
         table-row:
           cell:
             padding: 10pt
-            background: "#F3F5F5"
             paragraph @seller:
               style: "@base"
               bind: "seller"
@@ -360,7 +485,6 @@ export const playgroundSamples = [
               text: "Seller"
           cell:
             padding: 10pt
-            background: "#F3F5F5"
             paragraph @customer:
               style: "@base"
               bind: "customer"
@@ -369,113 +493,125 @@ export const playgroundSamples = [
         table-row:
           cell:
             padding: 10pt
-            background: "#F3F5F5"
             paragraph @seller-contact:
               style: "@base"
               bind: "sellerContact"
-              color: "#65717A"
+              color: "#697078"
               text: "Contact"
           cell:
             padding: 10pt
-            background: "#F3F5F5"
             paragraph @customer-address:
               style: "@base"
               bind: "customerAddress"
-              color: "#65717A"
+              color: "#697078"
               text: "Address"
 
-      row @dates:
-        gap: 12pt
-        paragraph @issued:
-          width: 1fr
-          style: "@base"
-          bind: "issued"
-          bold: true
-          color: "#B94730"
-          text: "Issue date"
-        paragraph @due:
-          width: 1fr
-          style: "@base"
-          bind: "due"
-          bold: true
-          color: "#3D57A3"
-          text: "Due date"
+      table @dates:
+        split: "avoid"
+        table-column:
+          width: 50%
+        table-column:
+          width: 50%
+        table-row:
+          cell:
+            style: "@label"
+            padding: 9pt
+            background: "#F2EEE6"
+            text: "ISSUED"
+          cell:
+            style: "@label"
+            padding: 9pt
+            background: "#F2EEE6"
+            text: "DUE"
+        table-row:
+          cell:
+            style: "@base"
+            bind: "issued"
+            padding: 9pt
+            bold: true
+            text: "Issue date"
+          cell:
+            style: "@base"
+            bind: "due"
+            padding: 9pt
+            bold: true
+            text: "Due date"
 
       table @items-table:
         repeat-header: true
         split: "rows"
-        table-column @description-column:
+        table-column:
           width: 52%
-        table-column @quantity-column:
+        table-column:
           width: 12%
-        table-column @rate-column:
+        table-column:
           width: 18%
-        table-column @amount-column:
+        table-column:
           width: 18%
-        table-header @items-header:
-          table-row @items-header-row:
-            cell @description-heading:
-              padding: 8pt
-              background: "#DDE7EA"
-              paragraph:
-                style: "@label"
-                color: "#40515C"
-                text: "DESCRIPTION"
-            cell @quantity-heading:
-              padding: 8pt
-              background: "#DDE7EA"
-              paragraph:
-                style: "@label"
-                color: "#40515C"
-                text: "QTY"
-            cell @rate-heading:
-              padding: 8pt
-              background: "#DDE7EA"
-              paragraph:
-                style: "@label"
-                color: "#40515C"
-                text: "RATE"
-            cell @amount-heading:
-              padding: 8pt
-              background: "#DDE7EA"
-              paragraph:
-                style: "@label"
-                color: "#40515C"
-                align: "right"
-                text: "AMOUNT"
+        table-header:
+          table-row:
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "DESCRIPTION"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "QTY"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "RATE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              align: "right"
+              text: "AMOUNT"
         repeat @item-rows:
           source: "items"
           instance-prefix: "items"
           max-items: 100
-          table-row @item-row:
-            cell @description-cell:
-              padding: 9pt
+          table-row:
+            cell:
+              padding: 10pt
               border-bottom-width: 1pt
-              border-color: "#DDE3E6"
+              border-color: "#D5CFC5"
               paragraph:
                 style: "@base"
                 bind: "description"
                 text: "Item"
-            cell @quantity-cell:
-              padding: 9pt
+            cell:
+              padding: 10pt
               border-bottom-width: 1pt
-              border-color: "#DDE3E6"
+              border-color: "#D5CFC5"
               paragraph:
                 style: "@base"
                 bind: "quantity"
                 text: "1"
-            cell @rate-cell:
-              padding: 9pt
+            cell:
+              padding: 10pt
               border-bottom-width: 1pt
-              border-color: "#DDE3E6"
+              border-color: "#D5CFC5"
               paragraph:
                 style: "@base"
                 bind: "rate"
                 text: "$0.00"
-            cell @amount-cell:
-              padding: 9pt
+            cell:
+              padding: 10pt
               border-bottom-width: 1pt
-              border-color: "#DDE3E6"
+              border-color: "#D5CFC5"
               paragraph:
                 style: "@base"
                 bind: "amount"
@@ -483,50 +619,63 @@ export const playgroundSamples = [
                 bold: true
                 text: "$0.00"
 
-      row @summary:
-        gap: 10pt
-        paragraph @summary-note:
-          width: 2fr
-          style: "@base"
-          color: "#66737C"
-          text: "Payment due within 30 days. Thank you for building better documents with us."
-        paragraph @total-value:
-          width: 1fr
-          style: "@total"
-          bind: "total"
-          align: "right"
-          text: "$0.00"
-      paragraph @note:
+      table @summary:
+        split: "avoid"
+        table-column:
+          width: 65%
+        table-column:
+          width: 35%
+        table-row:
+          cell:
+            style: "@base"
+            padding: 15pt
+            background: "#F2EEE6"
+            color: "#596169"
+            text: "Payment due within 30 days. Reference the invoice number with your remittance."
+          cell:
+            style: "@total"
+            bind: "total"
+            padding: 15pt
+            background: "#D94F2B"
+            align: "right"
+            text: "$0.00"
+
+      paragraph @terms:
         style: "@base"
-        margin-top: 18pt
+        margin-top: 22pt
         padding-top: 10pt
         border-top-width: 1pt
-        border-color: "#D5DDE1"
+        border-color: "#CDC7BD"
         size: 8pt
-        color: "#77828A"
-        text: "AMOUNT DUE / Include the invoice number with your remittance."
+        color: "#687078"
+        text: "Thank you for the collaboration. Questions: accounts@paperrune.studio"
+
+      paragraph @footer:
+        style: "@label"
+        margin-top: 26pt
+        text: "PAPERRUNE / TYPED BILLING / DETERMINISTIC OUTPUT"
 `,
     data: `{
   "invoiceNumber": "INV-2026-0042",
   "issued": "July 20, 2026",
   "due": "August 19, 2026",
   "seller": "PaperRune Studio",
-  "sellerContact": "documents@example.test | +1 555 0124",
+  "sellerContact": "accounts@paperrune.studio / +1 555 0124",
   "customer": "Northwind Operations",
   "customerAddress": "22 Market Street, Seattle, WA 98101",
   "total": "$1,850.00",
   "items": [
-    {"description":"PDF generation platform","quantity":"1","rate":"$800.00","amount":"$800.00"},
-    {"description":"Template implementation","quantity":"6","rate":"$95.00","amount":"$570.00"},
-    {"description":"Automated document checks","quantity":"4","rate":"$75.00","amount":"$300.00"},
-    {"description":"Support package","quantity":"1","rate":"$180.00","amount":"$180.00"}
+    {"description":"Document platform license","quantity":"1","rate":"$800.00","amount":"$800.00"},
+    {"description":"Editorial template system","quantity":"6","rate":"$95.00","amount":"$570.00"},
+    {"description":"Automated output checks","quantity":"4","rate":"$75.00","amount":"$300.00"},
+    {"description":"Launch support","quantity":"1","rate":"$180.00","amount":"$180.00"}
   ]
 }`,
   },
   {
-    name: 'Component dispatch',
-    source: `document @component-dispatch:
-  title: "Release readiness"
+    name: 'Release brief',
+    source: `document @release-brief:
+  title: "Release brief"
   language: "en"
 
   schema release:
@@ -537,162 +686,233 @@ export const playgroundSamples = [
 
   style @base:
     font: "Helvetica"
-    size: 11pt
-    line-height: 17pt
-    color: "#31404A"
+    size: 10pt
+    line-height: 15pt
+    color: "#25313A"
 
   style @label:
     style: "@base"
     size: 8pt
-    line-height: 11pt
+    line-height: 10pt
     bold: true
-    color: "#697681"
+    color: "#D94F2B"
 
   style @display:
     style: "@base"
-    size: 29pt
-    line-height: 34pt
+    size: 32pt
+    line-height: 36pt
     bold: true
-    color: "#152D3D"
+    color: "#111A21"
 
-  component @ready-card:
-    heading @ready-title:
-      level: 2
+  style @score:
+    style: "@base"
+    size: 40pt
+    line-height: 44pt
+    bold: true
+    color: "#D94F2B"
+
+  component @ready:
+    paragraph @ready-label:
+      style: "@label"
       margin-top: 22pt
-      padding: 15pt
-      background: "#DDF4E8"
-      border-radius: 8pt
-      color: "#176B49"
-      text: "READY TO SHIP"
+      padding: 13pt
+      background: "#111A21"
+      color: "#FFFFFF"
+      text: "DECISION / READY TO SHIP"
     paragraph @ready-copy:
       style: "@base"
-      padding: 14pt
-      background: "#F0FAF5"
-      color: "#35644F"
-      text: "All release gates passed. The package is clear for publication."
-
-  component @blocked-card:
-    heading @blocked-title:
-      level: 2
-      margin-top: 22pt
       padding: 15pt
-      background: "#FFE3DC"
-      border-radius: 8pt
-      color: "#B42318"
-      text: "RELEASE BLOCKED"
+      background: "#F2EEE6"
+      text: "Every release gate is closed. Publication can proceed."
+
+  component @blocked:
+    paragraph @blocked-label:
+      style: "@label"
+      margin-top: 22pt
+      padding: 13pt
+      background: "#D94F2B"
+      color: "#FFFFFF"
+      text: "DECISION / HOLD RELEASE"
     paragraph @blocked-copy:
       style: "@base"
-      padding: 14pt
-      background: "#FFF3F0"
-      color: "#7E3A30"
-      text: "One gate needs attention. Resolve it before publishing this release."
+      padding: 15pt
+      background: "#F2EEE6"
+      text: "One gate remains open. Resolve the named blocker before publication."
 
   page @sheet:
     size: "A4"
-    margin: 38pt
+    margin: 36pt
     body @content:
-      row @report-header:
-        gap: 12pt
-        align-items: "center"
-        paragraph @report-name:
-          width: 2fr
-          style: "@label"
-          color: "#D45C3B"
-          text: "RELEASE CONTROL / LIVE REPORT"
-        paragraph @report-version:
-          width: 1fr
-          style: "@label"
-          align: "right"
-          text: "PAPERRUNE 0.4"
+      paragraph @masthead:
+        style: "@label"
+        padding: 13pt
+        background: "#111A21"
+        color: "#F7F2E9"
+        text: "PAPERRUNE                         RELEASE CONTROL / BRIEF 04"
+
+      paragraph @brief-label:
+        style: "@label"
+        margin-top: 30pt
+        text: "SHIP / HOLD DECISION"
 
       heading @product:
         level: 1
         style: "@display"
-        margin-top: 22pt
+        margin-top: 8pt
         text: product
 
       paragraph @subtitle:
         style: "@base"
-        margin-top: 8pt
-        margin-bottom: 28pt
-        color: "#66747E"
-        text: "A compact, typed decision report assembled from reusable components."
+        margin-top: 10pt
+        margin-bottom: 26pt
+        size: 13pt
+        line-height: 19pt
+        color: "#59636B"
+        text: "A typed decision record for the people responsible for publication."
 
       row @scoreboard:
-        gap: 12pt
-        paragraph @score:
+        gap: 18pt
+        height: 68pt
+        paragraph @score-value:
           width: 1fr
-          style: "@display"
+          style: "@score"
           bind: "score"
           format: "decimal"
           format-locale: "en-US"
           format-min-fraction: 0
           format-max-fraction: 0
-          color: "#3D57A3"
           text: "0"
         paragraph @rating:
           width: 2fr
           style: "@base"
           bold: true
           text: switch:
-            case score >= 90: "EXCELLENT / all systems are ready"
-            case score >= 70: "REVIEW / almost there, inspect open gates"
+            case score >= 90: "EXCELLENT / all release evidence is complete"
+            case score >= 70: "REVIEW / inspect the remaining open gate"
             default: "AT RISK / intervention is required"
 
       paragraph @score-label:
         style: "@label"
-        margin-top: 8pt
         text: "READINESS SCORE / 100"
 
-      use @release-state:
-        component: blocked ? @blocked-card : @ready-card
+      use @decision:
+        component: blocked ? @blocked : @ready
 
       paragraph @blocker:
         visible: blocker != null && blocked
         style: "@base"
-        margin-top: 10pt
+        margin-top: 12pt
         padding: 14pt
-        border-left-width: 3pt
-        border-color: "#B42318"
-        color: "#B42318"
+        border-left-width: 4pt
+        border-color: "#D94F2B"
+        bold: true
         text: blocker != null ? blocker : ""
 
-      paragraph @checks-label:
+      paragraph @gates-label:
         style: "@label"
         margin-top: 28pt
         margin-bottom: 8pt
-        text: "SYSTEM CHECKS"
+        text: "RELEASE GATES"
 
-      table @checks:
+      table @gates:
         split: "avoid"
-        table-column:
-          width: 33%
         table-column:
           width: 34%
         table-column:
-          width: 33%
+          width: 38%
+        table-column:
+          width: 28%
+        table-header:
+          table-row:
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "GATE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "EVIDENCE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "STATE"
         table-row:
-          cell @types:
+          cell:
             style: "@base"
-            padding: 13pt
-            background: "#EEF2FF"
-            bold: true
-            color: "#3D57A3"
-            text: "01  TYPES / Schema valid"
-          cell @layout:
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Typed source"
+          cell:
             style: "@base"
-            padding: 13pt
-            background: "#F8F0E2"
-            bold: true
-            color: "#9A6438"
-            text: "02  LAYOUT / Plan stable"
-          cell @output:
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Schema and expressions"
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            color: "#25313A"
+            text: "PASSED"
+        table-row:
+          cell:
             style: "@base"
-            padding: 13pt
-            background: "#E9F6EF"
-            bold: true
-            color: "#287052"
-            text: "03  OUTPUT / Hash exact"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Layout plan"
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Stable page geometry"
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            color: "#25313A"
+            text: "PASSED"
+        table-row:
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Publication"
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: blocked ? "Approval outstanding" : "Approval recorded"
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            color: "#D94F2B"
+            text: blocked ? "OPEN" : "PASSED"
+
+      paragraph @footer:
+        style: "@label"
+        margin-top: 30pt
+        padding-top: 10pt
+        border-top-width: 1pt
+        border-color: "#CDC7BD"
+        text: "DECISION RECORD / GENERATED LOCALLY / HASHED EXACTLY"
 `,
     data: `{
   "product": "PaperRune 0.4",

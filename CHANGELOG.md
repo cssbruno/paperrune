@@ -11,6 +11,8 @@
   and pushes to `main` publish the verified site through GitHub Pages.
 - Replaced the playground's SVG capture iframe with lossless PNG pages painted
   directly by the Go WebAssembly display-list renderer.
+- Rebuilt the bundled playground documents as a coherent editorial set with
+  stronger typography, print hierarchy, denser real content, and fewer boxes.
 - Fixed Paper table cells so documented `vertical-align` values are validated
   and retained in the renderer-independent layout plan.
 - Removed the public FPDF-style, typed-Go, and HTML-to-PDF authoring surfaces.
