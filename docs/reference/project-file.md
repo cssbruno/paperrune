@@ -1,8 +1,7 @@
 # Paper project file
 
-`paper.project.json` makes `paper check`, `paper render`, and `paper studio`
-work without repeating source, data, asset, and output arguments. `paper init`
-creates this file automatically.
+`paper.project.json` stores shared CLI and Studio options. `paper init` creates
+it automatically.
 
 ```json
 {
@@ -15,9 +14,8 @@ creates this file automatically.
 }
 ```
 
-All paths in the project file are resolved relative to the project file. The
-CLI searches the current directory and its parents, so commands also work from
-a project subdirectory. Unknown fields and trailing JSON are rejected.
+Paths are relative to the project file. Discovery searches the current
+directory and its parents. Unknown fields and trailing JSON are rejected.
 
 ## Precedence
 

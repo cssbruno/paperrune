@@ -1,7 +1,6 @@
 # Projects and data
 
-PaperRune keeps the template, data contract, data values, and output settings
-explicit. It does not read ambient variables from the host during compilation.
+Projects combine a template, schema, data, assets, and output settings.
 
 ## Project discovery
 
@@ -19,7 +18,7 @@ and its parents for `paper.project.json`:
 }
 ```
 
-Every path is relative to the project file. Configuration precedence is:
+Paths are relative to the project file. Precedence:
 
 1. command flags and an explicit source argument;
 2. `PAPER_SOURCE`, `PAPER_DATA`, `PAPER_OUTPUT`, `PAPER_FORMAT`,
@@ -27,13 +26,11 @@ Every path is relative to the project file. Configuration precedence is:
 3. `paper.project.json`;
 4. command defaults.
 
-See the [project-file reference](/reference/project-file) for output and
-standard-stream behavior.
+See [Project file](/reference/project-file) for output behavior.
 
 ## Declare a schema
 
-A schema is closed and typed. Primitive fields do not end in a colon. Object
-and list fields own an indented block:
+Schemas are closed and typed:
 
 ```paper
 document:
@@ -52,13 +49,9 @@ document:
       number quantity
 ```
 
-Supported primitives are `string`, `number`, and `bool`. `object` creates a
-nested record. `list TYPE name:` creates a bounded collection of a primitive,
-inline object, or declared custom object. `optional` permits a missing field or
-JSON `null`; every other field is required.
-
-Every list must declare a positive `max-items`. The bound is part of the
-template contract and protects compilation from unbounded expansion.
+Types are `string`, `number`, `bool`, `object`, `list`, and declared objects.
+`optional` permits a missing field or JSON `null`. Lists require a positive
+`max-items`.
 
 ## Supply JSON
 
@@ -79,11 +72,10 @@ JSON keys match schema field names exactly:
 }
 ```
 
-Paper rejects duplicate JSON keys, trailing JSON, unknown fields, wrong scalar
-types, missing required fields, and arrays longer than `max-items`.
+Rejected: duplicate or unknown keys, trailing JSON, wrong types, missing
+required fields, and arrays beyond `max-items`.
 
-Use bare declared paths in expressions. A property name is the receiver, not a
-variable declaration:
+Expressions use declared paths directly:
 
 ```paper
 text: number
@@ -107,12 +99,12 @@ paragraph:
   text: "$0.00"
 ```
 
-The `text` value is the template fallback when no concrete data selection is
-being rendered. For calculated strings, use `text: expression` directly.
+`text` is the fallback when no data is selected. Use `text: expression` for
+calculated strings.
 
 ## Declare scenarios
 
-Scenarios are in-source fixtures for Studio, tests, and deterministic previews:
+Scenarios provide in-source preview and test data:
 
 ```paper
 scenario @overdue:
@@ -129,14 +121,12 @@ scenario @overdue:
       value @quantity: 2
 ```
 
-`parent: "@base"` inherits another scenario before local values override it.
-Scenario values still have to satisfy the selected schema. For production
-data, prefer `--data` and JSON.
+`parent: "@base"` inherits a scenario; local values override it. Scenarios
+must satisfy the schema. Use `--data` for production JSON.
 
 ## Repeat collections
 
-A repeat has exactly one template child. It is expanded only when concrete
-JSON or a scenario is selected:
+A repeat expands one template child for selected data:
 
 ```paper
 repeat @item-rows:
@@ -155,13 +145,12 @@ repeat @item-rows:
         text: "0"
 ```
 
-Inside the template, use `item.field`. An optional `visible` expression filters
-items, and nested repeats may read a child list of the current object. The
-repeat's `max-items` cannot promise more output than the schema permits.
+Use `item.field` inside the template. `visible` filters items. Nested repeats
+may read child lists. Repeat bounds cannot exceed schema bounds.
 
 ## Fixed loops
 
-Use a loop for a bounded numeric sequence rather than a data collection:
+Use a loop for a bounded numeric sequence:
 
 ```paper
 loop @copies:
@@ -175,6 +164,5 @@ loop @copies:
     text: "Copy"
 ```
 
-`loop.index`, `loop.first`, and `loop.last` are available inside the template.
-The direction of `step` must reach `through`, and `max-iterations` must cover
-the authored range.
+Available paths: `loop.index`, `loop.first`, and `loop.last`. `step` must reach
+`through`; `max-iterations` must cover the range.

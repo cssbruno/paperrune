@@ -5,7 +5,7 @@ const base = process.env.PAPERRUNE_DOCS_BASE || (process.env.GITHUB_ACTIONS && r
 
 export default defineConfig({
   title: 'PaperRune',
-  description: 'Deterministic document generation with the Paper language.',
+  description: 'Typed templates for deterministic PDF and HTML.',
   lang: 'en-US',
   base,
   cleanUrls: true,
@@ -38,9 +38,21 @@ export default defineConfig({
         ]},
       ],
       '/reference/': [
-        {text: 'Paper language', items: [
-          {text: 'Complete language reference', link: '/reference/language'},
+        {text: 'Start here', items: [
+          {text: 'Language overview', link: '/reference/language'},
+          {text: 'Node index', link: '/reference/nodes'},
+          {text: 'Syntax and values', link: '/reference/syntax'},
           {text: 'Expressions', link: '/reference/expressions'},
+        ]},
+        {text: 'Document', items: [
+          {text: 'Document and pages', link: '/reference/document'},
+          {text: 'Content', link: '/reference/content'},
+          {text: 'Layout', link: '/reference/layout'},
+        ]},
+        {text: 'Data and reuse', items: [
+          {text: 'Schemas and expansion', link: '/reference/data'},
+          {text: 'Components', link: '/reference/components'},
+          {text: 'Styles and themes', link: '/reference/design'},
         ]},
         {text: 'Tools', items: [
           {text: 'Command line', link: '/reference/cli'},
@@ -65,7 +77,6 @@ export default defineConfig({
       text: 'Edit this page on GitHub',
     },
     footer: {
-      message: 'Paper is the only public authoring format.',
       copyright: 'PaperRune Health-Sector Restricted License 1.0',
     },
   },

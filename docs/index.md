@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: PaperRune
-  text: Documents with a language, not a layout API.
-  tagline: Write typed, indentation-sensitive Paper. Compile deterministic PDF and standalone HTML from the same immutable plan.
+  text: Typed templates for PDF and HTML.
+  tagline: Write Paper once. Compile deterministic outputs in Go or the browser.
   actions:
     - theme: brand
       text: Open the playground
@@ -14,13 +14,7 @@ hero:
       link: /reference/language
 ---
 
-<div class="home-proof">
-  <div><strong>One authoring surface</strong><span>Paper source drives PDF, HTML, Studio, and the browser playground.</span></div>
-  <div><strong>Typed before layout</strong><span>Schemas, expressions, components, and structure fail before output is committed.</span></div>
-  <div><strong>Deterministic by design</strong><span>No clocks, network access, ambient files, mutable layout state, or browser pagination.</span></div>
-</div>
-
-## Start with a readable document
+## Example
 
 ```paper
 document @hello:
@@ -37,6 +31,4 @@ document @hello:
         text: name
 ```
 
-Use the [getting-started guide](/guide/getting-started) to build locally, or
-open the [WASM playground](/playground) to compile this language directly in
-your browser.
+[Get started](/guide/getting-started) or run it in the [playground](/playground).

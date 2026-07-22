@@ -1,8 +1,6 @@
 # Expressions
 
-Paper expressions calculate property values, control visibility, and select
-components from declared data. Expressions are unquoted; string literals
-inside them remain quoted.
+Expressions are unquoted; string literals remain quoted.
 
 ```paper
 text: customer.name
@@ -12,8 +10,7 @@ color: customer.active ? "#16803A" : "#B42318"
 
 ## Names and literals
 
-A bare name or dotted path reads data declared by the schema. Paper does not
-use a `$data` prefix and does not treat an unknown name as text.
+Bare names and dotted paths read schema data. There is no `$data` prefix.
 
 ```paper
 text: title       # field named title
@@ -21,8 +18,7 @@ text: "title"     # literal word title
 visible: active   # boolean field named active
 ```
 
-The property name on the left does not create a variable. In `text: title`,
-`text` is the receiving property and `title` is the data path.
+In `text: title`, `text` is the property and `title` is the data path.
 
 | Value | Examples |
 | --- | --- |
@@ -33,13 +29,11 @@ The property name on the left does not create a variable. In `text: title`,
 | Component | `@paid-card` |
 | Absence | `null` |
 
-Strings use JSON-style double quotes and escapes. Component references are
-unquoted and may only name declared components.
+Strings use JSON escapes. Component references are unquoted.
 
 ## Types belong to properties
 
-The receiving property determines the required result type. Paper does not
-convert between strings, numbers, booleans, units, or component references.
+The receiving property sets the result type; values are not coerced.
 
 Given a boolean field named `active`:
 
@@ -50,8 +44,8 @@ text: active                     # error: text requires string
 text: active ? "Yes" : "No"     # valid: string
 ```
 
-All branches of a conditional must return compatible types. Pairing a value
-with `null` is allowed only when the receiving property supports absence.
+Conditional branches must have compatible types. `null` requires a property
+that supports absence.
 
 ## Operators
 
@@ -69,17 +63,14 @@ From highest to lowest precedence:
 | Boolean OR | `||` |
 | Conditional | `condition ? whenTrue : whenFalse` |
 
-`+` concatenates two strings or adds two compatible numeric values. It never
-converts another type to a string. `matches` performs bounded wildcard matching
-on two strings.
+`+` joins strings or adds compatible numbers; it never coerces. `matches`
+performs bounded wildcard matching on strings.
 
 ```paper
 visible: enabled && name matches "Ada*"
 text: firstName + " " + lastName
 width: (columnCount * 24pt) + 12pt
 ```
-
-Use parentheses when the intended grouping is not immediately obvious.
 
 ## Visibility
 
@@ -91,13 +82,11 @@ paragraph @confidential:
   text: "Confidential information"
 ```
 
-When the result is `false`, the node and its descendants do not exist in the
-rendered document. Paper still checks their expression syntax and schema paths,
-but does not evaluate their runtime expressions or load their assets.
+When false, the subtree is removed. Its syntax and paths are still checked;
+runtime expressions and assets are skipped.
 
-`visible: null` and a missing required visibility value are errors. After
-removal, Paper rechecks structural rules such as table spans and required page
-content.
+`null` or missing visibility is an error. Structural rules are checked again
+after removal.
 
 ## Ternary selection
 
@@ -114,8 +103,7 @@ Ternaries associate from the right:
 text: status == "paid" ? "Paid" : status == "overdue" ? "Overdue" : "Open"
 ```
 
-Both branches are parsed and type-checked. Only the selected branch runs, so a
-guard can safely prevent an invalid runtime operation:
+Both branches are type-checked; only the selected branch runs:
 
 ```paper
 width: count != 0 ? total / count * 1pt : 0pt
@@ -145,10 +133,9 @@ paragraph @risk-label:
     default: "None"
 ```
 
-The first matching case wins. Switches do not fall through and have no
-`break`. Every switch requires one final `default`. Cases after `default`,
-duplicate literal cases, non-boolean predicate cases, and incompatible result
-types are errors.
+The first match wins. There is no fallthrough or `break`. A final `default` is
+required. Duplicate literals, cases after `default`, non-boolean predicates,
+and incompatible results are errors.
 
 ## Component selection
 
@@ -166,14 +153,12 @@ use @optional-warning:
   component: overdue ? @overdue-warning : null
 ```
 
-Every referenced component is checked, including unselected alternatives.
-Paper rejects unknown components, incompatible contracts, and cycles. Data
-cannot construct a component name dynamically.
+All alternatives are checked. Unknown components, incompatible contracts, and
+cycles are errors. Data cannot construct component names.
 
 ## Optional data and null guards
 
-An absent optional schema field or optional component argument resolves to
-`null`. Operations on a nullable value require a guard:
+Missing optional values resolve to `null` and require guards:
 
 ```paper
 text: nickname != null ? nickname : fullName
@@ -187,15 +172,13 @@ The compiler narrows a path where the condition proves it is non-null:
 - the safe right-hand side of `&&` or `||`;
 - the corresponding branch of a ternary.
 
-An arbitrary condition does not narrow a nullable path. Arithmetic, ordering,
-matching, and boolean operations on `null` are errors. Equality is defined:
-`null == null` is `true`, and `null` compared with a non-null value is unequal.
+Other conditions do not narrow. Operations on `null` are errors except
+equality: `null == null` is true; a non-null value is unequal.
 
 ## Numbers and units
 
-Expression numbers are exact decimals with at most nine fractional places.
-They use canonical notation: no leading `+`, no unnecessary leading zero, and
-no trailing fractional zero.
+Numbers are exact decimals with at most nine fractional places. They forbid a
+leading `+`, unnecessary leading zero, and trailing fractional zero.
 
 ```paper
 width: 12.5pt       # valid
@@ -214,14 +197,12 @@ Allowed calculations:
 - multiply a number by a unit in either order;
 - divide a unit by a number.
 
-Multiplying two units, dividing by a unit, mixing unrelated units, overflow,
-division by zero, and results requiring rounding are errors. For example,
-`1 / 2` produces `0.5`, while `1 / 3` fails because it cannot be represented
-exactly within nine decimal places.
+Invalid operations include multiplying units, dividing by a unit, mixing
+unrelated units, overflow, division by zero, and rounding. `1 / 2` is `0.5`;
+`1 / 3` fails the nine-place exactness limit.
 
-Context-dependent units such as `%`, `fr`, `em`, `rem`, `vh`, and `vw` combine
-only with the same suffix. Expressions cannot read calculated page or layout
-measurements.
+`%`, `fr`, `em`, `rem`, `vh`, and `vw` combine only with the same suffix.
+Expressions cannot read calculated layout measurements.
 
 ## Data scopes
 
@@ -234,15 +215,9 @@ Only paths declared in the current scope are available:
 | Loop | `loop.index`, `loop.first`, `loop.last` |
 | Component | declared arguments such as `args.title` |
 
-Unknown, misspelled, or inaccessible paths are compile errors. There are no
-ambient variables or implicit locals.
+Unknown or inaccessible paths are errors. There are no ambient variables.
 
 ## Failure behavior
 
-Expression errors stop compilation or rendering. Paper does not silently use a
-switch default, substitute `null`, retain a conditionally invalid node, or
-coerce a value to the receiving property type.
-
-Diagnostics identify the expression location and distinguish syntax, path,
-type, nullability, component, arithmetic, unit, structure, limit, and
-cancellation failures.
+Expression errors stop compilation. Diagnostics identify the location and
+failure class; Paper does not substitute, coerce, or ignore invalid values.

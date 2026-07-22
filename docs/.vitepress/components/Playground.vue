@@ -175,14 +175,19 @@ onBeforeUnmount(() => clearTimeout(debounceTimer));
 <style scoped>
 .playground-shell {
   --play-border: rgba(23, 26, 31, 0.17);
-  margin: 32px 0 36px;
-  width: 100%;
-  border-top: 1px solid var(--play-border);
-  border-bottom: 1px solid var(--play-border);
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100vw;
+  height: 100vh;
+  height: 100svh;
   background: #e8e3d8;
   color: #171a1f;
   overflow: hidden;
 }
+.playground-shell, .playground-shell * { box-sizing: border-box; }
 .playground-bar, .preview-toolbar, .editor-tabs {
   display: flex;
   align-items: center;
@@ -202,22 +207,22 @@ button { border: 0; background: none; cursor: pointer; }
 button:disabled { cursor: wait; opacity: .48; }
 .compile-button { padding: 9px 16px; border-radius: 4px; background: #2459d3; color: white; font-weight: 700; transition: transform .15s, background .15s; }
 .compile-button:hover:not(:disabled) { transform: translateY(-1px); background: #1746b7; }
-.playground-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr); min-height: 680px; }
-.editor-pane, .preview-pane { min-width: 0; }
+.playground-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr); min-height: 0; overflow: hidden; }
+.editor-pane, .preview-pane { min-width: 0; min-height: 0; }
 .editor-pane { display: grid; grid-template-rows: 48px 1fr; border-right: 1px solid var(--play-border); background: #171a1f; }
 .editor-tabs { justify-content: flex-start; gap: 22px; padding: 0 20px; color: #9fa5af; border-bottom: 1px solid rgba(255,255,255,.12); }
 .editor-tabs button { height: 48px; color: inherit; font: 650 .77rem/1 var(--vp-font-family-mono); text-transform: uppercase; letter-spacing: .06em; }
 .editor-tabs button.active { color: #fff; box-shadow: inset 0 -2px #87a7ff; }
 .editor-tabs span { margin-left: 5px; opacity: .58; text-transform: none; }
-textarea { width: 100%; height: 100%; min-height: 630px; resize: none; border: 0; outline: 0; padding: 22px; background: #171a1f; color: #ece8df; caret-color: #87a7ff; font: 13px/1.65 var(--vp-font-family-mono); tab-size: 2; }
+textarea { display: block; width: 100%; height: 100%; min-height: 0; resize: none; border: 0; outline: 0; padding: 22px; background: #171a1f; color: #ece8df; caret-color: #87a7ff; font: 13px/1.65 var(--vp-font-family-mono); tab-size: 2; }
 .preview-pane { display: grid; grid-template-rows: 48px 1fr; background: #d8d3c8; }
 .preview-toolbar { padding: 0 18px; border-bottom: 1px solid var(--play-border); font: 650 .76rem/1 var(--vp-font-family-mono); text-transform: uppercase; letter-spacing: .06em; }
 .page-controls { display: flex; align-items: center; gap: 8px; }
 .page-controls button { width: 27px; height: 27px; border: 1px solid #aaa59d; border-radius: 50%; }
-iframe { width: 100%; height: 100%; min-height: 630px; border: 0; background: #d8d3c8; }
+iframe { display: block; width: 100%; height: 100%; min-height: 0; border: 0; background: #d8d3c8; }
 .preview-empty { display: grid; place-content: center; gap: 5px; text-align: center; color: #66645f; }
 .preview-empty strong { color: #2c2e32; }
-.diagnostic-list { padding: 0 max(20px, calc((100vw - 1320px) / 2)); background: #f4f0e7; }
+.diagnostic-list { max-height: min(28svh, 260px); padding: 0 max(20px, calc((100vw - 1320px) / 2)); overflow-y: auto; background: #f4f0e7; }
 .diagnostic-list article { padding: 16px 0; border-top: 1px solid var(--play-border); }
 .diagnostic-list article > div { display: flex; justify-content: space-between; gap: 20px; }
 .diagnostic-list strong { font: 700 .78rem/1.2 var(--vp-font-family-mono); color: #a22c24; }
@@ -227,9 +232,8 @@ iframe { width: 100%; height: 100%; min-height: 630px; border: 0; background: #d
 @keyframes pulse { to { transform: scale(1.45); opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .status-dot, .compile-button { animation: none; transition: none; } }
 @media (max-width: 900px) {
-  .playground-workspace { grid-template-columns: 1fr; }
+  .playground-workspace { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
   .editor-pane { border-right: 0; border-bottom: 1px solid var(--play-border); }
-  textarea, iframe { min-height: 520px; }
 }
 @media (max-width: 560px) {
   .playground-bar { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px 16px; }

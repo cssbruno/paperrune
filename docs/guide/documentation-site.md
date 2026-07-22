@@ -1,9 +1,7 @@
 # Documentation site
 
-The documentation is a [VitePress](https://vitepress.dev/) site rooted at
-`docs/`. It uses ordinary Markdown for reference content and one Vue component
-for the browser compiler. Node dependencies are exact-pinned in
-`package-lock.json`.
+[VitePress](https://vitepress.dev/) sources live in `docs/`; dependencies are
+pinned in `package-lock.json`.
 
 ## Local commands
 
@@ -13,17 +11,15 @@ npm run docs:dev
 npm run docs:check
 ```
 
-`docs:dev` starts the authoring server. `docs:check` performs the release gate:
+`docs:check`:
 
 1. compile `cmd/paper-studio-wasm` for `js/wasm`;
 2. copy Go's matching `wasm_exec.js` runtime;
-3. build every VitePress page and validate internal links;
+3. build the site and validate links;
 4. instantiate the built WASM under Node;
-5. prove that valid Paper produces exact SVG, invalid Paper preserves its
-   source diagnostic, and every bundled playground sample compiles.
+5. test valid, invalid, and bundled playground samples.
 
-`make docs-site` and `make docs-site-check` expose the production build and
-release gate through the repository Makefile.
+Make equivalents: `make docs-site` and `make docs-site-check`.
 
 ## Generated files
 
@@ -33,13 +29,11 @@ release gate through the repository Makefile.
 - `docs/public/wasm_exec.js`;
 - `docs/.vitepress/dist/` after the VitePress build.
 
-Do not commit those outputs. The Go source, Markdown, Vue component, VitePress
-configuration, package manifest, and lockfile are the reproducible inputs.
+Do not commit these files.
 
 ## WASM bridge
 
-The browser runtime exposes the existing `PaperStudioWASM` object. The docs
-playground uses its asynchronous `compile` method:
+The playground calls `PaperStudioWASM.compile`:
 
 ```js
 const result = await PaperStudioWASM.compile({
@@ -62,22 +56,18 @@ The request accepts:
 | `schema` | string | Explicit schema selection when needed |
 | `locale` | string | Explicit JSON formatting locale |
 
-`data` and `scenario` are mutually exclusive. The resolved result contains
-`ok`, `pages`, `page`, `hash`, `diagnostics`, `error`, `svg`, `page_width`,
-`page_height`, and `fixed_scale`. Expected authoring failures resolve with
-`ok: false` and structured diagnostics; invalid bridge requests and unexpected
-runtime failures reject the promise.
+`data` and `scenario` are mutually exclusive. Results contain `ok`, `pages`,
+`page`, `hash`, `diagnostics`, `error`, `svg`, `page_width`, `page_height`, and
+`fixed_scale`. Authoring errors resolve with `ok: false`; invalid requests and
+runtime failures reject.
 
-The docs build does not expose filesystem or network resolution to compiled
-Paper. Inline data and declared scenarios work. Imports and asset catalog
-references belong in the CLI or Studio workflow.
+WASM supports inline data and scenarios, but not files, network access,
+imports, or asset catalogs.
 
 ## GitHub Pages
 
-`.github/workflows/pages.yml` builds, tests, uploads, and deploys the site on
-each push to `main`. Actions are pinned to immutable commits. The VitePress
-base path is derived from `GITHUB_REPOSITORY`, so the repository deployment is
-served under `/paperrune/` without breaking navigation, runtime, or WASM URLs.
+`.github/workflows/pages.yml` tests and deploys pushes to `main`. The base path
+is derived from `GITHUB_REPOSITORY`.
 
 To reproduce that path locally:
 
@@ -86,6 +76,4 @@ PAPERRUNE_DOCS_BASE=/paperrune/ npm run docs:build
 PAPERRUNE_DOCS_BASE=/paperrune/ npm run docs:preview
 ```
 
-The ordinary CI workflow runs `npm run docs:check` for pull requests. The Pages
-workflow repeats that gate before deployment, so a broken link, failed static
-render, incompatible Go runtime, or non-working compiler cannot publish.
+CI and Pages both run `npm run docs:check`.
