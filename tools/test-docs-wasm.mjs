@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-PaperRune-Health-Sector-Restricted-1.0
 // Copyright (c) 2026 cssBruno
 
+import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -62,6 +63,8 @@ if (invalid.ok || !invalid.diagnostics?.some((diagnostic) => diagnostic.code ===
 
 let layoutSample;
 let layoutResult;
+let academicSample;
+let academicResult;
 for (const sample of playgroundSamples) {
   const result = await globalThis.PaperStudioWASM.compile({source: sample.source, data: sample.data, dataName: 'playground', page: 1});
   const samplePNG = Buffer.from(result.png || '', 'base64');
@@ -73,13 +76,37 @@ for (const sample of playgroundSamples) {
     layoutSample = sample;
     layoutResult = result;
   }
+  if (sample.name === 'Academic article') {
+    academicSample = sample;
+    academicResult = result;
+  }
 }
 
 if (!layoutSample) throw new Error('layout specimen sample is missing');
+if (!academicSample || !academicResult) throw new Error('academic article sample is missing');
+const academicPageHashes = [
+  '0636267885c0fb7c3fa0cde41dcc198953ef111d776681b83e2d3c487342d2b5',
+  '6d2adf863cafa775c83d09c63f2e298a6ec762eb9b3b4de956c380c93004fae5',
+  'e45c77a790a5fdc51d1e692ce008419270e68135927d4b00d06033551440ec15',
+  '1d2faad7a7399f019c5b332b7508acc1a5049e06661c6f64cc28db77ebaaeb61',
+];
+for (let page = 1; page <= academicPageHashes.length; page += 1) {
+  const result = page === 1 ? academicResult : await globalThis.PaperStudioWASM.compile({
+    source: academicSample.source,
+    data: academicSample.data,
+    dataName: 'playground',
+    page,
+  });
+  const pngHash = createHash('sha256').update(Buffer.from(result.png || '', 'base64')).digest('hex');
+  if (!result.ok || result.pages !== academicPageHashes.length || result.page !== page ||
+      result.pixel_width !== 1191 || result.pixel_height !== 1684 || pngHash !== academicPageHashes[page - 1]) {
+    throw new Error(`academic article page ${page} pixels changed: pages=${result.pages}, size=${result.pixel_width}x${result.pixel_height}, png=${pngHash}`);
+  }
+}
 assertFractionBand(Buffer.from(layoutResult.png || '', 'base64'), 2, 32);
 const compactLayout = await globalThis.PaperStudioWASM.compile({
   source: layoutSample.source,
-  data: '{"columns":3,"compact":true}',
+  data: '{"title":"A measured page.","intro":"Alternate compact geometry for regression coverage.","columns":3,"compact":true}',
   dataName: 'playground',
   page: 1,
 });
