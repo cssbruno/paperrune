@@ -662,21 +662,26 @@ func nestedRepeatFixtureItems(item paperscenario.Value, path string) ([]papersce
 }
 
 func repeatExpressionEnvironment(fields []FieldDescriptor, prefix string) []paperexpr.PathKind {
+	return repeatExpressionEnvironmentOptional(fields, prefix, false)
+}
+
+func repeatExpressionEnvironmentOptional(fields []FieldDescriptor, prefix string, parentOptional bool) []paperexpr.PathKind {
 	result := make([]paperexpr.PathKind, 0)
 	for _, field := range fields {
 		path := field.Name
 		if prefix != "" {
 			path = prefix + "." + field.Name
 		}
+		optional := parentOptional || !field.Required
 		switch field.Kind {
 		case SchemaString:
-			result = append(result, paperexpr.PathKind{Path: path, Kind: paperexpr.String})
+			result = append(result, paperexpr.PathKind{Path: path, Kind: paperexpr.String, Optional: optional})
 		case SchemaNumber:
-			result = append(result, paperexpr.PathKind{Path: path, Kind: paperexpr.Integer})
+			result = append(result, paperexpr.PathKind{Path: path, Kind: paperexpr.Integer, Optional: optional})
 		case SchemaBool:
-			result = append(result, paperexpr.PathKind{Path: path, Kind: paperexpr.Bool})
+			result = append(result, paperexpr.PathKind{Path: path, Kind: paperexpr.Bool, Optional: optional})
 		case SchemaObject:
-			result = append(result, repeatExpressionEnvironment(field.Fields, path)...)
+			result = append(result, repeatExpressionEnvironmentOptional(field.Fields, path, optional)...)
 		}
 	}
 	return result

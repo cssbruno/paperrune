@@ -10,6 +10,9 @@ PaperRune turns indentation-sensitive `.paper` templates and JSON data into
 PDF or standalone HTML. It includes a command-line compiler, a local visual
 Studio, and a Go API.
 
+Read the [complete documentation](https://cssbruno.github.io/paperrune/) or
+compile an example in the browser with the WebAssembly playground.
+
 ```paper
 document @hello:
   language: "en"
@@ -94,6 +97,9 @@ Paper is indentation-sensitive. Format source with:
 ```sh
 paper fmt -w hello.paper
 ```
+
+See the [expression reference](docs/reference/expressions.md) for calculated
+properties, visibility, switches, optional data, and component selection.
 
 ## Commands
 
@@ -189,6 +195,8 @@ make bootstrap   # install pinned development tools
 make test-fast   # formatting, vet, command, and internal tests
 make test        # complete Go test suite
 make docs-check  # build the CLI and exercise the documented project flow
+npm ci
+make docs-site-check # build VitePress and smoke-test the browser compiler
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [ARCHITECTURE.md](ARCHITECTURE.md), and

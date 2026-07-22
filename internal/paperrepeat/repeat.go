@@ -10,7 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -297,6 +297,10 @@ func (state *expansionState) bindings(item paperscenario.Value, itemPath string)
 			return nil, repeatError(diagnostic, "binding resolution work exceeds limits", ErrLimit)
 		}
 		if !found {
+			optional := sort.SearchStrings(state.predicate.OptionalPaths, bindingPath)
+			if optional < len(state.predicate.OptionalPaths) && state.predicate.OptionalPaths[optional] == bindingPath {
+				continue
+			}
 			return nil, repeatError(diagnostic, "predicate binding is missing", ErrBinding)
 		}
 		if collection {
@@ -346,11 +350,11 @@ func scenarioPrimitive(value paperscenario.Value) (paperexpr.Value, error) {
 	case paperscenario.String:
 		return paperexpr.Value{Kind: paperexpr.String, String: string([]byte(value.String))}, nil
 	case paperscenario.Number:
-		integer, err := strconv.ParseInt(value.Number, 10, 64)
+		number, err := paperexpr.ParseNumber(value.Number)
 		if err != nil {
-			return paperexpr.Value{}, errors.New("numeric binding is not a canonical int64")
+			return paperexpr.Value{}, errors.New("numeric binding exceeds deterministic decimal bounds")
 		}
-		return paperexpr.Value{Kind: paperexpr.Integer, Integer: integer}, nil
+		return number, nil
 	default:
 		return paperexpr.Value{}, errors.New("binding is not primitive")
 	}
@@ -453,6 +457,7 @@ func validScenarioNumber(value string) bool {
 func cloneProgram(program paperexpr.Program) paperexpr.Program {
 	program.Constants = append([]paperexpr.Value(nil), program.Constants...)
 	program.Paths = append([]string(nil), program.Paths...)
+	program.OptionalPaths = append([]string(nil), program.OptionalPaths...)
 	program.Code = append([]paperexpr.Instruction(nil), program.Code...)
 	return program
 }

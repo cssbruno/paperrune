@@ -1,0 +1,18 @@
+{
+  "name": "paperrune-documentation",
+  "private": true,
+  "scripts": {
+    "docs:dev": "vitepress dev docs",
+    "docs:wasm": "bash tools/build-docs-wasm.sh",
+    "docs:build": "npm run docs:wasm && vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "docs:check": "npm run docs:build && node tools/test-docs-wasm.mjs docs/.vitepress/dist"
+  },
+  "devDependencies": {
+    "vitepress": "2.0.0-alpha.18",
+    "vue": "3.5.40"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

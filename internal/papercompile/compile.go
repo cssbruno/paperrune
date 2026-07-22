@@ -935,6 +935,17 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 					}
 				}
 			}
+			if property, ok := cellProperties["vertical-align"]; ok {
+				if value, valid := c.stringProperty(property); valid {
+					value = strings.ToLower(strings.TrimSpace(value))
+					switch value {
+					case "top", "middle", "bottom":
+						cell.VerticalAlign = value
+					default:
+						c.add("PAPER_COMPILE_TABLE_VERTICAL_ALIGN", fmt.Sprintf("table cell vertical alignment %q is unsupported", value), "use top, middle, or bottom", property.Value.Span)
+					}
+				}
+			}
 			for _, child := range content {
 				switch child.Kind {
 				case paperlang.NodeText:

@@ -94,6 +94,90 @@ func TestCompileArithmeticOrderingAndInequality(t *testing.T) {
 	}
 }
 
+func TestDeterministicDecimalsAndUnits(t *testing.T) {
+	program, kind, err := Compile(`12.5 * 2 + 0.25`, nil, LanguageLimits{})
+	if err != nil || kind != Integer {
+		t.Fatalf("compile decimal: kind=%v err=%v", kind, err)
+	}
+	value, err := Evaluate(context.Background(), program, nil, Limits{})
+	if err != nil || value != (Value{Kind: Integer, Integer: 2525, Scale: 2}) || FormatNumber(value) != "25.25" {
+		t.Fatalf("decimal = %#v, %v", value, err)
+	}
+
+	program, kind, err = Compile(`(10pt + 2.5pt) * 2`, nil, LanguageLimits{})
+	if err != nil || kind != Unit {
+		t.Fatalf("compile unit: kind=%v err=%v", kind, err)
+	}
+	value, err = Evaluate(context.Background(), program, nil, Limits{})
+	if err != nil || value != (Value{Kind: Unit, Integer: 25, Unit: "pt"}) {
+		t.Fatalf("unit = %#v, %v", value, err)
+	}
+
+	program, _, err = Compile(`1 / 2`, nil, LanguageLimits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err = Evaluate(context.Background(), program, nil, Limits{})
+	if err != nil || FormatNumber(value) != "0.5" {
+		t.Fatalf("exact division = %#v, %v", value, err)
+	}
+
+	program, _, err = Compile(`1 / 3`, nil, LanguageLimits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = Evaluate(context.Background(), program, nil, Limits{}); !errors.Is(err, ErrType) || !strings.Contains(err.Error(), "exact decimal precision") {
+		t.Fatalf("inexact division error = %v", err)
+	}
+	program, _, err = Compile(`1in + 25.4mm`, nil, LanguageLimits{})
+	if err != nil {
+		t.Fatalf("compatible units: %v", err)
+	}
+	value, err = Evaluate(context.Background(), program, nil, Limits{})
+	if err != nil || value != (Value{Kind: Unit, Integer: 2, Unit: "in"}) {
+		t.Fatalf("converted units = %#v, %v", value, err)
+	}
+	if _, _, err = Compile(`10% + 2mm`, nil, LanguageLimits{}); !errors.Is(err, ErrType) {
+		t.Fatalf("mixed unit error = %v", err)
+	}
+	if _, err = Parse(`1.0000000001`, LanguageLimits{}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("precision error = %v", err)
+	}
+}
+
+func TestOptionalPathsRequireAndHonorFlowNarrowing(t *testing.T) {
+	environment := []PathKind{{Path: "name", Kind: String, Optional: true}}
+	program, kind, err := Compile(`name != null ? name : "fallback"`, environment, LanguageLimits{})
+	if err != nil || kind != String || program.ResultNullable || !reflect.DeepEqual(program.OptionalPaths, []string{"name"}) {
+		t.Fatalf("guarded compile = %#v kind=%v err=%v", program, kind, err)
+	}
+	value, err := Evaluate(context.Background(), program, nil, Limits{})
+	if err != nil || value != (Value{Kind: String, String: "fallback"}) {
+		t.Fatalf("missing optional = %#v, %v", value, err)
+	}
+
+	direct, kind, err := Compile(`name`, environment, LanguageLimits{})
+	if err != nil || kind != String || !direct.ResultNullable {
+		t.Fatalf("direct optional = %#v kind=%v err=%v", direct, kind, err)
+	}
+	value, err = Evaluate(context.Background(), direct, nil, Limits{})
+	if err != nil || value.Kind != Null {
+		t.Fatalf("direct missing optional = %#v, %v", value, err)
+	}
+
+	if _, _, err = Compile(`name + "!"`, environment, LanguageLimits{}); !errors.Is(err, ErrType) || !strings.Contains(err.Error(), "non-null") {
+		t.Fatalf("unguarded optional error = %v", err)
+	}
+	orGuard, _, err := Compile(`name == null || name matches "A*"`, environment, LanguageLimits{})
+	if err != nil {
+		t.Fatalf("or narrowing: %v", err)
+	}
+	value, err = Evaluate(context.Background(), orGuard, nil, Limits{})
+	if err != nil || value != (Value{Kind: Bool, Bool: true}) {
+		t.Fatalf("or guard = %#v, %v", value, err)
+	}
+}
+
 func TestLanguageNullableSelectionAndEquality(t *testing.T) {
 	program, kind, err := Compile(`enabled ? @card : null`, []PathKind{{Path: "enabled", Kind: Bool}}, LanguageLimits{})
 	if err != nil || kind != String {
@@ -218,6 +302,7 @@ func TestCompileLiteralsAndDeduplicatesInputs(t *testing.T) {
 	}{
 		{source: `null == null`, kind: Bool, value: Value{Kind: Bool, Bool: true}},
 		{source: `-42`, kind: Integer, value: Value{Kind: Integer, Integer: -42}},
+		{source: `-9223372036854775808`, kind: Integer, value: Value{Kind: Integer, Integer: -9223372036854775808}},
 		{source: `"Olá \ud83d\ude80"`, kind: String, value: Value{Kind: String, String: "Olá 🚀"}},
 		{source: `true || false`, kind: Bool, value: Value{Kind: Bool, Bool: true}},
 	}

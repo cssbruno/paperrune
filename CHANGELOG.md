@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added statically typed declarative expressions for calculated property
+  values, visibility, lazy ternaries, readable switches, null guards, exact
+  decimal/unit arithmetic, and data-dependent component selection.
+- Replaced the scattered language notes with a VitePress documentation site,
+  complete Paper reference, project/data guides, local search, and an exact
+  Go/WASM compiler playground. CI now smoke-tests the built browser compiler,
+  and pushes to `main` publish the verified site through GitHub Pages.
+- Fixed Paper table cells so documented `vertical-align` values are validated
+  and retained in the renderer-independent layout plan.
 - Removed the public FPDF-style, typed-Go, and HTML-to-PDF authoring surfaces.
   Paper is now the only public content-authoring format.
 - Moved the former public `layout` model under `internal`. Removed the obsolete

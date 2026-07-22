@@ -5,7 +5,6 @@ package papercompile
 
 import (
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 
@@ -81,6 +80,7 @@ type expansionOrigin struct {
 	bindingSpan     paperlang.Span
 	bindingRequired bool
 	props           map[string]paperlang.Scalar
+	propContracts   map[string]componentProp
 	context         expansionProvenance
 }
 
@@ -282,7 +282,7 @@ func (e *componentExpander) expandNode(source *paperlang.Node, origin expansionO
 	}
 	for _, member := range source.Members {
 		if member.Property != nil {
-			clone.Members = append(clone.Members, cloneExpansionPropertyWithProps(member.Property, origin.props))
+			clone.Members = append(clone.Members, cloneExpansionPropertyWithProps(member.Property, origin.props, origin.propContracts))
 			continue
 		}
 		for _, child := range e.expandNode(member.Node, origin, depth) {
@@ -336,7 +336,7 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 	for _, member := range use.Members {
 		if member.Property != nil {
 			property := member.Property
-			value := substituteComponentScalar(property.Value, parent.props)
+			value := substituteComponentScalar(property.Value, parent.props, parent.propContracts)
 			if property.Name == "bind" {
 				if value.Kind != paperlang.ScalarString || value.StringValue == nil {
 					e.add("PAPER_BIND_PATH", "bind requires a quoted schema path", "use field.path with one schema, schema.field with several schemas, or a component-relative path", value.Span)
@@ -399,7 +399,7 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 				e.add("PAPER_COMPONENT_ARG_DUPLICATE", fmt.Sprintf("arg @%s is passed more than once", name), "keep one argument per prop", arg.HeaderSpan)
 				continue
 			}
-			args[name] = substituteComponentScalar(*arg.Value, parent.props)
+			args[name] = substituteComponentScalar(*arg.Value, parent.props, parent.propContracts)
 			continue
 		}
 		if member.Node == nil || member.Node.Kind != paperlang.NodeFill {
@@ -510,7 +510,7 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 		}
 		if template.Kind != paperlang.NodeSlot {
 			origin := expansionOrigin{definition: template.Span, invocation: invocationSpan, instancePath: instancePath, prefix: instanceID,
-				bindingBase: bindingBase, bindingSpan: bindingSpan, bindingRequired: bindingRequired, props: resolvedProps, context: context}
+				bindingBase: bindingBase, bindingSpan: bindingSpan, bindingRequired: bindingRequired, props: resolvedProps, propContracts: contract.props, context: context}
 			output = append(output, e.expandNode(template, origin, depth+1)...)
 			continue
 		}
@@ -521,7 +521,7 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 		fill := e.selectSlotFill(template, contract, fills[template.ID])
 		selected := componentChildNodes(template)
 		origin := expansionOrigin{definition: template.Span, invocation: invocationSpan, instancePath: instancePath + "/" + template.ID, prefix: instanceID + "--" + strings.TrimPrefix(template.ID, "@"),
-			bindingBase: bindingBase, bindingSpan: bindingSpan, bindingRequired: bindingRequired, props: resolvedProps, context: context}
+			bindingBase: bindingBase, bindingSpan: bindingSpan, bindingRequired: bindingRequired, props: resolvedProps, propContracts: e.contracts[definition].props, context: context}
 		if fill != nil {
 			selected = componentChildNodes(fill)
 			origin.invocation = fill.Span
@@ -559,9 +559,9 @@ func (e *componentExpander) shouldDeferUse(use *paperlang.Node, parent expansion
 		var value paperlang.Scalar
 		switch {
 		case member.Property != nil && member.Property.Name == "component":
-			value = substituteComponentScalar(member.Property.Value, parent.props)
+			value = substituteComponentScalar(member.Property.Value, parent.props, parent.propContracts)
 		case member.Node != nil && member.Node.Kind == paperlang.NodeArg && member.Node.Value != nil:
-			value = substituteComponentScalar(*member.Node.Value, parent.props)
+			value = substituteComponentScalar(*member.Node.Value, parent.props, parent.propContracts)
 		default:
 			continue
 		}
@@ -602,7 +602,7 @@ func (e *componentExpander) cloneDeferredNode(source *paperlang.Node, origin exp
 	}
 	for _, member := range source.Members {
 		if member.Property != nil {
-			clone.Members = append(clone.Members, cloneExpansionPropertyWithProps(member.Property, origin.props))
+			clone.Members = append(clone.Members, cloneExpansionPropertyWithProps(member.Property, origin.props, origin.propContracts))
 			continue
 		}
 		child := e.cloneDeferredNode(member.Node, origin)
@@ -756,7 +756,7 @@ func (e *componentExpander) cloneHeader(source *paperlang.Node, origin expansion
 	e.nodes++
 	clone := &paperlang.Node{Kind: source.Kind, ID: source.ID, FieldType: source.FieldType, TypeRef: source.TypeRef, ItemType: source.ItemType, ItemTypeRef: source.ItemTypeRef, Optional: source.Optional, HeaderSpan: source.HeaderSpan, Span: source.Span}
 	if source.Value != nil {
-		value := substituteComponentScalar(*source.Value, origin.props)
+		value := substituteComponentScalar(*source.Value, origin.props, origin.propContracts)
 		clone.Value = &value
 	}
 	if prior, exists := e.prior[source]; exists {
@@ -830,30 +830,42 @@ func cloneExpansionProperty(source *paperlang.Property) paperlang.Member {
 	return paperlang.Member{Property: &clone}
 }
 
-func cloneExpansionPropertyWithProps(source *paperlang.Property, props map[string]paperlang.Scalar) paperlang.Member {
+func cloneExpansionPropertyWithProps(source *paperlang.Property, props map[string]paperlang.Scalar, contracts map[string]componentProp) paperlang.Member {
 	if source == nil {
 		return paperlang.Member{}
 	}
 	clone := *source
-	clone.Value = substituteComponentScalar(source.Value, props)
+	clone.Value = substituteComponentScalar(source.Value, props, contracts)
 	return paperlang.Member{Property: &clone}
 }
 
-func substituteComponentScalar(source paperlang.Scalar, props map[string]paperlang.Scalar) paperlang.Scalar {
+func substituteComponentScalar(source paperlang.Scalar, props map[string]paperlang.Scalar, contracts map[string]componentProp) paperlang.Scalar {
 	clone := cloneExpansionScalar(source)
 	if len(props) == 0 {
 		return clone
 	}
 	if source.Kind == paperlang.ScalarExpression && source.ExpressionValue != nil {
-		environment := make([]paperexpr.PathKind, 0, len(props))
+		environment := make([]paperexpr.PathKind, 0, len(contracts)+len(props))
 		bindings := make([]paperexpr.Binding, 0, len(props))
+		declared := make(map[string]bool, len(contracts))
+		for name, contract := range contracts {
+			kind, ok := componentExpressionKind(contract.typeName)
+			if !ok {
+				continue
+			}
+			path := "args." + name
+			environment = append(environment, paperexpr.PathKind{Path: path, Kind: kind, Optional: !contract.required && contract.defaultValue == nil})
+			declared[name] = true
+		}
 		for name, value := range props {
 			kind, converted, ok := componentExpressionValue(value)
 			if !ok {
 				continue
 			}
 			path := "args." + name
-			environment = append(environment, paperexpr.PathKind{Path: path, Kind: kind})
+			if !declared[name] {
+				environment = append(environment, paperexpr.PathKind{Path: path, Kind: kind})
+			}
 			bindings = append(bindings, paperexpr.Binding{Path: path, Value: converted})
 		}
 		program, _, err := paperexpr.Compile(strings.TrimSpace(*source.ExpressionValue), environment, paperexpr.LanguageLimits{})
@@ -879,6 +891,21 @@ func substituteComponentScalar(source paperlang.Scalar, props map[string]paperla
 	return clone
 }
 
+func componentExpressionKind(typeName string) (paperexpr.Kind, bool) {
+	switch typeName {
+	case "string":
+		return paperexpr.String, true
+	case "bool":
+		return paperexpr.Bool, true
+	case "number":
+		return paperexpr.Integer, true
+	case "unit", "length":
+		return paperexpr.Unit, true
+	default:
+		return paperexpr.Null, false
+	}
+}
+
 func componentExpressionValue(value paperlang.Scalar) (paperexpr.Kind, paperexpr.Value, bool) {
 	switch value.Kind {
 	case paperlang.ScalarNull:
@@ -888,9 +915,16 @@ func componentExpressionValue(value paperlang.Scalar) (paperexpr.Kind, paperexpr
 			return paperexpr.Bool, paperexpr.Value{Kind: paperexpr.Bool, Bool: *value.BoolValue}, true
 		}
 	case paperlang.ScalarNumber:
-		if value.NumberValue != nil && math.Trunc(*value.NumberValue) == *value.NumberValue && *value.NumberValue >= math.MinInt64 && *value.NumberValue <= math.MaxInt64 {
-			integer := int64(*value.NumberValue)
-			return paperexpr.Integer, paperexpr.Value{Kind: paperexpr.Integer, Integer: integer}, true
+		if parsed, err := paperexpr.ParseNumber(value.Raw); err == nil {
+			return paperexpr.Integer, parsed, true
+		}
+	case paperlang.ScalarUnit:
+		if value.UnitValue != nil {
+			raw := strings.TrimSuffix(value.Raw, value.UnitValue.Unit)
+			if parsed, err := paperexpr.ParseNumber(raw); err == nil {
+				parsed.Kind, parsed.Unit = paperexpr.Unit, value.UnitValue.Unit
+				return paperexpr.Unit, parsed, true
+			}
 		}
 	case paperlang.ScalarString:
 		if value.StringValue != nil {

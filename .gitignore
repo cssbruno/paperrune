@@ -25,6 +25,11 @@ tools/bin/
 .vscode/
 /bin/
 /dist/
+/node_modules/
+/docs/.vitepress/cache/
+/docs/.vitepress/dist/
+/docs/public/paperrune.wasm
+/docs/public/wasm_exec.js
 doc/body.html
 doc/body.md
 doc/index.html

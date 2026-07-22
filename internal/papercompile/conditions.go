@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -104,6 +105,10 @@ func (e *scenarioConditionEvaluator) include(node *paperlang.Node) bool {
 	}
 	if kind != paperexpr.Bool {
 		e.add("PAPER_VISIBLE_TYPE", "visible expression must return bool", "compare values or use a boolean field", condition.Value.Span)
+		return true
+	}
+	if program.ResultNullable {
+		e.add("PAPER_VISIBLE_NULLABLE", "visible expression may return null", "guard the optional boolean, for example active != null && active", condition.Value.Span)
 		return true
 	}
 	if value.Kind != paperexpr.Bool {
@@ -227,7 +232,7 @@ func (e *scenarioConditionEvaluator) evaluate(node *paperlang.Node, source strin
 	if err != nil {
 		return paperexpr.Program{}, paperexpr.Null, paperexpr.Value{}, err
 	}
-	bindings, err := e.expressionBindings(node, program.Paths, root)
+	bindings, err := e.expressionBindings(node, program, root)
 	if err != nil {
 		return program, kind, paperexpr.Value{}, fmt.Errorf("%w: %v", paperexpr.ErrBinding, err)
 	}
@@ -245,9 +250,14 @@ func expressionScalar(value paperexpr.Value, span paperlang.Span) paperlang.Scal
 		boolean := value.Bool
 		scalar.BoolValue = &boolean
 	case paperexpr.Integer:
-		scalar.Kind, scalar.Raw = paperlang.ScalarNumber, strconv.FormatInt(value.Integer, 10)
-		number := float64(value.Integer)
+		scalar.Kind, scalar.Raw = paperlang.ScalarNumber, paperexpr.FormatNumber(value)
+		number, _ := strconv.ParseFloat(scalar.Raw, 64)
 		scalar.NumberValue = &number
+	case paperexpr.Unit:
+		raw := paperexpr.FormatNumber(value) + value.Unit
+		number, _ := strconv.ParseFloat(paperexpr.FormatNumber(value), 64)
+		scalar.Kind, scalar.Raw = paperlang.ScalarUnit, raw
+		scalar.UnitValue = &paperlang.UnitValue{Number: number, Unit: value.Unit}
 	case paperexpr.String:
 		scalar.Kind = paperlang.ScalarString
 		text := value.String
@@ -307,33 +317,36 @@ func (e *scenarioConditionEvaluator) conditionEnvironment(node *paperlang.Node) 
 
 	// Scenario fixture fields share the top-level namespace. Merge all declared
 	// schemas deterministically; conflicting field contracts are diagnosed.
-	kinds := make(map[string]paperexpr.Kind)
+	contracts := make(map[string]paperexpr.PathKind)
 	for _, schema := range e.schemas.descriptors {
 		for _, field := range schema.Fields {
 			for _, path := range repeatExpressionEnvironment([]FieldDescriptor{field}, "") {
-				if prior, exists := kinds[path.Path]; exists && prior != path.Kind {
+				if prior, exists := contracts[path.Path]; exists && prior.Kind != path.Kind {
 					return nil, paperscenario.Value{}, fmt.Sprintf("schema path %q has conflicting primitive types", path.Path)
 				}
-				kinds[path.Path] = path.Kind
+				if prior, exists := contracts[path.Path]; exists {
+					path.Optional = path.Optional || prior.Optional
+				}
+				contracts[path.Path] = path
 			}
 		}
 	}
-	environment := make([]paperexpr.PathKind, 0, len(kinds))
-	for path, kind := range kinds {
-		environment = append(environment, paperexpr.PathKind{Path: path, Kind: kind})
+	environment := make([]paperexpr.PathKind, 0, len(contracts))
+	for _, contract := range contracts {
+		environment = append(environment, contract)
 	}
 	return environment, paperscenario.Value{Kind: paperscenario.Object, Object: e.fixture.Values}, ""
 }
 
-func (e *scenarioConditionEvaluator) expressionBindings(node *paperlang.Node, paths []string, root paperscenario.Value) ([]paperexpr.Binding, error) {
+func (e *scenarioConditionEvaluator) expressionBindings(node *paperlang.Node, program paperexpr.Program, root paperscenario.Value) ([]paperexpr.Binding, error) {
 	origin := e.provenance[node]
 	if origin.loopItem {
-		return loopExpressionBindings(paths, root, origin.loopIndex, origin.loopFirst, origin.loopLast)
+		return loopExpressionBindings(program.Paths, program.OptionalPaths, root, origin.loopIndex, origin.loopFirst, origin.loopLast)
 	}
 	if origin.repeatItem {
-		return scopedConditionBindings(paths, root, "item")
+		return scopedConditionBindingsOptional(program.Paths, program.OptionalPaths, root, "item")
 	}
-	return conditionBindings(paths, root)
+	return conditionBindingsOptional(program.Paths, program.OptionalPaths, root)
 }
 
 func repeatConditionContext(origin expansionProvenance) ([]FieldDescriptor, paperscenario.Value, string) {
@@ -396,10 +409,18 @@ func (e *scenarioConditionEvaluator) bindingContext(path string) ([]FieldDescrip
 }
 
 func conditionBindings(paths []string, root paperscenario.Value) ([]paperexpr.Binding, error) {
-	return scopedConditionBindings(paths, root, "")
+	return conditionBindingsOptional(paths, nil, root)
 }
 
 func scopedConditionBindings(paths []string, root paperscenario.Value, scope string) ([]paperexpr.Binding, error) {
+	return scopedConditionBindingsOptional(paths, nil, root, scope)
+}
+
+func conditionBindingsOptional(paths, optional []string, root paperscenario.Value) ([]paperexpr.Binding, error) {
+	return scopedConditionBindingsOptional(paths, optional, root, "")
+}
+
+func scopedConditionBindingsOptional(paths, optional []string, root paperscenario.Value, scope string) ([]paperexpr.Binding, error) {
 	bindings := make([]paperexpr.Binding, 0, len(paths))
 	for _, path := range paths {
 		lookup := path
@@ -412,6 +433,10 @@ func scopedConditionBindings(paths []string, root paperscenario.Value, scope str
 		}
 		value, found, collection := resolveConditionPath(root, lookup)
 		if !found {
+			index := sort.SearchStrings(optional, path)
+			if index < len(optional) && optional[index] == path {
+				continue
+			}
 			return nil, fmt.Errorf("when binding %q is missing", path)
 		}
 		if collection {
@@ -455,11 +480,11 @@ func conditionPrimitive(value paperscenario.Value) (paperexpr.Value, error) {
 	case paperscenario.String:
 		return paperexpr.Value{Kind: paperexpr.String, String: value.String}, nil
 	case paperscenario.Number:
-		integer, err := strconv.ParseInt(value.Number, 10, 64)
+		number, err := paperexpr.ParseNumber(value.Number)
 		if err != nil {
-			return paperexpr.Value{}, errors.New("number is not a canonical int64")
+			return paperexpr.Value{}, errors.New("number exceeds deterministic decimal bounds")
 		}
-		return paperexpr.Value{Kind: paperexpr.Integer, Integer: integer}, nil
+		return number, nil
 	default:
 		return paperexpr.Value{}, fmt.Errorf("value is non-primitive %s", value.Kind)
 	}

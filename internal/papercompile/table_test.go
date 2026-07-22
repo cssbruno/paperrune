@@ -47,6 +47,24 @@ func TestCompileTableCellHeaderAttributeDoesNotCollideWithHeaderRegion(t *testin
 	}
 }
 
+func TestCompileTableCellVerticalAlignment(t *testing.T) {
+	source := strings.Replace(paperTableSource, "cell @name:\n", "cell @name:\n            vertical-align: \"middle\"\n", 1)
+	parsed := paperlang.Parse("vertical-cell.paper", source)
+	compiled := Compile(parsed.AST)
+	if !parsed.OK() || !compiled.OK() {
+		t.Fatalf("diagnostics=%#v/%#v", parsed.Diagnostics, compiled.Diagnostics)
+	}
+	if got := compiled.Document.Body[0].(layout.TableBlock).Body[0].Cells[0].VerticalAlign; got != "middle" {
+		t.Fatalf("vertical alignment = %q", got)
+	}
+
+	invalid := paperlang.Parse("invalid-vertical-cell.paper", strings.Replace(source, "\"middle\"", "\"baseline\"", 1))
+	invalidResult := Compile(invalid.AST)
+	if invalidResult.OK() || !hasCompileDiagnostic(invalidResult.Diagnostics, "PAPER_COMPILE_TABLE_VERTICAL_ALIGN") {
+		t.Fatalf("invalid vertical alignment diagnostics = %#v", invalidResult.Diagnostics)
+	}
+}
+
 func TestCompileScenarioRendersDirectTableCellBinding(t *testing.T) {
 	const source = `document @report:
   schema invoice:

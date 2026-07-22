@@ -29,7 +29,7 @@ PAPER_ENGINE_PROFILE_CPU_SECONDS ?= 2
 PAPER_ENGINE_PROFILE_ALLOC_ITERATIONS ?= 20
 PAPER_STUDIO_LATENCY_REPORT ?= artifacts/paper-studio-wasm-latency.json
 
-.PHONY: all documentation help bootstrap test-fast ci docs-check cov coverage-check test race vet fmt-check check modules tools tools-clean benchstat lint lin nilaway gosec gosev govulncheck quality release-version release-check release-notes release-artifacts release-tag release-push release build bench bench-ci bench-paper-engine bench-paper-engine-ci bench-paper-engine-budget bench-paper-studio bench-paper-studio-wasm-latency bench-paper-studio-wasm-latency-budget test-paper-studio-js test-paper-studio-wasm paper-studio-wasm paper-studio profile-paper-engine profile-paper-engine-check profile profile-cpu profile-alloc profile-block profile-mutex profile-trace compliance-fixtures compliance-validate compliance-baseline-check compliance-regenerate pdf-reader-smoke clean
+.PHONY: all documentation help bootstrap test-fast ci docs-check docs-site docs-site-check cov coverage-check test race vet fmt-check check modules tools tools-clean benchstat lint lin nilaway gosec gosev govulncheck quality release-version release-check release-notes release-artifacts release-tag release-push release build bench bench-ci bench-paper-engine bench-paper-engine-ci bench-paper-engine-budget bench-paper-studio bench-paper-studio-wasm-latency bench-paper-studio-wasm-latency-budget test-paper-studio-js test-paper-studio-wasm paper-studio-wasm paper-studio profile-paper-engine profile-paper-engine-check profile profile-cpu profile-alloc profile-block profile-mutex profile-trace compliance-fixtures compliance-validate compliance-baseline-check compliance-regenerate pdf-reader-smoke clean
 
 help :
 	@awk 'BEGIN { FS = " :" } /^[a-z][a-z0-9_-]* :/ { print $$1 }' Makefile | sort -u
@@ -53,6 +53,12 @@ ci : fmt-check modules release-version coverage-check lint nilaway gosec
 
 docs-check :
 	sh tools/docs-check.sh
+
+docs-site :
+	npm run docs:build
+
+docs-site-check :
+	npm run docs:check
 
 cov : all
 	go test $(GO_PACKAGES) -coverprofile=coverage && go tool cover -html=coverage -o=coverage.html

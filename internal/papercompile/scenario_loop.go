@@ -137,7 +137,7 @@ func (e *repeatExpansionContext) expandLoop(node *paperlang.Node, prior map[*pap
 		last := value == through || overflow || step > 0 && next > through || step < 0 && next < through
 		include := true
 		if predicate != nil {
-			bindings, err := loopExpressionBindings(predicate.Paths, root, value, iteration == 1, last)
+			bindings, err := loopExpressionBindings(predicate.Paths, predicate.OptionalPaths, root, value, iteration == 1, last)
 			if err != nil {
 				e.add("PAPER_LOOP_BINDING", err.Error(), "make the selected fixture match its schema", predicateSpan)
 				return nil
@@ -270,19 +270,22 @@ func (e *repeatExpansionContext) loopEnvironment(repeatParent *repeatFrame, loop
 		}
 	} else {
 		root = paperscenario.Value{Kind: paperscenario.Object, Object: e.fixture.Values}
-		kinds := make(map[string]paperexpr.Kind)
+		contracts := make(map[string]paperexpr.PathKind)
 		for _, schema := range e.schemas.descriptors {
 			for _, field := range schema.Fields {
 				for _, path := range repeatExpressionEnvironment([]FieldDescriptor{field}, "") {
-					if prior, exists := kinds[path.Path]; exists && prior != path.Kind {
+					if prior, exists := contracts[path.Path]; exists && prior.Kind != path.Kind {
 						return nil, paperscenario.Value{}, fmt.Sprintf("schema path %q has conflicting primitive types", path.Path)
 					}
-					kinds[path.Path] = path.Kind
+					if prior, exists := contracts[path.Path]; exists {
+						path.Optional = path.Optional || prior.Optional
+					}
+					contracts[path.Path] = path
 				}
 			}
 		}
-		for path, kind := range kinds {
-			environment = append(environment, paperexpr.PathKind{Path: path, Kind: kind})
+		for _, contract := range contracts {
+			environment = append(environment, contract)
 		}
 	}
 	environment = append(environment,
@@ -293,7 +296,7 @@ func (e *repeatExpansionContext) loopEnvironment(repeatParent *repeatFrame, loop
 	return environment, root, ""
 }
 
-func loopExpressionBindings(paths []string, root paperscenario.Value, index int64, first, last bool) ([]paperexpr.Binding, error) {
+func loopExpressionBindings(paths, optional []string, root paperscenario.Value, index int64, first, last bool) ([]paperexpr.Binding, error) {
 	fixturePaths := make([]string, 0, len(paths))
 	bindings := make([]paperexpr.Binding, 0, len(paths))
 	for _, path := range paths {
@@ -315,7 +318,13 @@ func loopExpressionBindings(paths []string, root paperscenario.Value, index int6
 			break
 		}
 	}
-	fixture, err := scopedConditionBindings(fixturePaths, root, scope)
+	fixtureOptional := make([]string, 0, len(optional))
+	for _, path := range optional {
+		if path != "loop.index" && path != "loop.first" && path != "loop.last" {
+			fixtureOptional = append(fixtureOptional, path)
+		}
+	}
+	fixture, err := scopedConditionBindingsOptional(fixturePaths, fixtureOptional, root, scope)
 	if err != nil {
 		return nil, err
 	}

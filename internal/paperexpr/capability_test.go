@@ -26,7 +26,7 @@ func TestExpressionAndControlFlowRuntimeHasNoAmbientAuthority(t *testing.T) {
 		"syscall": "host process", "time": "ambient time", "math/rand": "randomness", "crypto/rand": "randomness",
 	}
 	allowed := map[string]bool{
-		"context": true, "encoding/json": true, "errors": true, "fmt": true, "math": true,
+		"context": true, "encoding/json": true, "errors": true, "fmt": true, "math": true, "math/big": true,
 		"sort": true, "strconv": true, "strings": true, "unicode/utf8": true,
 		"github.com/cssbruno/paperrune/internal/paperexpr":     true,
 		"github.com/cssbruno/paperrune/internal/paperlang":     true,

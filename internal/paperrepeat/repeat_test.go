@@ -85,7 +85,7 @@ func TestExpandRejectsStableKeyAndObjectShapeErrorsWithExactPaths(t *testing.T) 
 	assertRepeatError(t, err, ErrInvalid, "instance_prefix")
 }
 
-func TestPredicateBindingsRejectMissingCollectionsDecimalsAndNonBoolResults(t *testing.T) {
+func TestPredicateBindingsHandleDecimalsAndRejectInvalidBindingsAndResults(t *testing.T) {
 	active := compilePredicate(t, "active", []paperexpr.PathKind{{Path: "active", Kind: paperexpr.Bool}})
 	_, err := Expand(context.Background(), Input{Items: []paperscenario.Item{objectItem("a")}, MaxOutput: 1, Predicate: &active, InstancePrefix: "items"}, DefaultLimits())
 	assertRepeatError(t, err, ErrBinding, "items[0].bindings.active")
@@ -94,13 +94,23 @@ func TestPredicateBindingsRejectMissingCollectionsDecimalsAndNonBoolResults(t *t
 	_, err = Expand(context.Background(), Input{Items: []paperscenario.Item{objectItem("a", paperscenario.Field{Name: "tags", Value: paperscenario.Value{Kind: paperscenario.List}})}, MaxOutput: 1, Predicate: &tags, InstancePrefix: "items"}, DefaultLimits())
 	assertRepeatError(t, err, ErrBinding, "items[0].bindings.tags")
 
-	score := compilePredicate(t, "score == 2", []paperexpr.PathKind{{Path: "score", Kind: paperexpr.Integer}})
-	_, err = Expand(context.Background(), Input{Items: []paperscenario.Item{objectItem("a", numberField("score", "2.5"))}, MaxOutput: 1, Predicate: &score, InstancePrefix: "items"}, DefaultLimits())
-	assertRepeatError(t, err, ErrBinding, "items[0].bindings.score")
+	score := compilePredicate(t, "score > 2", []paperexpr.PathKind{{Path: "score", Kind: paperexpr.Integer}})
+	expansion, err := Expand(context.Background(), Input{Items: []paperscenario.Item{objectItem("a", numberField("score", "2.5"))}, MaxOutput: 1, Predicate: &score, InstancePrefix: "items"}, DefaultLimits())
+	if err != nil || expansion.Len() != 1 {
+		t.Fatalf("decimal predicate = %#v, %v", expansion.Instances(), err)
+	}
 
 	name := compilePredicate(t, "name", []paperexpr.PathKind{{Path: "name", Kind: paperexpr.String}})
 	_, err = Expand(context.Background(), Input{Items: []paperscenario.Item{objectItem("a", stringField("name", "A"))}, MaxOutput: 1, Predicate: &name, InstancePrefix: "items"}, DefaultLimits())
 	assertRepeatError(t, err, ErrPredicate, "items[0].predicate")
+}
+
+func TestOptionalPredicateBindingEvaluatesMissingAsNull(t *testing.T) {
+	predicate := compilePredicate(t, `name == null || name == "Ada"`, []paperexpr.PathKind{{Path: "name", Kind: paperexpr.String, Optional: true}})
+	expansion, err := Expand(context.Background(), Input{Items: []paperscenario.Item{objectItem("a")}, MaxOutput: 1, Predicate: &predicate, InstancePrefix: "items"}, DefaultLimits())
+	if err != nil || expansion.Len() != 1 {
+		t.Fatalf("optional predicate = %#v, %v", expansion.Instances(), err)
+	}
 }
 
 func TestNestedPrimitivePredicateBinding(t *testing.T) {

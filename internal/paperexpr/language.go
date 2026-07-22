@@ -37,8 +37,9 @@ func DefaultLanguageLimits() LanguageLimits {
 // PathKind is an explicit static binding contract. Compile rejects duplicate,
 // invalid, undeclared, or unsupported path kinds before producing bytecode.
 type PathKind struct {
-	Path string
-	Kind Kind
+	Path     string
+	Kind     Kind
+	Optional bool
 }
 
 // Expression is an immutable parsed expression. Its syntax tree is intentionally
@@ -211,7 +212,12 @@ func CompileExpression(expression Expression, environment []PathKind, limits Lan
 	if uint32(len(compiler.paths)) > normalized.Program.MaxPaths { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 		return Program{}, Null, expressionError(expression.root.start, expression.root.end, "path count exceeds MaxPaths", ErrLimit)
 	}
-	program := Program{Constants: compiler.constants, Paths: compiler.paths, root: expression.root}
+	program := Program{Constants: compiler.constants, Paths: compiler.paths, root: expression.root, ResultNullable: expression.root.nullable}
+	for _, path := range compiler.paths {
+		if contract := kinds[path]; contract.Optional {
+			program.OptionalPaths = append(program.OptionalPaths, path)
+		}
+	}
 	compiler.emit(expression.root, &program.Code)
 	if uint32(len(program.Code)) > normalized.Program.MaxInstructions { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 		return Program{}, Null, expressionError(expression.root.start, expression.root.end, "instruction count exceeds MaxInstructions", ErrLimit)
@@ -280,9 +286,9 @@ func lexExpression(source string, limits LanguageLimits) ([]expressionToken, err
 			offset++
 			token = simpleToken(tokenPlus, source, start, offset)
 		case '-':
-			if offset+1 < len(source) && source[offset+1] >= '0' && source[offset+1] <= '9' {
+			if offset+1 < len(source) && source[offset+1] >= '0' && source[offset+1] <= '9' && expressionCanStartSignedLiteral(tokens) {
 				var err error
-				token, offset, err = lexExpressionInteger(source, start)
+				token, offset, err = lexExpressionNumber(source, start)
 				if err != nil {
 					return nil, err
 				}
@@ -363,7 +369,7 @@ func lexExpression(source string, limits LanguageLimits) ([]expressionToken, err
 		default:
 			if character >= '0' && character <= '9' {
 				var err error
-				token, offset, err = lexExpressionInteger(source, start)
+				token, offset, err = lexExpressionNumber(source, start)
 				if err != nil {
 					return nil, err
 				}
@@ -405,27 +411,63 @@ func simpleToken(kind tokenKind, source string, start, end int) expressionToken 
 	return expressionToken{kind: kind, start: uint32(start), end: uint32(end), text: source[start:end]} // #nosec G115 -- fixed-width conversion is bounded by the surrounding parser, planner, or resource invariant
 }
 
-func lexExpressionInteger(source string, start int) (expressionToken, int, error) {
+func expressionCanStartSignedLiteral(tokens []expressionToken) bool {
+	if len(tokens) == 0 {
+		return true
+	}
+	switch tokens[len(tokens)-1].kind {
+	case tokenLeftParen, tokenNot, tokenEqual, tokenMatches, tokenAnd, tokenOr,
+		tokenPlus, tokenMinus, tokenMultiply, tokenDivide, tokenNotEqual, tokenLess,
+		tokenLessEqual, tokenGreater, tokenGreaterEqual, tokenQuestion, tokenColon:
+		return true
+	default:
+		return false
+	}
+}
+
+func lexExpressionNumber(source string, start int) (expressionToken, int, error) {
 	offset := start
 	if source[offset] == '-' {
 		offset++
-		if offset >= len(source) || source[offset] < '0' || source[offset] > '9' {
-			return expressionToken{}, offset, expressionError(uint32(start), uint32(offset), "minus must begin an integer literal", ErrInvalid) // #nosec G115 -- source offset is bounded by validated input or parser state
-		}
 	}
 	for offset < len(source) && source[offset] >= '0' && source[offset] <= '9' {
 		offset++
 	}
-	raw := source[start:offset]
-	digits := strings.TrimPrefix(raw, "-")
-	if len(digits) > 1 && digits[0] == '0' || raw == "-0" {
-		return expressionToken{}, offset, expressionError(uint32(start), uint32(offset), "integer must use canonical base-10 notation", ErrInvalid) // #nosec G115 -- source offset is bounded by validated input or parser state
+	if offset < len(source) && source[offset] == '.' {
+		offset++
+		fractionStart := offset
+		for offset < len(source) && source[offset] >= '0' && source[offset] <= '9' {
+			offset++
+		}
+		if offset == fractionStart {
+			return expressionToken{}, offset, expressionError(uint32(start), uint32(offset), "decimal point requires fractional digits", ErrInvalid)
+		}
 	}
-	integer, err := strconv.ParseInt(raw, 10, 64)
+	numberEnd := offset
+	unit := ""
+	if offset < len(source) && source[offset] == '%' {
+		unit, offset = "%", offset+1
+	} else {
+		unitStart := offset
+		for offset < len(source) && source[offset] >= 'a' && source[offset] <= 'z' {
+			offset++
+		}
+		if offset > unitStart {
+			unit = source[unitStart:offset]
+		}
+	}
+	raw := source[start:numberEnd]
+	value, err := ParseNumber(raw)
 	if err != nil {
-		return expressionToken{}, offset, expressionError(uint32(start), uint32(offset), "integer is outside int64 range", ErrInvalid) // #nosec G115 -- source offset is bounded by validated input or parser state
+		return expressionToken{}, offset, expressionError(uint32(start), uint32(numberEnd), strings.TrimPrefix(err.Error(), ErrInvalid.Error()+": "), ErrInvalid) // #nosec G115 -- source offset is bounded by validated input or parser state
 	}
-	return expressionToken{kind: tokenInteger, start: uint32(start), end: uint32(offset), text: raw, value: Value{Kind: Integer, Integer: integer}}, offset, nil // #nosec G115 -- source offset is bounded by validated input or parser state
+	if unit != "" {
+		if !validUnit(unit) {
+			return expressionToken{}, offset, expressionError(uint32(numberEnd), uint32(offset), fmt.Sprintf("unsupported unit %q", unit), ErrType)
+		}
+		value.Kind, value.Unit = Unit, unit
+	}
+	return expressionToken{kind: tokenInteger, start: uint32(start), end: uint32(offset), text: source[start:offset], value: value}, offset, nil // #nosec G115 -- source offset is bounded by validated input or parser state
 }
 
 func lexExpressionString(source string, start int) (expressionToken, int, error) {
@@ -540,6 +582,7 @@ type expressionNode struct {
 	path             string
 	left, right, alt *expressionNode
 	inferred         Kind
+	nullable         bool
 	height           uint32
 }
 
@@ -717,6 +760,9 @@ func (p *expressionParser) parseUnary(depth uint32) (*expressionNode, error) {
 		if err != nil {
 			return nil, err
 		}
+		if child.kind == nodeLiteral && (child.value.Kind == Integer || child.value.Kind == Unit) && child.value.Integer == 0 {
+			return nil, expressionError(token.start, child.end, "negative zero is not canonical", ErrInvalid)
+		}
 		return p.node(nodeNegate, token.start, child.end, token.start, child, nil, nil)
 	}
 	return p.parsePrimary(depth)
@@ -813,7 +859,7 @@ func (p *expressionParser) take() expressionToken {
 }
 
 type expressionCompiler struct {
-	pathKinds     map[string]Kind
+	pathKinds     map[string]PathKind
 	limits        Limits
 	constants     []Value
 	paths         []string
@@ -822,60 +868,72 @@ type expressionCompiler struct {
 }
 
 func (c *expressionCompiler) check(node *expressionNode) (Kind, error) {
+	return c.checkWithNarrowing(node, nil)
+}
+
+func (c *expressionCompiler) checkWithNarrowing(node *expressionNode, narrowed map[string]bool) (Kind, error) {
 	switch node.kind {
 	case nodeLiteral:
 		if node.value.Kind == String && uint32(len(node.value.String)) > c.limits.MaxStringBytes { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 			return Null, expressionError(node.start, node.end, "string literal exceeds MaxStringBytes", ErrLimit)
 		}
 		node.inferred = node.value.Kind
+		node.nullable = node.value.Kind == Null
 	case nodePath:
-		kind, exists := c.pathKinds[node.path]
+		contract, exists := c.pathKinds[node.path]
 		if !exists {
 			return Null, expressionError(node.start, node.end, fmt.Sprintf("binding path %q is not declared", node.path), ErrBinding)
 		}
-		node.inferred = kind
+		node.inferred = contract.Kind
+		node.nullable = contract.Optional && !narrowed[node.path]
 	case nodeNot:
-		kind, err := c.check(node.left)
+		kind, err := c.checkWithNarrowing(node.left, narrowed)
 		if err != nil {
 			return Null, err
 		}
-		if kind != Bool {
+		if kind != Bool || node.left.nullable {
 			return Null, expressionError(node.opOffset, node.opOffset+1, "! requires bool", ErrType)
 		}
 		node.inferred = Bool
 	case nodeNegate:
-		kind, err := c.check(node.left)
+		kind, err := c.checkWithNarrowing(node.left, narrowed)
 		if err != nil {
 			return Null, err
 		}
-		if kind != Integer {
-			return Null, expressionError(node.opOffset, node.opOffset+1, "unary - requires integer", ErrType)
+		if kind != Integer && kind != Unit || node.left.nullable {
+			return Null, expressionError(node.opOffset, node.opOffset+1, "unary - requires a non-null number or unit", ErrType)
 		}
-		node.inferred = Integer
+		node.inferred = kind
 	case nodeEqual, nodeNotEqual:
-		left, right, err := c.checkPair(node)
+		left, right, err := c.checkPair(node, narrowed)
 		if err != nil {
 			return Null, err
 		}
 		if left != right && left != Null && right != Null {
 			return Null, expressionError(node.opOffset, node.opOffset+2, "== operands must have the same static kind", ErrType)
 		}
+		if left == Unit && right == Unit && literalUnitsIncompatible(node.left, node.right) {
+			return Null, expressionError(node.opOffset, node.opOffset+2, "unit equality requires compatible units", ErrType)
+		}
 		node.inferred = Bool
 	case nodeLess, nodeLessEqual, nodeGreater, nodeGreaterEqual:
-		left, right, err := c.checkPair(node)
+		left, right, err := c.checkPair(node, narrowed)
 		if err != nil {
 			return Null, err
 		}
-		if left != right || left != Integer && left != String {
-			return Null, expressionError(node.opOffset, node.opOffset+1, "ordering requires two integers or two strings", ErrType)
+		if left != right || left != Integer && left != String && left != Unit || node.left.nullable || node.right.nullable {
+			return Null, expressionError(node.opOffset, node.opOffset+1, "ordering requires two non-null numbers, strings, or compatible units", ErrType)
+		}
+		if left == Unit && literalUnitsIncompatible(node.left, node.right) {
+			return Null, expressionError(node.opOffset, node.opOffset+1, "unit ordering requires matching units", ErrType)
 		}
 		node.inferred = Bool
 	case nodeMatches:
-		left, right, err := c.checkPair(node)
+		left, right, err := c.checkPair(node, narrowed)
 		if err != nil {
 			return Null, err
 		}
-		if left != String || right != String {
+		if left != String || right != String || node.left.nullable || node.right.nullable {
 			return Null, expressionError(node.opOffset, node.opOffset+7, "matches requires two strings", ErrType)
 		}
 		if node.right.kind == nodeLiteral {
@@ -889,46 +947,80 @@ func (c *expressionCompiler) check(node *expressionNode) (Kind, error) {
 		}
 		node.inferred = Bool
 	case nodeAnd, nodeOr:
-		left, right, err := c.checkPair(node)
+		left, err := c.checkWithNarrowing(node.left, narrowed)
 		if err != nil {
 			return Null, err
 		}
-		if left != Bool || right != Bool {
+		rightNarrowed := cloneNarrowing(narrowed)
+		truth := node.kind == nodeAnd
+		applyNarrowing(rightNarrowed, node.left, truth)
+		right, err := c.checkWithNarrowing(node.right, rightNarrowed)
+		if err != nil {
+			return Null, err
+		}
+		if left != Bool || right != Bool || node.left.nullable || node.right.nullable {
 			return Null, expressionError(node.opOffset, node.opOffset+2, "boolean operator requires bool operands", ErrType)
 		}
 		node.inferred = Bool
 	case nodePlus:
-		left, right, err := c.checkPair(node)
+		left, right, err := c.checkPair(node, narrowed)
 		if err != nil {
 			return Null, err
 		}
-		if left != right || left != Integer && left != String {
-			return Null, expressionError(node.opOffset, node.opOffset+1, "+ requires two integers or two strings", ErrType)
+		if left != right || left != Integer && left != String && left != Unit || node.left.nullable || node.right.nullable {
+			return Null, expressionError(node.opOffset, node.opOffset+1, "+ requires two integers or two strings, or two matching units; operands must be non-null", ErrType)
+		}
+		if left == Unit && literalUnitsIncompatible(node.left, node.right) {
+			return Null, expressionError(node.opOffset, node.opOffset+1, "unit addition requires matching units", ErrType)
 		}
 		node.inferred = left
 	case nodeMinus, nodeMultiply, nodeDivide:
-		left, right, err := c.checkPair(node)
+		left, right, err := c.checkPair(node, narrowed)
 		if err != nil {
 			return Null, err
 		}
-		if left != Integer || right != Integer {
-			return Null, expressionError(node.opOffset, node.opOffset+1, "arithmetic requires two integers", ErrType)
+		if node.left.nullable || node.right.nullable {
+			return Null, expressionError(node.opOffset, node.opOffset+1, "arithmetic requires non-null operands", ErrType)
 		}
-		node.inferred = Integer
+		switch node.kind {
+		case nodeMinus:
+			if left != right || left != Integer && left != Unit || left == Unit && literalUnitsIncompatible(node.left, node.right) {
+				return Null, expressionError(node.opOffset, node.opOffset+1, "subtraction requires two numbers or matching units", ErrType)
+			}
+			node.inferred = left
+		case nodeMultiply:
+			if left != Integer && left != Unit || right != Integer && right != Unit || left == Unit && right == Unit {
+				return Null, expressionError(node.opOffset, node.opOffset+1, "multiplication supports number*number or number*unit", ErrType)
+			}
+			if left == Unit || right == Unit {
+				node.inferred = Unit
+			} else {
+				node.inferred = Integer
+			}
+		case nodeDivide:
+			if right != Integer || left != Integer && left != Unit {
+				return Null, expressionError(node.opOffset, node.opOffset+1, "division supports number/number or unit/number", ErrType)
+			}
+			node.inferred = left
+		}
 	case nodeSelect:
-		condition, err := c.check(node.left)
+		condition, err := c.checkWithNarrowing(node.left, narrowed)
 		if err != nil {
 			return Null, err
 		}
-		whenTrue, err := c.check(node.right)
+		trueNarrowed := cloneNarrowing(narrowed)
+		applyNarrowing(trueNarrowed, node.left, true)
+		whenTrue, err := c.checkWithNarrowing(node.right, trueNarrowed)
 		if err != nil {
 			return Null, err
 		}
-		whenFalse, err := c.check(node.alt)
+		falseNarrowed := cloneNarrowing(narrowed)
+		applyNarrowing(falseNarrowed, node.left, false)
+		whenFalse, err := c.checkWithNarrowing(node.alt, falseNarrowed)
 		if err != nil {
 			return Null, err
 		}
-		if condition != Bool {
+		if condition != Bool || node.left.nullable {
 			return Null, expressionError(node.opOffset, node.opOffset+1, "conditional condition must be bool", ErrType)
 		}
 		if whenTrue != whenFalse && whenTrue != Null && whenFalse != Null {
@@ -938,19 +1030,72 @@ func (c *expressionCompiler) check(node *expressionNode) (Kind, error) {
 		if node.inferred == Null {
 			node.inferred = whenFalse
 		}
+		node.nullable = node.right.nullable || node.alt.nullable || whenTrue == Null || whenFalse == Null
 	default:
 		return Null, expressionError(node.start, node.end, "unknown expression node", ErrInvalid)
 	}
 	return node.inferred, nil
 }
 
-func (c *expressionCompiler) checkPair(node *expressionNode) (Kind, Kind, error) {
-	left, err := c.check(node.left)
+func (c *expressionCompiler) checkPair(node *expressionNode, narrowed map[string]bool) (Kind, Kind, error) {
+	left, err := c.checkWithNarrowing(node.left, narrowed)
 	if err != nil {
 		return Null, Null, err
 	}
-	right, err := c.check(node.right)
+	right, err := c.checkWithNarrowing(node.right, narrowed)
 	return left, right, err
+}
+
+func cloneNarrowing(input map[string]bool) map[string]bool {
+	result := make(map[string]bool, len(input)+1)
+	for path, value := range input {
+		result[path] = value
+	}
+	return result
+}
+
+// applyNarrowing records facts proven by the truth or falsity of a guard. It
+// deliberately recognizes only sound null checks and their boolean
+// composition; arbitrary predicates never narrow a schema path.
+func applyNarrowing(result map[string]bool, node *expressionNode, truth bool) {
+	if node == nil {
+		return
+	}
+	if node.kind == nodeNot {
+		applyNarrowing(result, node.left, !truth)
+		return
+	}
+	if node.kind == nodeAnd && truth {
+		applyNarrowing(result, node.left, true)
+		applyNarrowing(result, node.right, true)
+		return
+	}
+	if node.kind == nodeOr && !truth {
+		applyNarrowing(result, node.left, false)
+		applyNarrowing(result, node.right, false)
+		return
+	}
+	if node.kind != nodeEqual && node.kind != nodeNotEqual {
+		return
+	}
+	path := ""
+	if node.left.kind == nodePath && node.right.kind == nodeLiteral && node.right.value.Kind == Null {
+		path = node.left.path
+	}
+	if node.right.kind == nodePath && node.left.kind == nodeLiteral && node.left.value.Kind == Null {
+		path = node.right.path
+	}
+	if path == "" {
+		return
+	}
+	nonNull := truth == (node.kind == nodeNotEqual)
+	if nonNull {
+		result[path] = true
+	}
+}
+
+func literalUnitsIncompatible(left, right *expressionNode) bool {
+	return left.kind == nodeLiteral && right.kind == nodeLiteral && left.value.Kind == Unit && right.value.Kind == Unit && !unitsCompatible(left.value.Unit, right.value.Unit)
 }
 
 func (c *expressionCompiler) indexInputs(root *expressionNode) {
@@ -1025,10 +1170,10 @@ func (c *expressionCompiler) emit(node *expressionNode, code *[]Instruction) {
 		case nodeOr:
 			op = OpOr
 		case nodePlus:
-			if node.inferred == Integer {
-				op = OpAddInteger
-			} else {
+			if node.inferred == String {
 				op = OpConcat
+			} else {
+				op = OpAddInteger
 			}
 		case nodeMinus:
 			op = OpSubInteger
@@ -1054,30 +1199,41 @@ func lessExpressionValue(left, right Value) bool {
 	case Bool:
 		return !left.Bool && right.Bool
 	case Integer:
-		return left.Integer < right.Integer
+		if left.Integer != right.Integer {
+			return left.Integer < right.Integer
+		}
+		return left.Scale < right.Scale
 	case String:
 		if left.Reference != right.Reference {
 			return !left.Reference && right.Reference
 		}
 		return left.String < right.String
+	case Unit:
+		if left.Unit != right.Unit {
+			return left.Unit < right.Unit
+		}
+		if left.Integer != right.Integer {
+			return left.Integer < right.Integer
+		}
+		return left.Scale < right.Scale
 	default:
 		return false
 	}
 }
 
-func normalizePathKinds(environment []PathKind, limits Limits) (map[string]Kind, error) {
-	result := make(map[string]Kind, len(environment))
+func normalizePathKinds(environment []PathKind, limits Limits) (map[string]PathKind, error) {
+	result := make(map[string]PathKind, len(environment))
 	for _, entry := range environment {
 		if !validPath(entry.Path) || uint32(len(entry.Path)) > limits.MaxStringBytes { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 			return nil, expressionError(0, 0, fmt.Sprintf("invalid environment path %q", entry.Path), ErrBinding)
 		}
-		if entry.Kind > String {
+		if entry.Kind > Unit || entry.Kind == Null {
 			return nil, expressionError(0, 0, fmt.Sprintf("invalid kind for %q", entry.Path), ErrType)
 		}
 		if _, duplicate := result[entry.Path]; duplicate {
 			return nil, expressionError(0, 0, fmt.Sprintf("duplicate environment path %q", entry.Path), ErrBinding)
 		}
-		result[entry.Path] = entry.Kind
+		result[entry.Path] = entry
 	}
 	return result, nil
 }

@@ -37,6 +37,15 @@ var stringExpressionProperties = map[string]bool{
 	"page-number-format": true, "page-number-align": true, "page-number-position": true,
 }
 
+var unitExpressionProperties = map[string]bool{
+	"size": true, "line-height": true, "width": true, "min-width": true, "max-width": true,
+	"height": true, "min-height": true, "max-height": true, "gap": true, "line-gap": true,
+	"margin": true, "margin-top": true, "margin-right": true, "margin-bottom": true, "margin-left": true,
+	"padding": true, "padding-top": true, "padding-right": true, "padding-bottom": true, "padding-left": true,
+	"border-width": true, "border-top-width": true, "border-right-width": true, "border-bottom-width": true, "border-left-width": true,
+	"border-radius": true, "left": true, "right": true, "top": true, "bottom": true, "center-x": true, "center-y": true,
+}
+
 func staticExpressionDiagnostics(ast paperlang.AST, schemas schemaAnalysis, limits paperexpr.LanguageLimits) []paperlang.Diagnostic {
 	rootEnvironment := staticSchemaEnvironment(schemas)
 	var diagnostics []paperlang.Diagnostic
@@ -69,7 +78,7 @@ func staticExpressionDiagnostics(ast paperlang.AST, schemas schemaAnalysis, limi
 				return
 			}
 			source := strings.TrimSpace(*scalar.ExpressionValue)
-			_, kind, err := paperexpr.Compile(source, current, limits)
+			program, kind, err := paperexpr.Compile(source, current, limits)
 			if err != nil {
 				diagnostics = append(diagnostics, staticExpressionDiagnostic(err, source, scalar.Span))
 				return
@@ -78,6 +87,9 @@ func staticExpressionDiagnostics(ast paperlang.AST, schemas schemaAnalysis, limi
 				diagnostics = append(diagnostics, paperlang.Diagnostic{Code: "PAPER_EXPRESSION_PROPERTY_TYPE", Severity: paperlang.SeverityError,
 					Message: fmt.Sprintf("%s expression returns %s, expected %s", subject, expressionKindName(kind), expressionKindName(expectation.kind)),
 					Hint:    "make the expression result match the receiving property", Span: scalar.Span})
+			} else if expectation != nil && program.ResultNullable && !expectation.optional {
+				diagnostics = append(diagnostics, paperlang.Diagnostic{Code: "PAPER_EXPRESSION_PROPERTY_NULLABLE", Severity: paperlang.SeverityError,
+					Message: fmt.Sprintf("%s expression may return null", subject), Hint: "guard the optional value or return a non-null fallback", Span: scalar.Span})
 			}
 		}
 		if node.Value != nil {
@@ -121,11 +133,17 @@ func propertyExpressionExpectation(nodeKind paperlang.NodeKind, name string) (ex
 	if booleanExpressionProperties[name] {
 		return expressionExpectation{kind: paperexpr.Bool, optional: name != "visible"}, true
 	}
+	if nodeKind == paperlang.NodePage && name == "size" {
+		return expressionExpectation{kind: paperexpr.String, optional: true}, true
+	}
 	if integerExpressionProperties[name] {
 		return expressionExpectation{kind: paperexpr.Integer, optional: true}, true
 	}
 	if stringExpressionProperties[name] {
 		return expressionExpectation{kind: paperexpr.String, optional: true}, true
+	}
+	if unitExpressionProperties[name] {
+		return expressionExpectation{kind: paperexpr.Unit, optional: true}, true
 	}
 	return expressionExpectation{}, false
 }
@@ -145,22 +163,27 @@ func componentArgsEnvironment(component *paperlang.Node) []paperexpr.PathKind {
 			continue
 		}
 		name := strings.TrimPrefix(member.Node.ID, "@")
+		required, hasDefault := false, false
+		for _, contract := range member.Node.Members {
+			if contract.Property == nil {
+				continue
+			}
+			if contract.Property.Name == "required" && contract.Property.Value.BoolValue != nil {
+				required = *contract.Property.Value.BoolValue
+			}
+			if contract.Property.Name == "default" {
+				hasDefault = true
+			}
+		}
 		for _, contract := range member.Node.Members {
 			if contract.Property == nil || contract.Property.Name != "type" || contract.Property.Value.StringValue == nil {
 				continue
 			}
-			var kind paperexpr.Kind
-			switch strings.TrimSpace(*contract.Property.Value.StringValue) {
-			case "string":
-				kind = paperexpr.String
-			case "bool":
-				kind = paperexpr.Bool
-			case "number":
-				kind = paperexpr.Integer
-			default:
+			kind, ok := componentExpressionKind(strings.TrimSpace(*contract.Property.Value.StringValue))
+			if !ok {
 				continue
 			}
-			environment = append(environment, paperexpr.PathKind{Path: "args." + name, Kind: kind})
+			environment = append(environment, paperexpr.PathKind{Path: "args." + name, Kind: kind, Optional: !required && !hasDefault})
 		}
 	}
 	return environment
@@ -183,19 +206,23 @@ func staticRepeatFields(node *paperlang.Node, schemas schemaAnalysis, parent []F
 }
 
 func uniqueExpressionEnvironment(environment []paperexpr.PathKind) []paperexpr.PathKind {
-	kinds := make(map[string]paperexpr.Kind)
+	contracts := make(map[string]paperexpr.PathKind)
 	conflicts := make(map[string]bool)
 	for _, entry := range environment {
-		if prior, exists := kinds[entry.Path]; exists && prior != entry.Kind {
+		if prior, exists := contracts[entry.Path]; exists && prior.Kind != entry.Kind {
 			conflicts[entry.Path] = true
 			continue
 		}
-		kinds[entry.Path] = entry.Kind
+		if prior, exists := contracts[entry.Path]; exists {
+			entry.Optional = entry.Optional || prior.Optional
+		}
+		contracts[entry.Path] = entry
 	}
-	result := make([]paperexpr.PathKind, 0, len(kinds))
-	for path, kind := range kinds {
+	result := make([]paperexpr.PathKind, 0, len(contracts))
+	for path, contract := range contracts {
 		if !conflicts[path] {
-			result = append(result, paperexpr.PathKind{Path: path, Kind: kind})
+			contract.Path = path
+			result = append(result, contract)
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
@@ -249,6 +276,8 @@ func expressionKindName(kind paperexpr.Kind) string {
 		return "string"
 	case paperexpr.Null:
 		return "null"
+	case paperexpr.Unit:
+		return "unit"
 	default:
 		return "unknown"
 	}
@@ -304,6 +333,8 @@ func zeroExpressionValue(kind paperexpr.Kind) paperexpr.Value {
 		return paperexpr.Value{Kind: paperexpr.Integer}
 	case paperexpr.Null:
 		return paperexpr.Value{Kind: paperexpr.Null}
+	case paperexpr.Unit:
+		return paperexpr.Value{Kind: paperexpr.Unit, Integer: 1, Unit: "pt"}
 	default:
 		return paperexpr.Value{Kind: paperexpr.String}
 	}

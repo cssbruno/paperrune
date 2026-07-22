@@ -288,7 +288,7 @@ func TestCompileScenarioDiagnosesWhenPathTypeRuntimeBindingAndLimits(t *testing.
 		{name: "non-bool-result", fixture: "    value @active: true", expression: `quantity + 1`, code: "PAPER_VISIBLE_TYPE"},
 		{name: "matches-type", fixture: "    value @active: true", expression: `quantity matches "*"`, code: "PAPER_VISIBLE_TYPE"},
 		{name: "invalid-match-pattern", fixture: "    value @active: true", expression: `name matches "bad\\"`, code: "PAPER_VISIBLE_EXPRESSION"},
-		{name: "missing-runtime-binding", expression: `active`, code: "PAPER_VISIBLE_PATH"},
+		{name: "nullable-runtime-binding", expression: `active`, code: "PAPER_VISIBLE_NULLABLE"},
 		{name: "wrong-property-type", fixture: "    value @active: true", expression: `12`, code: "PAPER_VISIBLE_VALUE"},
 	}
 	bounded := paperexpr.DefaultLanguageLimits()
