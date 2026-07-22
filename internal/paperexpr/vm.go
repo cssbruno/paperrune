@@ -339,11 +339,14 @@ func evaluateExpressionNode(ctx context.Context, node *expressionNode, bindings 
 			}
 			return Value{Kind: String, String: left.String + right.String}, nil
 		case nodeMinus, nodeMultiply, nodeDivide:
-			op := OpSubInteger
-			if node.kind == nodeMultiply {
+			var op Op
+			switch node.kind {
+			case nodeMultiply:
 				op = OpMultiplyInteger
-			} else if node.kind == nodeDivide {
+			case nodeDivide:
 				op = OpDivideInteger
+			default:
+				op = OpSubInteger
 			}
 			return numericArithmetic(op, left, right)
 		}
@@ -469,7 +472,7 @@ func validateProgram(program Program, limits Limits) (uint32, error) {
 }
 
 func validateBindings(bindings []Binding, limits Limits) ([]Binding, error) {
-	result := append([]Binding(nil), bindings...)
+	result := append(make([]Binding, 0, len(bindings)), bindings...)
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	for i := range result {
 		if !validPath(result[i].Path) || uint32(len(result[i].Path)) > limits.MaxStringBytes { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant

@@ -83,7 +83,7 @@ func staticExpressionDiagnostics(ast paperlang.AST, schemas schemaAnalysis, limi
 				diagnostics = append(diagnostics, staticExpressionDiagnostic(err, source, scalar.Span))
 				return
 			}
-			if expectation != nil && kind != expectation.kind && !(expectation.optional && kind == paperexpr.Null) {
+			if expectation != nil && kind != expectation.kind && (!expectation.optional || kind != paperexpr.Null) {
 				diagnostics = append(diagnostics, paperlang.Diagnostic{Code: "PAPER_EXPRESSION_PROPERTY_TYPE", Severity: paperlang.SeverityError,
 					Message: fmt.Sprintf("%s expression returns %s, expected %s", subject, expressionKindName(kind), expressionKindName(expectation.kind)),
 					Hint:    "make the expression result match the receiving property", Span: scalar.Span})
@@ -260,9 +260,9 @@ func expressionErrorSpan(span paperlang.Span, source string, start, end uint32) 
 	result := span
 	result.Start.Offset += uint64(start)
 	result.End.Offset = span.Start.Offset + uint64(end)
-	result.Start.Column += uint32(utf8.RuneCountInString(startText))
+	result.Start.Column += uint32(utf8.RuneCountInString(startText)) // #nosec G115 -- the sliced prefix length is bounded by the uint32 expression offset
 	result.End.Line = result.Start.Line
-	result.End.Column = span.Start.Column + uint32(utf8.RuneCountInString(endText))
+	result.End.Column = span.Start.Column + uint32(utf8.RuneCountInString(endText)) // #nosec G115 -- the sliced prefix length is bounded by the uint32 expression offset
 	return result
 }
 

@@ -431,7 +431,7 @@ func (p *paperParser) parseSwitchProperty(property *Property, header string) {
 		condition, result         string
 		conditionSpan, resultSpan Span
 	}
-	var arms []arm
+	arms := make([]arm, 0)
 	seenCases := make(map[string]bool)
 	defaultResult := ""
 	defaultSpan := Span{}

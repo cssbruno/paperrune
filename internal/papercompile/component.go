@@ -4,6 +4,7 @@
 package papercompile
 
 import (
+	stdcontext "context"
 	"fmt"
 	"sort"
 	"strings"
@@ -366,7 +367,7 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 				expression := strings.TrimSpace(*value.ExpressionValue)
 				program, kind, err := paperexpr.Compile(expression, nil, paperexpr.LanguageLimits{})
 				if err == nil && (kind == paperexpr.String || kind == paperexpr.Null) {
-					selected, evaluateErr := paperexpr.Evaluate(nil, program, nil, paperexpr.Limits{})
+					selected, evaluateErr := paperexpr.Evaluate(stdcontext.Background(), program, []paperexpr.Binding{}, paperexpr.Limits{})
 					if evaluateErr == nil {
 						if selected.Kind == paperexpr.Null {
 							return nil
@@ -584,7 +585,7 @@ func (e *componentExpander) shouldDeferUse(use *paperlang.Node, parent expansion
 		if err != nil {
 			return true
 		}
-		_, err = paperexpr.Evaluate(nil, program, nil, paperexpr.Limits{})
+		_, err = paperexpr.Evaluate(stdcontext.Background(), program, []paperexpr.Binding{}, paperexpr.Limits{})
 		if err != nil {
 			return true
 		}
@@ -870,7 +871,7 @@ func substituteComponentScalar(source paperlang.Scalar, props map[string]paperla
 		}
 		program, _, err := paperexpr.Compile(strings.TrimSpace(*source.ExpressionValue), environment, paperexpr.LanguageLimits{})
 		if err == nil {
-			value, evaluateErr := paperexpr.Evaluate(nil, program, bindings, paperexpr.Limits{})
+			value, evaluateErr := paperexpr.Evaluate(stdcontext.Background(), program, bindings, paperexpr.Limits{})
 			if evaluateErr == nil {
 				return expressionScalar(value, source.Span)
 			}

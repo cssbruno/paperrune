@@ -169,13 +169,11 @@ indentationDone:
 
 func (l *paperLexer) lexSwitchArm(line sourceLine, indent int) bool {
 	content := line.text[indent:]
-	keyword := ""
-	labelStart := 0
-	if strings.HasPrefix(content, "case ") {
-		keyword, labelStart = "case", len("case ")
-	} else {
+	if !strings.HasPrefix(content, "case ") {
 		return false
 	}
+	keyword := "case"
+	labelStart := len("case ")
 	separator := switchArmColon(content, labelStart)
 	if separator < 0 {
 		return false
@@ -287,9 +285,10 @@ func closedExpressionString(value string) bool {
 			escaped = false
 			continue
 		}
-		if value[index] == '\\' {
+		switch value[index] {
+		case '\\':
 			escaped = true
-		} else if value[index] == '"' {
+		case '"':
 			return true
 		}
 	}
@@ -305,16 +304,18 @@ func expressionContentEnd(content string, start int) int {
 				escaped = false
 				continue
 			}
-			if character == '\\' {
+			switch character {
+			case '\\':
 				escaped = true
-			} else if character == '"' {
+			case '"':
 				quoted = false
 			}
 			continue
 		}
-		if character == '"' {
+		switch character {
+		case '"':
 			quoted = true
-		} else if character == '#' {
+		case '#':
 			return index
 		}
 	}

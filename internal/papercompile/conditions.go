@@ -234,7 +234,7 @@ func (e *scenarioConditionEvaluator) evaluate(node *paperlang.Node, source strin
 	}
 	bindings, err := e.expressionBindings(node, program, root)
 	if err != nil {
-		return program, kind, paperexpr.Value{}, fmt.Errorf("%w: %v", paperexpr.ErrBinding, err)
+		return program, kind, paperexpr.Value{}, fmt.Errorf("%w: %w", paperexpr.ErrBinding, err)
 	}
 	value, err := paperexpr.Evaluate(e.ctx, program, bindings, e.limits.Program)
 	return program, kind, value, err

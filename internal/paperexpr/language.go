@@ -440,7 +440,7 @@ func lexExpressionNumber(source string, start int) (expressionToken, int, error)
 			offset++
 		}
 		if offset == fractionStart {
-			return expressionToken{}, offset, expressionError(uint32(start), uint32(offset), "decimal point requires fractional digits", ErrInvalid)
+			return expressionToken{}, offset, expressionError(uint32(start), uint32(offset), "decimal point requires fractional digits", ErrInvalid) // #nosec G115 -- source offsets are bounded by MaxSourceBytes before tokenization
 		}
 	}
 	numberEnd := offset
@@ -463,7 +463,7 @@ func lexExpressionNumber(source string, start int) (expressionToken, int, error)
 	}
 	if unit != "" {
 		if !validUnit(unit) {
-			return expressionToken{}, offset, expressionError(uint32(numberEnd), uint32(offset), fmt.Sprintf("unsupported unit %q", unit), ErrType)
+			return expressionToken{}, offset, expressionError(uint32(numberEnd), uint32(offset), fmt.Sprintf("unsupported unit %q", unit), ErrType) // #nosec G115 -- source offsets are bounded by MaxSourceBytes before tokenization
 		}
 		value.Kind, value.Unit = Unit, unit
 	}
@@ -637,9 +637,10 @@ func (p *expressionParser) parseEqual(depth uint32) (*expressionNode, error) {
 			return nil, err
 		}
 		kind := nodeEqual
-		if operator.kind == tokenNotEqual {
+		switch operator.kind {
+		case tokenNotEqual:
 			kind = nodeNotEqual
-		} else if operator.kind == tokenMatches {
+		case tokenMatches:
 			kind = nodeMatches
 		}
 		left, err = p.node(kind, left.start, right.end, operator.start, left, right, nil)
