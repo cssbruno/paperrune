@@ -16,6 +16,7 @@ const (
 	TokenReadableID TokenKind = "readable_id"
 	TokenColon      TokenKind = "colon"
 	TokenString     TokenKind = "string"
+	TokenExpression TokenKind = "expression"
 	TokenBool       TokenKind = "bool"
 	TokenNumber     TokenKind = "number"
 	TokenUnit       TokenKind = "unit"
@@ -99,6 +100,14 @@ indentationDone:
 
 	contentOffset := line.startOffset + indent
 	l.applyIndent(indent, contentOffset)
+	if l.lexSwitchArm(line, indent) {
+		l.emitLineNewline(line)
+		return
+	}
+	if l.lexExpressionProperty(line, indent) {
+		l.emitLineNewline(line)
+		return
+	}
 	for cursor := indent; cursor < len(line.text); {
 		for cursor < len(line.text) && (line.text[cursor] == ' ' || line.text[cursor] == '\t') {
 			cursor++
@@ -156,6 +165,201 @@ indentationDone:
 		}
 	}
 	l.emitLineNewline(line)
+}
+
+func (l *paperLexer) lexSwitchArm(line sourceLine, indent int) bool {
+	content := line.text[indent:]
+	keyword := ""
+	labelStart := 0
+	if strings.HasPrefix(content, "case ") {
+		keyword, labelStart = "case", len("case ")
+	} else {
+		return false
+	}
+	separator := switchArmColon(content, labelStart)
+	if separator < 0 {
+		return false
+	}
+	resultStart := separator + 1
+	for resultStart < len(content) && (content[resultStart] == ' ' || content[resultStart] == '\t') {
+		resultStart++
+	}
+	resultEnd := expressionContentEnd(content, resultStart)
+	for resultEnd > resultStart && (content[resultEnd-1] == ' ' || content[resultEnd-1] == '\t') {
+		resultEnd--
+	}
+	if resultEnd <= resultStart {
+		return false
+	}
+	start := line.startOffset + indent
+	l.emitOffsets(TokenIdentifier, keyword, start, start+len(keyword))
+	labelEnd := separator
+	for labelEnd > labelStart && (content[labelEnd-1] == ' ' || content[labelEnd-1] == '\t') {
+		labelEnd--
+	}
+	l.emitOffsets(TokenExpression, content[labelStart:labelEnd], start+labelStart, start+labelEnd)
+	l.emitOffsets(TokenColon, ":", start+separator, start+separator+1)
+	l.emitOffsets(TokenExpression, content[resultStart:resultEnd], start+resultStart, start+resultEnd)
+	return true
+}
+
+func switchArmColon(content string, start int) int {
+	quoted, escaped, depth := false, false, 0
+	for index := start; index < len(content); index++ {
+		character := content[index]
+		if quoted {
+			if escaped {
+				escaped = false
+			} else if character == '\\' {
+				escaped = true
+			} else if character == '"' {
+				quoted = false
+			}
+			continue
+		}
+		switch character {
+		case '"':
+			quoted = true
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case ':':
+			if depth == 0 {
+				return index
+			}
+		}
+	}
+	return -1
+}
+
+// lexExpressionProperty keeps the outer Paper grammar small while allowing a
+// scalar property to contain operators that belong to paperexpr. Static Paper
+// scalars continue through the ordinary lexer. A bare identifier/path is an
+// expression binding, never an unquoted string.
+func (l *paperLexer) lexExpressionProperty(line sourceLine, indent int) bool {
+	content := line.text[indent:]
+	colon := strings.IndexByte(content, ':')
+	if colon <= 0 {
+		return false
+	}
+	name := strings.TrimSpace(content[:colon])
+	if name == "" || !isIdentifierStart(name[0]) {
+		return false
+	}
+	for index := 1; index < len(name); index++ {
+		if !isIdentifierContinue(name[index]) {
+			return false
+		}
+	}
+	valueStart := colon + 1
+	for valueStart < len(content) && (content[valueStart] == ' ' || content[valueStart] == '\t') {
+		valueStart++
+	}
+	if valueStart == len(content) {
+		return false
+	}
+	valueEnd := expressionContentEnd(content, valueStart)
+	for valueEnd > valueStart && (content[valueEnd-1] == ' ' || content[valueEnd-1] == '\t') {
+		valueEnd--
+	}
+	if valueEnd <= valueStart || paperStaticScalar(content[valueStart:valueEnd]) {
+		return false
+	}
+	value := content[valueStart:valueEnd]
+	if value[0] == '@' && !validReadableID(value) || value[0] == '"' && !closedExpressionString(value) {
+		return false
+	}
+	nameStart := line.startOffset + indent
+	l.emitOffsets(TokenIdentifier, name, nameStart, nameStart+len(name))
+	colonOffset := line.startOffset + indent + colon
+	l.emitOffsets(TokenColon, ":", colonOffset, colonOffset+1)
+	l.emitOffsets(TokenExpression, content[valueStart:valueEnd], line.startOffset+indent+valueStart, line.startOffset+indent+valueEnd)
+	return true
+}
+
+func closedExpressionString(value string) bool {
+	escaped := false
+	for index := 1; index < len(value); index++ {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if value[index] == '\\' {
+			escaped = true
+		} else if value[index] == '"' {
+			return true
+		}
+	}
+	return false
+}
+
+func expressionContentEnd(content string, start int) int {
+	quoted, escaped := false, false
+	for index := start; index < len(content); index++ {
+		character := content[index]
+		if quoted {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if character == '\\' {
+				escaped = true
+			} else if character == '"' {
+				quoted = false
+			}
+			continue
+		}
+		if character == '"' {
+			quoted = true
+		} else if character == '#' {
+			return index
+		}
+	}
+	return len(content)
+}
+
+func paperStaticScalar(value string) bool {
+	if value == "true" || value == "false" || value == "null" {
+		return true
+	}
+	if strings.HasPrefix(value, "\"") {
+		return len(value) >= 2 && value[len(value)-1] == '"' && expressionContentEnd(value, 0) == len(value)
+	}
+	start := 0
+	if value[0] == '+' || value[0] == '-' {
+		start++
+	}
+	digits, dot := 0, false
+	for start < len(value) {
+		character := value[start]
+		if character >= '0' && character <= '9' {
+			digits++
+			start++
+			continue
+		}
+		if character == '.' && !dot {
+			dot = true
+			start++
+			continue
+		}
+		break
+	}
+	if digits == 0 {
+		return false
+	}
+	for start < len(value) {
+		character := value[start]
+		if character < 'a' || character > 'z' {
+			if character != '%' {
+				return false
+			}
+		}
+		start++
+	}
+	return true
 }
 
 func (l *paperLexer) applyIndent(indent, offset int) {

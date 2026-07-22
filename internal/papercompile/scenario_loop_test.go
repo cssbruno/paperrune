@@ -28,9 +28,9 @@ const loopScenarioSource = `document:
         step: 1
         max-iterations: 3
         instance-prefix: "copies"
-        when: "enabled && (loop.first || loop.last)"
+        visible: enabled && (loop.first || loop.last)
         paragraph @copy:
-          when: "loop.index == 1 || loop.last"
+          visible: loop.index == 1 || loop.last
           text: "Copy"
 `
 
@@ -88,7 +88,7 @@ func TestCompileScenarioSupportsNestedLoopConditions(t *testing.T) {
           max-iterations: 2
           instance-prefix: "inner"
           paragraph @line:
-            when: "loop.last && loop.index == 6"
+            visible: loop.last && loop.index == 6
             text: "Nested"
 `
 	parsed := paperlang.Parse("nested-loop.paper", source)
@@ -134,7 +134,7 @@ func TestLoopRejectsDirectionBoundsWorkDepthAndCancellationDeterministically(t *
 		{name: "direction", source: strings.Replace(loopScenarioSource, "step: 1", "step: -1", 1), code: "PAPER_LOOP_DIRECTION"},
 		{name: "explicit max", source: strings.Replace(loopScenarioSource, "max-iterations: 3", "max-iterations: 2", 1), code: "PAPER_LOOP_LIMIT"},
 		{name: "output", source: loopScenarioSource, limits: loopLimits(func(value *paperrepeat.Limits) { value.MaxOutput = 1 }), code: "PAPER_LOOP_LIMIT"},
-		{name: "depth", source: strings.Replace(loopScenarioSource, "paragraph @copy:\n          when: \"loop.index == 1 || loop.last\"\n          text: \"Copy\"", "loop @inner:\n          from: 1\n          through: 1\n          step: 1\n          max-iterations: 1\n          instance-prefix: \"inner\"\n          text: \"Copy\"", 1), limits: loopLimits(func(value *paperrepeat.Limits) { value.MaxDepth = 1 }), code: "PAPER_LOOP_LIMIT"},
+		{name: "depth", source: strings.Replace(loopScenarioSource, "paragraph @copy:\n          visible: loop.index == 1 || loop.last\n          text: \"Copy\"", "loop @inner:\n          from: 1\n          through: 1\n          step: 1\n          max-iterations: 1\n          instance-prefix: \"inner\"\n          text: \"Copy\"", 1), limits: loopLimits(func(value *paperrepeat.Limits) { value.MaxDepth = 1 }), code: "PAPER_LOOP_LIMIT"},
 		{name: "work", source: loopScenarioSource, limits: loopLimits(func(value *paperrepeat.Limits) { value.MaxWork = 5 }), code: "PAPER_LOOP_LIMIT"},
 		{name: "state", source: loopScenarioSource, limits: loopLimits(func(value *paperrepeat.Limits) { value.MaxStateBytes = 32 }), code: "PAPER_LOOP_LIMIT"},
 	}
@@ -182,9 +182,9 @@ func TestLoopCanLowerInsideTypedRepeatItemContext(t *testing.T) {
           step: 1
           max-iterations: 2
           instance-prefix: "copies"
-          when: "active"
+          visible: item.active
           paragraph @copy:
-            when: "active && loop.index == 2"
+            visible: item.active && loop.index == 2
             text: "Copy"
 `
 	parsed := paperlang.Parse("repeat-loop.paper", source)

@@ -39,7 +39,7 @@ const repeatSourceFixture = `document @doc:
         source: "items"
         instance-prefix: "invoice-lines"
         max-items: 2
-        when: "active && quantity == 1"
+        visible: item.active && item.quantity == 1
         paragraph @line:
           bind: "name"
           text: "Line"
@@ -360,8 +360,8 @@ func TestCompileScenarioRejectsInvalidSelectionSchemaPredicateAndBounds(t *testi
 		{name: "missing selection", source: repeatSourceFixture, scenario: "", code: "PAPER_REPEAT_SCENARIO_REQUIRED"},
 		{name: "unknown selection", source: repeatSourceFixture, scenario: "missing", code: "PAPER_REPEAT_SCENARIO_UNKNOWN"},
 		{name: "unknown schema path", source: strings.Replace(repeatSourceFixture, "items\"", "missing\"", 1), scenario: "sample", code: "PAPER_REPEAT_SCHEMA"},
-		{name: "unknown predicate path", source: strings.Replace(repeatSourceFixture, "active && quantity == 1", "missing == 1", 1), scenario: "sample", code: "PAPER_REPEAT_WHEN"},
-		{name: "predicate type", source: strings.Replace(repeatSourceFixture, "active && quantity == 1", "quantity + 1", 1), scenario: "sample", code: "PAPER_REPEAT_WHEN_TYPE"},
+		{name: "unknown predicate path", source: strings.Replace(repeatSourceFixture, "item.active && item.quantity == 1", "item.missing == 1", 1), scenario: "sample", code: "PAPER_REPEAT_VISIBLE"},
+		{name: "predicate type", source: strings.Replace(repeatSourceFixture, "item.active && item.quantity == 1", "item.quantity + 1", 1), scenario: "sample", code: "PAPER_REPEAT_VISIBLE_TYPE"},
 		{name: "output bound", source: strings.Replace(repeatSourceFixture, "max-items: 2", "max-items: 1", 1), scenario: "sample", code: "PAPER_REPEAT_LIMIT"},
 		{name: "multiple templates", source: strings.Replace(repeatSourceFixture, "          text: \"Line\"\n", "          text: \"Line\"\n        text: \"extra\"\n", 1), scenario: "sample", code: "PAPER_REPEAT_TEMPLATE"},
 	}

@@ -33,7 +33,7 @@ const paperScenarioRepeatFixture = `document @doc:
         source: "items"
         instance-prefix: "preview-lines"
         max-items: 2
-        when: "active"
+        visible: item.active
         paragraph @line:
           bind: "name"
           text: "Scenario line"
@@ -88,9 +88,9 @@ func TestPlanAndWritePaperScenarioBoundedLoopEndToEnd(t *testing.T) {
         step: 1
         max-iterations: 3
         instance-prefix: "copies"
-        when: "enabled && !loop.last"
+        visible: enabled && !loop.last
         paragraph @copy:
-          when: "loop.first || loop.index == 2"
+          visible: loop.first || loop.index == 2
           text: "Loop"
 `
 	plan, result, err := PlanPaperScenario("loop.paper", source, "preview")

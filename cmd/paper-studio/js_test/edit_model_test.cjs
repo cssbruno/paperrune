@@ -104,9 +104,9 @@ test('document, page, canvas, appearance, and conditions expose typed missing at
   assert.equal(model.buildPayload(workspace, paragraph, 'appearance', 'style', '@body').text, '@body');
   assert.equal(model.buildPayload(workspace, paragraph, 'appearance', 'color-token', 'ink').text, 'ink');
   assert.throws(() => model.buildPayload(workspace, paragraph, 'appearance', 'color-token', 'bad token'), /without whitespace/);
-  assert.equal(model.buildPayload(workspace, paragraph, 'condition', 'when', 'patient.active == true').text, 'patient.active == true');
-  assert.throws(() => model.buildPayload(workspace, paragraph, 'condition', 'when', '  '), /required/);
-  assert.equal(model.defaultValue(model.valueSpec('condition', 'when', paragraph)), 'true');
+  assert.equal(model.buildPayload(workspace, paragraph, 'condition', 'visible', 'patient.active == true').text, 'patient.active == true');
+  assert.throws(() => model.buildPayload(workspace, paragraph, 'condition', 'visible', '  '), /required/);
+  assert.equal(model.defaultValue(model.valueSpec('condition', 'visible', paragraph)), 'true');
   assert.equal(model.defaultValue(model.valueSpec('appearance', 'style', paragraph)), '');
 });
 

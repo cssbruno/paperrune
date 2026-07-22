@@ -17,6 +17,7 @@ import (
 
 	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
+	"github.com/cssbruno/paperrune/internal/paperexpr"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 	"github.com/cssbruno/paperrune/internal/paperscenario"
 	"github.com/cssbruno/paperrune/internal/papertheme"
@@ -183,17 +184,25 @@ func compilePipeline(ctx context.Context, ast paperlang.AST, expansionLimits Exp
 		scenario.dataOptions.Locale = paperDocumentLanguage(ast)
 	}
 	schemas := analyzeSchemas(ast, schemaLimits)
+	expressionLimits := paperexpr.DefaultLanguageLimits()
+	var expressionDiagnostics []paperlang.Diagnostic
+	if scenario == nil {
+		expressionDiagnostics = staticExpressionDiagnostics(ast, schemas, expressionLimits)
+	}
 	themes := ExtractThemes(ast)
 	selectedScenario := ""
 	if scenario != nil {
 		selectedScenario = scenario.name
 	}
-	expanded := expandComponents(ast, expansionLimits, selectedScenario)
+	expanded := expandComponentsWithProvenance(ast, expansionLimits, selectedScenario, nil, true, true)
 	if scenario != nil {
 		expanded = expandSelectedScenario(ast, schemas, expanded, scenario)
+		expanded = expandDeferredScenarioComponents(ctx, ast, schemas, expanded, expansionLimits, scenario)
 	} else {
 		expanded = deferDynamicFlow(expanded)
+		deferStaticExpressionValues(expanded.ast, schemas, expressionLimits)
 	}
+	expanded.diagnostics = append(expanded.diagnostics, expressionDiagnostics...)
 	bindings := validateBindings(expanded.ast, expanded.provenance, schemas, schemaLimits)
 	c := compiler{
 		result: Result{Document: layout.NewLayoutDocument(), Page: PageSpec{Width: 595.275590551, Height: 841.88976378}, Schemas: schemas.descriptors,
@@ -278,7 +287,7 @@ func deferDynamicFlow(input componentExpansionResult) componentExpansionResult {
 		}
 		members := node.Members[:0]
 		for _, member := range node.Members {
-			if member.Node != nil && (member.Node.Kind == paperlang.NodeRepeat || member.Node.Kind == paperlang.NodeLoop) {
+			if member.Node != nil && (member.Node.Kind == paperlang.NodeRepeat || member.Node.Kind == paperlang.NodeLoop || deferredComponentUse(member.Node)) {
 				input.diagnostics = append(input.diagnostics, paperlang.Diagnostic{Code: "PAPER_COMPILE_DYNAMIC_DEFERRED", Severity: paperlang.SeverityWarning, Message: fmt.Sprintf("%s is deferred until a scenario is selected", member.Node.Kind), Hint: "compile with one declared scenario to render dynamic content", Span: member.Node.HeaderSpan})
 				continue
 			}
@@ -289,6 +298,18 @@ func deferDynamicFlow(input componentExpansionResult) componentExpansionResult {
 	}
 	prune(input.ast.Root)
 	return input
+}
+
+func deferredComponentUse(node *paperlang.Node) bool {
+	if node == nil || node.Kind != paperlang.NodeUse {
+		return false
+	}
+	for _, member := range node.Members {
+		if member.Property != nil && member.Property.Name == "component" && member.Property.Value.Kind == paperlang.ScalarExpression {
+			return true
+		}
+	}
+	return false
 }
 
 type compiler struct {
@@ -326,7 +347,7 @@ var textStyleProperties = map[string]bool{
 }
 var bindingTextProperties = func() map[string]bool {
 	properties := copyPropertySet(textStyleProperties)
-	for _, name := range []string{"bind", "bind-required", "format", "format-locale", "format-currency", "format-min-fraction", "format-max-fraction", "when"} {
+	for _, name := range []string{"bind", "bind-required", "format", "format-locale", "format-currency", "format-min-fraction", "format-max-fraction", "visible"} {
 		properties[name] = true
 	}
 	return properties
@@ -350,7 +371,7 @@ var listProperties = func() map[string]bool {
 	properties["style"] = true
 	properties["ordered"] = true
 	properties["marker"] = true
-	properties["when"] = true
+	properties["visible"] = true
 	for _, name := range boxPropertyNames {
 		properties[name] = true
 	}
@@ -359,12 +380,12 @@ var listProperties = func() map[string]bool {
 var rowColumnProperties = map[string]bool{
 	"gap": true, "line-gap": true, "width": true, "height": true,
 	"wrap": true, "justify-content": true, "align-items": true, "align-content": true, "reverse": true,
-	"when": true,
+	"visible": true,
 }
-var canvasProperties = map[string]bool{"width": true, "height": true, "default-horizontal": true, "default-vertical": true}
+var canvasProperties = map[string]bool{"width": true, "height": true, "default-horizontal": true, "default-vertical": true, "visible": true}
 var canvasAnchorProperties = func() map[string]bool {
 	properties := map[string]bool{"width": true, "height": true, "alt": true,
-		"left": true, "right": true, "center-x": true, "top": true, "bottom": true, "center-y": true}
+		"left": true, "right": true, "center-x": true, "top": true, "bottom": true, "center-y": true, "visible": true}
 	for _, name := range boxPropertyNames {
 		properties[name] = true
 	}
@@ -374,7 +395,7 @@ var imageProperties = func() map[string]bool {
 	properties := map[string]bool{
 		"source": true, "width": true, "height": true, "max-width": true, "max-height": true,
 		"fit": true, "focus-x": true, "focus-y": true, "align": true,
-		"alt": true, "decorative": true, "caption": true, "when": true,
+		"alt": true, "decorative": true, "caption": true, "visible": true,
 	}
 	properties["style"] = true
 	for _, name := range boxPropertyNames {
@@ -382,7 +403,7 @@ var imageProperties = func() map[string]bool {
 	}
 	return properties
 }()
-var tableProperties = map[string]bool{"caption": true, "repeat-header": true, "split": true, "when": true}
+var tableProperties = map[string]bool{"caption": true, "repeat-header": true, "split": true, "visible": true}
 var tableColumnProperties = map[string]bool{"width": true, "min-width": true, "max-width": true}
 var tableRowProperties = map[string]bool{"keep-together": true, "keep-with-next": true, "orphans": true, "widows": true}
 var tableCellProperties = func() map[string]bool {
@@ -599,6 +620,9 @@ func (c *compiler) compilePage(node *paperlang.Node) {
 		c.result.Document.PageTemplate.Footer = &layout.FooterBlock{Blocks: blocks, ReservePageArea: reserve, Box: box}
 	}
 	c.compileBody(body)
+	if c.fixture != nil && len(c.result.Document.Body) == 0 {
+		c.add("PAPER_COMPILE_EMPTY_VISIBLE_BODY", "selected data leaves the page body with no visible content", "keep at least one visible body block for every rendered scenario", body.HeaderSpan)
+	}
 }
 
 func validPageNumberFormat(format string) bool {
@@ -725,6 +749,22 @@ func (c *compiler) compileCanvas(node *paperlang.Node) {
 	}
 	if len(block.Items) == 0 {
 		c.add("PAPER_COMPILE_CANVAS_EMPTY", "canvas requires at least one anchor", "add an explicitly sized anchor child", node.HeaderSpan)
+	}
+	for index, item := range block.Items {
+		for _, constraint := range item.Constraints {
+			if !strings.HasPrefix(constraint.Target, "@") || seen[constraint.Target] {
+				continue
+			}
+			span := node.HeaderSpan
+			if index < len(children) {
+				if property := findNodeProperty(children[index], constraint.Anchor); property != nil {
+					span = property.Value.Span
+				} else {
+					span = children[index].HeaderSpan
+				}
+			}
+			c.add("PAPER_COMPILE_CANVAS_TARGET_HIDDEN", fmt.Sprintf("canvas constraint targets missing anchor %s", constraint.Target), "keep the target visible or remove the sibling constraint", span)
+		}
 	}
 	c.result.Document.Body = append(c.result.Document.Body, block)
 	c.recordComputedStyle(node, bodyIndex)
@@ -1568,7 +1608,7 @@ func (c *compiler) compileList(node *paperlang.Node) {
 }
 
 func (c *compiler) compileListItem(node *paperlang.Node, listStyle layout.TextStyle, bodyIndex, itemIndex int) (layout.ListItem, bool) {
-	_, children := c.members(node, map[string]bool{"when": true})
+	_, children := c.members(node, map[string]bool{"visible": true})
 	c.mapNode(node, bodyIndex, itemIndex)
 	item := layout.ListItem{}
 	for _, child := range children {

@@ -182,6 +182,55 @@ func expandSelectedScenario(ast paperlang.AST, schemas schemaAnalysis, component
 	return result
 }
 
+// expandDeferredScenarioComponents alternates expression resolution and
+// component expansion. A computed use is kept intact until its fixture,
+// repeat, or loop scope exists; null removes the use, while a selected
+// reference expands only that definition. The component depth limit also
+// bounds the number of deferred rounds.
+func expandDeferredScenarioComponents(ctx context.Context, source paperlang.AST, schemas schemaAnalysis, current componentExpansionResult, limits ExpansionLimits, request *scenarioCompileRequest) componentExpansionResult {
+	if current.deferred == 0 || request.fixture == nil {
+		return current
+	}
+	normalized := limits
+	if normalized == (ExpansionLimits{}) {
+		normalized = DefaultExpansionLimits()
+	}
+	exprLimits := request.limits.Expressions
+	if exprLimits == (paperexpr.LanguageLimits{}) {
+		exprLimits = paperexpr.DefaultLanguageLimits()
+	}
+	for round := uint32(0); current.deferred != 0 && round < normalized.MaxDepth; round++ {
+		input := attachComponentDefinitions(current.ast, source)
+		next := expandComponentsWithProvenance(input, normalized, request.name, current.provenance, false, true)
+		next.diagnostics = append(current.diagnostics, next.diagnostics...)
+		next.diagnostics = append(next.diagnostics, evaluateScenarioConditions(ctx, next.ast, next.provenance, schemas, *request.fixture, exprLimits)...)
+		current = next
+	}
+	if current.deferred != 0 {
+		current.diagnostics = append(current.diagnostics, repeatDiagnostic(
+			"PAPER_COMPONENT_DYNAMIC_DEPTH",
+			"computed component selection exceeds the configured expansion depth",
+			"reduce nested computed component uses or raise the bounded component depth",
+			rootSpan(current.ast),
+		))
+	}
+	return current
+}
+
+func attachComponentDefinitions(expanded, source paperlang.AST) paperlang.AST {
+	if expanded.Root == nil || source.Root == nil || source.Root.Kind != paperlang.NodeDocument {
+		return expanded
+	}
+	root := *expanded.Root
+	root.Members = append([]paperlang.Member(nil), expanded.Root.Members...)
+	for _, member := range source.Root.Members {
+		if member.Node != nil && member.Node.Kind == paperlang.NodeComponent {
+			root.Members = append(root.Members, paperlang.Member{Node: member.Node})
+		}
+	}
+	return paperlang.AST{File: expanded.File, Root: &root}
+}
+
 func (e *repeatExpansionContext) cloneOrdinaryRoot(source *paperlang.Node, prior map[*paperlang.Node]expansionProvenance) *paperlang.Node {
 	if source == nil {
 		return nil
@@ -244,8 +293,8 @@ func (e *repeatExpansionContext) expandRepeat(node *paperlang.Node, prior map[*p
 		}
 	}
 	for name, property := range properties {
-		if name != "source" && name != "instance-prefix" && name != "max-items" && name != "when" {
-			e.add("PAPER_REPEAT_PROPERTY", fmt.Sprintf("repeat property %q is unsupported", name), "use source, instance-prefix, max-items, and optional when", property.Span)
+		if name != "source" && name != "instance-prefix" && name != "max-items" && name != "visible" {
+			e.add("PAPER_REPEAT_PROPERTY", fmt.Sprintf("repeat property %q is unsupported", name), "use source, instance-prefix, max-items, and optional visible", property.Span)
 		}
 	}
 	if len(children) != 1 {
@@ -303,20 +352,20 @@ func (e *repeatExpansionContext) expandRepeat(node *paperlang.Node, prior map[*p
 	}
 
 	var predicate *paperexpr.Program
-	if when := properties["when"]; when != nil {
-		expression, _, valid := repeatStringProperty(when)
+	if visible := properties["visible"]; visible != nil {
+		expression, _, valid := repeatExpressionProperty(visible)
 		if !valid {
-			e.add("PAPER_REPEAT_WHEN", "repeat when must be a quoted boolean expression", "quote the bounded expression", when.Value.Span)
+			e.add("PAPER_REPEAT_VISIBLE", "repeat visible must be an unquoted boolean expression", "use item fields and boolean operators", visible.Value.Span)
 			return nil
 		}
-		environment := repeatExpressionEnvironment(itemFields, "")
+		environment := repeatExpressionEnvironment(itemFields, "item")
 		program, kind, err := paperexpr.Compile(expression, environment, e.exprLimits)
 		if err != nil {
-			e.add("PAPER_REPEAT_WHEN", err.Error(), "use item-relative primitive paths and boolean operators", when.Value.Span)
+			e.add("PAPER_REPEAT_VISIBLE", err.Error(), "use item-relative primitive paths and boolean operators", visible.Value.Span)
 			return nil
 		}
 		if kind != paperexpr.Bool {
-			e.add("PAPER_REPEAT_WHEN_TYPE", "repeat when expression must return bool", "compare values or use a boolean item field", when.Value.Span)
+			e.add("PAPER_REPEAT_VISIBLE_TYPE", "repeat visible expression must return bool", "compare values or use a boolean item field", visible.Value.Span)
 			return nil
 		}
 		predicate = &program
@@ -638,6 +687,13 @@ func repeatStringProperty(property *paperlang.Property) (string, paperlang.Span,
 		return "", paperlang.Span{}, false
 	}
 	return strings.TrimSpace(*property.Value.StringValue), property.Value.Span, true
+}
+
+func repeatExpressionProperty(property *paperlang.Property) (string, paperlang.Span, bool) {
+	if property == nil || property.Value.Kind != paperlang.ScalarExpression || property.Value.ExpressionValue == nil {
+		return "", paperlang.Span{}, false
+	}
+	return strings.TrimSpace(*property.Value.ExpressionValue), property.Value.Span, true
 }
 
 func repeatMaxItems(property *paperlang.Property) (uint32, bool) {

@@ -42,8 +42,8 @@ func (e *repeatExpansionContext) expandLoop(node *paperlang.Node, prior map[*pap
 		}
 	}
 	for name, property := range properties {
-		if name != "from" && name != "through" && name != "step" && name != "max-iterations" && name != "instance-prefix" && name != "when" {
-			e.add("PAPER_LOOP_PROPERTY", fmt.Sprintf("loop property %q is unsupported", name), "use from, through, step, max-iterations, instance-prefix, and optional when", property.Span)
+		if name != "from" && name != "through" && name != "step" && name != "max-iterations" && name != "instance-prefix" && name != "visible" {
+			e.add("PAPER_LOOP_PROPERTY", fmt.Sprintf("loop property %q is unsupported", name), "use from, through, step, max-iterations, instance-prefix, and optional visible", property.Span)
 		}
 	}
 	if len(children) != 1 {
@@ -87,24 +87,24 @@ func (e *repeatExpansionContext) expandLoop(node *paperlang.Node, prior map[*pap
 	}
 	var predicate *paperexpr.Program
 	predicateSpan := node.HeaderSpan
-	if when := properties["when"]; when != nil {
-		predicateSpan = when.Value.Span
-		expression, _, valid := repeatStringProperty(when)
+	if visible := properties["visible"]; visible != nil {
+		predicateSpan = visible.Value.Span
+		expression, _, valid := repeatExpressionProperty(visible)
 		if !valid {
-			e.add("PAPER_LOOP_WHEN", "loop when must be a quoted boolean expression", "use fixture paths and loop.index, loop.first, or loop.last", when.Value.Span)
+			e.add("PAPER_LOOP_VISIBLE", "loop visible must be an unquoted boolean expression", "use fixture paths and loop.index, loop.first, or loop.last", visible.Value.Span)
 			return nil
 		}
 		program, kind, err := paperexpr.Compile(expression, environment, e.exprLimits)
 		if err != nil {
-			code := "PAPER_LOOP_WHEN"
+			code := "PAPER_LOOP_VISIBLE"
 			if errors.Is(err, paperexpr.ErrLimit) {
 				code = "PAPER_LOOP_LIMIT"
 			}
-			e.add(code, err.Error(), "use typed fixture paths and loop bindings", when.Value.Span)
+			e.add(code, err.Error(), "use typed fixture paths and loop bindings", visible.Value.Span)
 			return nil
 		}
 		if kind != paperexpr.Bool {
-			e.add("PAPER_LOOP_WHEN_TYPE", "loop when expression must return bool", "compare values or use a boolean binding", when.Value.Span)
+			e.add("PAPER_LOOP_VISIBLE_TYPE", "loop visible expression must return bool", "compare values or use a boolean binding", visible.Value.Span)
 			return nil
 		}
 		predicate = &program
@@ -259,7 +259,7 @@ func (e *repeatExpansionContext) loopEnvironment(repeatParent *repeatFrame, loop
 	var environment []paperexpr.PathKind
 	var root paperscenario.Value
 	if repeatParent != nil {
-		environment = repeatExpressionEnvironment(repeatParent.fields, "")
+		environment = repeatExpressionEnvironment(repeatParent.fields, "item")
 		root = repeatParent.value
 	} else if loopParent != nil {
 		root = loopParent.root
@@ -308,7 +308,14 @@ func loopExpressionBindings(paths []string, root paperscenario.Value, index int6
 			fixturePaths = append(fixturePaths, path)
 		}
 	}
-	fixture, err := conditionBindings(fixturePaths, root)
+	scope := ""
+	for _, path := range fixturePaths {
+		if strings.HasPrefix(path, "item.") {
+			scope = "item"
+			break
+		}
+	}
+	fixture, err := scopedConditionBindings(fixturePaths, root, scope)
 	if err != nil {
 		return nil, err
 	}

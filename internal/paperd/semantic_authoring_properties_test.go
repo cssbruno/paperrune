@@ -18,6 +18,9 @@ const authoringPropertiesFixture = `document @report:
     token @ink:
       type: "color"
       value: "#112233"
+  schema data:
+    object patient:
+      bool active
   page @sheet:
     page-numbers: false
     body @body:
@@ -119,7 +122,7 @@ func TestPaperSetAppearanceAndConditionPublishReadableProperties(t *testing.T) {
 	workspace = mustWorkspace(t, Limits{})
 	guard, _, _ = mutationGuard(t, workspace, authoringPropertiesFixture, "@copy", "condition", CapabilityEdit)
 	result, err = workspace.PaperSetCondition(PaperSetConditionRequest{Guard: guard, Expression: "patient.active == true"})
-	if err != nil || !strings.Contains(result.Revision.Source, `when: "patient.active == true"`) {
+	if err != nil || !strings.Contains(result.Revision.Source, `visible: patient.active == true`) {
 		t.Fatalf("condition = %#v, %v", result, err)
 	}
 

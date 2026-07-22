@@ -15,7 +15,7 @@ func TestRepeatSyntaxParseFormatParseIsStable(t *testing.T) {
 		"    page:\n" +
 		"        body:\n" +
 		"            repeat @visible-lines:\n" +
-		"                when: \"active && quantity == 1\"\n" +
+		"                visible: active && quantity == 1\n" +
 		"                max-items: 50\n" +
 		"                source: \"items\"\n" +
 		"                instance-prefix: \"invoice-lines\"\n" +
@@ -36,7 +36,7 @@ func TestRepeatSyntaxParseFormatParseIsStable(t *testing.T) {
 		"        instance-prefix: \"invoice-lines\"\n" +
 		"        max-items: 50\n" +
 		"        source: \"items\"\n" +
-		"        when: \"active && quantity == 1\"\n" +
+		"        visible: active && quantity == 1\n" +
 		"        paragraph @line:\n" +
 		"          text: \"Line\"\n"
 	if string(formatted) != want {

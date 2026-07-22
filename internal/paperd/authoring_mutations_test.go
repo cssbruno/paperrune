@@ -82,7 +82,7 @@ func TestPaperInsertTemplatePaletteCoversTypedPrimitivesAndComponents(t *testing
 	workspace := mustWorkspace(t, Limits{})
 	guard, _, _ := mutationGuard(t, workspace, source, "@body", "palette-component", CapabilityEdit)
 	result, err := workspace.PaperInsertTemplate(PaperInsertTemplateRequest{Guard: guard, Template: "component", Component: "@card", ID: "@card-instance"})
-	if err != nil || !result.Semantic.AfterCompileOK || !strings.Contains(result.Revision.Source, "use @card-instance:") || !strings.Contains(result.Revision.Source, "component: \"@card\"") {
+	if err != nil || !result.Semantic.AfterCompileOK || !strings.Contains(result.Revision.Source, "use @card-instance:") || !strings.Contains(result.Revision.Source, "component: @card") {
 		t.Fatalf("component template = %v result=%#v\nsource=%s", err, result, result.Revision.Source)
 	}
 

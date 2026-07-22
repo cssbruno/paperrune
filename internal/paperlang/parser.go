@@ -113,6 +113,10 @@ func (p *paperParser) parseNode(depth int) *Node {
 	if !p.consume(TokenColon) {
 		p.add("PAPER_EXPECTED_COLON", fmt.Sprintf("%s declaration requires ':'", kind), "add ':' after the node name or @id", p.current().Span)
 	}
+	switchHeader := ""
+	if p.at(TokenExpression) && strings.HasPrefix(strings.TrimSpace(p.current().Lexeme), "switch") && strings.HasSuffix(strings.TrimSpace(p.current().Lexeme), ":") {
+		switchHeader = strings.TrimSpace(p.current().Lexeme)
+	}
 	if isScalarToken(p.current().Kind) {
 		value := p.parseScalar()
 		node.Value = &value
@@ -134,6 +138,14 @@ func (p *paperParser) parseNode(depth int) *Node {
 	// them as newlines without indentation tokens, so skip them before deciding
 	// whether the declaration owns an indented block.
 	p.skipNewlines()
+	if switchHeader != "" && p.at(TokenIndent) {
+		property := &Property{Value: *node.Value, Span: node.Span}
+		p.parseSwitchProperty(property, switchHeader)
+		node.Value = &property.Value
+		node.Span.End = property.Span.End
+		p.validateNode(node, depth)
+		return node
+	}
 	if p.at(TokenIndent) {
 		p.advance()
 		for !p.at(TokenDedent) && !p.at(TokenEOF) {
@@ -169,7 +181,7 @@ func (p *paperParser) parseMember(depth int, parent *Node) Member {
 		return Member{Node: p.parseSchemaField(depth)}
 	}
 	_, isNode := parseNodeKind(p.current().Lexeme)
-	// `component: "@name"` is the readable reference property inside a use;
+	// `component: @name` is the readable reference property inside a use;
 	// a component definition remains unambiguous as `component @name:` (or a
 	// block-valued `component:`) because no scalar follows its colon.
 	isComponentReference := p.current().Lexeme == string(NodeComponent) &&
@@ -385,6 +397,10 @@ func (p *paperParser) parseProperty() *Property {
 	if !p.consume(TokenColon) {
 		p.add("PAPER_EXPECTED_COLON", fmt.Sprintf("property %q requires ':'", name.Lexeme), "add ':' between the property name and value", p.current().Span)
 	}
+	switchHeader := ""
+	if p.at(TokenExpression) && strings.HasPrefix(strings.TrimSpace(p.current().Lexeme), "switch") && strings.HasSuffix(strings.TrimSpace(p.current().Lexeme), ":") {
+		switchHeader = strings.TrimSpace(p.current().Lexeme)
+	}
 	if isScalarToken(p.current().Kind) {
 		property.Value = p.parseScalar()
 	} else {
@@ -399,11 +415,102 @@ func (p *paperParser) parseProperty() *Property {
 		p.advance()
 	}
 	property.Span = Span{File: p.file, Start: name.Span.Start, End: end}
-	if p.at(TokenIndent) {
+	if switchHeader != "" && p.at(TokenIndent) {
+		p.parseSwitchProperty(property, switchHeader)
+	} else if p.at(TokenIndent) {
 		p.add("PAPER_PROPERTY_BLOCK", "properties cannot own an indented block", "dedent the following lines or make this a component", p.current().Span)
 		p.skipIndentedBlock()
 	}
 	return property
+}
+
+func (p *paperParser) parseSwitchProperty(property *Property, header string) {
+	p.advance() // indent
+	selector := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.TrimPrefix(header, "switch")), ":"))
+	type arm struct {
+		condition, result         string
+		conditionSpan, resultSpan Span
+	}
+	var arms []arm
+	seenCases := make(map[string]bool)
+	defaultResult := ""
+	defaultSpan := Span{}
+	end := property.Value.Span.End
+	for !p.at(TokenDedent) && !p.at(TokenEOF) {
+		if p.at(TokenNewline) {
+			p.advance()
+			continue
+		}
+		if !p.at(TokenIdentifier) || p.current().Lexeme != "case" && p.current().Lexeme != "default" {
+			p.add("PAPER_SWITCH_ARM", "switch expects case or default", "add case value: result or default: result", p.current().Span)
+			p.skipLine()
+			continue
+		}
+		keyword := p.advance()
+		label := ""
+		if keyword.Lexeme == "case" {
+			if !p.at(TokenExpression) {
+				p.add("PAPER_SWITCH_CASE", "case requires a value or boolean expression", "add a case expression before ':'", p.current().Span)
+				p.skipLine()
+				continue
+			}
+			labelToken := p.advance()
+			label = strings.TrimSpace(labelToken.Lexeme)
+			if selector != "" && seenCases[label] {
+				p.add("PAPER_SWITCH_CASE_DUPLICATE", "switch repeats case "+label, "keep each value case once", keyword.Span)
+			}
+			seenCases[label] = true
+		}
+		if !p.consume(TokenColon) || !isScalarToken(p.current().Kind) {
+			p.add("PAPER_SWITCH_RESULT", "switch arm requires a result expression", "add ': result' after the case", p.current().Span)
+			p.skipLine()
+			continue
+		}
+		resultToken := p.advance()
+		result := strings.TrimSpace(resultToken.Lexeme)
+		end = resultToken.Span.End
+		if keyword.Lexeme == "default" {
+			if defaultResult != "" {
+				p.add("PAPER_SWITCH_DEFAULT", "switch has more than one default", "keep exactly one final default", keyword.Span)
+			}
+			defaultResult = result
+			defaultSpan = resultToken.Span
+		} else if defaultResult != "" {
+			p.add("PAPER_SWITCH_AFTER_DEFAULT", "case appears after default", "move default to the end", keyword.Span)
+		} else {
+			condition := label
+			if selector != "" {
+				condition = "(" + selector + ") == (" + label + ")"
+			}
+			arms = append(arms, arm{condition: condition, result: result, conditionSpan: p.peek(-3).Span, resultSpan: resultToken.Span})
+		}
+		if p.at(TokenNewline) {
+			p.advance()
+		}
+	}
+	p.consume(TokenDedent)
+	if defaultResult == "" {
+		p.add("PAPER_SWITCH_DEFAULT", "switch requires a default", "add default: result as the final arm", property.Value.Span)
+		defaultResult = "null"
+	}
+	expression := defaultResult
+	for index := len(arms) - 1; index >= 0; index-- {
+		expression = "(" + arms[index].condition + ") ? (" + arms[index].result + ") : (" + expression + ")"
+	}
+	property.Value.Kind = ScalarExpression
+	property.Value.Raw = header
+	property.Value.ExpressionValue = &expression
+	switchCases := make([]SwitchCase, len(arms))
+	for index, item := range arms {
+		condition := item.condition
+		if selector != "" {
+			condition = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(item.condition, "("+selector+") == ("), ")"))
+		}
+		switchCases[index] = SwitchCase{Condition: condition, Result: item.result, ConditionSpan: item.conditionSpan, ResultSpan: item.resultSpan}
+	}
+	property.Value.SwitchValue = &SwitchExpression{Selector: selector, SelectorSpan: property.Value.Span, Cases: switchCases, Default: defaultResult, DefaultSpan: defaultSpan}
+	property.Value.Span.End = end
+	property.Span.End = end
 }
 
 func (p *paperParser) parseScalar() Scalar {
@@ -418,6 +525,10 @@ func (p *paperParser) parseScalar() Scalar {
 			decoded = token.Lexeme
 		}
 		value.StringValue = &decoded
+	case TokenExpression:
+		value.Kind = ScalarExpression
+		expression := strings.TrimSpace(token.Lexeme)
+		value.ExpressionValue = &expression
 	case TokenBool:
 		value.Kind = ScalarBool
 		parsed := token.Lexeme == "true"
@@ -657,7 +768,7 @@ func validUnit(unit string) bool {
 }
 
 func isScalarToken(kind TokenKind) bool {
-	return kind == TokenString || kind == TokenBool || kind == TokenNumber || kind == TokenUnit || kind == TokenNull
+	return kind == TokenString || kind == TokenExpression || kind == TokenBool || kind == TokenNumber || kind == TokenUnit || kind == TokenNull
 }
 
 func isFixtureNodeKind(kind NodeKind) bool {

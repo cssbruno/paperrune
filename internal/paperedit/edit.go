@@ -15,6 +15,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/cssbruno/paperrune/internal/paperexpr"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 )
 
@@ -109,10 +110,11 @@ type TargetCandidate struct {
 type ValueKind string
 
 const (
-	ValueString ValueKind = "string"
-	ValueBool   ValueKind = "bool"
-	ValueNumber ValueKind = "number"
-	ValueUnit   ValueKind = "unit"
+	ValueString     ValueKind = "string"
+	ValueExpression ValueKind = "expression"
+	ValueBool       ValueKind = "bool"
+	ValueNumber     ValueKind = "number"
+	ValueUnit       ValueKind = "unit"
 )
 
 // Value is a typed .paper scalar. Text stores a string value or the unit
@@ -124,9 +126,10 @@ type Value struct {
 	Number float64
 }
 
-func StringValue(value string) Value  { return Value{Kind: ValueString, Text: value} }
-func BoolValue(value bool) Value      { return Value{Kind: ValueBool, Bool: value} }
-func NumberValue(value float64) Value { return Value{Kind: ValueNumber, Number: value} }
+func StringValue(value string) Value     { return Value{Kind: ValueString, Text: value} }
+func ExpressionValue(value string) Value { return Value{Kind: ValueExpression, Text: value} }
+func BoolValue(value bool) Value         { return Value{Kind: ValueBool, Bool: value} }
+func NumberValue(value float64) Value    { return Value{Kind: ValueNumber, Number: value} }
 func UnitValue(number float64, unit string) Value {
 	return Value{Kind: ValueUnit, Number: number, Text: unit}
 }
@@ -1238,6 +1241,15 @@ func renderValue(value Value) (string, error) {
 	switch value.Kind {
 	case ValueString:
 		return strconv.Quote(value.Text), nil
+	case ValueExpression:
+		expression := strings.TrimSpace(value.Text)
+		if expression == "" || strings.ContainsAny(expression, "\r\n") || !utf8.ValidString(expression) {
+			return "", errors.New("expression must be non-empty single-line UTF-8")
+		}
+		if _, err := paperexpr.Parse(expression, paperexpr.LanguageLimits{}); err != nil {
+			return "", fmt.Errorf("expression is invalid: %w", err)
+		}
+		return expression, nil
 	case ValueBool:
 		return strconv.FormatBool(value.Bool), nil
 	case ValueNumber:

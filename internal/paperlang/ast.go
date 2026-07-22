@@ -10,8 +10,8 @@ import (
 const (
 	// GrammarVersion pins the accepted source-language contract independently
 	// from the JSON projection schema used by internal tools.
-	GrammarVersion          = "paper/0.3"
-	ASTSchemaVersion uint16 = 1
+	GrammarVersion          = "paper/0.4"
+	ASTSchemaVersion uint16 = 2
 )
 
 // Position is a source location. Offset is a zero-based UTF-8 byte offset;
@@ -117,10 +117,13 @@ type ScalarKind string
 
 const (
 	ScalarString ScalarKind = "string"
-	ScalarBool   ScalarKind = "bool"
-	ScalarNumber ScalarKind = "number"
-	ScalarUnit   ScalarKind = "unit"
-	ScalarNull   ScalarKind = "null"
+	// ScalarExpression is an unquoted, typed data expression. ExpressionValue
+	// retains its exact semantic spelling without surrounding source trivia.
+	ScalarExpression ScalarKind = "expression"
+	ScalarBool       ScalarKind = "bool"
+	ScalarNumber     ScalarKind = "number"
+	ScalarUnit       ScalarKind = "unit"
+	ScalarNull       ScalarKind = "null"
 )
 
 // UnitValue stores a numeric magnitude and canonical unit suffix.
@@ -129,17 +132,39 @@ type UnitValue struct {
 	Unit   string  `json:"unit"`
 }
 
+// SwitchCase is one ordered case in a typed switch expression. Condition is a
+// value expression when Selector is non-empty and a boolean predicate
+// otherwise. Result is always an expression spelling.
+type SwitchCase struct {
+	Condition     string `json:"condition"`
+	Result        string `json:"result"`
+	ConditionSpan Span   `json:"condition_span"`
+	ResultSpan    Span   `json:"result_span"`
+}
+
+// SwitchExpression preserves the authored readable switch independently from
+// the lowered lazy expression retained in Scalar.ExpressionValue.
+type SwitchExpression struct {
+	Selector     string       `json:"selector,omitempty"`
+	SelectorSpan Span         `json:"selector_span"`
+	Cases        []SwitchCase `json:"cases"`
+	Default      string       `json:"default"`
+	DefaultSpan  Span         `json:"default_span"`
+}
+
 // Scalar retains Raw exactly as authored. String values are decoded for
 // consumers, but interpolation such as {{ customer.name }} remains ordinary
 // source text and is not evaluated by this package.
 type Scalar struct {
-	Kind        ScalarKind `json:"kind"`
-	Raw         string     `json:"raw"`
-	StringValue *string    `json:"string_value,omitempty"`
-	BoolValue   *bool      `json:"bool_value,omitempty"`
-	NumberValue *float64   `json:"number_value,omitempty"`
-	UnitValue   *UnitValue `json:"unit_value,omitempty"`
-	Span        Span       `json:"span"`
+	Kind            ScalarKind        `json:"kind"`
+	Raw             string            `json:"raw"`
+	StringValue     *string           `json:"string_value,omitempty"`
+	ExpressionValue *string           `json:"expression_value,omitempty"`
+	SwitchValue     *SwitchExpression `json:"switch_value,omitempty"`
+	BoolValue       *bool             `json:"bool_value,omitempty"`
+	NumberValue     *float64          `json:"number_value,omitempty"`
+	UnitValue       *UnitValue        `json:"unit_value,omitempty"`
+	Span            Span              `json:"span"`
 }
 
 // Property is a named typed value inside a node.
@@ -229,6 +254,15 @@ func cloneScalar(value *Scalar) *Scalar {
 	if value.StringValue != nil {
 		copyValue := *value.StringValue
 		cloned.StringValue = &copyValue
+	}
+	if value.ExpressionValue != nil {
+		copyValue := *value.ExpressionValue
+		cloned.ExpressionValue = &copyValue
+	}
+	if value.SwitchValue != nil {
+		copyValue := *value.SwitchValue
+		copyValue.Cases = append([]SwitchCase(nil), value.SwitchValue.Cases...)
+		cloned.SwitchValue = &copyValue
 	}
 	if value.BoolValue != nil {
 		copyValue := *value.BoolValue

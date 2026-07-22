@@ -29,6 +29,9 @@ type Value struct {
 	Bool    bool
 	Integer int64
 	String  string
+	// Reference distinguishes an unquoted closed @component literal from an
+	// ordinary quoted string while retaining String as its payload.
+	Reference bool
 }
 
 type Op uint8
@@ -44,6 +47,15 @@ const (
 	OpConcat
 	OpMatches
 	OpSelect
+	OpNotEqual
+	OpLess
+	OpLessEqual
+	OpGreater
+	OpGreaterEqual
+	OpSubInteger
+	OpMultiplyInteger
+	OpDivideInteger
+	OpNegateInteger
 )
 
 type Instruction struct {
@@ -55,6 +67,10 @@ type Program struct {
 	Constants []Value
 	Paths     []string
 	Code      []Instruction
+	// root retains the checked immutable syntax tree for genuinely lazy
+	// evaluation of short-circuit operators and conditional branches. Programs
+	// constructed manually continue to use Code directly.
+	root *expressionNode
 }
 
 type Binding struct {
@@ -101,6 +117,10 @@ func Evaluate(ctx context.Context, program Program, bindings []Binding, limits L
 	if err != nil {
 		return Value{}, err
 	}
+	if program.root != nil {
+		work := uint64(0)
+		return evaluateExpressionNode(ctx, program.root, values, limits, &work)
+	}
 	stack := make([]Value, 0, maxStack)
 	work := uint64(0)
 	for pc, instruction := range program.Code {
@@ -129,9 +149,19 @@ func Evaluate(ctx context.Context, program Program, bindings []Binding, limits L
 				return Value{}, fmt.Errorf("%w: not requires bool", ErrType)
 			}
 			stack = append(stack, Value{Kind: Bool, Bool: !value.Bool})
-		case OpEqual:
+		case OpNegateInteger:
+			value := pop1(&stack)
+			if value.Kind != Integer || value.Integer == -1<<63 {
+				return Value{}, fmt.Errorf("%w: integer negation overflow", ErrType)
+			}
+			stack = append(stack, Value{Kind: Integer, Integer: -value.Integer})
+		case OpEqual, OpNotEqual, OpLess, OpLessEqual, OpGreater, OpGreaterEqual:
 			left, right := pop2(&stack)
-			stack = append(stack, Value{Kind: Bool, Bool: equal(left, right)})
+			result, err := compareValues(instruction.Op, left, right)
+			if err != nil {
+				return Value{}, err
+			}
+			stack = append(stack, Value{Kind: Bool, Bool: result})
 		case OpAnd, OpOr:
 			left, right := pop2(&stack)
 			if left.Kind != Bool || right.Kind != Bool {
@@ -148,6 +178,13 @@ func Evaluate(ctx context.Context, program Program, bindings []Binding, limits L
 				return Value{}, fmt.Errorf("%w: integer overflow", ErrType)
 			}
 			stack = append(stack, Value{Kind: Integer, Integer: result})
+		case OpSubInteger, OpMultiplyInteger, OpDivideInteger:
+			left, right := pop2(&stack)
+			result, err := integerArithmetic(instruction.Op, left, right)
+			if err != nil {
+				return Value{}, err
+			}
+			stack = append(stack, result)
 		case OpConcat:
 			left, right := pop2(&stack)
 			if left.Kind != String || right.Kind != String {
@@ -191,6 +228,188 @@ func Evaluate(ctx context.Context, program Program, bindings []Binding, limits L
 	return stack[0], nil
 }
 
+func evaluateExpressionNode(ctx context.Context, node *expressionNode, bindings []Binding, limits Limits, work *uint64) (Value, error) {
+	if node == nil {
+		return Value{}, ErrInvalid
+	}
+	*work++
+	if *work > limits.MaxWork {
+		return Value{}, ErrLimit
+	}
+	if *work&63 == 0 {
+		if err := ctx.Err(); err != nil {
+			return Value{}, err
+		}
+	}
+	switch node.kind {
+	case nodeLiteral:
+		return node.value, nil
+	case nodePath:
+		index := sort.Search(len(bindings), func(i int) bool { return bindings[i].Path >= node.path })
+		if index == len(bindings) || bindings[index].Path != node.path {
+			return Value{}, fmt.Errorf("%w: missing %q", ErrBinding, node.path)
+		}
+		return bindings[index].Value, nil
+	case nodeNot, nodeNegate:
+		value, err := evaluateExpressionNode(ctx, node.left, bindings, limits, work)
+		if err != nil {
+			return Value{}, err
+		}
+		if node.kind == nodeNot {
+			return Value{Kind: Bool, Bool: !value.Bool}, nil
+		}
+		if value.Integer == -1<<63 {
+			return Value{}, fmt.Errorf("%w: integer negation overflow", ErrType)
+		}
+		return Value{Kind: Integer, Integer: -value.Integer}, nil
+	case nodeAnd, nodeOr:
+		left, err := evaluateExpressionNode(ctx, node.left, bindings, limits, work)
+		if err != nil {
+			return Value{}, err
+		}
+		if node.kind == nodeAnd && !left.Bool || node.kind == nodeOr && left.Bool {
+			return left, nil
+		}
+		return evaluateExpressionNode(ctx, node.right, bindings, limits, work)
+	case nodeSelect:
+		condition, err := evaluateExpressionNode(ctx, node.left, bindings, limits, work)
+		if err != nil {
+			return Value{}, err
+		}
+		if condition.Bool {
+			return evaluateExpressionNode(ctx, node.right, bindings, limits, work)
+		}
+		return evaluateExpressionNode(ctx, node.alt, bindings, limits, work)
+	case nodeEqual, nodeNotEqual, nodeLess, nodeLessEqual, nodeGreater, nodeGreaterEqual, nodeMatches, nodePlus, nodeMinus, nodeMultiply, nodeDivide:
+		left, err := evaluateExpressionNode(ctx, node.left, bindings, limits, work)
+		if err != nil {
+			return Value{}, err
+		}
+		right, err := evaluateExpressionNode(ctx, node.right, bindings, limits, work)
+		if err != nil {
+			return Value{}, err
+		}
+		switch node.kind {
+		case nodeEqual, nodeNotEqual, nodeLess, nodeLessEqual, nodeGreater, nodeGreaterEqual:
+			op := OpEqual
+			switch node.kind {
+			case nodeNotEqual:
+				op = OpNotEqual
+			case nodeLess:
+				op = OpLess
+			case nodeLessEqual:
+				op = OpLessEqual
+			case nodeGreater:
+				op = OpGreater
+			case nodeGreaterEqual:
+				op = OpGreaterEqual
+			}
+			result, err := compareValues(op, left, right)
+			return Value{Kind: Bool, Bool: result}, err
+		case nodeMatches:
+			matched, err := wildcardMatch(ctx, left.String, right.String, limits, work)
+			return Value{Kind: Bool, Bool: matched}, err
+		case nodePlus:
+			if left.Kind == Integer {
+				result := left.Integer + right.Integer
+				if right.Integer > 0 && result < left.Integer || right.Integer < 0 && result > left.Integer {
+					return Value{}, fmt.Errorf("%w: integer overflow", ErrType)
+				}
+				return Value{Kind: Integer, Integer: result}, nil
+			}
+			if uint64(len(left.String))+uint64(len(right.String)) > uint64(limits.MaxStringBytes) {
+				return Value{}, ErrLimit
+			}
+			*work += uint64(len(left.String) + len(right.String))
+			if *work > limits.MaxWork {
+				return Value{}, ErrLimit
+			}
+			return Value{Kind: String, String: left.String + right.String}, nil
+		case nodeMinus, nodeMultiply, nodeDivide:
+			op := OpSubInteger
+			if node.kind == nodeMultiply {
+				op = OpMultiplyInteger
+			} else if node.kind == nodeDivide {
+				op = OpDivideInteger
+			}
+			return integerArithmetic(op, left, right)
+		}
+	}
+	return Value{}, ErrInvalid
+}
+
+func compareValues(op Op, left, right Value) (bool, error) {
+	if left.Kind != right.Kind {
+		if op == OpEqual || op == OpNotEqual {
+			equal := left.Kind == Null && right.Kind == Null
+			return equal == (op == OpEqual), nil
+		}
+		return false, fmt.Errorf("%w: comparison requires matching kinds", ErrType)
+	}
+	if op == OpEqual || op == OpNotEqual {
+		result := equal(left, right)
+		return result != (op == OpNotEqual), nil
+	}
+	var comparison int
+	switch left.Kind {
+	case Integer:
+		if left.Integer < right.Integer {
+			comparison = -1
+		} else if left.Integer > right.Integer {
+			comparison = 1
+		}
+	case String:
+		comparison = strings.Compare(left.String, right.String)
+	default:
+		return false, fmt.Errorf("%w: value kind is not ordered", ErrType)
+	}
+	switch op {
+	case OpLess:
+		return comparison < 0, nil
+	case OpLessEqual:
+		return comparison <= 0, nil
+	case OpGreater:
+		return comparison > 0, nil
+	case OpGreaterEqual:
+		return comparison >= 0, nil
+	default:
+		return false, ErrInvalid
+	}
+}
+
+func integerArithmetic(op Op, left, right Value) (Value, error) {
+	if left.Kind != Integer || right.Kind != Integer {
+		return Value{}, fmt.Errorf("%w: arithmetic requires integers", ErrType)
+	}
+	var result int64
+	switch op {
+	case OpSubInteger:
+		result = left.Integer - right.Integer
+		if right.Integer > 0 && result > left.Integer || right.Integer < 0 && result < left.Integer {
+			return Value{}, fmt.Errorf("%w: integer overflow", ErrType)
+		}
+	case OpMultiplyInteger:
+		if left.Integer == -1 && right.Integer == -1<<63 || right.Integer == -1 && left.Integer == -1<<63 {
+			return Value{}, fmt.Errorf("%w: integer overflow", ErrType)
+		}
+		result = left.Integer * right.Integer
+		if left.Integer != 0 && result/left.Integer != right.Integer {
+			return Value{}, fmt.Errorf("%w: integer overflow", ErrType)
+		}
+	case OpDivideInteger:
+		if right.Integer == 0 {
+			return Value{}, fmt.Errorf("%w: division by zero", ErrType)
+		}
+		if left.Integer == -1<<63 && right.Integer == -1 {
+			return Value{}, fmt.Errorf("%w: integer overflow", ErrType)
+		}
+		result = left.Integer / right.Integer
+	default:
+		return Value{}, ErrInvalid
+	}
+	return Value{Kind: Integer, Integer: result}, nil
+}
+
 func validateProgram(program Program, limits Limits) (uint32, error) {
 	if len(program.Code) == 0 || uint32(len(program.Code)) > limits.MaxInstructions || uint32(len(program.Constants)) > limits.MaxConstants || uint32(len(program.Paths)) > limits.MaxPaths { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 		return 0, ErrLimit
@@ -220,9 +439,10 @@ func validateProgram(program Program, limits Limits) (uint32, error) {
 			if uint64(instruction.Arg) >= uint64(len(program.Paths)) {
 				return 0, fmt.Errorf("%w: instruction %d path", ErrInvalid, pc)
 			}
-		case OpNot:
+		case OpNot, OpNegateInteger:
 			pop = 1
-		case OpEqual, OpAnd, OpOr, OpAddInteger, OpConcat, OpMatches:
+		case OpEqual, OpNotEqual, OpLess, OpLessEqual, OpGreater, OpGreaterEqual,
+			OpAnd, OpOr, OpAddInteger, OpSubInteger, OpMultiplyInteger, OpDivideInteger, OpConcat, OpMatches:
 			pop = 2
 		case OpSelect:
 			pop = 3
@@ -270,7 +490,7 @@ func validateValue(value Value, limits Limits) error {
 	if value.Kind > String {
 		return ErrType
 	}
-	if value.Kind != Bool && value.Bool || value.Kind != Integer && value.Integer != 0 || value.Kind != String && value.String != "" {
+	if value.Kind != Bool && value.Bool || value.Kind != Integer && value.Integer != 0 || value.Kind != String && value.String != "" || value.Reference && (value.Kind != String || !strings.HasPrefix(value.String, "@")) {
 		return ErrType
 	}
 	if value.Kind == String && (!utf8.ValidString(value.String) || uint32(len(value.String)) > limits.MaxStringBytes) { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
@@ -410,7 +630,7 @@ func matchWork(ctx context.Context, work *uint64, limit uint64) error {
 }
 
 func equal(left, right Value) bool {
-	return left.Kind == right.Kind && left.Bool == right.Bool && left.Integer == right.Integer && left.String == right.String
+	return left.Kind == right.Kind && left.Bool == right.Bool && left.Integer == right.Integer && left.String == right.String && left.Reference == right.Reference
 }
 
 func pop1(stack *[]Value) Value {

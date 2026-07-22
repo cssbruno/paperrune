@@ -98,7 +98,7 @@
     if (operation === 'document') return ['title', 'language', 'theme'];
     if (operation === 'text') return selection?.node?.kind === 'heading' ? ['font', 'size', 'line-height', 'color', 'align', 'bold', 'italic', 'level'] : ['font', 'size', 'line-height', 'color', 'align', 'bold', 'italic'];
     if (operation === 'appearance') return selection?.node?.kind === 'image' ? ['style'] : ['style', 'font-token', 'size-token', 'line-height-token', 'color-token'];
-    if (operation === 'condition') return ['when'];
+    if (operation === 'condition') return ['visible'];
     if (operation === 'box') return boxProperties;
     if (operation === 'list') return ['ordered', 'marker'];
     if (operation === 'layout-item') return layoutItemProperties(selection);
@@ -206,7 +206,7 @@
     'page-number-align': 'Inner and outer mirror automatically across odd and even pages.',
     'page-number-hide-first': 'Keeps a cover page unnumbered while later pages retain their physical count.',
     'page-number-start': 'Number assigned to the first physical page.',
-    when: 'Shows this content only when the data expression evaluates to true.',
+    visible: 'Shows this content only when the unquoted data expression evaluates to true.',
     decorative: 'Marks an image as visual decoration so alternative text is not required.',
     'default-horizontal': 'Anchor used when a canvas item has no horizontal constraint.',
     'default-vertical': 'Anchor used when a canvas item has no vertical constraint.',

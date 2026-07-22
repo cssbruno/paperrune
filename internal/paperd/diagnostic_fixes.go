@@ -144,7 +144,7 @@ func (w *Workspace) PaperApplyDiagnosticFix(request PaperApplyDiagnosticFixReque
 		if _, err := uniqueComponentDefinition(revision.parsed.AST.Root, request.Payload.Component); err != nil {
 			return PaperMutationResult{}, err
 		}
-		operations = []paperedit.Operation{paperedit.SetProperty{Target: request.Guard.Target, Name: "component", Value: paperedit.StringValue(request.Payload.Component)}}
+		operations = []paperedit.Operation{paperedit.SetProperty{Target: request.Guard.Target, Name: "component", Value: paperedit.ExpressionValue(request.Payload.Component)}}
 
 	default:
 		return PaperMutationResult{}, workspaceError("REMEDY_NOT_ALLOWED", "diagnostic remedy code is not in the stable allowlist", paperedit.ErrInvalidOperation)

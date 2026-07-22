@@ -243,12 +243,12 @@ func (w *Workspace) PaperSetCondition(request PaperSetConditionRequest) (PaperMu
 	}
 	expression := strings.TrimSpace(request.Expression)
 	if expression == "" || !utf8.ValidString(expression) || len(expression) > w.maxMutationPayloadBytes() || strings.IndexByte(expression, 0) >= 0 {
-		return PaperMutationResult{}, workspaceError("INVALID_CONDITION_VALUE", "when must be a non-empty bounded UTF-8 expression", paperedit.ErrInvalidOperation)
+		return PaperMutationResult{}, workspaceError("INVALID_CONDITION_VALUE", "visible must be a non-empty bounded UTF-8 expression", paperedit.ErrInvalidOperation)
 	}
 	if _, err := paperexpr.Parse(expression, paperexpr.DefaultLanguageLimits()); err != nil {
-		return PaperMutationResult{}, workspaceError("INVALID_CONDITION_VALUE", "when must use valid bounded expression syntax", paperedit.ErrInvalidOperation)
+		return PaperMutationResult{}, workspaceError("INVALID_CONDITION_VALUE", "visible must use valid bounded expression syntax", paperedit.ErrInvalidOperation)
 	}
-	operation := paperedit.SetProperty{Target: request.Guard.Target, Name: "when", Value: paperedit.StringValue(expression)}
+	operation := paperedit.SetProperty{Target: request.Guard.Target, Name: "visible", Value: paperedit.ExpressionValue(expression)}
 	return w.applyPaperMutation("set_condition", request.Guard, opened, revision, []string{request.Guard.Target}, []paperedit.Operation{operation}, "INVALID_CONDITION_STATE")
 }
 
@@ -311,7 +311,7 @@ func resetPropertyAllowed(kind paperlang.NodeKind, category, property string) bo
 		}
 		return allowed("style", "font-token", "size-token", "line-height-token", "color-token")
 	case "condition":
-		return conditionNode(kind) && property == "when"
+		return conditionNode(kind) && property == "visible"
 	case "text":
 		if kind != paperlang.NodeParagraph && kind != paperlang.NodeHeading && kind != paperlang.NodeList && kind != paperlang.NodeTableCell {
 			return false

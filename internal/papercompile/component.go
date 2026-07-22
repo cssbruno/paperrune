@@ -5,6 +5,7 @@ package papercompile
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -50,19 +51,24 @@ type componentExpansionResult struct {
 	ast         paperlang.AST
 	provenance  map[*paperlang.Node]expansionProvenance
 	diagnostics []paperlang.Diagnostic
+	deferred    uint32
 }
 
 type componentExpander struct {
-	limits      ExpansionLimits
-	definitions map[string]*paperlang.Node
-	provenance  map[*paperlang.Node]expansionProvenance
-	diagnostics []paperlang.Diagnostic
-	stack       map[string]bool
-	nodes       uint32
-	serial      uint32
-	limitHit    bool
-	scenario    string
-	contracts   map[*paperlang.Node]componentContract
+	limits            ExpansionLimits
+	definitions       map[string]*paperlang.Node
+	provenance        map[*paperlang.Node]expansionProvenance
+	diagnostics       []paperlang.Diagnostic
+	stack             map[string]bool
+	nodes             uint32
+	serial            uint32
+	limitHit          bool
+	scenario          string
+	contracts         map[*paperlang.Node]componentContract
+	prior             map[*paperlang.Node]expansionProvenance
+	deferred          uint32
+	reportDefinitions bool
+	deferExpressions  bool
 }
 
 type expansionOrigin struct {
@@ -75,6 +81,7 @@ type expansionOrigin struct {
 	bindingSpan     paperlang.Span
 	bindingRequired bool
 	props           map[string]paperlang.Scalar
+	context         expansionProvenance
 }
 
 type componentProp struct {
@@ -90,11 +97,16 @@ type componentContract struct {
 }
 
 func expandComponents(ast paperlang.AST, limits ExpansionLimits, scenario string) componentExpansionResult {
+	return expandComponentsWithProvenance(ast, limits, scenario, nil, true, scenario != "")
+}
+
+func expandComponentsWithProvenance(ast paperlang.AST, limits ExpansionLimits, scenario string, prior map[*paperlang.Node]expansionProvenance, reportDefinitions, deferExpressions bool) componentExpansionResult {
 	expander := componentExpander{
 		limits: limits, definitions: make(map[string]*paperlang.Node),
 		provenance: make(map[*paperlang.Node]expansionProvenance), stack: make(map[string]bool),
 		scenario:  strings.TrimPrefix(strings.TrimSpace(scenario), "@"),
 		contracts: make(map[*paperlang.Node]componentContract),
+		prior:     prior, reportDefinitions: reportDefinitions, deferExpressions: deferExpressions,
 	}
 	if limits == (ExpansionLimits{}) {
 		expander.limits = DefaultExpansionLimits()
@@ -111,8 +123,10 @@ func expandComponents(ast paperlang.AST, limits ExpansionLimits, scenario string
 	if ast.Root.Kind != paperlang.NodeDocument {
 		result.ast.Root = expander.cloneOrdinary(ast.Root, expansionOrigin{}, 0)
 		result.diagnostics = expander.diagnostics
+		result.deferred = expander.deferred
 		return result
 	}
+	definitionDiagnosticsStart := len(expander.diagnostics)
 	for _, member := range ast.Root.Members {
 		if member.Node == nil || member.Node.Kind != paperlang.NodeComponent {
 			continue
@@ -133,6 +147,9 @@ func expandComponents(ast paperlang.AST, limits ExpansionLimits, scenario string
 		expander.definitions[definition.ID] = definition
 		expander.validateDefinition(definition)
 	}
+	if !expander.reportDefinitions {
+		expander.diagnostics = expander.diagnostics[:definitionDiagnosticsStart]
+	}
 
 	root := expander.cloneHeader(ast.Root, expansionOrigin{})
 	if root != nil {
@@ -151,6 +168,7 @@ func expandComponents(ast paperlang.AST, limits ExpansionLimits, scenario string
 	}
 	result.ast.Root = root
 	result.diagnostics = expander.diagnostics
+	result.deferred = expander.deferred
 	return result
 }
 
@@ -293,8 +311,23 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 		e.add("PAPER_COMPONENT_INSTANCE", "use requires a unique readable @instance ID", "write use @instance:", use.HeaderSpan)
 		return nil
 	}
+	if e.shouldDeferUse(use, parent) {
+		e.deferred++
+		clone := e.cloneDeferredNode(use, parent)
+		if clone == nil {
+			return nil
+		}
+		return []*paperlang.Node{clone}
+	}
 	componentName := ""
+	context := parent.context
+	if prior, exists := e.prior[use]; exists {
+		context = prior
+	}
 	bindingBase, bindingSpan, bindingRequired := parent.bindingBase, parent.bindingSpan, parent.bindingRequired
+	if bindingBase == "" && context.bindingBase != "" {
+		bindingBase, bindingSpan, bindingRequired = context.bindingBase, context.bindingSpan, context.bindingRequired
+	}
 	if parent.bindingBase == "" {
 		bindingRequired = true
 	}
@@ -329,8 +362,27 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 				e.add("PAPER_COMPONENT_BINDING_UNSUPPORTED", fmt.Sprintf("use property %q is not supported", property.Name), "data bindings and scenarios are not part of the initial component contract", property.Span)
 				continue
 			}
+			if value.Kind == paperlang.ScalarExpression && value.ExpressionValue != nil {
+				expression := strings.TrimSpace(*value.ExpressionValue)
+				program, kind, err := paperexpr.Compile(expression, nil, paperexpr.LanguageLimits{})
+				if err == nil && (kind == paperexpr.String || kind == paperexpr.Null) {
+					selected, evaluateErr := paperexpr.Evaluate(nil, program, nil, paperexpr.Limits{})
+					if evaluateErr == nil {
+						if selected.Kind == paperexpr.Null {
+							return nil
+						}
+						componentName = selected.String
+						continue
+					}
+				}
+				e.add("PAPER_COMPONENT_DYNAMIC_CONTEXT", "data-dependent component selection requires scenario scope", "select a declared component reference from scenario data", property.Value.Span)
+				continue
+			}
+			if value.Kind == paperlang.ScalarNull {
+				return nil
+			}
 			if value.Kind != paperlang.ScalarString || value.StringValue == nil {
-				e.add("PAPER_COMPONENT_REFERENCE", "component property requires a quoted @component name", "write component: \"@name\"", property.Value.Span)
+				e.add("PAPER_COMPONENT_REFERENCE", "component property requires an @component reference", "write component: @name", property.Value.Span)
 				continue
 			}
 			componentName = *value.StringValue
@@ -458,7 +510,7 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 		}
 		if template.Kind != paperlang.NodeSlot {
 			origin := expansionOrigin{definition: template.Span, invocation: invocationSpan, instancePath: instancePath, prefix: instanceID,
-				bindingBase: bindingBase, bindingSpan: bindingSpan, bindingRequired: bindingRequired, props: resolvedProps}
+				bindingBase: bindingBase, bindingSpan: bindingSpan, bindingRequired: bindingRequired, props: resolvedProps, context: context}
 			output = append(output, e.expandNode(template, origin, depth+1)...)
 			continue
 		}
@@ -469,7 +521,7 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 		fill := e.selectSlotFill(template, contract, fills[template.ID])
 		selected := componentChildNodes(template)
 		origin := expansionOrigin{definition: template.Span, invocation: invocationSpan, instancePath: instancePath + "/" + template.ID, prefix: instanceID + "--" + strings.TrimPrefix(template.ID, "@"),
-			bindingBase: bindingBase, bindingSpan: bindingSpan, bindingRequired: bindingRequired, props: resolvedProps}
+			bindingBase: bindingBase, bindingSpan: bindingSpan, bindingRequired: bindingRequired, props: resolvedProps, context: context}
 		if fill != nil {
 			selected = componentChildNodes(fill)
 			origin.invocation = fill.Span
@@ -497,6 +549,68 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 		}
 	}
 	return output
+}
+
+func (e *componentExpander) shouldDeferUse(use *paperlang.Node, parent expansionOrigin) bool {
+	if !e.deferExpressions {
+		return false
+	}
+	for _, member := range use.Members {
+		var value paperlang.Scalar
+		switch {
+		case member.Property != nil && member.Property.Name == "component":
+			value = substituteComponentScalar(member.Property.Value, parent.props)
+		case member.Node != nil && member.Node.Kind == paperlang.NodeArg && member.Node.Value != nil:
+			value = substituteComponentScalar(*member.Node.Value, parent.props)
+		default:
+			continue
+		}
+		if value.Kind != paperlang.ScalarExpression || value.ExpressionValue == nil {
+			continue
+		}
+		source := strings.TrimSpace(*value.ExpressionValue)
+		if member.Property != nil && member.Property.Name == "component" {
+			if references, referenceErr := paperexpr.ValidateComponentSelection(source, paperexpr.LanguageLimits{}); referenceErr == nil {
+				for _, reference := range references {
+					if e.definitions[reference] == nil {
+						e.add("PAPER_COMPONENT_UNKNOWN_BRANCH", fmt.Sprintf("computed component branch %s is not defined", reference), "define every referenced component, including currently unselected branches", value.Span)
+					}
+				}
+			} else {
+				e.add("PAPER_COMPONENT_SELECTION_TYPE", referenceErr.Error(), "return only unquoted @component references or null", locatedExpressionSpan(value.Span, source, referenceErr))
+			}
+		}
+		program, _, err := paperexpr.Compile(source, nil, paperexpr.LanguageLimits{})
+		if err != nil {
+			return true
+		}
+		_, err = paperexpr.Evaluate(nil, program, nil, paperexpr.Limits{})
+		if err != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *componentExpander) cloneDeferredNode(source *paperlang.Node, origin expansionOrigin) *paperlang.Node {
+	if source == nil {
+		return nil
+	}
+	clone := e.cloneHeader(source, origin)
+	if clone == nil {
+		return nil
+	}
+	for _, member := range source.Members {
+		if member.Property != nil {
+			clone.Members = append(clone.Members, cloneExpansionPropertyWithProps(member.Property, origin.props))
+			continue
+		}
+		child := e.cloneDeferredNode(member.Node, origin)
+		if child != nil {
+			clone.Members = append(clone.Members, paperlang.Member{Node: child})
+		}
+	}
+	return clone
 }
 
 type componentSlotContract struct {
@@ -645,6 +759,9 @@ func (e *componentExpander) cloneHeader(source *paperlang.Node, origin expansion
 		value := substituteComponentScalar(*source.Value, origin.props)
 		clone.Value = &value
 	}
+	if prior, exists := e.prior[source]; exists {
+		e.provenance[clone] = prior
+	}
 	if origin.instancePath != "" {
 		if !origin.preserveIDs || clone.ID == "" {
 			e.serial++
@@ -657,8 +774,14 @@ func (e *componentExpander) cloneHeader(source *paperlang.Node, origin expansion
 				clone.ID = "@" + clone.ID
 			}
 		}
-		e.provenance[clone] = expansionProvenance{definition: origin.definition, invocation: origin.invocation, instancePath: origin.instancePath,
-			bindingBase: origin.bindingBase, bindingSpan: origin.bindingSpan, bindingRequired: origin.bindingRequired}
+		provenance := origin.context
+		provenance.definition = origin.definition
+		provenance.invocation = origin.invocation
+		provenance.instancePath = origin.instancePath
+		provenance.bindingBase = origin.bindingBase
+		provenance.bindingSpan = origin.bindingSpan
+		provenance.bindingRequired = origin.bindingRequired
+		e.provenance[clone] = provenance
 	}
 	return clone
 }
@@ -718,7 +841,31 @@ func cloneExpansionPropertyWithProps(source *paperlang.Property, props map[strin
 
 func substituteComponentScalar(source paperlang.Scalar, props map[string]paperlang.Scalar) paperlang.Scalar {
 	clone := cloneExpansionScalar(source)
-	if source.Kind != paperlang.ScalarString || source.StringValue == nil || len(props) == 0 {
+	if len(props) == 0 {
+		return clone
+	}
+	if source.Kind == paperlang.ScalarExpression && source.ExpressionValue != nil {
+		environment := make([]paperexpr.PathKind, 0, len(props))
+		bindings := make([]paperexpr.Binding, 0, len(props))
+		for name, value := range props {
+			kind, converted, ok := componentExpressionValue(value)
+			if !ok {
+				continue
+			}
+			path := "args." + name
+			environment = append(environment, paperexpr.PathKind{Path: path, Kind: kind})
+			bindings = append(bindings, paperexpr.Binding{Path: path, Value: converted})
+		}
+		program, _, err := paperexpr.Compile(strings.TrimSpace(*source.ExpressionValue), environment, paperexpr.LanguageLimits{})
+		if err == nil {
+			value, evaluateErr := paperexpr.Evaluate(nil, program, bindings, paperexpr.Limits{})
+			if evaluateErr == nil {
+				return expressionScalar(value, source.Span)
+			}
+		}
+		return clone
+	}
+	if source.Kind != paperlang.ScalarString || source.StringValue == nil {
 		return clone
 	}
 	value := strings.TrimSpace(*source.StringValue)
@@ -730,6 +877,27 @@ func substituteComponentScalar(source paperlang.Scalar, props map[string]paperla
 		return cloneExpansionScalar(replacement)
 	}
 	return clone
+}
+
+func componentExpressionValue(value paperlang.Scalar) (paperexpr.Kind, paperexpr.Value, bool) {
+	switch value.Kind {
+	case paperlang.ScalarNull:
+		return paperexpr.Null, paperexpr.Value{Kind: paperexpr.Null}, true
+	case paperlang.ScalarBool:
+		if value.BoolValue != nil {
+			return paperexpr.Bool, paperexpr.Value{Kind: paperexpr.Bool, Bool: *value.BoolValue}, true
+		}
+	case paperlang.ScalarNumber:
+		if value.NumberValue != nil && math.Trunc(*value.NumberValue) == *value.NumberValue && *value.NumberValue >= math.MinInt64 && *value.NumberValue <= math.MaxInt64 {
+			integer := int64(*value.NumberValue)
+			return paperexpr.Integer, paperexpr.Value{Kind: paperexpr.Integer, Integer: integer}, true
+		}
+	case paperlang.ScalarString:
+		if value.StringValue != nil {
+			return paperexpr.String, paperexpr.Value{Kind: paperexpr.String, String: *value.StringValue}, true
+		}
+	}
+	return paperexpr.Null, paperexpr.Value{}, false
 }
 
 func validComponentPropType(name string) bool {
@@ -785,6 +953,15 @@ func cloneExpansionScalar(source paperlang.Scalar) paperlang.Scalar {
 	if source.StringValue != nil {
 		value := *source.StringValue
 		clone.StringValue = &value
+	}
+	if source.ExpressionValue != nil {
+		value := *source.ExpressionValue
+		clone.ExpressionValue = &value
+	}
+	if source.SwitchValue != nil {
+		value := *source.SwitchValue
+		value.Cases = append([]paperlang.SwitchCase(nil), source.SwitchValue.Cases...)
+		clone.SwitchValue = &value
 	}
 	if source.BoolValue != nil {
 		value := *source.BoolValue

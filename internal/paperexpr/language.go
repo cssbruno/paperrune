@@ -102,6 +102,75 @@ func Parse(source string, limits LanguageLimits) (Expression, error) {
 	}, nil
 }
 
+// ComponentReferences returns the closed @component literals mentioned by an
+// expression, including literals in lazy branches. Quoted strings that happen
+// to begin with @ are deliberately not references.
+func ComponentReferences(source string, limits LanguageLimits) ([]string, error) {
+	normalized, err := normalizeLanguageLimits(limits)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := Parse(source, normalized); err != nil {
+		return nil, err
+	}
+	tokens, err := lexExpression(source, normalized)
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[string]bool)
+	for _, token := range tokens {
+		if token.kind == tokenComponentReference {
+			set[token.value.String] = true
+		}
+	}
+	result := make([]string, 0, len(set))
+	for reference := range set {
+		result = append(result, reference)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+// ValidateComponentSelection proves that every possible result is a closed
+// unquoted @component literal or null. Conditions may use the ordinary typed
+// expression language, but schema strings cannot become component names.
+func ValidateComponentSelection(source string, limits LanguageLimits) ([]string, error) {
+	expression, err := Parse(source, limits)
+	if err != nil {
+		return nil, err
+	}
+	references := make(map[string]bool)
+	var validate func(*expressionNode) error
+	validate = func(node *expressionNode) error {
+		if node == nil {
+			return expressionError(0, 0, "component selection has no result", ErrInvalid)
+		}
+		if node.kind == nodeSelect {
+			if err := validate(node.right); err != nil {
+				return err
+			}
+			return validate(node.alt)
+		}
+		if node.kind == nodeLiteral && node.value.Kind == Null {
+			return nil
+		}
+		if node.kind == nodeLiteral && node.value.Kind == String && node.value.Reference {
+			references[node.value.String] = true
+			return nil
+		}
+		return expressionError(node.start, node.end, "component result must be an unquoted @component reference or null", ErrType)
+	}
+	if err := validate(expression.root); err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(references))
+	for reference := range references {
+		result = append(result, reference)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
 // Compile parses, statically checks, and emits deterministic VM bytecode. The
 // returned Kind is the expression result kind.
 func Compile(source string, environment []PathKind, limits LanguageLimits) (Program, Kind, error) {
@@ -142,7 +211,7 @@ func CompileExpression(expression Expression, environment []PathKind, limits Lan
 	if uint32(len(compiler.paths)) > normalized.Program.MaxPaths { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 		return Program{}, Null, expressionError(expression.root.start, expression.root.end, "path count exceeds MaxPaths", ErrLimit)
 	}
-	program := Program{Constants: compiler.constants, Paths: compiler.paths}
+	program := Program{Constants: compiler.constants, Paths: compiler.paths, root: expression.root}
 	compiler.emit(expression.root, &program.Code)
 	if uint32(len(program.Code)) > normalized.Program.MaxInstructions { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 		return Program{}, Null, expressionError(expression.root.start, expression.root.end, "instruction count exceeds MaxInstructions", ErrLimit)
@@ -161,6 +230,7 @@ const (
 	tokenBool
 	tokenInteger
 	tokenString
+	tokenComponentReference
 	tokenPath
 	tokenLeftParen
 	tokenRightParen
@@ -170,6 +240,14 @@ const (
 	tokenAnd
 	tokenOr
 	tokenPlus
+	tokenMinus
+	tokenMultiply
+	tokenDivide
+	tokenNotEqual
+	tokenLess
+	tokenLessEqual
+	tokenGreater
+	tokenGreaterEqual
 	tokenQuestion
 	tokenColon
 )
@@ -201,6 +279,23 @@ func lexExpression(source string, limits LanguageLimits) ([]expressionToken, err
 		case '+':
 			offset++
 			token = simpleToken(tokenPlus, source, start, offset)
+		case '-':
+			if offset+1 < len(source) && source[offset+1] >= '0' && source[offset+1] <= '9' {
+				var err error
+				token, offset, err = lexExpressionInteger(source, start)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				offset++
+				token = simpleToken(tokenMinus, source, start, offset)
+			}
+		case '*':
+			offset++
+			token = simpleToken(tokenMultiply, source, start, offset)
+		case '/':
+			offset++
+			token = simpleToken(tokenDivide, source, start, offset)
 		case '?':
 			offset++
 			token = simpleToken(tokenQuestion, source, start, offset)
@@ -208,8 +303,39 @@ func lexExpression(source string, limits LanguageLimits) ([]expressionToken, err
 			offset++
 			token = simpleToken(tokenColon, source, start, offset)
 		case '!':
+			if offset+1 < len(source) && source[offset+1] == '=' {
+				offset += 2
+				token = simpleToken(tokenNotEqual, source, start, offset)
+			} else {
+				offset++
+				token = simpleToken(tokenNot, source, start, offset)
+			}
+		case '<', '>':
 			offset++
-			token = simpleToken(tokenNot, source, start, offset)
+			inclusive := offset < len(source) && source[offset] == '='
+			if inclusive {
+				offset++
+			}
+			kind := tokenLess
+			if character == '>' {
+				kind = tokenGreater
+			}
+			if inclusive && character == '<' {
+				kind = tokenLessEqual
+			} else if inclusive {
+				kind = tokenGreaterEqual
+			}
+			token = simpleToken(kind, source, start, offset)
+		case '@':
+			offset++
+			if offset >= len(source) || !isPathStart(source[offset]) || source[offset] == '_' {
+				return nil, expressionError(uint32(start), uint32(offset), "component reference requires a readable @name", ErrInvalid)
+			}
+			for offset < len(source) && (isPathStart(source[offset]) || source[offset] >= '0' && source[offset] <= '9' || source[offset] == '-') {
+				offset++
+			}
+			text := source[start:offset]
+			token = expressionToken{kind: tokenComponentReference, start: uint32(start), end: uint32(offset), text: text, value: Value{Kind: String, String: text, Reference: true}}
 		case '=':
 			if offset+1 >= len(source) || source[offset+1] != '=' {
 				return nil, expressionError(uint32(start), uint32(start+1), "expected ==", ErrInvalid)
@@ -235,7 +361,7 @@ func lexExpression(source string, limits LanguageLimits) ([]expressionToken, err
 				return nil, err
 			}
 		default:
-			if character == '-' || character >= '0' && character <= '9' {
+			if character >= '0' && character <= '9' {
 				var err error
 				token, offset, err = lexExpressionInteger(source, start)
 				if err != nil {
@@ -394,6 +520,15 @@ const (
 	nodeAnd
 	nodeOr
 	nodePlus
+	nodeMinus
+	nodeMultiply
+	nodeDivide
+	nodeNegate
+	nodeNotEqual
+	nodeLess
+	nodeLessEqual
+	nodeGreater
+	nodeGreaterEqual
 	nodeSelect
 )
 
@@ -448,18 +583,20 @@ func (p *expressionParser) parseAnd(depth uint32) (*expressionNode, error) {
 }
 
 func (p *expressionParser) parseEqual(depth uint32) (*expressionNode, error) {
-	left, err := p.parsePlus(depth)
+	left, err := p.parseCompare(depth)
 	if err != nil {
 		return nil, err
 	}
-	for p.peek().kind == tokenEqual || p.peek().kind == tokenMatches {
+	for p.peek().kind == tokenEqual || p.peek().kind == tokenNotEqual || p.peek().kind == tokenMatches {
 		operator := p.take()
 		right, err := p.parsePlus(depth)
 		if err != nil {
 			return nil, err
 		}
 		kind := nodeEqual
-		if operator.kind == tokenMatches {
+		if operator.kind == tokenNotEqual {
+			kind = nodeNotEqual
+		} else if operator.kind == tokenMatches {
 			kind = nodeMatches
 		}
 		left, err = p.node(kind, left.start, right.end, operator.start, left, right, nil)
@@ -470,8 +607,78 @@ func (p *expressionParser) parseEqual(depth uint32) (*expressionNode, error) {
 	return left, nil
 }
 
+func (p *expressionParser) parseCompare(depth uint32) (*expressionNode, error) {
+	left, err := p.parsePlus(depth)
+	if err != nil {
+		return nil, err
+	}
+	for p.peek().kind == tokenLess || p.peek().kind == tokenLessEqual || p.peek().kind == tokenGreater || p.peek().kind == tokenGreaterEqual {
+		operator := p.take()
+		right, err := p.parsePlus(depth)
+		if err != nil {
+			return nil, err
+		}
+		kind := nodeLess
+		switch operator.kind {
+		case tokenLessEqual:
+			kind = nodeLessEqual
+		case tokenGreater:
+			kind = nodeGreater
+		case tokenGreaterEqual:
+			kind = nodeGreaterEqual
+		}
+		left, err = p.node(kind, left.start, right.end, operator.start, left, right, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return left, nil
+}
+
 func (p *expressionParser) parsePlus(depth uint32) (*expressionNode, error) {
-	return p.parseBinary(depth, p.parseUnary, tokenPlus, nodePlus)
+	left, err := p.parseMultiply(depth)
+	if err != nil {
+		return nil, err
+	}
+	for p.peek().kind == tokenPlus || p.peek().kind == tokenMinus {
+		operator := p.take()
+		right, err := p.parseMultiply(depth)
+		if err != nil {
+			return nil, err
+		}
+		kind := nodePlus
+		if operator.kind == tokenMinus {
+			kind = nodeMinus
+		}
+		left, err = p.node(kind, left.start, right.end, operator.start, left, right, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return left, nil
+}
+
+func (p *expressionParser) parseMultiply(depth uint32) (*expressionNode, error) {
+	left, err := p.parseUnary(depth)
+	if err != nil {
+		return nil, err
+	}
+	for p.peek().kind == tokenMultiply || p.peek().kind == tokenDivide {
+		operator := p.take()
+		right, err := p.parseUnary(depth)
+		if err != nil {
+			return nil, err
+		}
+		kind := nodeMultiply
+		if operator.kind == tokenDivide {
+			kind = nodeDivide
+		}
+		left, err = p.node(kind, left.start, right.end, operator.start, left, right, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return left, nil
 }
 
 type parseLevel func(uint32) (*expressionNode, error)
@@ -504,6 +711,14 @@ func (p *expressionParser) parseUnary(depth uint32) (*expressionNode, error) {
 		}
 		return p.node(nodeNot, token.start, child.end, token.start, child, nil, nil)
 	}
+	if token := p.peek(); token.kind == tokenMinus {
+		p.take()
+		child, err := p.parseUnary(depth + 1)
+		if err != nil {
+			return nil, err
+		}
+		return p.node(nodeNegate, token.start, child.end, token.start, child, nil, nil)
+	}
 	return p.parsePrimary(depth)
 }
 
@@ -513,7 +728,7 @@ func (p *expressionParser) parsePrimary(depth uint32) (*expressionNode, error) {
 	}
 	token := p.take()
 	switch token.kind {
-	case tokenNull, tokenBool, tokenInteger, tokenString:
+	case tokenNull, tokenBool, tokenInteger, tokenString, tokenComponentReference:
 		return p.leaf(nodeLiteral, token)
 	case tokenPath:
 		node, err := p.leaf(nodePath, token)
@@ -628,13 +843,31 @@ func (c *expressionCompiler) check(node *expressionNode) (Kind, error) {
 			return Null, expressionError(node.opOffset, node.opOffset+1, "! requires bool", ErrType)
 		}
 		node.inferred = Bool
-	case nodeEqual:
+	case nodeNegate:
+		kind, err := c.check(node.left)
+		if err != nil {
+			return Null, err
+		}
+		if kind != Integer {
+			return Null, expressionError(node.opOffset, node.opOffset+1, "unary - requires integer", ErrType)
+		}
+		node.inferred = Integer
+	case nodeEqual, nodeNotEqual:
 		left, right, err := c.checkPair(node)
 		if err != nil {
 			return Null, err
 		}
-		if left != right {
+		if left != right && left != Null && right != Null {
 			return Null, expressionError(node.opOffset, node.opOffset+2, "== operands must have the same static kind", ErrType)
+		}
+		node.inferred = Bool
+	case nodeLess, nodeLessEqual, nodeGreater, nodeGreaterEqual:
+		left, right, err := c.checkPair(node)
+		if err != nil {
+			return Null, err
+		}
+		if left != right || left != Integer && left != String {
+			return Null, expressionError(node.opOffset, node.opOffset+1, "ordering requires two integers or two strings", ErrType)
 		}
 		node.inferred = Bool
 	case nodeMatches:
@@ -673,6 +906,15 @@ func (c *expressionCompiler) check(node *expressionNode) (Kind, error) {
 			return Null, expressionError(node.opOffset, node.opOffset+1, "+ requires two integers or two strings", ErrType)
 		}
 		node.inferred = left
+	case nodeMinus, nodeMultiply, nodeDivide:
+		left, right, err := c.checkPair(node)
+		if err != nil {
+			return Null, err
+		}
+		if left != Integer || right != Integer {
+			return Null, expressionError(node.opOffset, node.opOffset+1, "arithmetic requires two integers", ErrType)
+		}
+		node.inferred = Integer
 	case nodeSelect:
 		condition, err := c.check(node.left)
 		if err != nil {
@@ -689,10 +931,13 @@ func (c *expressionCompiler) check(node *expressionNode) (Kind, error) {
 		if condition != Bool {
 			return Null, expressionError(node.opOffset, node.opOffset+1, "conditional condition must be bool", ErrType)
 		}
-		if whenTrue != whenFalse {
+		if whenTrue != whenFalse && whenTrue != Null && whenFalse != Null {
 			return Null, expressionError(node.opOffset, node.opOffset+1, "conditional branches must have the same static kind", ErrType)
 		}
 		node.inferred = whenTrue
+		if node.inferred == Null {
+			node.inferred = whenFalse
+		}
 	default:
 		return Null, expressionError(node.start, node.end, "unknown expression node", ErrInvalid)
 	}
@@ -751,14 +996,28 @@ func (c *expressionCompiler) emit(node *expressionNode, code *[]Instruction) {
 		*code = append(*code, Instruction{Op: OpConstant, Arg: c.constantIndex[node.value]})
 	case nodePath:
 		*code = append(*code, Instruction{Op: OpLoad, Arg: c.pathIndex[node.path]})
-	case nodeNot:
+	case nodeNot, nodeNegate:
 		c.emit(node.left, code)
-		*code = append(*code, Instruction{Op: OpNot})
-	case nodeEqual, nodeMatches, nodeAnd, nodeOr, nodePlus:
+		op := OpNot
+		if node.kind == nodeNegate {
+			op = OpNegateInteger
+		}
+		*code = append(*code, Instruction{Op: op})
+	case nodeEqual, nodeNotEqual, nodeLess, nodeLessEqual, nodeGreater, nodeGreaterEqual, nodeMatches, nodeAnd, nodeOr, nodePlus, nodeMinus, nodeMultiply, nodeDivide:
 		c.emit(node.left, code)
 		c.emit(node.right, code)
 		op := OpEqual
 		switch node.kind {
+		case nodeNotEqual:
+			op = OpNotEqual
+		case nodeLess:
+			op = OpLess
+		case nodeLessEqual:
+			op = OpLessEqual
+		case nodeGreater:
+			op = OpGreater
+		case nodeGreaterEqual:
+			op = OpGreaterEqual
 		case nodeAnd:
 			op = OpAnd
 		case nodeMatches:
@@ -771,6 +1030,12 @@ func (c *expressionCompiler) emit(node *expressionNode, code *[]Instruction) {
 			} else {
 				op = OpConcat
 			}
+		case nodeMinus:
+			op = OpSubInteger
+		case nodeMultiply:
+			op = OpMultiplyInteger
+		case nodeDivide:
+			op = OpDivideInteger
 		}
 		*code = append(*code, Instruction{Op: op})
 	case nodeSelect:
@@ -791,6 +1056,9 @@ func lessExpressionValue(left, right Value) bool {
 	case Integer:
 		return left.Integer < right.Integer
 	case String:
+		if left.Reference != right.Reference {
+			return !left.Reference && right.Reference
+		}
 		return left.String < right.String
 	default:
 		return false

@@ -15,9 +15,9 @@ import (
 	"github.com/cssbruno/paperrune/internal/paperscenario"
 )
 
-// scenarioConditionEvaluator removes visual nodes whose explicitly authored
-// `when` expression is false. It runs only from CompileScenario: ordinary
-// Compile deliberately retains conditional nodes and never reads fixture data.
+// scenarioConditionEvaluator resolves data expressions and removes nodes whose
+// explicitly authored `visible` expression is false. It runs only with an
+// explicit scenario/data fixture; ordinary Compile never reads fixture data.
 type scenarioConditionEvaluator struct {
 	ctx         context.Context
 	schemas     schemaAnalysis
@@ -47,27 +47,40 @@ func (e *scenarioConditionEvaluator) filterChildren(parent *paperlang.Node) {
 		}
 		include := e.include(member.Node)
 		if include {
+			e.resolveProperties(member.Node)
 			e.filterChildren(member.Node)
 			filtered = append(filtered, member)
+		} else {
+			e.validateHiddenExpressions(member.Node)
 		}
 	}
 	parent.Members = filtered
 }
 
 func (e *scenarioConditionEvaluator) include(node *paperlang.Node) bool {
-	condition, duplicate := takeConditionProperty(node)
+	condition, duplicate, legacy := takeVisibilityProperty(node)
+	if legacy != nil {
+		e.add("PAPER_WHEN_REMOVED", "property \"when\" was removed", "use an unquoted boolean expression such as visible: active", legacy.Span)
+	}
 	if condition == nil {
 		return true
 	}
 	if duplicate != nil {
-		e.add("PAPER_WHEN_DUPLICATE", "property \"when\" is repeated on "+string(node.Kind), "remove the duplicate; the first expression is retained", duplicate.Span)
+		e.add("PAPER_VISIBLE_DUPLICATE", "property \"visible\" is repeated on "+string(node.Kind), "remove the duplicate; the first expression is retained", duplicate.Span)
 	}
 	if !conditionNodeKind(node.Kind) {
-		e.add("PAPER_WHEN_NODE", fmt.Sprintf("when is unsupported on %s", node.Kind), "put when on a paragraph, heading, list, item, row, or column", condition.Span)
+		e.add("PAPER_VISIBLE_NODE", fmt.Sprintf("visible is unsupported on %s", node.Kind), "put visible on a renderable node or component use", condition.Span)
 		return true
 	}
-	if condition.Value.Kind != paperlang.ScalarString || condition.Value.StringValue == nil {
-		e.add("PAPER_WHEN_VALUE", "when must be a quoted boolean expression", "quote a bounded expression such as active && quantity == 1", condition.Value.Span)
+	if condition.Value.Kind == paperlang.ScalarBool && condition.Value.BoolValue != nil {
+		return *condition.Value.BoolValue
+	}
+	if condition.Value.Kind == paperlang.ScalarString {
+		e.add("PAPER_VISIBLE_QUOTED", "visible expressions are not quoted strings", "remove the outer quotes", condition.Value.Span)
+		return true
+	}
+	if condition.Value.Kind != paperlang.ScalarExpression || condition.Value.ExpressionValue == nil {
+		e.add("PAPER_VISIBLE_VALUE", "visible must be a boolean expression", "use a declared boolean path or comparison", condition.Value.Span)
 		return true
 	}
 
@@ -76,56 +89,44 @@ func (e *scenarioConditionEvaluator) include(node *paperlang.Node) bool {
 		e.add("PAPER_WHEN_CONTEXT", problem, "use a declared primitive schema path available in this node's binding context", condition.Value.Span)
 		return true
 	}
-	expression := strings.TrimSpace(*condition.Value.StringValue)
-	program, kind, err := paperexpr.Compile(expression, environment, e.limits)
+	program, kind, value, err := e.evaluate(node, strings.TrimSpace(*condition.Value.ExpressionValue), environment, root)
 	if err != nil {
-		code := "PAPER_WHEN_EXPRESSION"
+		code := "PAPER_VISIBLE_EXPRESSION"
 		if errors.Is(err, paperexpr.ErrLimit) {
-			code = "PAPER_WHEN_LIMIT"
+			code = "PAPER_VISIBLE_LIMIT"
 		} else if errors.Is(err, paperexpr.ErrBinding) {
-			code = "PAPER_WHEN_PATH"
+			code = "PAPER_VISIBLE_PATH"
 		} else if errors.Is(err, paperexpr.ErrType) {
-			code = "PAPER_WHEN_TYPE"
+			code = "PAPER_VISIBLE_TYPE"
 		}
-		e.add(code, err.Error(), "use declared primitive paths and a boolean result", condition.Value.Span)
+		e.add(code, err.Error(), "use declared primitive paths and a boolean result", locatedExpressionSpan(condition.Value.Span, strings.TrimSpace(*condition.Value.ExpressionValue), err))
 		return true
 	}
 	if kind != paperexpr.Bool {
-		e.add("PAPER_WHEN_TYPE", "when expression must return bool", "compare values or use a boolean field", condition.Value.Span)
-		return true
-	}
-	bindings, err := e.expressionBindings(node, program.Paths, root)
-	if err != nil {
-		e.add("PAPER_WHEN_BINDING", err.Error(), "make the selected fixture provide values matching the declared schema", condition.Value.Span)
-		return true
-	}
-	value, err := paperexpr.Evaluate(e.ctx, program, bindings, e.limits.Program)
-	if err != nil {
-		code := "PAPER_WHEN_EVALUATE"
-		if errors.Is(err, paperexpr.ErrLimit) {
-			code = "PAPER_WHEN_LIMIT"
-		} else if errors.Is(err, paperexpr.ErrBinding) {
-			code = "PAPER_WHEN_BINDING"
-		} else if errors.Is(err, paperexpr.ErrType) {
-			code = "PAPER_WHEN_TYPE"
-		}
-		e.add(code, err.Error(), "make the selected fixture and expression types agree", condition.Value.Span)
+		e.add("PAPER_VISIBLE_TYPE", "visible expression must return bool", "compare values or use a boolean field", condition.Value.Span)
 		return true
 	}
 	if value.Kind != paperexpr.Bool {
-		e.add("PAPER_WHEN_TYPE", "when expression evaluated to a non-bool value", "make the expression return true or false", condition.Value.Span)
+		e.add("PAPER_VISIBLE_TYPE", "visible expression evaluated to a non-bool value", "make the expression return true or false", condition.Value.Span)
 		return true
 	}
+	_ = program
 	return value.Bool
 }
 
-// takeConditionProperty removes condition syntax before normal lowering. The
+// takeVisibilityProperty removes visibility syntax before normal lowering. The
 // first authored property wins, matching compiler duplicate-property behavior.
-func takeConditionProperty(node *paperlang.Node) (first, duplicate *paperlang.Property) {
+func takeVisibilityProperty(node *paperlang.Node) (first, duplicate, legacy *paperlang.Property) {
 	members := make([]paperlang.Member, 0, len(node.Members))
 	for _, member := range node.Members {
-		if member.Property == nil || member.Property.Name != "when" {
+		if member.Property == nil || member.Property.Name != "visible" && member.Property.Name != "when" {
 			members = append(members, member)
+			continue
+		}
+		if member.Property.Name == "when" {
+			if legacy == nil {
+				legacy = member.Property
+			}
 			continue
 		}
 		if first == nil {
@@ -135,16 +136,125 @@ func takeConditionProperty(node *paperlang.Node) (first, duplicate *paperlang.Pr
 		}
 	}
 	node.Members = members
-	return first, duplicate
+	return first, duplicate, legacy
 }
 
 func conditionNodeKind(kind paperlang.NodeKind) bool {
 	switch kind {
-	case paperlang.NodeParagraph, paperlang.NodeHeading, paperlang.NodeList, paperlang.NodeItem, paperlang.NodeRow, paperlang.NodeColumn, paperlang.NodeImage, paperlang.NodeTable:
+	case paperlang.NodeParagraph, paperlang.NodeHeading, paperlang.NodeList, paperlang.NodeItem, paperlang.NodeRow, paperlang.NodeColumn,
+		paperlang.NodeImage, paperlang.NodeTable, paperlang.NodeTableRow, paperlang.NodeTableCell, paperlang.NodePageBreak, paperlang.NodeUse,
+		paperlang.NodeCanvas, paperlang.NodeAnchor:
 		return true
 	default:
 		return false
 	}
+}
+
+func (e *scenarioConditionEvaluator) resolveProperties(node *paperlang.Node) {
+	environment, root, problem := e.conditionEnvironment(node)
+	if node.Value != nil && node.Value.Kind == paperlang.ScalarExpression && node.Value.ExpressionValue != nil {
+		e.resolveScalar(node, node.Value, environment, root, problem)
+	}
+	members := node.Members[:0]
+	for _, member := range node.Members {
+		property := member.Property
+		if property == nil || property.Value.Kind != paperlang.ScalarExpression || property.Value.ExpressionValue == nil {
+			members = append(members, member)
+			continue
+		}
+		e.resolveScalar(node, &property.Value, environment, root, problem)
+		// A computed null optional property is exactly the same as an omitted
+		// property. Required shorthand values (for example text:) live on
+		// node.Value and therefore remain available for the normal required-value
+		// diagnostic path.
+		if property.Value.Kind != paperlang.ScalarNull || node.Kind == paperlang.NodeUse && property.Name == "component" {
+			members = append(members, member)
+		}
+	}
+	node.Members = members
+}
+
+func (e *scenarioConditionEvaluator) validateHiddenExpressions(node *paperlang.Node) {
+	if node == nil {
+		return
+	}
+	environment, _, problem := e.conditionEnvironment(node)
+	if problem == "" {
+		validate := func(scalar *paperlang.Scalar) {
+			if scalar == nil || scalar.Kind != paperlang.ScalarExpression || scalar.ExpressionValue == nil {
+				return
+			}
+			if _, _, err := paperexpr.Compile(strings.TrimSpace(*scalar.ExpressionValue), environment, e.limits); err != nil {
+				e.add("PAPER_EXPRESSION_STATIC", err.Error(), "fix the expression even though its node is currently hidden", scalar.Span)
+			}
+		}
+		validate(node.Value)
+		for _, member := range node.Members {
+			if member.Property != nil && member.Property.Name != "visible" {
+				validate(&member.Property.Value)
+			}
+		}
+	}
+	for _, member := range node.Members {
+		e.validateHiddenExpressions(member.Node)
+	}
+}
+
+func (e *scenarioConditionEvaluator) resolveScalar(node *paperlang.Node, scalar *paperlang.Scalar, environment []paperexpr.PathKind, root paperscenario.Value, problem string) {
+	if problem != "" {
+		e.add("PAPER_EXPRESSION_CONTEXT", problem, "use a declared path available in this node's binding context", scalar.Span)
+		return
+	}
+	expression := strings.TrimSpace(*scalar.ExpressionValue)
+	_, _, value, err := e.evaluate(node, expression, environment, root)
+	if err != nil {
+		code := "PAPER_EXPRESSION"
+		if errors.Is(err, paperexpr.ErrLimit) {
+			code = "PAPER_EXPRESSION_LIMIT"
+		} else if errors.Is(err, paperexpr.ErrBinding) {
+			code = "PAPER_EXPRESSION_PATH"
+		} else if errors.Is(err, paperexpr.ErrType) {
+			code = "PAPER_EXPRESSION_TYPE"
+		}
+		e.add(code, err.Error(), "use declared paths and a result compatible with the property", locatedExpressionSpan(scalar.Span, expression, err))
+		return
+	}
+	*scalar = expressionScalar(value, scalar.Span)
+}
+
+func (e *scenarioConditionEvaluator) evaluate(node *paperlang.Node, source string, environment []paperexpr.PathKind, root paperscenario.Value) (paperexpr.Program, paperexpr.Kind, paperexpr.Value, error) {
+	program, kind, err := paperexpr.Compile(source, environment, e.limits)
+	if err != nil {
+		return paperexpr.Program{}, paperexpr.Null, paperexpr.Value{}, err
+	}
+	bindings, err := e.expressionBindings(node, program.Paths, root)
+	if err != nil {
+		return program, kind, paperexpr.Value{}, fmt.Errorf("%w: %v", paperexpr.ErrBinding, err)
+	}
+	value, err := paperexpr.Evaluate(e.ctx, program, bindings, e.limits.Program)
+	return program, kind, value, err
+}
+
+func expressionScalar(value paperexpr.Value, span paperlang.Span) paperlang.Scalar {
+	scalar := paperlang.Scalar{Span: span}
+	switch value.Kind {
+	case paperexpr.Null:
+		scalar.Kind, scalar.Raw = paperlang.ScalarNull, "null"
+	case paperexpr.Bool:
+		scalar.Kind, scalar.Raw = paperlang.ScalarBool, strconv.FormatBool(value.Bool)
+		boolean := value.Bool
+		scalar.BoolValue = &boolean
+	case paperexpr.Integer:
+		scalar.Kind, scalar.Raw = paperlang.ScalarNumber, strconv.FormatInt(value.Integer, 10)
+		number := float64(value.Integer)
+		scalar.NumberValue = &number
+	case paperexpr.String:
+		scalar.Kind = paperlang.ScalarString
+		text := value.String
+		scalar.StringValue = &text
+		scalar.Raw = strconv.Quote(text)
+	}
+	return scalar
 }
 
 func (e *scenarioConditionEvaluator) conditionEnvironment(node *paperlang.Node) ([]paperexpr.PathKind, paperscenario.Value, string) {
@@ -160,13 +270,13 @@ func (e *scenarioConditionEvaluator) conditionEnvironment(node *paperlang.Node) 
 				if problem != "" {
 					return nil, paperscenario.Value{}, problem
 				}
-				return repeatExpressionEnvironment(fields, ""), value, ""
+				return repeatExpressionEnvironment(fields, "item"), value, ""
 			}
 			fields, value, problem := repeatConditionContext(origin)
 			if problem != "" {
 				return nil, paperscenario.Value{}, problem
 			}
-			return repeatExpressionEnvironment(fields, ""), value, ""
+			return repeatExpressionEnvironment(fields, "item"), value, ""
 		}
 		fields, err := repeatSchemaItem(origin.repeatSource, e.schemas)
 		if err != nil {
@@ -181,7 +291,7 @@ func (e *scenarioConditionEvaluator) conditionEnvironment(node *paperlang.Node) 
 				if item.Value.Kind != paperscenario.Object {
 					return nil, paperscenario.Value{}, fmt.Sprintf("repeat item %s[%s] is not an object", origin.repeatSource, origin.repeatKey)
 				}
-				return repeatExpressionEnvironment(fields, ""), item.Value, ""
+				return repeatExpressionEnvironment(fields, "item"), item.Value, ""
 			}
 		}
 		return nil, paperscenario.Value{}, fmt.Sprintf("repeat source %s has no stable item key %q", origin.repeatSource, origin.repeatKey)
@@ -192,7 +302,7 @@ func (e *scenarioConditionEvaluator) conditionEnvironment(node *paperlang.Node) 
 		if problem != "" {
 			return nil, paperscenario.Value{}, problem
 		}
-		return repeatExpressionEnvironment(fields, ""), value, ""
+		return repeatExpressionEnvironment(fields, "item"), value, ""
 	}
 
 	// Scenario fixture fields share the top-level namespace. Merge all declared
@@ -219,6 +329,9 @@ func (e *scenarioConditionEvaluator) expressionBindings(node *paperlang.Node, pa
 	origin := e.provenance[node]
 	if origin.loopItem {
 		return loopExpressionBindings(paths, root, origin.loopIndex, origin.loopFirst, origin.loopLast)
+	}
+	if origin.repeatItem {
+		return scopedConditionBindings(paths, root, "item")
 	}
 	return conditionBindings(paths, root)
 }
@@ -283,9 +396,21 @@ func (e *scenarioConditionEvaluator) bindingContext(path string) ([]FieldDescrip
 }
 
 func conditionBindings(paths []string, root paperscenario.Value) ([]paperexpr.Binding, error) {
+	return scopedConditionBindings(paths, root, "")
+}
+
+func scopedConditionBindings(paths []string, root paperscenario.Value, scope string) ([]paperexpr.Binding, error) {
 	bindings := make([]paperexpr.Binding, 0, len(paths))
 	for _, path := range paths {
-		value, found, collection := resolveConditionPath(root, path)
+		lookup := path
+		if scope != "" {
+			prefix := scope + "."
+			if !strings.HasPrefix(path, prefix) {
+				return nil, fmt.Errorf("binding %q is outside the %s scope", path, scope)
+			}
+			lookup = strings.TrimPrefix(path, prefix)
+		}
+		value, found, collection := resolveConditionPath(root, lookup)
 		if !found {
 			return nil, fmt.Errorf("when binding %q is missing", path)
 		}

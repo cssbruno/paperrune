@@ -47,7 +47,7 @@ const scenarioRepeatSource = `document @doc:
         source: "items"
         instance-prefix: "preview-lines"
         max-items: 2
-        when: "active"
+        visible: item.active
         paragraph @line:
           bind: "name"
           text: "Scenario line"

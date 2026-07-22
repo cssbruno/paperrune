@@ -26,10 +26,10 @@ func TestCompileScenarioEvaluatesVisualWhenWithoutChangingOrdinaryCompile(t *tes
   page:
     body:
       heading @title:
-        when: "show-title"
+        visible: show-title
         text: "Visible title"
       paragraph @note:
-        when: "show-note"
+        visible: show-note
         text: "Hidden note"
       paragraph @always:
         text: "Always"
@@ -65,6 +65,136 @@ func TestCompileScenarioEvaluatesVisualWhenWithoutChangingOrdinaryCompile(t *tes
 	}
 }
 
+func TestCompileScenarioResolvesBareAndTernaryTextExpressions(t *testing.T) {
+	t.Parallel()
+
+	const source = `document:
+  schema:
+    bool paid
+    string label
+  scenario @sample:
+    value @paid: false
+    value @label: "Invoice"
+  page:
+    body:
+      paragraph @label:
+        text: label
+      paragraph @status:
+        text: paid ? "Paid" : "Payment pending"
+      paragraph @switch-status:
+        text: switch label:
+          case "Invoice": "Matched invoice"
+          default: "Unknown"
+`
+	parsed := paperlang.Parse("computed-text.paper", source)
+	if !parsed.OK() {
+		t.Fatalf("parse diagnostics = %#v", parsed.Diagnostics)
+	}
+	compiled := CompileScenario(parsed.AST, "sample")
+	if !compiled.OK() || len(compiled.Document.Body) != 3 {
+		t.Fatalf("compile = body %#v diagnostics %#v", compiled.Document.Body, compiled.Diagnostics)
+	}
+	got := []string{
+		layout.TextSegmentsPlainText(compiled.Document.Body[0].(layout.ParagraphBlock).Segments),
+		layout.TextSegmentsPlainText(compiled.Document.Body[1].(layout.ParagraphBlock).Segments),
+		layout.TextSegmentsPlainText(compiled.Document.Body[2].(layout.ParagraphBlock).Segments),
+	}
+	if !equalStrings(got, []string{"Invoice", "Payment pending", "Matched invoice"}) {
+		t.Fatalf("computed text = %#v", got)
+	}
+}
+
+func TestCompileWithoutScenarioStaticallyChecksAndDefersExpressions(t *testing.T) {
+	valid := paperlang.Parse("static-expression.paper", `document:
+  schema:
+    string label
+  page:
+    body:
+      paragraph:
+        text: label
+`)
+	compiled := Compile(valid.AST)
+	if !valid.OK() || !compiled.OK() || len(compiled.Document.Body) != 1 {
+		t.Fatalf("neutral expression compile = body %#v diagnostics %#v / %#v", compiled.Document.Body, valid.Diagnostics, compiled.Diagnostics)
+	}
+
+	wrongType := paperlang.Parse("wrong-type.paper", `document:
+  schema:
+    bool active
+  page:
+    body:
+      paragraph:
+        text: active
+`)
+	invalid := Compile(wrongType.AST)
+	if invalid.OK() || !hasCompileDiagnostic(invalid.Diagnostics, "PAPER_EXPRESSION_PROPERTY_TYPE") {
+		t.Fatalf("wrong property type diagnostics = %#v", invalid.Diagnostics)
+	}
+
+	unknown := paperlang.Parse("unknown-path.paper", `document:
+  schema:
+    string label
+  page:
+    body:
+      paragraph:
+        text: missing
+`)
+	missing := Compile(unknown.AST)
+	if missing.OK() || !hasCompileDiagnostic(missing.Diagnostics, "PAPER_EXPRESSION_PATH") {
+		t.Fatalf("unknown path diagnostics = %#v", missing.Diagnostics)
+	}
+	for _, diagnostic := range missing.Diagnostics {
+		if diagnostic.Code == "PAPER_EXPRESSION_PATH" && diagnostic.Span.Start.Column != 15 {
+			t.Fatalf("unknown path span = %#v", diagnostic.Span)
+		}
+	}
+}
+
+func TestVisibilityRevalidatesRemainingDocumentStructure(t *testing.T) {
+	empty := paperlang.Parse("empty-visible.paper", `document:
+  schema:
+    bool show
+  scenario @hidden:
+    value @show: false
+  page:
+    body:
+      paragraph:
+        visible: show
+        text: "Hidden"
+`)
+	emptyResult := CompileScenario(empty.AST, "hidden")
+	if emptyResult.OK() || !hasCompileDiagnostic(emptyResult.Diagnostics, "PAPER_COMPILE_EMPTY_VISIBLE_BODY") {
+		t.Fatalf("empty visible body diagnostics = %#v", emptyResult.Diagnostics)
+	}
+
+	canvas := paperlang.Parse("hidden-target.paper", `document:
+  schema:
+    bool show-target
+  scenario @hidden:
+    value @show-target: false
+  page:
+    body:
+      canvas:
+        width: 100pt
+        height: 40pt
+        anchor @target:
+          visible: show-target
+          width: 10pt
+          height: 10pt
+          left: "canvas.left"
+          top: "canvas.top"
+        anchor @dependent:
+          width: 10pt
+          height: 10pt
+          left: "@target.right"
+          top: "canvas.top"
+`)
+	canvasResult := CompileScenario(canvas.AST, "hidden")
+	if canvasResult.OK() || !hasCompileDiagnostic(canvasResult.Diagnostics, "PAPER_COMPILE_CANVAS_TARGET_HIDDEN") {
+		t.Fatalf("hidden canvas target diagnostics = %#v", canvasResult.Diagnostics)
+	}
+}
+
 func TestCompileScenarioEvaluatesRepeatItemRelativeWhen(t *testing.T) {
 	t.Parallel()
 
@@ -92,7 +222,7 @@ func TestCompileScenarioEvaluatesRepeatItemRelativeWhen(t *testing.T) {
         instance-prefix: "lines"
         max-items: 3
         paragraph @line:
-          when: "active && name matches \"*a\""
+          visible: item.active && item.name matches "*a"
           bind: "name"
           text: "placeholder"
 `
@@ -144,7 +274,7 @@ func TestCompileScenarioDiagnosesWhenPathTypeRuntimeBindingAndLimits(t *testing.
   page:
     body:
       paragraph:
-        when: %s
+        visible: %s
         text: "conditional"
 `
 	tests := []struct {
@@ -154,12 +284,12 @@ func TestCompileScenarioDiagnosesWhenPathTypeRuntimeBindingAndLimits(t *testing.
 		code       string
 		limits     *ScenarioCompileLimits
 	}{
-		{name: "unknown-path", fixture: "    value @active: true", expression: `"missing"`, code: "PAPER_WHEN_PATH"},
-		{name: "non-bool-result", fixture: "    value @active: true", expression: `"quantity + 1"`, code: "PAPER_WHEN_TYPE"},
-		{name: "matches-type", fixture: "    value @active: true", expression: `"quantity matches \"*\""`, code: "PAPER_WHEN_TYPE"},
-		{name: "invalid-match-pattern", fixture: "    value @active: true", expression: `"name matches \"bad\\\\\""`, code: "PAPER_WHEN_EXPRESSION"},
-		{name: "missing-runtime-binding", expression: `"active"`, code: "PAPER_WHEN_BINDING"},
-		{name: "wrong-property-type", fixture: "    value @active: true", expression: "true", code: "PAPER_WHEN_VALUE"},
+		{name: "unknown-path", fixture: "    value @active: true", expression: `missing`, code: "PAPER_VISIBLE_PATH"},
+		{name: "non-bool-result", fixture: "    value @active: true", expression: `quantity + 1`, code: "PAPER_VISIBLE_TYPE"},
+		{name: "matches-type", fixture: "    value @active: true", expression: `quantity matches "*"`, code: "PAPER_VISIBLE_TYPE"},
+		{name: "invalid-match-pattern", fixture: "    value @active: true", expression: `name matches "bad\\"`, code: "PAPER_VISIBLE_EXPRESSION"},
+		{name: "missing-runtime-binding", expression: `active`, code: "PAPER_VISIBLE_PATH"},
+		{name: "wrong-property-type", fixture: "    value @active: true", expression: `12`, code: "PAPER_VISIBLE_VALUE"},
 	}
 	bounded := paperexpr.DefaultLanguageLimits()
 	bounded.MaxSourceBytes = 4
@@ -169,7 +299,7 @@ func TestCompileScenarioDiagnosesWhenPathTypeRuntimeBindingAndLimits(t *testing.
 		expression string
 		code       string
 		limits     *ScenarioCompileLimits
-	}{name: "expression-limit", fixture: "    value @active: true", expression: `"active"`, code: "PAPER_WHEN_LIMIT", limits: &ScenarioCompileLimits{Expressions: bounded}})
+	}{name: "expression-limit", fixture: "    value @active: true", expression: `active`, code: "PAPER_VISIBLE_LIMIT", limits: &ScenarioCompileLimits{Expressions: bounded}})
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

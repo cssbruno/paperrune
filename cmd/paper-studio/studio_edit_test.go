@@ -613,7 +613,7 @@ func TestPaperStudioTypedPaletteInsertsPrimitiveAndComponentInstances(t *testing
 		t.Fatalf("component palette edit = %d %s", response.StatusCode, response.Body)
 	}
 	after := fetchStudioWorkspace(t, handler)
-	if !strings.Contains(after.Source, "use @card-instance:") || !strings.Contains(after.Source, "component: \"@card\"") {
+	if !strings.Contains(after.Source, "use @card-instance:") || !strings.Contains(after.Source, "component: @card") {
 		t.Fatalf("component palette source =\n%s", after.Source)
 	}
 }
@@ -926,6 +926,9 @@ const studioAuthoringPropertiesFixture = `document @report:
   language: "en"
   style @body-style:
     font: "Helvetica"
+  schema data:
+    object patient:
+      bool active
   page @sheet:
     width: 200pt
     height: 140pt
@@ -958,7 +961,7 @@ func TestPaperStudioRoutesMissingAttributesThroughClosedMutations(t *testing.T) 
 		{"canvas alt", "@badge", "canvas", "alt", `alt: "Badge"`, map[string]any{"text": "Badge"}},
 		{"heading level", "@title", "text", "level", "level: 4", map[string]any{"count": 4}},
 		{"named style", "@title", "appearance", "style", `style: "@body-style"`, map[string]any{"text": "@body-style"}},
-		{"condition", "@title", "condition", "when", `when: "patient.active == true"`, map[string]any{"text": "patient.active == true"}},
+		{"condition", "@title", "condition", "visible", `visible: patient.active == true`, map[string]any{"text": "patient.active == true"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

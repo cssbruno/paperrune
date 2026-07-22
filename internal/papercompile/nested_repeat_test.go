@@ -54,12 +54,12 @@ const nestedRepeatSource = `document @doc:
         source: "groups"
         instance-prefix: "groups"
         max-items: 3
-        when: "enabled"
+        visible: item.enabled
         repeat @lines:
           source: "lines"
           instance-prefix: "lines"
           max-items: 2
-          when: "visible && name matches \"A*\""
+          visible: item.visible && item.name matches "A*"
           paragraph @line:
             bind: "name"
             text: "placeholder"

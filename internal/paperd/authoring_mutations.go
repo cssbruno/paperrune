@@ -143,7 +143,7 @@ func (w *Workspace) PaperInsertTemplate(request PaperInsertTemplateRequest) (Pap
 		if _, err := uniqueComponentDefinition(revision.parsed.AST.Root, request.Component); err != nil {
 			return PaperMutationResult{}, err
 		}
-		node = paperedit.NodeSpec{Kind: paperlang.NodeUse, ID: request.ID, Properties: []paperedit.PropertySpec{{Name: "component", Value: paperedit.StringValue(request.Component)}}}
+		node = paperedit.NodeSpec{Kind: paperlang.NodeUse, ID: request.ID, Properties: []paperedit.PropertySpec{{Name: "component", Value: paperedit.ExpressionValue(request.Component)}}}
 	case "section":
 		base := strings.TrimPrefix(request.ID, "@")
 		if len(base) > 220 {

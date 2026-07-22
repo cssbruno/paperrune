@@ -169,7 +169,7 @@ func (s *studioServer) componentPreview(ctx context.Context, snapshot *studioSna
 	for suffix := 2; studioSourceTargetExists(parsed.AST.Root, previewID); suffix++ {
 		previewID = "@studio-gallery-preview-" + strconv.Itoa(suffix)
 	}
-	value := paperedit.StringValue(component)
+	value := paperedit.ExpressionValue(component)
 	fingerprint, instance, err := studioTargetPrecondition(snapshot.file, snapshot.source, body)
 	if err != nil {
 		return nil, "", err

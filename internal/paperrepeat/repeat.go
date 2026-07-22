@@ -289,7 +289,8 @@ func (state *expansionState) validateValue(value paperscenario.Value, valuePath 
 func (state *expansionState) bindings(item paperscenario.Value, itemPath string) ([]paperexpr.Binding, error) {
 	bindings := make([]paperexpr.Binding, 0, len(state.predicate.Paths))
 	for _, bindingPath := range state.predicate.Paths {
-		value, found, collection, work := resolveScenarioPath(item, bindingPath)
+		lookupPath := strings.TrimPrefix(bindingPath, "item.")
+		value, found, collection, work := resolveScenarioPath(item, lookupPath)
 		diagnostic := itemPath + ".bindings." + bindingPath
 		state.work += work
 		if state.work > state.limits.MaxWork {

@@ -116,7 +116,7 @@ func TestPaperApplyDiagnosticFixAllowlistedRemediesCompileAtomically(t *testing.
 		workspace := mustWorkspace(t, Limits{})
 		request, _, _ := diagnosticFixRequest(t, workspace, componentReferenceFixFixture, "@instance", "fix-component", "PAPER_COMPONENT_UNKNOWN", RemedySetComponentReference, PaperDiagnosticFixPayload{Component: "@known"}, CapabilityEdit)
 		result, err := workspace.PaperApplyDiagnosticFix(request)
-		if err != nil || !result.Revision.CompileOK || !strings.Contains(result.Revision.Source, `component: "@known"`) {
+		if err != nil || !result.Revision.CompileOK || !strings.Contains(result.Revision.Source, `component: @known`) {
 			t.Fatalf("component fix = %#v, %v", result, err)
 		}
 	})

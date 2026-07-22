@@ -45,6 +45,84 @@ func TestCompileAndEvaluateHumanExpression(t *testing.T) {
 	}
 }
 
+func TestCompiledExpressionsEvaluateConditionalBranchesLazily(t *testing.T) {
+	t.Parallel()
+
+	program, kind, err := Compile(`true ? "selected" : missing`, []PathKind{{Path: "missing", Kind: String}}, LanguageLimits{})
+	if err != nil || kind != String {
+		t.Fatalf("compile lazy select = %#v, %v, %v", program, kind, err)
+	}
+	value, err := Evaluate(context.Background(), program, nil, Limits{})
+	if err != nil || value != (Value{Kind: String, String: "selected"}) {
+		t.Fatalf("lazy select = %#v, %v", value, err)
+	}
+
+	program, kind, err = Compile(`false && missing`, []PathKind{{Path: "missing", Kind: Bool}}, LanguageLimits{})
+	if err != nil || kind != Bool {
+		t.Fatalf("compile lazy and = %#v, %v, %v", program, kind, err)
+	}
+	value, err = Evaluate(context.Background(), program, nil, Limits{})
+	if err != nil || value != (Value{Kind: Bool}) {
+		t.Fatalf("lazy and = %#v, %v", value, err)
+	}
+}
+
+func TestCompileArithmeticOrderingAndInequality(t *testing.T) {
+	t.Parallel()
+
+	program, kind, err := Compile(`-(total - 2) * 3 / 2 >= -12 && name != "closed"`, []PathKind{
+		{Path: "total", Kind: Integer}, {Path: "name", Kind: String},
+	}, LanguageLimits{})
+	if err != nil || kind != Bool {
+		t.Fatalf("compile arithmetic = %#v, %v, %v", program, kind, err)
+	}
+	value, err := Evaluate(context.Background(), program, []Binding{
+		{Path: "total", Value: Value{Kind: Integer, Integer: 10}},
+		{Path: "name", Value: Value{Kind: String, String: "open"}},
+	}, Limits{})
+	if err != nil || value != (Value{Kind: Bool, Bool: true}) {
+		t.Fatalf("arithmetic value = %#v, %v", value, err)
+	}
+
+	program, _, err = Compile(`false ? 10 / zero : 4`, []PathKind{{Path: "zero", Kind: Integer}}, LanguageLimits{})
+	if err != nil {
+		t.Fatalf("compile lazy division: %v", err)
+	}
+	value, err = Evaluate(context.Background(), program, nil, Limits{})
+	if err != nil || value.Integer != 4 {
+		t.Fatalf("lazy division = %#v, %v", value, err)
+	}
+}
+
+func TestLanguageNullableSelectionAndEquality(t *testing.T) {
+	program, kind, err := Compile(`enabled ? @card : null`, []PathKind{{Path: "enabled", Kind: Bool}}, LanguageLimits{})
+	if err != nil || kind != String {
+		t.Fatalf("compile nullable reference: kind=%v err=%v", kind, err)
+	}
+	value, err := Evaluate(context.Background(), program, []Binding{{Path: "enabled", Value: Value{Kind: Bool}}}, Limits{})
+	if err != nil || value.Kind != Null {
+		t.Fatalf("nullable result = %#v, %v", value, err)
+	}
+	equal, _, err := Compile(`name != null`, []PathKind{{Path: "name", Kind: String}}, LanguageLimits{})
+	if err != nil {
+		t.Fatalf("compile null equality: %v", err)
+	}
+	value, err = Evaluate(context.Background(), equal, []Binding{{Path: "name", Value: Value{Kind: String, String: "Ada"}}}, Limits{})
+	if err != nil || value != (Value{Kind: Bool, Bool: true}) {
+		t.Fatalf("null equality result = %#v, %v", value, err)
+	}
+}
+
+func TestComponentSelectionAcceptsOnlyClosedReferencesOrNull(t *testing.T) {
+	references, err := ValidateComponentSelection(`paid ? @paid : null`, LanguageLimits{})
+	if err != nil || !reflect.DeepEqual(references, []string{"@paid"}) {
+		t.Fatalf("closed references = %#v, %v", references, err)
+	}
+	if _, err := ValidateComponentSelection(`paid ? "@paid" : "dynamic"`, LanguageLimits{}); !errors.Is(err, ErrType) {
+		t.Fatalf("quoted component results error = %v", err)
+	}
+}
+
 func TestCompilePrecedenceKindsAndDeterminism(t *testing.T) {
 	t.Parallel()
 

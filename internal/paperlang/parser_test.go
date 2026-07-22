@@ -86,8 +86,8 @@ func TestASTProjectionIsDetachedAndDeterministic(t *testing.T) {
 		t.Fatalf("CanonicalJSON() = %v", err)
 	}
 	secondJSON, _ := second.AST.CanonicalJSON()
-	if !bytes.Equal(firstJSON, secondJSON) || !bytes.Contains(firstJSON, []byte(`"schema_version":1`)) ||
-		!bytes.Contains(firstJSON, []byte(`"grammar_version":"paper/0.3"`)) {
+	if !bytes.Equal(firstJSON, secondJSON) || !bytes.Contains(firstJSON, []byte(`"schema_version":2`)) ||
+		!bytes.Contains(firstJSON, []byte(`"grammar_version":"paper/0.4"`)) {
 		t.Fatalf("canonical JSON differs:\n%s\n%s", firstJSON, secondJSON)
 	}
 	var decoded ASTProjection
@@ -213,7 +213,7 @@ func TestParseReportsHelpfulStructuralDiagnostics(t *testing.T) {
 	}
 	codes := diagnosticCodes(result.Diagnostics)
 	for _, want := range []string{
-		"PAPER_DUPLICATE_ID", "PAPER_EXPECTED_VALUE", "PAPER_INVALID_UNIT",
+		"PAPER_DUPLICATE_ID", "PAPER_INVALID_UNIT",
 		"PAPER_INVALID_CHILD", "PAPER_TEXT_VALUE", "PAPER_TEXT_BLOCK",
 	} {
 		if !codes[want] {
@@ -243,5 +243,64 @@ func TestParseRequiresSingleDocumentRoot(t *testing.T) {
 				t.Fatalf("diagnostics = %#v, want %s", result.Diagnostics, test.code)
 			}
 		})
+	}
+}
+
+func TestParseSwitchPropertyDesugarsToTypedLazyExpression(t *testing.T) {
+	t.Parallel()
+
+	const source = `document:
+  page:
+    body:
+      paragraph:
+        text: switch status:
+          case "active": "Active"
+          case "closed": "Closed"
+          default: "Unknown"
+`
+	parsed := Parse("switch.paper", source)
+	if !parsed.OK() {
+		t.Fatalf("diagnostics = %#v", parsed.Diagnostics)
+	}
+	paragraph := parsed.AST.Root.Members[0].Node.Members[0].Node.Members[0].Node
+	textNode := paragraph.Members[0].Node
+	if textNode == nil || textNode.Value == nil || textNode.Value.ExpressionValue == nil {
+		t.Fatalf("switch text = %#v", textNode)
+	}
+	expression := *textNode.Value.ExpressionValue
+	if !strings.Contains(expression, `status`) || !strings.Contains(expression, `"Active"`) || !strings.Contains(expression, `"Unknown"`) {
+		t.Fatalf("desugared switch = %q", expression)
+	}
+	if textNode.Value.SwitchValue == nil || len(textNode.Value.SwitchValue.Cases) != 2 {
+		t.Fatalf("preserved switch = %#v", textNode.Value.SwitchValue)
+	}
+	formatted, err := Format(parsed.AST)
+	if err != nil || !strings.Contains(string(formatted), "text: switch status:\n") || !strings.Contains(string(formatted), `case "active": "Active"`) {
+		t.Fatalf("formatted switch = %q, %v", formatted, err)
+	}
+}
+
+func TestParsePredicateSwitchAndRejectDuplicateValueCases(t *testing.T) {
+	predicate := Parse("predicate-switch.paper", `document:
+  page:
+    body:
+      text: switch:
+        case score >= 90: "Critical"
+        case score >= 1: "Low"
+        default: "None"
+`)
+	if !predicate.OK() {
+		t.Fatalf("predicate switch diagnostics = %#v", predicate.Diagnostics)
+	}
+	duplicate := Parse("duplicate-switch.paper", `document:
+  page:
+    body:
+      text: switch status:
+        case "active": "A"
+        case "active": "Again"
+        default: "Other"
+`)
+	if duplicate.OK() || !diagnosticCodes(duplicate.Diagnostics)["PAPER_SWITCH_CASE_DUPLICATE"] {
+		t.Fatalf("duplicate switch diagnostics = %#v", duplicate.Diagnostics)
 	}
 }

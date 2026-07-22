@@ -81,6 +81,110 @@ func TestComponentExpansionSupportsListAndRowColumnSlotContent(t *testing.T) {
 	}
 }
 
+func TestComputedComponentSelectionChoosesReferenceOrRendersNothing(t *testing.T) {
+	const source = `document:
+  schema:
+    bool paid
+  scenario @paid-case:
+    value @paid: true
+  scenario @pending-case:
+    value @paid: false
+  component @paid-message:
+    paragraph:
+      text: "Paid"
+  component @pending-message:
+    paragraph:
+      text: "Pending"
+  page:
+    body:
+      use @status:
+        component: paid ? @paid-message : @pending-message
+      use @optional:
+        component: paid ? null : @pending-message
+`
+	parsed := paperlang.Parse("computed-component.paper", source)
+	if !parsed.OK() {
+		t.Fatalf("parse diagnostics = %#v", parsed.Diagnostics)
+	}
+	paid := CompileScenario(parsed.AST, "paid-case")
+	if !paid.OK() || len(paid.Document.Body) != 1 {
+		t.Fatalf("paid compile = body %#v diagnostics %#v", paid.Document.Body, paid.Diagnostics)
+	}
+	if got := layout.TextSegmentsPlainText(paid.Document.Body[0].(layout.ParagraphBlock).Segments); got != "Paid" {
+		t.Fatalf("paid selection = %q", got)
+	}
+	pending := CompileScenario(parsed.AST, "pending-case")
+	if !pending.OK() || len(pending.Document.Body) != 2 {
+		t.Fatalf("pending compile = body %#v diagnostics %#v", pending.Document.Body, pending.Diagnostics)
+	}
+	for index, block := range pending.Document.Body {
+		if got := layout.TextSegmentsPlainText(block.(layout.ParagraphBlock).Segments); got != "Pending" {
+			t.Fatalf("pending selection %d = %q", index, got)
+		}
+	}
+}
+
+func TestComputedComponentSelectionRejectsStringResults(t *testing.T) {
+	const source = `document:
+  schema:
+    bool paid
+  scenario @sample:
+    value @paid: true
+  component @paid-message:
+    text: "Paid"
+  page:
+    body:
+      use @status:
+        component: paid ? "@paid-message" : "other"
+`
+	parsed := paperlang.Parse("invalid-component-selection.paper", source)
+	compiled := CompileScenario(parsed.AST, "sample")
+	if !parsed.OK() || compiled.OK() || !hasCompileDiagnostic(compiled.Diagnostics, "PAPER_COMPONENT_SELECTION_TYPE") {
+		t.Fatalf("component selection diagnostics = %#v / %#v", parsed.Diagnostics, compiled.Diagnostics)
+	}
+}
+
+func TestBareComponentReferenceIsAConstantExpression(t *testing.T) {
+	const source = `document:
+  component @message:
+    paragraph:
+      text: "Hello"
+  page:
+    body:
+      use @selected:
+        component: @message
+`
+	parsed := paperlang.Parse("bare-component.paper", source)
+	compiled := Compile(parsed.AST)
+	if !parsed.OK() || !compiled.OK() || len(compiled.Document.Body) != 1 {
+		t.Fatalf("diagnostics = %#v / %#v", parsed.Diagnostics, compiled.Diagnostics)
+	}
+}
+
+func TestComponentExpressionsUseDeclaredArgsScope(t *testing.T) {
+	const source = `document:
+  component @message:
+    prop @title:
+      type: "string"
+      required: true
+    paragraph:
+      text: args.title
+  page:
+    body:
+      use @selected:
+        component: @message
+        arg @title: "Scoped title"
+`
+	parsed := paperlang.Parse("component-args.paper", source)
+	compiled := Compile(parsed.AST)
+	if !parsed.OK() || !compiled.OK() || len(compiled.Document.Body) != 1 {
+		t.Fatalf("diagnostics = %#v / %#v", parsed.Diagnostics, compiled.Diagnostics)
+	}
+	if got := layout.TextSegmentsPlainText(compiled.Document.Body[0].(layout.ParagraphBlock).Segments); got != "Scoped title" {
+		t.Fatalf("component args text = %q", got)
+	}
+}
+
 func TestComponentExpansionReportsContractFailures(t *testing.T) {
 	tests := []struct {
 		name   string

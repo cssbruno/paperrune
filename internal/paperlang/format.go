@@ -276,15 +276,20 @@ func (f *astFormatter) writeNode(node *Node, path string, depth int) error {
 		}
 	}
 	if node.Value != nil {
-		formatted, err := formatScalar(*node.Value, path+".value")
-		if err != nil {
-			return err
+		if node.Value.SwitchValue != nil {
+			if err := f.writeSwitch(*node.Value, path+".value", depth); err != nil {
+				return err
+			}
+		} else {
+			formatted, err := formatScalar(*node.Value, path+".value")
+			if err != nil {
+				return err
+			}
+			if err := f.write(" " + formatted + "\n"); err != nil {
+				return err
+			}
 		}
-		if err := f.write(" " + formatted); err != nil {
-			return err
-		}
-	}
-	if err := f.write("\n"); err != nil {
+	} else if err := f.write("\n"); err != nil {
 		return err
 	}
 
@@ -301,8 +306,17 @@ func (f *astFormatter) writeNode(node *Node, path string, depth int) error {
 		if err := f.writeIndent(depth + 1); err != nil {
 			return err
 		}
-		if err := f.write(property.Name + ": " + formatted + "\n"); err != nil {
-			return err
+		if property.Value.SwitchValue != nil {
+			if err := f.write(property.Name + ":"); err != nil {
+				return err
+			}
+			if err := f.writeSwitch(property.Value, propertyPath+".value", depth+1); err != nil {
+				return err
+			}
+		} else {
+			if err := f.write(property.Name + ": " + formatted + "\n"); err != nil {
+				return err
+			}
 		}
 	}
 	for _, child := range children {
@@ -311,6 +325,42 @@ func (f *astFormatter) writeNode(node *Node, path string, depth int) error {
 		}
 	}
 	return nil
+}
+
+func (f *astFormatter) writeSwitch(value Scalar, path string, depth int) error {
+	if value.Kind != ScalarExpression || value.ExpressionValue == nil || value.SwitchValue == nil {
+		return f.invalid(path, "switch requires an expression scalar and lowered expression")
+	}
+	switchValue := value.SwitchValue
+	if len(switchValue.Cases) == 0 || strings.TrimSpace(switchValue.Default) == "" {
+		return f.invalid(path+".switch", "switch requires at least one case and a default")
+	}
+	header := " switch"
+	if selector := strings.TrimSpace(switchValue.Selector); selector != "" {
+		if strings.ContainsAny(selector, "\r\n") {
+			return f.invalid(path+".switch.selector", "switch selector must be one line")
+		}
+		header += " " + selector
+	}
+	if err := f.write(header + ":\n"); err != nil {
+		return err
+	}
+	for index, item := range switchValue.Cases {
+		condition, result := strings.TrimSpace(item.Condition), strings.TrimSpace(item.Result)
+		if condition == "" || result == "" || strings.ContainsAny(condition+result, "\r\n") {
+			return f.invalid(fmt.Sprintf("%s.switch.cases[%d]", path, index), "switch case expressions must be non-empty and single-line")
+		}
+		if err := f.writeIndent(depth + 1); err != nil {
+			return err
+		}
+		if err := f.write("case " + condition + ": " + result + "\n"); err != nil {
+			return err
+		}
+	}
+	if err := f.writeIndent(depth + 1); err != nil {
+		return err
+	}
+	return f.write("default: " + strings.TrimSpace(switchValue.Default) + "\n")
 }
 
 func formatScalar(value Scalar, path string) (string, error) {
@@ -326,6 +376,15 @@ func formatScalar(value Scalar, path string) (string, error) {
 			return nonmatching("string scalar is not valid UTF-8")
 		}
 		return strconv.Quote(*value.StringValue), nil
+	case ScalarExpression:
+		if value.ExpressionValue == nil || value.StringValue != nil || value.BoolValue != nil || value.NumberValue != nil || value.UnitValue != nil {
+			return nonmatching("expression scalar has inconsistent typed fields")
+		}
+		expression := strings.TrimSpace(*value.ExpressionValue)
+		if expression == "" || !utf8.ValidString(expression) || strings.ContainsAny(expression, "\r\n") {
+			return nonmatching("expression scalar must be non-empty single-line UTF-8")
+		}
+		return expression, nil
 	case ScalarBool:
 		if value.StringValue != nil || value.BoolValue == nil || value.NumberValue != nil || value.UnitValue != nil {
 			return nonmatching("boolean scalar has inconsistent typed fields")
