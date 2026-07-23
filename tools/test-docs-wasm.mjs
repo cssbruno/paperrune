@@ -124,25 +124,25 @@ if (editableHit.Page !== 1 || !editableHit.Fragments?.some((fragment) => fragmen
   throw new Error(`retained plan hit did not resolve editable title: ${JSON.stringify(editableHit)}`);
 }
 const edited = await globalThis.PaperStudioWASM.editText({
-  source: editableSource,
-  sourceRevision: editableFirst.source_revision,
+  hash: editableFirst.hash,
+  page: 1,
   target: '@editable-title',
   text: 'Edited "title"\\nnext',
 });
-if (!edited.applied || edited.applied_operations !== 1 || edited.source === editableSource ||
-    !/^[0-9a-f]{64}$/.test(edited.revision || '') || edited.diff?.patches?.length !== 1 ||
+if (!edited.applied || !edited.ok || edited.source === editableSource ||
+    !/^[0-9a-f]{64}$/.test(edited.source_revision || '') || edited.hash === editableFirst.hash ||
     !edited.source.includes('text: "Edited \\"title\\"\\\\nnext"')) {
-  throw new Error(`authored text edit did not return one minimal source patch: ${JSON.stringify(edited)}`);
+  throw new Error(`authored text edit did not return a recompiled WASM workspace: ${JSON.stringify(edited)}`);
 }
 const paragraphEdited = await globalThis.PaperStudioWASM.editText({
-  source: editableSource,
-  sourceRevision: editableFirst.source_revision,
+  hash: editableFirst.hash,
+  page: 1,
   target: '@editable-paragraph',
   text: 'Edited paragraph',
 });
 const textEdited = await globalThis.PaperStudioWASM.editText({
-  source: editableSource,
-  sourceRevision: editableFirst.source_revision,
+  hash: editableFirst.hash,
+  page: 1,
   target: '@editable-text',
   text: 'Edited text',
 });
@@ -153,8 +153,8 @@ if (!paragraphEdited.applied || !paragraphEdited.source.includes('text: "Edited 
 let boundEditError = '';
 try {
   await globalThis.PaperStudioWASM.editText({
-    source,
-    sourceRevision: compiled.source_revision,
+    hash: compiled.hash,
+    page: 1,
     target: '@title',
     text: 'Must not replace JSON data',
   });
@@ -202,14 +202,14 @@ if (!Number.isInteger(anonymousCellText?.header_span?.start?.offset)) {
   throw new Error(`anonymous cell text source offset is missing: ${JSON.stringify(anonymousCellText)}`);
 }
 const addressedCellEdited = await globalThis.PaperStudioWASM.editText({
-  source: editableCellSource,
-  sourceRevision: editableCellCompiled.source_revision,
+  hash: editableCellCompiled.hash,
+  page: 1,
   target: '@addressed-cell',
   text: 'Edited addressed cell',
 });
 const anonymousCellEdited = await globalThis.PaperStudioWASM.editText({
-  source: editableCellSource,
-  sourceRevision: editableCellCompiled.source_revision,
+  hash: editableCellCompiled.hash,
+  page: 1,
   sourceOffset: anonymousCellText.header_span.start.offset,
   text: 'Edited anonymous cell',
 });
@@ -218,12 +218,14 @@ if (!addressedCellEdited.applied || !addressedCellEdited.source.includes('text: 
   throw new Error(`cell literal edits failed: addressed=${JSON.stringify(addressedCellEdited)} anonymous=${JSON.stringify(anonymousCellEdited)}`);
 }
 const boundCellEdited = await globalThis.PaperStudioWASM.editText({
-  data: '{"variable":"JSON-bound cell"}',
+  hash: editableCellCompiled.hash,
+  page: 1,
   jsonPointer: '/variable',
   text: 'Edited directly in WASM',
 });
-if (!boundCellEdited.applied || boundCellEdited.json_pointer !== '/variable' ||
-    JSON.parse(boundCellEdited.data).variable !== 'Edited directly in WASM') {
+if (!boundCellEdited.applied ||
+    JSON.parse(boundCellEdited.data).variable !== 'Edited directly in WASM' ||
+    boundCellEdited.hash === editableCellCompiled.hash) {
   throw new Error(`JSON-bound cell edit did not run in WASM: ${JSON.stringify(boundCellEdited)}`);
 }
 
@@ -248,7 +250,8 @@ for (const sample of playgroundSamples) {
   if (sample.slug === 'laboratory-report') {
     const pointer = await assertLaboratoryRepeatTrace(first);
     const repeatedEdit = await globalThis.PaperStudioWASM.editText({
-      data: sample.data,
+      hash: first.hash,
+      page: first.page,
       jsonPointer: pointer,
       text: 'White blood cells',
     });

@@ -318,9 +318,6 @@ function requestInlineEdit() {
     bounds,
     busy: false,
     error: '',
-    source: selection.snapshot.source,
-    data: selection.snapshot.data,
-    sourceRevision: selection.snapshot.sourceRevision,
     planHash: selection.snapshot.hash,
     compileSequence: selection.snapshot.sequence,
     page: selection.snapshot.page,
@@ -338,18 +335,17 @@ async function commitInlineEdit(nextText) {
     if (editor.mode === 'data') {
       if (!editor.pointer) throw new Error('The selected binding has no concrete JSON pointer.');
       const result = await engine.editText({
-        data: editor.data,
+        hash: editor.planHash,
+        page: editor.page,
         jsonPointer: editor.pointer,
         text: nextText,
       });
       if (!inlineTransactionCurrent(editor, transaction)) return;
-      suppressLiveCompile = true;
-      data.value = result.data;
-      suppressLiveCompile = false;
+      acceptEditedWorkspace(result);
     } else {
       const request = {
-        source: editor.source,
-        sourceRevision: editor.sourceRevision,
+        hash: editor.planHash,
+        page: editor.page,
         text: nextText,
       };
       if (Number.isInteger(editor.sourceOffset)) request.sourceOffset = editor.sourceOffset;
@@ -358,13 +354,10 @@ async function commitInlineEdit(nextText) {
         ...request,
       });
       if (!inlineTransactionCurrent(editor, transaction)) return;
-      suppressLiveCompile = true;
-      source.value = result.source;
-      suppressLiveCompile = false;
+      acceptEditedWorkspace(result);
     }
     if (inlineEditSequence !== transaction) return;
     inlineEditor.value = null;
-    await compile(editor.page);
   } catch (error) {
     suppressLiveCompile = false;
     if (inlineEditSequence !== transaction || inlineEditor.value?.transaction !== transaction) return;
@@ -381,10 +374,34 @@ function inlineTransactionCurrent(editor, transaction) {
     inlineEditor.value?.transaction === transaction &&
     editor.compileSequence === compileSequence &&
     editor.planHash === planHash.value &&
-    editor.source === source.value &&
-    editor.data === data.value &&
-    editor.sourceRevision === sourceRevision.value &&
     !previewStale.value;
+}
+
+function acceptEditedWorkspace(result) {
+  if (!result?.ok || !result.png || !result.applied) {
+    throw new Error(result?.error || 'WASM did not return an edited document snapshot.');
+  }
+  suppressLiveCompile = true;
+  source.value = result.source;
+  data.value = result.data;
+  suppressLiveCompile = false;
+  diagnostics.value = result.diagnostics || [];
+  pages.value = result.pages || 0;
+  page.value = result.page;
+  planHash.value = result.hash || '';
+  sourceRevision.value = result.source_revision || '';
+  png.value = result.png;
+  svg.value = result.svg || '';
+  ast.value = result.ast || null;
+  pageX.value = Number(result.page_x_fixed || 0);
+  pageY.value = Number(result.page_y_fixed || 0);
+  pageWidth.value = Number(result.page_width_fixed || 0);
+  pageHeight.value = Number(result.page_height_fixed || 0);
+  previewStale.value = false;
+  failure.value = '';
+  selected.value = null;
+  state.value = diagnostics.value.length ? 'warning' : 'ready';
+  status.value = `${result.pages} page${result.pages === 1 ? '' : 's'} · plan ${result.hash.slice(0, 10)}`;
 }
 
 async function retryCompiler() {
