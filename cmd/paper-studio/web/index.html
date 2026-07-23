@@ -115,9 +115,18 @@
               <small>Composing layout, type and assets</small>
             </div>
             <div id="inspection-layer" class="inspection-layer" aria-hidden="true"></div>
+            <div id="text-selection-layer" class="text-selection-layer" aria-label="Selectable document text"></div>
             <div id="selection-layer" class="selection-layer" aria-hidden="true"></div>
             <div id="selection-pulse" class="selection-pulse" aria-hidden="true"></div>
             <div id="overlap-picker" class="overlap-picker" role="listbox" aria-label="Overlapping fragments in paint order" hidden></div>
+            <form id="inline-text-editor" class="inline-text-editor" aria-label="Edit document text" hidden>
+              <textarea id="inline-text-input" rows="2" maxlength="1048576" spellcheck="true"></textarea>
+              <div class="inline-text-actions">
+                <span>Esc to cancel · ⌘/Ctrl Enter to apply</span>
+                <button id="inline-text-cancel" type="button">Cancel</button>
+                <button id="inline-text-apply" type="submit">Apply</button>
+              </div>
+            </form>
           </div>
           <div id="empty-state" class="empty-state">
             <strong>No authoritative plan yet</strong>

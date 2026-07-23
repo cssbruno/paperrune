@@ -25,6 +25,7 @@ const state = {
   editSelection: null,
   editDraft: null,
   editFeedback: null,
+  inlineEdit: null,
   history: {can_undo: false, can_redo: false, undo_count: 0, redo_count: 0},
   committing: false,
   resources: [],
@@ -52,8 +53,11 @@ const app = $('#app');
 const pageImage = $('#page-image');
 const geometryImage = $('#geometry-image');
 const inspectionLayer = $('#inspection-layer');
+const textSelectionLayer = $('#text-selection-layer');
 const overlapPicker = $('#overlap-picker');
 const selectionLayer = $('#selection-layer');
+const inlineTextEditor = $('#inline-text-editor');
+const inlineTextInput = $('#inline-text-input');
 const canvasScroll = $('#canvas-scroll');
 const studioSessionToken = new URLSearchParams(window.location.hash.slice(1)).get('token') || '';
 if (studioSessionToken) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
@@ -127,6 +131,7 @@ async function performRefresh({quiet = false} = {}) {
     state.loadedScenario = state.scenario;
     await loadHistory();
     if (changed) {
+      closeInlineTextEditor();
       clearObjectURLs();
       state.pageMeta.clear();
       state.inspections.clear();
@@ -1332,6 +1337,16 @@ async function loadSVG(page, kind) {
   return result;
 }
 
+async function loadSelectableText(page) {
+  const key = `${state.revision}:selectable-text:${page}`;
+  if (state.pageMeta.has(key)) return state.pageMeta.get(key);
+  const scenario = state.scenario ? `&scenario=${encodeURIComponent(state.scenario)}` : '';
+  const response = await api(`/api/page/${page}.svg?revision=${encodeURIComponent(state.revision)}${scenario}`);
+  const result = {text: await response.text()};
+  state.pageMeta.set(key, result);
+  return result;
+}
+
 async function loadWASMPage(page, dpi = renderDPIForZoom()) {
   const key = `${state.revision}:wasm:${page}:${dpi}`;
   if (state.pageMeta.has(key)) {
@@ -1450,13 +1465,17 @@ async function showPage(page) {
   const revision = state.revision;
   const selectedTarget = state.editSelection?.target || '';
   if (page !== state.page) {
+    closeInlineTextEditor();
     selectionLayer.replaceChildren();
+    textSelectionLayer.replaceChildren();
     canvasScroll.scrollTop = 0;
     canvasScroll.scrollLeft = 0;
   }
   setPreviewStale(true);
   try {
-    const [display, geometry] = await Promise.all([loadWASMPage(page, previewDPIForZoom()), loadSVG(page, 'geometry'), loadInspection(page)]);
+    const [display, geometry, selectableText] = await Promise.all([
+      loadWASMPage(page, previewDPIForZoom()), loadSVG(page, 'geometry'), loadSelectableText(page), loadInspection(page),
+    ]);
     if (revision !== state.revision) return;
     state.page = page;
     paintWASMPage(display);
@@ -1464,6 +1483,7 @@ async function showPage(page) {
     queueWASMPageDetail(page);
     queueWASMThumbnails(page);
     geometryImage.src = geometry.url;
+    renderSelectableText(selectableText.text);
     $('#page-label').textContent = `Page ${page} of ${state.workspace.pages}`;
     document.querySelectorAll('.thumbnail-page').forEach((button) => {
       const active = Number(button.dataset.page) === page;
@@ -1481,6 +1501,69 @@ async function showPage(page) {
   } finally {
     setPreviewStale(state.loading);
   }
+}
+
+function renderSelectableText(svgText) {
+  textSelectionLayer.replaceChildren();
+  const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+  if (parsed.querySelector('parsererror')) return;
+  const source = parsed.documentElement;
+  source.querySelectorAll('script, foreignObject, image, a, use').forEach((node) => node.remove());
+  source.querySelectorAll('rect, path').forEach((node) => { if (!node.closest('clipPath')) node.remove(); });
+  const svg = document.importNode(source, true);
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  textSelectionLayer.append(svg);
+  window.setTimeout(() => materializeSelectableGlyphs(svg), 0);
+}
+
+function materializeSelectableGlyphs(svg) {
+  if (!svg.isConnected) return;
+  const layerBounds = textSelectionLayer.getBoundingClientRect();
+  if (!(layerBounds.width > 0 && layerBounds.height > 0)) {
+    window.setTimeout(() => materializeSelectableGlyphs(svg), 16);
+    return;
+  }
+  const plane = document.createElement('div');
+  plane.className = 'selectable-glyph-plane';
+  const lines = [];
+  let line = null;
+  for (const text of svg.querySelectorAll('text')) {
+    const rect = text.getBoundingClientRect();
+    const usable = rect.width > 0 && rect.height > 0;
+    const family = text.getAttribute('font-family') || 'sans-serif';
+    const nextTop = usable ? rect.top - layerBounds.top : line?.top ?? 0;
+    const nextLeft = usable ? rect.left - layerBounds.left : line?.right ?? 0;
+    const nextHeight = usable ? rect.height : line?.height ?? 1;
+    const separated = line && usable && (Math.abs(nextTop - line.top) > 1 || family !== line.family || nextLeft < line.lastLeft || nextLeft - line.right > nextHeight * 4);
+    if (!line || separated) {
+      line = {text: '', left: nextLeft, top: nextTop, right: nextLeft, lastLeft: nextLeft, height: nextHeight, family};
+      lines.push(line);
+    }
+    line.text += text.textContent;
+    if (usable) {
+      line.right = rect.right - layerBounds.left;
+      line.lastLeft = nextLeft;
+      line.height = Math.max(line.height, nextHeight);
+    }
+  }
+  for (const item of lines) {
+    const selectable = document.createElement('span');
+    selectable.className = 'selectable-line';
+    selectable.textContent = item.text;
+    selectable.style.left = `${item.left / layerBounds.width * 100}%`;
+    selectable.style.top = `${item.top / layerBounds.height * 100}%`;
+    selectable.style.fontFamily = item.family;
+    selectable.style.fontSize = `${Math.max(0.1, item.height / layerBounds.height * 100)}cqh`;
+    plane.append(selectable);
+    if (item.text.length > 1) {
+      const naturalWidth = selectable.getBoundingClientRect().width;
+      const spacing = ((item.right - item.left) - naturalWidth) / (item.text.length - 1);
+      selectable.style.letterSpacing = `${spacing / layerBounds.width * 100}cqw`;
+    }
+  }
+  svg.remove();
+  textSelectionLayer.append(plane);
 }
 
 function inspectionTarget() {
@@ -1699,6 +1782,100 @@ async function hitPage(event) {
   }
 }
 
+function inlineEditBounds() {
+  const meta = state.activePageMeta;
+  if (!meta) return null;
+  const rects = state.selectionFragments
+    .filter((fragment) => fragment.page === state.page)
+    .map((fragment) => fragment.content_box || fragment.border_box)
+    .filter((rect) => rect && rect.width >= 0 && rect.height >= 0);
+  if (!rects.length) return null;
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+  const [viewX, viewY, viewWidth, viewHeight] = meta.viewBox;
+  if (!(viewWidth > 0 && viewHeight > 0)) return null;
+  return {
+    left: ((left - viewX) / viewWidth) * 100,
+    top: ((top - viewY) / viewHeight) * 100,
+    width: Math.max(12, ((right - left) / viewWidth) * 100),
+    height: Math.max(3, ((bottom - top) / viewHeight) * 100),
+  };
+}
+
+function beginInlineTextEdit() {
+  if (visualMutationsLocked() || !state.editSelection) return false;
+  const content = PaperStudioEditModel.contentState(state.editSelection);
+  const bounds = inlineEditBounds();
+  if (!content.available || !content.authored || content.runs.length > 1 || !bounds) {
+    state.editFeedback = {
+      tone: 'error',
+      text: content.bound
+        ? 'This content is data-bound; edit its JSON value instead of adding static text.'
+        : 'This content is not one directly editable authored text value; use the inspector.',
+    };
+    renderEditControls();
+    return false;
+  }
+  const property = PaperStudioEditModel.properties(state.editSelection, 'content')[0];
+  if (property !== 'text') return false;
+  state.inlineEdit = {target: state.editSelection.target, original: content.text};
+  inlineTextEditor.style.left = `${Math.max(0, Math.min(96, bounds.left))}%`;
+  inlineTextEditor.style.top = `${Math.max(0, Math.min(96, bounds.top))}%`;
+  inlineTextEditor.style.width = `${Math.max(18, Math.min(100 - bounds.left, bounds.width))}%`;
+  inlineTextInput.style.minHeight = `${Math.max(44, pageImage.clientHeight * bounds.height / 100)}px`;
+  inlineTextInput.value = content.text;
+  inlineTextEditor.hidden = false;
+  inlineTextEditor.classList.remove('is-committing');
+  inlineTextEditor.querySelector('.inline-text-actions span').textContent = 'Esc to cancel · ⌘/Ctrl Enter to apply';
+  requestAnimationFrame(() => {
+    inlineTextInput.focus({preventScroll: true});
+    inlineTextInput.setSelectionRange(0, inlineTextInput.value.length);
+  });
+  return true;
+}
+
+function closeInlineTextEditor() {
+  state.inlineEdit = null;
+  inlineTextEditor.hidden = true;
+  inlineTextEditor.classList.remove('is-committing');
+  inlineTextInput.value = '';
+}
+
+async function commitInlineTextEdit() {
+  if (!state.inlineEdit || visualMutationsLocked() || state.inlineEdit.target !== state.editSelection?.target) return;
+  const value = inlineTextInput.value;
+  if (value === state.inlineEdit.original) {
+    closeInlineTextEditor();
+    return;
+  }
+  let payload;
+  try {
+    payload = PaperStudioEditModel.buildPayload(state.workspace, state.editSelection, 'content', 'text', value);
+  } catch (error) {
+    inlineTextEditor.querySelector('.inline-text-actions span').textContent = error.message;
+    return;
+  }
+  state.committing = true;
+  inlineTextEditor.classList.add('is-committing');
+  inlineTextEditor.querySelector('.inline-text-actions span').textContent = 'Applying exact source patch…';
+  try {
+    await api('/api/validate-edit', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload)});
+    const result = await api('/api/edit', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(payload)});
+    state.editFeedback = {tone: 'success', text: `Text committed · ${result.patch_count} minimal patch`};
+    closeInlineTextEditor();
+    await refresh();
+  } catch (error) {
+    inlineTextEditor.classList.remove('is-committing');
+    inlineTextEditor.querySelector('.inline-text-actions span').textContent = error.status === 409 ? 'The document changed; refresh before applying.' : error.message;
+    if (error.status === 409) await refresh();
+  } finally {
+    state.committing = false;
+    renderHistoryActions();
+  }
+}
+
 async function selectHitFragment(result, fragment) {
   const revision = state.revision;
   try {
@@ -1894,6 +2071,7 @@ function selectEditableTarget(target) {
 }
 
 function closeSelectionInspector() {
+  closeInlineTextEditor();
   state.selectionFragments = [];
   renderSelectionRects();
   $('#selection-pulse').classList.remove('is-visible');
@@ -2856,6 +3034,37 @@ $('#zoom-value').addEventListener('keydown', event => {
   event.currentTarget.blur();
 });
 pageImage.addEventListener('click', hitPage);
+textSelectionLayer.addEventListener('click', (event) => {
+  if (!window.getSelection()?.isCollapsed) return;
+  void hitPage(event);
+});
+textSelectionLayer.addEventListener('dblclick', async (event) => {
+  event.preventDefault();
+  window.getSelection()?.removeAllRanges();
+  await hitPage(event);
+  beginInlineTextEdit();
+});
+inlineTextEditor.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void commitInlineTextEdit();
+});
+$('#inline-text-cancel').addEventListener('click', closeInlineTextEditor);
+inlineTextInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeInlineTextEditor();
+    pageImage.focus?.({preventScroll: true});
+  } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+    event.preventDefault();
+    void commitInlineTextEdit();
+  }
+});
+inlineTextEditor.addEventListener('focusout', () => {
+  window.setTimeout(() => {
+    if (!inlineTextEditor.hidden && !inlineTextEditor.contains(document.activeElement)) void commitInlineTextEdit();
+  }, 80);
+});
 window.addEventListener('keydown', (event) => {
   const typing = event.target.matches('input, select, textarea, button, pre, [contenteditable="true"]');
   if (event.key === 'Escape') {
@@ -2875,6 +3084,11 @@ window.addEventListener('keydown', (event) => {
     return;
   }
   if (typing) return;
+  if ((event.key === 'Enter' || event.key === 'F2') && state.editSelection) {
+    event.preventDefault();
+    beginInlineTextEdit();
+    return;
+  }
   if (event.key === 'ArrowLeft') showPage(state.page - 1);
   if (event.key === 'ArrowRight') showPage(state.page + 1);
   if (event.key === '+' || event.key === '=') setZoom(state.zoom + .1);

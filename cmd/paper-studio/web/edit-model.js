@@ -230,8 +230,10 @@
 
   function contentState(selection) {
     const node = selection?.node;
-    if (!node || !contentKinds.has(node.kind)) return {available: false, authored: false, text: '', runs: []};
+    if (!node || !contentKinds.has(node.kind)) return {available: false, authored: false, bound: false, text: '', runs: []};
     if (node.kind === 'text') return {available: Boolean(node.id && node.value), authored: Boolean(node.value), text: scalarValue(node.value) ?? '', runs: []};
+    const propertyBind = authoredValue(selection, 'bind');
+    if (propertyBind.authored) return {available: false, authored: false, bound: true, text: '', runs: []};
     const propertyText = authoredValue(selection, 'text');
     const children = (node.members || []).map(member => member.node).filter(child => child?.kind === 'text');
     if (propertyText.authored && children.length) return {available: false, authored: true, text: '', runs: []};

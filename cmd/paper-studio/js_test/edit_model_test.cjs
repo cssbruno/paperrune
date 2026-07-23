@@ -62,6 +62,13 @@ test('content editor preserves literal and addressed rich-text representations',
   assert.deepEqual(model.buildPayload({source_revision: 's', revision: 'p'}, rich, 'content', 'runs', [
     {target: '@first', text: 'Goodbye'}, {target: '@second', text: ' moon'},
   ]).runs, [{target: '@first', text: 'Goodbye'}, {target: '@second', text: ' moon'}]);
+
+  const boundRoot = {kind: 'document', id: '@doc', members: [{node: {kind: 'paragraph', id: '@name', members: [
+    {property: {name: 'bind', value: {kind: 'string', string_value: 'customer.name'}}},
+  ]}}]};
+  const bound = model.findSelection(boundRoot, '@name');
+  assert.deepEqual(model.contentState(bound), {available: false, authored: false, bound: true, text: '', runs: []});
+  assert.equal(model.operations(bound).includes('content'), false);
 });
 
 test('list controls keep semantic ordering separate from typography and box styling', () => {

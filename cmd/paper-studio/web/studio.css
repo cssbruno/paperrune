@@ -153,7 +153,7 @@ button { color: inherit; }
 .canvas-scroll { width: 100%; height: 100%; overflow: auto; padding: clamp(18px, 3vw, 36px) clamp(20px, 4vw, 52px) clamp(36px, 7vw, 80px); }
 .page-stage { position: relative; width: min(100%, 720px); margin: auto; transform-origin: top center; outline: none; transition: width .16s ease, opacity .15s ease; }
 .page-stage > img, .page-stage > canvas { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
-#page-image { position: relative; z-index: 1; border: 1px solid #c8c6be; background: var(--paper); box-shadow: 0 14px 35px rgba(31,32,36,.16), 0 2px 8px rgba(31,32,36,.09); cursor: crosshair; }
+#page-image { position: relative; z-index: 1; border: 1px solid #c8c6be; background: var(--paper); box-shadow: 0 14px 35px rgba(31,32,36,.16), 0 2px 8px rgba(31,32,36,.09); }
 .geometry-image { position: absolute; inset: 0; z-index: 2; display: none !important; pointer-events: none; mix-blend-mode: multiply; }
 .app.show-geometry .geometry-image { display: block !important; }
 .app.is-stale #page-stage { min-height: min(76vh, 842px); aspect-ratio: 210 / 297; pointer-events: none; }
@@ -184,6 +184,12 @@ button { color: inherit; }
 @keyframes preview-loading-progress { 50% { width: 58%; } to { transform: translateX(280%); } }
 @media (prefers-reduced-motion: reduce) { .preview-loading::after, .preview-loading-signal, .preview-loading-body span, .preview-loading-progress i { animation: none; } }
 .inspection-layer { position: absolute; inset: 0; z-index: 3; overflow: visible; pointer-events: none; }
+.text-selection-layer { position: absolute; inset: 0; z-index: 3; overflow: hidden; cursor: text; user-select: text; }
+.text-selection-layer:empty { pointer-events: none; }
+.text-selection-layer svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; visibility: hidden; pointer-events: none; }
+.selectable-glyph-plane { position: absolute; inset: 0; container-type: size; user-select: text; }
+.selectable-line { position: absolute; display: inline-block; overflow: visible; color: transparent; line-height: 1; white-space: pre; pointer-events: auto; user-select: text; }
+.text-selection-layer ::selection { background: rgba(49,94,232,.32); color: transparent; }
 .inspection-mark { position: absolute; min-width: 1px; min-height: 1px; }
 .inspection-mark > span { position: absolute; top: 0; left: 0; max-width: 180px; padding: 1px 3px; transform: translateY(-100%); overflow: hidden; border-radius: 2px 2px 0 0; color: white; font: 8px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .inspection-mark.is-margin { border: 1px dotted rgba(199,116,18,.95); background: rgba(229,151,38,.035); }
@@ -233,6 +239,14 @@ button { color: inherit; }
 .overlap-region { color: var(--muted); font-size: 8px; text-transform: uppercase; }
 .selection-pulse.is-visible { display: block; animation: pulse .55s ease-out; }
 @keyframes pulse { from { transform: scale(.4); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+.inline-text-editor { position: absolute; z-index: 8; display: grid; min-width: 180px; overflow: visible; border: 1px solid var(--accent); border-radius: 4px; background: rgba(255,255,255,.98); box-shadow: 0 12px 30px rgba(22,31,48,.22), 0 0 0 3px rgba(49,94,232,.13); }
+.inline-text-editor[hidden] { display: none; }
+.inline-text-editor textarea { width: 100%; min-height: 44px; padding: 7px 9px; resize: vertical; border: 0; border-radius: 3px 3px 0 0; outline: 0; background: transparent; color: var(--ink); font: 13px/1.42 ui-sans-serif, system-ui, sans-serif; }
+.inline-text-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-height: 30px; padding: 4px 5px 4px 9px; border-top: 1px solid var(--hairline); background: #f7f6f2; }
+.inline-text-actions span { margin-right: auto; color: var(--muted); font-size: 8px; letter-spacing: .01em; }
+.inline-text-actions button { min-height: 22px; padding: 2px 8px; border: 1px solid #cbc9c1; border-radius: 3px; background: white; color: var(--ink); font-size: 9px; cursor: pointer; }
+.inline-text-actions button[type="submit"] { border-color: var(--accent); background: var(--accent); color: white; }
+.inline-text-editor.is-committing { opacity: .72; pointer-events: none; }
 .empty-state { display: none; max-width: 330px; margin: 20vh auto; text-align: center; }
 .empty-state strong, .empty-state span { display: block; }
 .empty-state strong { margin-bottom: 7px; font-size: 15px; }

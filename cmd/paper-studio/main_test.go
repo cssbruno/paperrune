@@ -69,6 +69,8 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 	response := studioRequest(t, handler, http.MethodGet, "/", nil, "")
 	if response.StatusCode != http.StatusOK || !bytes.Contains(response.Body, []byte("Paper Studio")) ||
 		!bytes.Contains(response.Body, []byte(`id="inspection-layer"`)) ||
+		!bytes.Contains(response.Body, []byte(`id="text-selection-layer"`)) ||
+		!bytes.Contains(response.Body, []byte(`id="inline-text-editor"`)) ||
 		!bytes.Contains(response.Body, []byte(`class="inspector-disclosure overlay-disclosure"`)) ||
 		!bytes.Contains(response.Body, []byte(`class="inspector-disclosure authoring-disclosure"`)) ||
 		bytes.Contains(response.Body, []byte(`review-contract-disclosure`)) ||
@@ -147,6 +149,9 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		!bytes.Contains(javascript.Body, []byte("visualMutationsLocked")) ||
 		!bytes.Contains(javascript.Body, []byte("previewRevisionLocked")) ||
 		!bytes.Contains(javascript.Body, []byte("loadWASMPage")) ||
+		!bytes.Contains(javascript.Body, []byte("loadSelectableText")) ||
+		!bytes.Contains(javascript.Body, []byte("beginInlineTextEdit")) ||
+		!bytes.Contains(javascript.Body, []byte("commitInlineTextEdit")) ||
 		!bytes.Contains(javascript.Body, []byte("PaperStudioViewportModel.fitZoom")) ||
 		!bytes.Contains(javascript.Body, []byte("window.devicePixelRatio")) ||
 		!bytes.Contains(javascript.Body, []byte("paintWASMCanvas")) ||
@@ -276,6 +281,8 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		!bytes.Contains(stylesheet.Body, []byte(".inspection-mark.is-baseline")) ||
 		!bytes.Contains(stylesheet.Body, []byte(".inspection-mark.is-table-cell")) ||
 		!bytes.Contains(stylesheet.Body, []byte(".overlap-picker")) ||
+		!bytes.Contains(stylesheet.Body, []byte(".text-selection-layer")) ||
+		!bytes.Contains(stylesheet.Body, []byte(".inline-text-editor")) ||
 		!bytes.Contains(stylesheet.Body, []byte(".region-state.is-repeated")) ||
 		!bytes.Contains(stylesheet.Body, []byte(".rail-badge.is-change")) ||
 		!bytes.Contains(stylesheet.Body, []byte(".syntax-keyword")) ||
