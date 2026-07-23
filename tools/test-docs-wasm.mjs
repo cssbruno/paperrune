@@ -217,19 +217,14 @@ if (!addressedCellEdited.applied || !addressedCellEdited.source.includes('text: 
     !anonymousCellEdited.applied || !anonymousCellEdited.source.includes('text: "Edited anonymous cell"')) {
   throw new Error(`cell literal edits failed: addressed=${JSON.stringify(addressedCellEdited)} anonymous=${JSON.stringify(anonymousCellEdited)}`);
 }
-let boundCellEditError = '';
-try {
-  await globalThis.PaperStudioWASM.editText({
-    source: editableCellSource,
-    sourceRevision: editableCellCompiled.source_revision,
-    target: '@bound-cell',
-    text: 'Must update JSON instead',
-  });
-} catch (error) {
-  boundCellEditError = error instanceof Error ? error.message : String(error);
-}
-if (!/data-bound|expression-backed/.test(boundCellEditError)) {
-  throw new Error(`JSON-bound cell edit was not rejected: ${JSON.stringify(boundCellEditError)}`);
+const boundCellEdited = await globalThis.PaperStudioWASM.editText({
+  data: '{"variable":"JSON-bound cell"}',
+  jsonPointer: '/variable',
+  text: 'Edited directly in WASM',
+});
+if (!boundCellEdited.applied || boundCellEdited.json_pointer !== '/variable' ||
+    JSON.parse(boundCellEdited.data).variable !== 'Edited directly in WASM') {
+  throw new Error(`JSON-bound cell edit did not run in WASM: ${JSON.stringify(boundCellEdited)}`);
 }
 
 let layoutSample;
@@ -251,7 +246,15 @@ for (const sample of playgroundSamples) {
   const results = [first];
   assertCompiledSamplePage(sample, first, 1, first.pages);
   if (sample.slug === 'laboratory-report') {
-    await assertLaboratoryRepeatTrace(first);
+    const pointer = await assertLaboratoryRepeatTrace(first);
+    const repeatedEdit = await globalThis.PaperStudioWASM.editText({
+      data: sample.data,
+      jsonPointer: pointer,
+      text: 'White blood cells',
+    });
+    if (!repeatedEdit.applied || JSON.parse(repeatedEdit.data).results[0].analyte !== 'White blood cells') {
+      throw new Error(`repeated JSON binding edit did not run in WASM: ${JSON.stringify(repeatedEdit)}`);
+    }
   }
   for (let page = 2; page <= first.pages; page += 1) {
     const result = await globalThis.PaperStudioWASM.compile({
@@ -382,7 +385,7 @@ async function assertLaboratoryRepeatTrace(result) {
       const binding = trace.provenance?.bindings?.find((candidate) =>
         candidate.json_pointer === '/results/0/analyte');
       if (trace.plan_hash === result.hash && trace.source_revision === result.source_revision && binding) {
-        return;
+        return binding.json_pointer;
       }
     } catch (error) {
       traces.push({error: error instanceof Error ? error.message : String(error)});

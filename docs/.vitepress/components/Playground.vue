@@ -8,7 +8,6 @@ import {
   normalizeFailure,
   pickHitTarget,
   traceBindingDescriptor,
-  updateBoundData,
 } from './playground/studio-model.mjs';
 import {
   createPlaygroundRuntimeLoader,
@@ -334,15 +333,20 @@ async function commitInlineEdit(nextText) {
   const transaction = editor.transaction;
   inlineEditor.value = {...editor, busy: true, error: ''};
   try {
+    const engine = await runtimeLoader.load();
+    if (!inlineTransactionCurrent(editor, transaction)) return;
     if (editor.mode === 'data') {
-      if (!inlineTransactionCurrent(editor, transaction)) throw new Error('The JSON changed while this edit was open. Select the value again.');
-      const nextData = updateBoundData(editor.data, editor.pointer || editor.binding, nextText);
+      if (!editor.pointer) throw new Error('The selected binding has no concrete JSON pointer.');
+      const result = await engine.editText({
+        data: editor.data,
+        jsonPointer: editor.pointer,
+        text: nextText,
+      });
+      if (!inlineTransactionCurrent(editor, transaction)) return;
       suppressLiveCompile = true;
-      data.value = nextData;
+      data.value = result.data;
       suppressLiveCompile = false;
     } else {
-      const engine = await runtimeLoader.load();
-      if (!inlineTransactionCurrent(editor, transaction)) return;
       const request = {
         source: editor.source,
         sourceRevision: editor.sourceRevision,

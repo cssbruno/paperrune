@@ -136,31 +136,6 @@ export function boxAsPercent(box, pageWidth, pageHeight, pageX = 0, pageY = 0) {
   };
 }
 
-export function updateBoundData(dataText, path, nextText) {
-  const parts = editablePathParts(path);
-  let data;
-  try {
-    data = JSON.parse(dataText);
-  } catch (error) {
-    throw new Error(`JSON data is invalid: ${normalizeFailure(error)}`);
-  }
-  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('JSON data must be an object.');
-  let parent = data;
-  for (const part of parts.slice(0, -1)) {
-    if (!hasPathMember(parent, part)) {
-      throw new Error(`Binding "${path}" does not resolve to an editable JSON value.`);
-    }
-    parent = parent[part];
-    if (!parent || typeof parent !== 'object') {
-      throw new Error(`Binding "${path}" does not resolve to an editable JSON value.`);
-    }
-  }
-  const leaf = parts.at(-1);
-  if (!hasPathMember(parent, leaf)) throw new Error(`Binding "${path}" is missing from JSON data.`);
-  parent[leaf] = coerceLike(parent[leaf], nextText);
-  return `${JSON.stringify(data, null, 2)}\n`;
-}
-
 function bindingDescriptor(scalar, dataText) {
   const path = scalar?.string_value ?? scalar?.expression_value ?? '';
   if (!simplePath.test(path)) {
@@ -187,7 +162,17 @@ function bindingDescriptor(scalar, dataText) {
   if (value && typeof value === 'object') {
     return {editable: false, binding: path, reason: 'Object and list bindings must be edited in JSON data.'};
   }
-  return {editable: true, mode: 'data', binding: path, value: String(value ?? '')};
+  return {
+    editable: true,
+    mode: 'data',
+    binding: path,
+    pointer: dottedPathPointer(path),
+    value: String(value ?? ''),
+  };
+}
+
+function dottedPathPointer(path) {
+  return `/${path.split('.').map((part) => part.replace(/~/g, '~0').replace(/\//g, '~1')).join('/')}`;
 }
 
 function sourceDescriptor(node, value) {
@@ -242,12 +227,6 @@ function nodeSourceOffset(node) {
   return raw === undefined || raw === null ? Number.NaN : Number(raw);
 }
 
-function editablePathParts(path) {
-  if (typeof path === 'string' && path.startsWith('/')) return decodePointer(path);
-  if (simplePath.test(path || '')) return path.split('.');
-  throw new Error('Only direct dotted JSON bindings or RFC 6901 JSON pointers can be edited on the page.');
-}
-
 function decodePointer(pointer) {
   if (pointer === '') return [];
   if (!pointer.startsWith('/')) throw new Error('Invalid JSON pointer.');
@@ -279,19 +258,4 @@ function valueAtPointer(data, pointer) {
 function numberField(value, first, second) {
   const number = Number(value?.[first] ?? value?.[second]);
   return number;
-}
-
-function coerceLike(current, nextText) {
-  if (typeof current === 'number') {
-    const number = Number(nextText);
-    if (!Number.isFinite(number)) throw new Error('Enter a valid number for this binding.');
-    return number;
-  }
-  if (typeof current === 'boolean') {
-    if (nextText === 'true') return true;
-    if (nextText === 'false') return false;
-    throw new Error('Enter true or false for this binding.');
-  }
-  if (current === null) return nextText === 'null' ? null : nextText;
-  return nextText;
 }

@@ -10,7 +10,6 @@ import {
   outlineNodes,
   pickHitTarget,
   traceBindingDescriptor,
-  updateBoundData,
 } from '../docs/.vitepress/components/playground/studio-model.mjs';
 
 const literal = node('paragraph', '@literal', [
@@ -64,6 +63,7 @@ assert.deepEqual(contentDescriptor(bound, data), {
   editable: true,
   mode: 'data',
   binding: 'report.title',
+  pointer: '/report/title',
   value: 'Draft',
 });
 assert.equal(contentDescriptor(computed, data).computed, true);
@@ -73,6 +73,7 @@ assert.deepEqual(contentDescriptor(boundCell, data), {
   editable: true,
   mode: 'data',
   binding: 'report.title',
+  pointer: '/report/title',
   value: 'Draft',
 });
 assert.deepEqual(contentDescriptor(literalCell, data), {
@@ -107,20 +108,6 @@ assert.deepEqual(boxAsPercent(hit.Fragments[1].ContentBox, 100, 200), {
   height: 20,
 });
 assert(outlineNodes(root).some(({id}) => id === '@literal'));
-
-const updated = JSON.parse(updateBoundData(data, 'report.title', 'Published'));
-assert.equal(updated.report.title, 'Published');
-const repeated = JSON.parse(updateBoundData(data, '/report/results/0/analyte', 'White blood cells'));
-assert.equal(repeated.report.results[0].analyte, 'White blood cells');
-const numeric = JSON.parse(updateBoundData(data, '/report/results/0/value', '6.2'));
-assert.equal(numeric.report.results[0].value, 6.2);
-const escapedData = '{"report":{"a/b":{"~value":"old"}}}';
-const escaped = JSON.parse(updateBoundData(escapedData, '/report/a~1b/~0value', 'new'));
-assert.equal(escaped.report['a/b']['~value'], 'new');
-assert.throws(() => updateBoundData(data, 'report.missing.value', 'x'), /does not resolve/);
-assert.throws(() => updateBoundData(data, '/report/results/1/analyte', 'x'), /does not resolve|missing/);
-assert.throws(() => updateBoundData(data, '/report/results/~2/analyte', 'x'), /Invalid JSON pointer escape/);
-assert.throws(() => updateBoundData(data, 'approved', 'yes'), /true or false/);
 
 const trace = {
   provenance: {

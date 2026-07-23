@@ -500,6 +500,42 @@ func editPaperText(_ js.Value, arguments []js.Value) any {
 			return nil
 		}
 		request := arguments[0]
+		textValue := request.Get("text")
+		if textValue.Type() != js.TypeString {
+			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText text must be a string")))
+			return nil
+		}
+		text := textValue.String()
+		if len(text) > paperedit.MaxReplacementBytes {
+			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText input exceeds playground limits")))
+			return nil
+		}
+		jsonPointer := strings.TrimSpace(jsOptionalString(request, "jsonPointer"))
+		if jsonPointer != "" {
+			data, dataErr := jsRequiredString(request, "data")
+			if dataErr != nil {
+				reject.Invoke(jsError(dataErr))
+				return nil
+			}
+			if len(data) > maxPlaygroundDataBytes || len(jsonPointer) > 4096 {
+				reject.Invoke(jsError(errors.New("paper-studio-wasm: editText input exceeds playground limits")))
+				return nil
+			}
+			go func() {
+				edited, editErr := playgroundEditJSONData(data, jsonPointer, text)
+				if editErr != nil {
+					reject.Invoke(jsError(editErr))
+					return
+				}
+				encoded, encodeErr := json.Marshal(edited)
+				if encodeErr != nil {
+					reject.Invoke(jsError(encodeErr))
+					return
+				}
+				resolve.Invoke(js.Global().Get("JSON").Call("parse", string(encoded)))
+			}()
+			return nil
+		}
 		source, err := jsRequiredString(request, "source")
 		if err != nil {
 			reject.Invoke(jsError(err))
@@ -524,12 +560,6 @@ func editPaperText(_ js.Value, arguments []js.Value) any {
 			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText accepts target or sourceOffset, not both")))
 			return nil
 		}
-		textValue := request.Get("text")
-		if textValue.Type() != js.TypeString {
-			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText text must be a string")))
-			return nil
-		}
-		text := textValue.String()
 		if len(source) > maxPlaygroundSourceBytes || len(text) > paperedit.MaxReplacementBytes ||
 			len(target) > 256 {
 			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText input exceeds playground limits")))
