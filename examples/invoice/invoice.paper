@@ -65,7 +65,6 @@ document @invoice:
       paragraph @invoice-number-value:
         style: "@invoice-base-style"
         bind: "invoiceNumber"
-        text: "INV-0000"
 
     body @invoice-content:
       paragraph @seller-label:
@@ -75,12 +74,10 @@ document @invoice:
       paragraph @seller-name:
         style: "@invoice-base-style"
         bind: "seller"
-        text: "Seller"
 
       paragraph @seller-contact:
         style: "@invoice-base-style"
         bind: "sellerContact"
-        text: "Contact"
 
       paragraph @customer-label:
         style: "@invoice-label-style"
@@ -89,12 +86,10 @@ document @invoice:
       paragraph @customer-name:
         style: "@invoice-base-style"
         bind: "customer"
-        text: "Customer"
 
       paragraph @customer-address:
         style: "@invoice-base-style"
         bind: "customerAddress"
-        text: "Address"
 
       paragraph @issued-label:
         style: "@invoice-label-style"
@@ -103,7 +98,6 @@ document @invoice:
       paragraph @issued-value:
         style: "@invoice-base-style"
         bind: "issued"
-        text: "Issue date"
 
       paragraph @due-label:
         style: "@invoice-label-style"
@@ -112,7 +106,6 @@ document @invoice:
       paragraph @due-value:
         style: "@invoice-base-style"
         bind: "due"
-        text: "Due date"
 
       table @invoice-items-table:
         repeat-header: true
@@ -156,22 +149,18 @@ document @invoice:
               paragraph:
                 style: "@invoice-base-style"
                 bind: "description"
-                text: "Item"
             cell @invoice-quantity-cell:
               paragraph:
                 style: "@invoice-base-style"
                 bind: "quantity"
-                text: "1"
             cell @invoice-rate-cell:
               paragraph:
                 style: "@invoice-base-style"
                 bind: "rate"
-                text: "$0.00"
             cell @invoice-amount-cell:
               paragraph:
                 style: "@invoice-base-style"
                 bind: "amount"
-                text: "$0.00"
 
       paragraph @invoice-total-label:
         style: "@invoice-label-style"
@@ -180,7 +169,6 @@ document @invoice:
       paragraph @invoice-total-value:
         style: "@invoice-total-style"
         bind: "total"
-        text: "$0.00"
 
       paragraph @invoice-note:
         style: "@invoice-base-style"

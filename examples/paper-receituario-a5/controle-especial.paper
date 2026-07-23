@@ -325,25 +325,21 @@ document @controle-especial:
             height: 15pt
             style: "@issuer-name"
             bind: "clinic"
-            text: "Clínica"
 
           paragraph @pharmacy-issuer:
             height: 13pt
             style: "@issuer-detail"
             bind: "issuer"
-            text: "Profissional e registro"
 
           paragraph @pharmacy-clinic-address:
             height: 13pt
             style: "@issuer-detail"
             bind: "clinicAddress"
-            text: "Endereço"
 
           paragraph @pharmacy-contact:
             height: 17pt
             style: "@issuer-detail"
             bind: "contact"
-            text: "Contato"
 
         column @pharmacy-document-block:
           width: 38%
@@ -404,14 +400,12 @@ document @controle-especial:
           width: 70%
           style: "@value"
           bind: "patient.name"
-          text: "Nome do paciente"
 
         paragraph @pharmacy-patient-document:
           width: 30%
           style: "@value"
           align: "right"
           bind: "patient.document"
-          text: "Documento"
 
       row @pharmacy-patient-address-row:
         gap: 8pt
@@ -425,7 +419,6 @@ document @controle-especial:
           width: 82%
           style: "@value"
           bind: "patient.address"
-          text: "Endereço do paciente"
 
       paragraph @pharmacy-patient-rule:
         size: 1pt
@@ -448,25 +441,21 @@ document @controle-especial:
           width: 74%
           style: "@medication-name-style"
           bind: "medication.name"
-          text: "Produto demonstrativo"
 
         paragraph @pharmacy-medication-quantity:
           width: 26%
           style: "@medication-quantity-style"
           bind: "medication.quantity"
-          text: "Quantidade"
 
       paragraph @pharmacy-directions:
         style: "@instruction"
         bind: "medication.directions"
         margin-top: 5pt
-        text: "Modo de usar"
 
       paragraph @pharmacy-medication-note:
         style: "@note"
         bind: "medication.note"
         margin-top: 3pt
-        text: "Nota demonstrativa"
 
       row @pharmacy-open-prescription-space:
         height: 210pt
@@ -490,14 +479,12 @@ document @controle-especial:
           width: 38%
           style: "@value"
           bind: "issuedAt"
-          text: "Data"
 
         paragraph @pharmacy-prescriber-name:
           width: 62%
           style: "@value"
           align: "right"
           bind: "prescriber.name"
-          text: "Prescritora"
 
       paragraph @pharmacy-signature-bottom-spacer:
         size: 1pt
@@ -552,25 +539,21 @@ document @controle-especial:
             height: 15pt
             style: "@issuer-name"
             bind: "clinic"
-            text: "Clínica"
 
           paragraph @patient-issuer:
             height: 13pt
             style: "@issuer-detail"
             bind: "issuer"
-            text: "Profissional e registro"
 
           paragraph @patient-clinic-address:
             height: 13pt
             style: "@issuer-detail"
             bind: "clinicAddress"
-            text: "Endereço"
 
           paragraph @patient-contact:
             height: 17pt
             style: "@issuer-detail"
             bind: "contact"
-            text: "Contato"
 
         column @patient-document-block:
           width: 38%
@@ -631,14 +614,12 @@ document @controle-especial:
           width: 70%
           style: "@value"
           bind: "patient.name"
-          text: "Nome do paciente"
 
         paragraph @patient-patient-document:
           width: 30%
           style: "@value"
           align: "right"
           bind: "patient.document"
-          text: "Documento"
 
       row @patient-patient-address-row:
         gap: 8pt
@@ -652,7 +633,6 @@ document @controle-especial:
           width: 82%
           style: "@value"
           bind: "patient.address"
-          text: "Endereço do paciente"
 
       paragraph @patient-patient-rule:
         size: 1pt
@@ -675,25 +655,21 @@ document @controle-especial:
           width: 74%
           style: "@medication-name-style"
           bind: "medication.name"
-          text: "Produto demonstrativo"
 
         paragraph @patient-medication-quantity:
           width: 26%
           style: "@medication-quantity-style"
           bind: "medication.quantity"
-          text: "Quantidade"
 
       paragraph @patient-directions:
         style: "@instruction"
         bind: "medication.directions"
         margin-top: 5pt
-        text: "Modo de usar"
 
       paragraph @patient-medication-note:
         style: "@note"
         bind: "medication.note"
         margin-top: 3pt
-        text: "Nota demonstrativa"
 
       row @patient-open-prescription-space:
         height: 210pt
@@ -717,14 +693,12 @@ document @controle-especial:
           width: 38%
           style: "@value"
           bind: "issuedAt"
-          text: "Data"
 
         paragraph @patient-prescriber-name:
           width: 62%
           style: "@value"
           align: "right"
           bind: "prescriber.name"
-          text: "Prescritora"
 
       paragraph @patient-signature-bottom-spacer:
         size: 1pt

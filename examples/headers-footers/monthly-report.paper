@@ -46,11 +46,9 @@ document @monthly-report:
       paragraph @period:
         style: "@label"
         bind: "period"
-        text: "Reporting period"
       paragraph @owner:
         style: "@label"
         bind: "owner"
-        text: "Owner"
 
     body @content:
       table @entries-table:
@@ -89,14 +87,11 @@ document @monthly-report:
               paragraph:
                 style: "@base"
                 bind: "name"
-                text: "Service"
             cell @status-cell:
               paragraph:
                 style: "@base"
                 bind: "status"
-                text: "Status"
             cell @note-cell:
               paragraph:
                 style: "@base"
                 bind: "note"
-                text: "Note"

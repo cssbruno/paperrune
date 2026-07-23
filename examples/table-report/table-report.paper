@@ -46,7 +46,6 @@ document @customer-status-report:
       paragraph @report-generated:
         style: "@report-label-style"
         bind: "generated"
-        text: "Generated"
 
     body @report-content:
       table @report-table:
@@ -91,19 +90,15 @@ document @customer-status-report:
               paragraph:
                 style: "@report-base-style"
                 bind: "number"
-                text: "000"
             cell @report-customer-cell:
               paragraph:
                 style: "@report-base-style"
                 bind: "customer"
-                text: "Customer"
             cell @report-status-cell:
               paragraph:
                 style: "@report-base-style"
                 bind: "status"
-                text: "Status"
             cell @report-note-cell:
               paragraph:
                 style: "@report-base-style"
                 bind: "note"
-                text: "Note"

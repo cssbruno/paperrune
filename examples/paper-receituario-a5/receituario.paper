@@ -74,7 +74,6 @@ document @receituario:
       paragraph @clinic:
         style: "@clinic-name"
         bind: "clinic"
-        text: "Clínica"
 
       row @header-details:
         gap: 8pt
@@ -83,7 +82,6 @@ document @receituario:
           width: 55%
           style: "@small"
           bind: "specialty"
-          text: "Especialidade"
 
         paragraph @header-document-title:
           width: 45%
@@ -98,14 +96,12 @@ document @receituario:
           width: 65%
           style: "@small"
           bind: "clinicAddress"
-          text: "Endereço da clínica"
 
         paragraph @document-id:
           width: 35%
           style: "@small"
           align: "right"
           bind: "documentId"
-          text: "Documento"
 
     footer @footer:
       padding-top: 7pt
@@ -155,14 +151,12 @@ document @receituario:
           width: 70%
           style: "@base"
           bind: "patient.name"
-          text: "Nome do paciente"
 
         paragraph @issued-at:
           width: 30%
           style: "@base"
           align: "right"
           bind: "issuedAt"
-          text: "Data"
 
       paragraph @patient-rule:
         border-bottom-width: 0.6pt
@@ -178,14 +172,12 @@ document @receituario:
           width: 70%
           style: "@small"
           bind: "patient.address"
-          text: "Endereço"
 
         paragraph @patient-cpf:
           width: 30%
           style: "@small"
           align: "right"
           bind: "patient.cpf"
-          text: "CPF"
 
       paragraph @patient-spacer:
         margin-bottom: 11pt
@@ -208,13 +200,11 @@ document @receituario:
             width: 8%
             style: "@document-title"
             bind: "number"
-            text: "01"
 
           paragraph @medication-content:
             width: 92%
             style: "@medication-copy"
             bind: "content"
-            text: "Medicamento, quantidade e modo de usar"
 
       paragraph @signature-label:
         style: "@label"
@@ -224,9 +214,7 @@ document @receituario:
       paragraph @prescriber-name:
         style: "@base"
         bind: "prescriber.name"
-        text: "Nome da profissional"
 
       paragraph @prescriber-registration:
         style: "@small"
         bind: "prescriber.registration"
-        text: "Registro profissional"

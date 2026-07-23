@@ -59,12 +59,10 @@ document @lab-report:
       paragraph @laboratory:
         style: "@title"
         bind: "laboratory"
-        text: "Laboratorio"
 
       paragraph @report-id:
         style: "@label"
         bind: "reportId"
-        text: "Laudo"
 
     body @body:
       paragraph @patient-label:
@@ -74,12 +72,10 @@ document @lab-report:
       paragraph @patient-name:
         style: "@value"
         bind: "patient.name"
-        text: "Nome"
 
       paragraph @patient-cpf:
         style: "@value"
         bind: "patient.cpf"
-        text: "CPF"
 
       table @results-table:
         repeat-header: true
@@ -123,7 +119,6 @@ document @lab-report:
               paragraph @result-name:
                 style: "@result"
                 bind: "name"
-                text: "Exame"
             cell @result-value-cell:
               paragraph @result-value:
                 style: "@result"
@@ -131,14 +126,11 @@ document @lab-report:
                 format: "decimal"
                 format-min-fraction: 2
                 format-max-fraction: 4
-                text: "0"
             cell @result-unit-cell:
               paragraph @result-unit:
                 style: "@result"
                 bind: "unit"
-                text: "Unidade"
             cell @result-reference-cell:
               paragraph @result-reference:
                 style: "@result"
                 bind: "reference"
-                text: "Referencia"
