@@ -2017,7 +2017,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 					if err != nil {
 						return layoutengine.LayoutPlan{}, err
 					}
-					placement.Source = fragment.Source
+					placement.Source = contentFragment.Source
 					images = append(images, placement)
 					items = append(items, layoutengine.DisplayItem{Kind: layoutengine.CommandImage, Payload: uint32(len(images) - 1)}) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 					for side, border := range image.borders {

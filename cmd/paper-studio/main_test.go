@@ -591,7 +591,7 @@ func TestPaperStudioInspectionRetainsRepeatedFragmentEvidence(t *testing.T) {
 	}
 	inspection := postStudioJSON(t, studio.testRoutes(), "/api/inspect", map[string]any{"revision": workspace.Revision, "page": 2})
 	if inspection.StatusCode != http.StatusOK || !strings.Contains(inspection.Body, `"repeated":true`) ||
-		!strings.Contains(inspection.Body, `"region":"body"`) || !strings.Contains(inspection.Body, `"instance":"@typed-table-r1-c1"`) ||
+		!strings.Contains(inspection.Body, `"region":"body"`) || !strings.Contains(inspection.Body, `"instance":"@head-cell"`) ||
 		!strings.Contains(inspection.Body, `"semantic_ownership":{"owner":`) || !strings.Contains(inspection.Body, `"table_header":true`) {
 		t.Fatalf("repeated inspection = %d %s", inspection.StatusCode, inspection.Body)
 	}
