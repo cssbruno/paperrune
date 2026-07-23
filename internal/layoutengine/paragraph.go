@@ -217,6 +217,9 @@ func paragraphFingerprint(input ParagraphLinePlanInput, lines []ParagraphLineInp
 		binary.LittleEndian.PutUint64(number[:], value)
 		_, _ = hasher.Write(number[:])
 	}
+	writeFixed := func(value Fixed) {
+		writeUint64(uint64(value)) // #nosec G115 -- signed fixed-point bits are intentionally preserved in the token hash.
+	}
 	writeString := func(value string) {
 		writeUint64(uint64(len(value)))
 		_, _ = hasher.Write([]byte(value))
@@ -239,10 +242,10 @@ func paragraphFingerprint(input ParagraphLinePlanInput, lines []ParagraphLineInp
 	writeSource(input.Source)
 	writeUint64(uint64(len(lines)))
 	for _, line := range lines {
-		writeUint64(uint64(line.OffsetX))
-		writeUint64(uint64(line.Width))
-		writeUint64(uint64(line.Height))
-		writeUint64(uint64(line.Baseline))
+		writeFixed(line.OffsetX)
+		writeFixed(line.Width)
+		writeFixed(line.Height)
+		writeFixed(line.Baseline)
 		writeSource(line.Source)
 	}
 	writeUint64(uint64(input.Orphans))

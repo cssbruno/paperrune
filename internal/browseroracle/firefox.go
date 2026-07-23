@@ -50,6 +50,9 @@ func CaptureFirefox(ctx context.Context, source, rectExpression string, options 
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if os.Getenv("PAPERRUNE_SKIP_BROWSER_ORACLE") != "" {
+		return Capture{}, fmt.Errorf("%w: disabled by PAPERRUNE_SKIP_BROWSER_ORACLE", ErrBrowserUnavailable)
+	}
 	if options.Width <= 0 || options.Height <= 0 || options.Width > 16384 || options.Height > 16384 {
 		return Capture{}, errors.New("browseroracle: viewport is outside bounded dimensions")
 	}

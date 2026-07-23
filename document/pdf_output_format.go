@@ -104,7 +104,7 @@ func appendPDFTJAdjustment(dst []byte, fontWidth int, fontSize, advance layouten
 	dst = append(dst, '.')
 	fraction := scaled % scale
 	for divisor := int64(1_000_000_000); divisor != 0; divisor /= 10 {
-		dst = append(dst, byte('0'+fraction/divisor))
+		dst = append(dst, byte('0'+fraction/divisor)) // #nosec G115 -- fraction/divisor is a decimal digit in [0, 9].
 		fraction %= divisor
 	}
 	return dst

@@ -49,3 +49,11 @@ html,body{margin:0;width:240px;height:160px;background:white}#row{display:flex;w
 		t.Fatalf("screenshot bounds = %v err=%v", image.Bounds(), err)
 	}
 }
+
+func TestCaptureFirefoxCanBeDisabledForNonVisualCI(t *testing.T) {
+	t.Setenv("PAPERRUNE_SKIP_BROWSER_ORACLE", "1")
+	_, err := CaptureFirefox(context.Background(), "", "", Options{Width: 1, Height: 1})
+	if !errors.Is(err, ErrBrowserUnavailable) {
+		t.Fatalf("CaptureFirefox error = %v, want ErrBrowserUnavailable", err)
+	}
+}
