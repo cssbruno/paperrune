@@ -465,7 +465,7 @@ func (f *pdfDocument) measurePaperRowColumnTable(ctx context.Context, doc *layou
 		selectedBodies[page-1] = selected
 		return selected, nil
 	}
-	planned, err := f.planTypedTableBodies(ctx, &child, table, path, nestedBody)
+	planned, err := f.planTypedTableBodies(ctx, &child, table, path, nestedBody, nil, -1)
 	if err != nil {
 		return paperRowColumnMeasurement{}, err
 	}

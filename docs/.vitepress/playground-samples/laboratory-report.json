@@ -1,0 +1,146 @@
+{
+  "laboratory": "Northstar Diagnostic Sciences",
+  "laboratoryAddress": "88 Meridian Way, Boston, MA 02115 / CLIA 22D2048817",
+  "reportId": "NSD-26-0719-0842",
+  "panel": "Complete Blood Count",
+  "status": "FINAL / VERIFIED",
+  "patientName": "Elena Marin",
+  "patientId": "MRN 00491827",
+  "dateOfBirth": "14 Feb 1988",
+  "sex": "Female",
+  "accession": "AC-260719-1844",
+  "specimen": "EDTA whole blood",
+  "collectedAt": "19 Jul 2026 / 08:42",
+  "receivedAt": "19 Jul 2026 / 09:03",
+  "reportedAt": "19 Jul 2026 / 10:16",
+  "authorizedAt": "19 Jul 2026 / 10:21",
+  "orderingClinician": "Priya N. Shah, MD / Internal Medicine",
+  "interpretation": "Mild microcytic anemia with increased red-cell distribution width. Leukocyte and platelet counts are within reference intervals. Correlate with ferritin, transferrin saturation, and clinical history.",
+  "specimenComment": "Specimen integrity acceptable. No visible hemolysis, lipemia, or clotting was observed at accession.",
+  "methodSummary": "Cell counts were measured by hydrodynamic focusing and impedance; hemoglobin by cyanide-free colorimetry; differential by multi-angle laser scatter. Results were reviewed against delta-check and instrument flag rules before authorization.",
+  "authorizedBy": "Marcus Lee, PhD",
+  "credentials": "Laboratory Director / Clinical Hematology",
+  "accreditation": "CAP 8221047 / ISO 15189 aligned quality system",
+  "analyzer": "Northstar HX-9000",
+  "analyzerSerial": "HX9-44182",
+  "reagentLot": "CBC-26G17",
+  "calibrationStatus": "Verified 02 Jul 2026",
+  "results": [
+    {
+      "analyte": "Leukocytes",
+      "result": "6.4",
+      "unit": "10^9/L",
+      "reference": "4.0-10.5",
+      "flag": "-"
+    },
+    {
+      "analyte": "Erythrocytes",
+      "result": "4.18",
+      "unit": "10^12/L",
+      "reference": "3.90-5.20",
+      "flag": "-"
+    },
+    {
+      "analyte": "Hemoglobin",
+      "result": "10.8",
+      "unit": "g/dL",
+      "reference": "12.0-15.5",
+      "flag": "LOW"
+    },
+    {
+      "analyte": "Hematocrit",
+      "result": "34.1",
+      "unit": "%",
+      "reference": "36.0-46.0",
+      "flag": "LOW"
+    },
+    {
+      "analyte": "Mean corpuscular volume",
+      "result": "81.6",
+      "unit": "fL",
+      "reference": "82.0-98.0",
+      "flag": "LOW"
+    },
+    {
+      "analyte": "Red-cell distribution width",
+      "result": "15.9",
+      "unit": "%",
+      "reference": "11.5-14.5",
+      "flag": "HIGH"
+    },
+    {
+      "analyte": "Platelets",
+      "result": "286",
+      "unit": "10^9/L",
+      "reference": "150-400",
+      "flag": "-"
+    },
+    {
+      "analyte": "Neutrophils",
+      "result": "3.7",
+      "unit": "10^9/L",
+      "reference": "1.8-7.5",
+      "flag": "-"
+    },
+    {
+      "analyte": "Lymphocytes",
+      "result": "2.0",
+      "unit": "10^9/L",
+      "reference": "1.0-4.0",
+      "flag": "-"
+    },
+    {
+      "analyte": "Monocytes",
+      "result": "0.5",
+      "unit": "10^9/L",
+      "reference": "0.2-0.8",
+      "flag": "-"
+    },
+    {
+      "analyte": "Eosinophils",
+      "result": "0.2",
+      "unit": "10^9/L",
+      "reference": "0.0-0.5",
+      "flag": "-"
+    },
+    {
+      "analyte": "Basophils",
+      "result": "0.0",
+      "unit": "10^9/L",
+      "reference": "0.0-0.2",
+      "flag": "-"
+    }
+  ],
+  "qualityControls": [
+    {
+      "control": "CBC low-level control",
+      "observed": "Within 0.6 SD",
+      "acceptance": "Within +/-2.0 SD",
+      "state": "PASS"
+    },
+    {
+      "control": "CBC normal-level control",
+      "observed": "Within 0.3 SD",
+      "acceptance": "Within +/-2.0 SD",
+      "state": "PASS"
+    },
+    {
+      "control": "Background count",
+      "observed": "0.02 x 10^9/L",
+      "acceptance": "<0.10 x 10^9/L",
+      "state": "PASS"
+    },
+    {
+      "control": "Carryover challenge",
+      "observed": "0.4%",
+      "acceptance": "<1.0%",
+      "state": "PASS"
+    },
+    {
+      "control": "Calibration verification",
+      "observed": "Bias 0.7%",
+      "acceptance": "Bias <2.0%",
+      "state": "PASS"
+    }
+  ]
+}

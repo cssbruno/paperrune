@@ -1,0 +1,228 @@
+document @layout-specimen:
+  language: "en"
+  title: "Layout specimen"
+
+  schema metrics:
+    string title
+    string intro
+    number columns
+    bool compact
+
+  style @base:
+    font: "Helvetica"
+    size: 10pt
+    line-height: 15pt
+    color: "#25313A"
+
+  style @label:
+    style: "@base"
+    size: 8pt
+    line-height: 10pt
+    bold: true
+    color: "#D94F2B"
+
+  style @display:
+    style: "@base"
+    size: 34pt
+    line-height: 38pt
+    bold: true
+    color: "#111A21"
+
+  style @mono:
+    font: "Courier"
+    size: 9pt
+    line-height: 13pt
+    color: "#111A21"
+
+  page @sheet:
+    size: "A4"
+    margin: 54pt
+    page-numbers: true
+    page-number-format: "GEOMETRY / %d of {pages}"
+    page-total-alias: "{pages}"
+    page-number-align: "outer"
+    body @content:
+      paragraph @masthead:
+        style: "@label"
+        padding: 14pt
+        background: "#D94F2B"
+        color: "#FFFFFF"
+        text: "02 / GEOMETRY                         PAPERRUNE"
+
+      paragraph @section:
+        style: "@label"
+        margin-top: 36pt
+        text: "LAYOUT AS AN EXPLICIT SYSTEM"
+
+      heading @title:
+        level: 1
+        style: "@display"
+        bind: "title"
+        margin-top: 8pt
+
+      paragraph @intro:
+        style: "@base"
+        bind: "intro"
+        margin-top: 10pt
+        margin-bottom: 32pt
+        size: 13pt
+        line-height: 19pt
+        color: "#59636B"
+
+      row @ratio:
+        gap: compact ? 8pt : 16pt
+        table @primary:
+          width: columns == 2 ? 2fr : 3fr
+          split: "avoid"
+          table-column:
+            width: 100%
+          table-row:
+            cell:
+              style: "@display"
+              padding: 18pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: columns == 2 ? "2fr / PRIMARY" : "3fr / PRIMARY"
+        table @support:
+          width: 1fr
+          split: "avoid"
+          table-column:
+            width: 100%
+          table-row:
+            cell:
+              style: "@display"
+              padding: 18pt
+              background: "#F2EEE6"
+              color: "#D94F2B"
+              text: "1fr"
+
+      paragraph @formula-label:
+        style: "@label"
+        margin-top: 24pt
+        margin-bottom: 8pt
+        text: "THE DECLARED RELATIONSHIP"
+
+      paragraph @formula:
+        style: "@mono"
+        padding: 17pt
+        margin-bottom: 30pt
+        background: "#111A21"
+        border-radius: 4pt
+        color: "#F7F2E9"
+        text: compact ? (columns == 2 ? "available width - 8pt gap = 2fr primary + 1fr support" : "available width - 8pt gap = 3fr primary + 1fr support") : (columns == 2 ? "available width - 16pt gap = 2fr primary + 1fr support" : "available width - 16pt gap = 3fr primary + 1fr support")
+
+      table @measurements:
+        split: "avoid"
+        table-column:
+          width: 31%
+        table-column:
+          width: 24%
+        table-column:
+          width: 45%
+        table-header:
+          table-row:
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#D94F2B"
+              color: "#FFFFFF"
+              text: "TOKEN"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#D94F2B"
+              color: "#FFFFFF"
+              text: "VALUE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#D94F2B"
+              color: "#FFFFFF"
+              text: "PURPOSE"
+        table-row:
+          cell:
+            style: "@mono"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "page.margin"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "54pt"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Stable outer rhythm"
+        table-row:
+          cell:
+            style: "@mono"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "row.gap"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: compact ? "8pt" : "16pt"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Data-dependent spacing"
+        table-row:
+          cell:
+            style: "@mono"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "column.width"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: columns == 2 ? "2fr / 1fr" : "3fr / 1fr"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Exact proportional allocation"
+        table-row:
+          cell:
+            style: "@mono"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "renderer.dpi"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "144"
+          cell:
+            style: "@base"
+            padding: 10pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Pinned WASM raster profile"
+
+      paragraph @footer:
+        style: "@label"
+        margin-top: 38pt
+        padding-top: 10pt
+        border-top-width: 1pt
+        border-color: "#CDC7BD"
+        text: "NO BROWSER LAYOUT DECISIONS / NO HIDDEN MEASUREMENTS"

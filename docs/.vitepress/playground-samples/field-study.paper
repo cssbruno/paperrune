@@ -1,0 +1,666 @@
+document @field-study:
+  title: "Field study"
+  language: "en"
+
+  schema survey:
+    string projectTitle
+    string expedition
+    string region
+    string coordinates
+    string surveyWindow
+    string leadObserver
+    string permit
+    string conditions
+    string habitat
+    string summary
+    string primaryFinding
+    string methods
+    string limitations
+    string recommendation
+    number plots
+    number speciesRichness
+    number canopyCover
+    list object observations:
+      max-items: 12
+      string time
+      string station
+      string taxon
+      number count
+      string confidence
+      string note
+    list object transects:
+      max-items: 8
+      string id
+      string elevation
+      string canopy
+      string moisture
+      number richness
+      string condition
+    list object actions:
+      max-items: 8
+      string priority
+      string action
+      string timing
+      string owner
+
+  style @body:
+    font: "Helvetica"
+    size: 9pt
+    line-height: 13pt
+    color: "#31382E"
+
+  style @serif:
+    font: "Times"
+    size: 10pt
+    line-height: 14pt
+    color: "#31382E"
+
+  style @label:
+    style: "@body"
+    size: 7pt
+    line-height: 10pt
+    bold: true
+    color: "#6A713B"
+
+  style @title:
+    font: "Times"
+    size: 27pt
+    line-height: 31pt
+    bold: true
+    color: "#263126"
+
+  style @page-title:
+    font: "Times"
+    size: 20pt
+    line-height: 24pt
+    bold: true
+    color: "#263126"
+
+  style @section:
+    style: "@body"
+    size: 8pt
+    line-height: 11pt
+    bold: true
+    color: "#9A552F"
+
+  style @metric:
+    font: "Times"
+    size: 21pt
+    line-height: 24pt
+    bold: true
+    color: "#263126"
+
+  style @note:
+    style: "@body"
+    size: 7.8pt
+    line-height: 11pt
+    color: "#697066"
+
+  page @survey-page:
+    size: "A4"
+    margin: 42pt
+    page-numbers: true
+    page-number-format: "FIELD NOTE 27 / %d of {pages}"
+    page-total-alias: "{pages}"
+    page-number-align: "outer"
+
+    body @survey-body:
+      table @cover-rule:
+        split: "avoid"
+        table-column:
+          width: 67%
+        table-column:
+          width: 33%
+        table-row:
+          cell:
+            style: "@label"
+            padding-bottom: 7pt
+            border-bottom-width: 2pt
+            border-color: "#6A713B"
+            text: "TERRAIN ECOLOGY UNIT / FIELD NOTE 27"
+          cell:
+            style: "@label"
+            padding-bottom: 7pt
+            border-bottom-width: 2pt
+            border-color: "#6A713B"
+            align: "right"
+            bind: "expedition"
+
+      paragraph:
+        style: "@section"
+        margin-top: 19pt
+        text: "RAPID BIODIVERSITY ASSESSMENT"
+
+      heading @project-title:
+        level: 1
+        style: "@title"
+        margin-top: 5pt
+        bind: "projectTitle"
+
+      paragraph @region:
+        style: "@serif"
+        size: 12pt
+        line-height: 16pt
+        italic: true
+        color: "#6C735F"
+        margin-top: 4pt
+        bind: "region"
+
+      paragraph @cover-gap:
+        size: 1pt
+        line-height: 15pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @field-identity:
+        split: "avoid"
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#E9E7DA"
+              text: "COORDINATES"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#E9E7DA"
+              text: "SURVEY WINDOW"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#E9E7DA"
+              text: "LEAD OBSERVER"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#E9E7DA"
+              text: "PERMIT"
+        table-row:
+          cell:
+            style: "@body"
+            padding: 7pt
+            bind: "coordinates"
+          cell:
+            style: "@body"
+            padding: 7pt
+            bind: "surveyWindow"
+          cell:
+            style: "@body"
+            padding: 7pt
+            bind: "leadObserver"
+          cell:
+            style: "@body"
+            padding: 7pt
+            bind: "permit"
+
+      paragraph @profile-gap:
+        size: 1pt
+        line-height: 14pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @site-profile:
+        split: "avoid"
+        table-column:
+          width: 46%
+        table-column:
+          width: 18%
+        table-column:
+          width: 18%
+        table-column:
+          width: 18%
+        table-row:
+          cell:
+            padding: 12pt
+            background: "#F1F0E7"
+            paragraph:
+              style: "@label"
+              text: "SITE CONDITIONS"
+            paragraph @conditions:
+              style: "@body"
+              bind: "conditions"
+            paragraph:
+              style: "@label"
+              text: "HABITAT"
+            paragraph @habitat:
+              style: "@body"
+              bind: "habitat"
+          cell:
+            padding: 11pt
+            border-left-width: 1pt
+            border-color: "#C5C2AD"
+            paragraph @plots:
+              style: "@metric"
+              bind: "plots"
+              format: "integer"
+              format-locale: "en-US"
+            paragraph:
+              style: "@label"
+              text: "PLOTS"
+          cell:
+            padding: 11pt
+            border-left-width: 1pt
+            border-color: "#C5C2AD"
+            paragraph @richness:
+              style: "@metric"
+              bind: "speciesRichness"
+              format: "integer"
+              format-locale: "en-US"
+            paragraph:
+              style: "@label"
+              text: "TAXA"
+          cell:
+            padding: 11pt
+            border-left-width: 1pt
+            border-color: "#C5C2AD"
+            paragraph @canopy:
+              style: "@metric"
+              bind: "canopyCover"
+              format: "decimal"
+              format-locale: "en-US"
+              format-min-fraction: 0
+              format-max-fraction: 0
+            paragraph:
+              style: "@label"
+              text: "% CANOPY"
+
+      paragraph:
+        style: "@section"
+        margin-top: 16pt
+        text: "01 / EXPEDITION SUMMARY"
+
+      paragraph @summary:
+        style: "@serif"
+        size: 10.5pt
+        line-height: 15pt
+        margin-top: 4pt
+        bind: "summary"
+
+      paragraph @primary-finding:
+        style: "@serif"
+        size: 12pt
+        line-height: 17pt
+        bold: true
+        color: "#FFFFFF"
+        padding: 11pt
+        margin-top: 11pt
+        background: "#6A713B"
+        border-radius: 4pt
+        bind: "primaryFinding"
+
+      paragraph:
+        style: "@section"
+        margin-top: 16pt
+        margin-bottom: 5pt
+        text: "02 / OBSERVATION LEDGER"
+
+      table @observations:
+        repeat-header: true
+        split: "rows"
+        table-column:
+          width: 10%
+        table-column:
+          width: 12%
+        table-column:
+          width: 25%
+        table-column:
+          width: 10%
+        table-column:
+          width: 13%
+        table-column:
+          width: 30%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 5pt
+              background: "#E9E7DA"
+              text: "TIME"
+            cell:
+              style: "@label"
+              padding: 5pt
+              background: "#E9E7DA"
+              text: "STATION"
+            cell:
+              style: "@label"
+              padding: 5pt
+              background: "#E9E7DA"
+              text: "TAXON"
+            cell:
+              style: "@label"
+              padding: 5pt
+              background: "#E9E7DA"
+              align: "right"
+              text: "COUNT"
+            cell:
+              style: "@label"
+              padding: 5pt
+              background: "#E9E7DA"
+              text: "CONF."
+            cell:
+              style: "@label"
+              padding: 5pt
+              background: "#E9E7DA"
+              text: "FIELD NOTE"
+        repeat @observation-rows:
+          source: "observations"
+          instance-prefix: "observations"
+          max-items: 12
+          table-row @observation-row:
+            cell:
+              style: "@note"
+              padding: 5pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "time"
+            cell:
+              style: "@note"
+              padding: 5pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "station"
+            cell:
+              style: "@body"
+              padding: 5pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              italic: true
+              bind: "taxon"
+            cell:
+              style: "@body"
+              padding: 5pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              align: "right"
+              bind: "count"
+              format: "integer"
+              format-locale: "en-US"
+            cell:
+              style: "@note"
+              padding: 5pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "confidence"
+            cell:
+              style: "@note"
+              padding: 5pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "note"
+
+      page-break @transect-page:
+
+      table @page-two-rule:
+        split: "avoid"
+        table-column:
+          width: 67%
+        table-column:
+          width: 33%
+        table-row:
+          cell:
+            style: "@label"
+            padding-bottom: 7pt
+            border-bottom-width: 2pt
+            border-color: "#6A713B"
+            text: "TERRAIN ECOLOGY UNIT / FIELD NOTE 27"
+          cell:
+            style: "@label"
+            padding-bottom: 7pt
+            border-bottom-width: 2pt
+            border-color: "#6A713B"
+            align: "right"
+            bind: "region"
+
+      paragraph:
+        style: "@section"
+        margin-top: 18pt
+        text: "TRANSECT EVIDENCE / METHODS"
+
+      heading:
+        level: 1
+        style: "@page-title"
+        margin-top: 5pt
+        text: "Survey structure and site condition"
+
+      paragraph:
+        style: "@section"
+        margin-top: 15pt
+        margin-bottom: 5pt
+        text: "03 / TRANSECT SUMMARY"
+
+      table @transects:
+        repeat-header: true
+        split: "rows"
+        table-column:
+          width: 14%
+        table-column:
+          width: 18%
+        table-column:
+          width: 17%
+        table-column:
+          width: 18%
+        table-column:
+          width: 13%
+        table-column:
+          width: 20%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#6A713B"
+              color: "#FFFFFF"
+              text: "TRANSECT"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#6A713B"
+              color: "#FFFFFF"
+              text: "ELEVATION"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#6A713B"
+              color: "#FFFFFF"
+              text: "CANOPY"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#6A713B"
+              color: "#FFFFFF"
+              text: "MOISTURE"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#6A713B"
+              color: "#FFFFFF"
+              align: "right"
+              text: "RICHNESS"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#6A713B"
+              color: "#FFFFFF"
+              text: "CONDITION"
+        repeat @transect-rows:
+          source: "transects"
+          instance-prefix: "transects"
+          max-items: 8
+          table-row @transect-row:
+            cell:
+              style: "@body"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bold: true
+              bind: "id"
+            cell:
+              style: "@body"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "elevation"
+            cell:
+              style: "@body"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "canopy"
+            cell:
+              style: "@body"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "moisture"
+            cell:
+              style: "@body"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              align: "right"
+              bind: "richness"
+              format: "integer"
+              format-locale: "en-US"
+            cell:
+              style: "@body"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "condition"
+
+      paragraph @method-grid-gap:
+        size: 1pt
+        line-height: 16pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @method-grid:
+        split: "avoid"
+        table-column:
+          width: 50%
+        table-column:
+          width: 50%
+        table-row:
+          cell:
+            padding-right: 14pt
+            border-right-width: 1pt
+            border-color: "#C5C2AD"
+            paragraph:
+              style: "@section"
+              text: "04 / METHODS"
+            paragraph @methods:
+              style: "@serif"
+              bind: "methods"
+          cell:
+            padding-left: 14pt
+            paragraph:
+              style: "@section"
+              text: "05 / LIMITATIONS"
+            paragraph @limitations:
+              style: "@serif"
+              bind: "limitations"
+
+      paragraph:
+        style: "@section"
+        margin-top: 17pt
+        text: "MANAGEMENT RECOMMENDATION"
+
+      paragraph @recommendation:
+        style: "@serif"
+        size: 12pt
+        line-height: 17pt
+        padding: 12pt
+        margin-top: 5pt
+        background: "#F1F0E7"
+        border-width: 1pt
+        border-color: "#9A552F"
+        border-radius: 4pt
+        bind: "recommendation"
+
+      paragraph:
+        style: "@section"
+        margin-top: 17pt
+        margin-bottom: 5pt
+        text: "06 / MANAGEMENT ACTION REGISTER"
+
+      table @actions:
+        repeat-header: true
+        split: "rows"
+        table-column:
+          width: 13%
+        table-column:
+          width: 49%
+        table-column:
+          width: 18%
+        table-column:
+          width: 20%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#E9E7DA"
+              text: "PRIORITY"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#E9E7DA"
+              text: "ACTION"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#E9E7DA"
+              text: "TIMING"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#E9E7DA"
+              text: "OWNER"
+        repeat @action-rows:
+          source: "actions"
+          instance-prefix: "actions"
+          max-items: 8
+          table-row @action-row:
+            cell:
+              style: "@body"
+              padding: 6pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bold: true
+              color: "#9A552F"
+              bind: "priority"
+            cell:
+              style: "@body"
+              padding: 6pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "action"
+            cell:
+              style: "@note"
+              padding: 6pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "timing"
+            cell:
+              style: "@note"
+              padding: 6pt
+              border-bottom-width: 1pt
+              border-color: "#D7D4C3"
+              bind: "owner"
+
+      paragraph:
+        style: "@note"
+        margin-top: 15pt
+        padding-top: 8pt
+        border-top-width: 1pt
+        border-color: "#B8B5A4"
+        text: "Voucher photographs and geospatial records are retained under the expedition permit. Taxonomy follows the 2026 regional checklist."

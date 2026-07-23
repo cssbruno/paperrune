@@ -11,21 +11,7 @@ go install github.com/cssbruno/paperrune/cmd/paper@main
 go install github.com/cssbruno/paperrune/cmd/paper-studio@main
 ```
 
-## Create a project
-
-```sh
-paper init invoice my-invoice
-cd my-invoice
-paper check
-paper render
-paper studio
-```
-
-This creates a template, sample JSON, and `paper.project.json`. `check`
-validates, `render` writes the configured output, and `studio` opens the local
-editor.
-
-## Create one file manually
+## Create a document
 
 Save this as `hello.paper`:
 
@@ -80,7 +66,7 @@ paper capture -o hello.svg hello.paper
 
 ## Where to go next
 
-- [Projects and data](./projects-and-data)
+- [Documents and data](./documents-and-data)
 - [Language reference](/reference/language)
 - [Expressions](/reference/expressions)
 - [WASM playground](/playground)

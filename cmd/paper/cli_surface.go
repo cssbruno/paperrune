@@ -4,7 +4,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -26,11 +25,10 @@ type commandHelp struct {
 }
 
 var commandHelpText = map[string]commandHelp{
-	"init":     {"Create a runnable Paper project from a built-in template.", "paper init [blank|invoice|report|table-report|letter] DIR", []string{"paper init invoice my-invoice", "paper init blank ."}},
 	"fmt":      {"Format Paper source into its canonical representation.", "paper fmt [options] FILE", []string{"paper fmt -w invoice.paper", "paper fmt - < invoice.paper"}},
-	"check":    {"Parse, compile, validate data, and plan a document.", "paper check [options] [FILE]", []string{"paper check", "paper check --data data.json invoice.paper"}},
-	"render":   {"Render a Paper document as deterministic PDF or standalone HTML.", "paper render [options] [FILE]", []string{"paper render", "paper render -o report.pdf report.paper", "paper render -o - report.paper > report.pdf"}},
-	"studio":   {"Open Paper Studio for a source file or project.", "paper studio [paper-studio options] [FILE|DIR]", []string{"paper studio", "paper studio invoice.paper", "paper studio --no-open ."}},
+	"check":    {"Parse, compile, validate data, and plan a document.", "paper check [options] FILE", []string{"paper check invoice.paper", "paper check --data data.json invoice.paper"}},
+	"render":   {"Render a Paper document as deterministic PDF or standalone HTML.", "paper render [options] FILE", []string{"paper render report.paper", "paper render -o report.pdf report.paper", "paper render -o - report.paper > report.pdf"}},
+	"studio":   {"Open Paper Studio for a source file.", "paper studio [paper-studio options] FILE", []string{"paper studio invoice.paper", "paper studio --no-open invoice.paper"}},
 	"capture":  {"Capture deterministic SVG evidence from a planned document.", "paper capture [options] FILE", []string{"paper capture -o page.svg report.paper", "paper capture --json --contact-sheet report.paper"}},
 	"explain":  {"Inspect selected nodes, fragments, instances, or pages.", "paper explain [options] FILE", []string{"paper explain --page 1 report.paper", "paper explain --key totals report.paper"}},
 	"scenario": {"List scenarios or inspect one resolved fixture.", "paper scenario [options] FILE", []string{"paper scenario report.paper", "paper scenario --scenario enterprise --json report.paper"}},
@@ -143,15 +141,11 @@ func runStudio(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		printCommandHelp(stdout, "studio", nil)
 		return exitOK
 	}
-	resolved, err := resolveStudioArgs(args)
-	if err != nil {
-		return commandError(false, stdout, stderr, "studio", err)
-	}
 	executable, err := studioExecutable()
 	if err != nil {
 		return commandError(false, stdout, stderr, "studio", err)
 	}
-	command := exec.Command(executable, resolved...) // #nosec G204,G702 -- executable is a fixed sibling or PATH lookup; arguments are passed without a shell.
+	command := exec.Command(executable, args...) // #nosec G204,G702 -- executable is a fixed sibling or PATH lookup; arguments are passed without a shell.
 	command.Stdin, command.Stdout, command.Stderr = stdin, stdout, stderr
 	if err := command.Run(); err != nil {
 		var exited *exec.ExitError
@@ -161,67 +155,6 @@ func runStudio(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return commandError(false, stdout, stderr, "studio", err)
 	}
 	return exitOK
-}
-
-func resolveStudioArgs(args []string) ([]string, error) {
-	for index := 0; index < len(args); index++ {
-		arg := args[index]
-		if studioOptionTakesValue(arg) {
-			index++
-			continue
-		}
-		if !strings.HasPrefix(arg, "-") {
-			info, err := os.Stat(arg) // #nosec G703 -- this explicitly supplied CLI path is only classified as a directory before constrained project loading.
-			if err == nil && info.IsDir() {
-				project, loadErr := loadDiscoveredProject(arg)
-				if loadErr != nil {
-					return nil, loadErr
-				}
-				return studioProjectArgs(replaceArgument(args, arg, project.source), project), nil
-			}
-			return args, nil
-		}
-	}
-	project, err := loadDiscoveredProject(".")
-	if err != nil {
-		return nil, errors.New("no FILE was provided and paper.project.json was not found")
-	}
-	return studioProjectArgs(append(args, project.source), project), nil
-}
-
-func studioOptionTakesValue(argument string) bool {
-	if strings.Contains(argument, "=") {
-		return false
-	}
-	switch argument {
-	case "-addr", "--addr", "-scenario", "--scenario", "-assets", "--assets", "-asset-root", "--asset-root":
-		return true
-	default:
-		return false
-	}
-}
-
-func studioProjectArgs(args []string, project *resolvedProject) []string {
-	if project.config.Assets == "" {
-		return args
-	}
-	for _, argument := range args {
-		if argument == "-assets" || argument == "--assets" || strings.HasPrefix(argument, "-assets=") || strings.HasPrefix(argument, "--assets=") {
-			return args
-		}
-	}
-	return append([]string{"--assets", projectPath(project.dir, project.config.Assets)}, args...)
-}
-
-func replaceArgument(args []string, old, replacement string) []string {
-	result := append([]string(nil), args...)
-	for index, arg := range result {
-		if arg == old {
-			result[index] = replacement
-			break
-		}
-	}
-	return result
 }
 
 func studioExecutable() (string, error) {
@@ -239,9 +172,4 @@ func studioExecutable() (string, error) {
 		return found, nil
 	}
 	return "", errors.New("paper-studio executable not found; install the PaperRune release bundle or run paper-studio separately")
-}
-
-func marshalIndent(value any) ([]byte, error) {
-	data, err := json.MarshalIndent(value, "", "  ")
-	return append(data, '\n'), err
 }

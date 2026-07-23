@@ -249,7 +249,7 @@ func (f *pdfDocument) planTypedMixedBodiesMappedMode(ctx context.Context, doc *l
 						}
 						startCursor, pendingReason = body.Y, layoutengine.BreakPaginationConstraint
 						child.Body = []layout.Block{table}
-						planned, err = f.planTypedTableBodies(ctx, &child, table, fmt.Sprintf("body[%d]", index), selector)
+						planned, err = f.planTypedTableBodiesMapped(ctx, &child, table, fmt.Sprintf("body[%d]", index), childMapping, 0, selector)
 						if err != nil {
 							return layoutengine.LayoutPlan{}, err
 						}

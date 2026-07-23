@@ -1,0 +1,20 @@
+{
+  "title": "Deterministic page planning eliminates cross-run geometry variance",
+  "authors": "M. Chen, PhD / A. Okafor, MSc / L. Pereira, PhD",
+  "affiliation": "Center for Reproducible Documents, Aurora Institute of Technology",
+  "track": "SCIENTIFIC SOFTWARE / POSTER P-184",
+  "abstract": "We evaluated whether resolving typed layout constraints before paint improves the reproducibility of scientific documents compiled in WebAssembly.",
+  "objective": "Compare browser-dependent flow with an explicit page planner using the same manuscript corpus, fonts, physical units, and raster profile.",
+  "methods": "A preregistered paired benchmark rendered 1,248 structurally diverse documents five times per condition. Page geometry, line breaks, table tracks, and final PNG dimensions were compared.",
+  "primaryResult": "The planned pipeline produced identical geometry in every eligible run.",
+  "interpretation": "The effect was strongest in mixed prose-and-table manuscripts, where implicit measurement previously propagated into pagination.",
+  "conclusion": "Constraint-first planning makes visual output repeatable, inspectable, and suitable for evidence-bearing publishing workflows.",
+  "contact": "methods@aurora.example / doi.org/10.1840/aurora.2026.184",
+  "doi": "10.1840/aurora.2026.184",
+  "posterCode": "POSTER P-184",
+  "browserVariance": "18.4%",
+  "plannedVariance": "0.0%",
+  "documents": 1248,
+  "stableRuns": 12480,
+  "reduction": 100
+}

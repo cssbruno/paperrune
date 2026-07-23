@@ -45,7 +45,7 @@ Catalog rules:
 - the compiler never searches paths, follows URLs, or reads ambient state;
 - verified digests contribute to plan identity.
 
-Inline image data URIs are supported; `asset:name` is preferred for projects.
+Inline image data URIs are supported; `asset:name` is preferred for documents.
 
 ## CLI and Paper Studio manifest
 

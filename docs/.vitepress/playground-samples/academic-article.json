@@ -1,0 +1,20 @@
+{
+  "title": "Constraint-Based Pagination for Reproducible Scientific Publishing",
+  "authors": "Maya Chen, PhD; Elias Romero, MSc; Noor Williams, PhD",
+  "affiliation": "Center for Computational Publishing, Northbridge Institute / Correspondence: m.chen@northbridge.example",
+  "abstract": "We evaluate a layout pipeline that resolves physical units, type metrics, and pagination before rasterization. Across a heterogeneous document corpus, deterministic planning removed cross-run geometry variance while preserving authored hierarchy.",
+  "doi": "doi:10.5281/aurora.2026.0417",
+  "participants": 1248,
+  "improvement": 18.4,
+  "confidence": 95,
+  "peerReviewed": true,
+  "measureLabel": "MEASURE",
+  "endpointLabel": "ENDPOINT",
+  "browserFlowLabel": "BROWSER FLOW",
+  "plannedLabel": "PLANNED",
+  "changeLabel": "CHANGE",
+  "confidenceIntervalLabel": "95% CI",
+  "subgroupLabel": "SUBGROUP",
+  "sampleSizeLabel": "N",
+  "flowVarianceLabel": "FLOW VARIANCE"
+}

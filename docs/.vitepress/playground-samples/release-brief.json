@@ -1,0 +1,13 @@
+{
+  "product": "PaperRune 0.4",
+  "releaseId": "REL-2026.07.22",
+  "owner": "Publishing Platform",
+  "targetDate": "July 24, 2026",
+  "environment": "Production",
+  "evidenceHash": "sha256:7cb8d4f6a31e92c0",
+  "deploymentWindow": "July 22 / 18:00 UTC",
+  "approver": "Noor Williams",
+  "score": 82,
+  "blocked": true,
+  "blocker": "Documentation approval is still pending."
+}

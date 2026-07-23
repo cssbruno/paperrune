@@ -107,6 +107,7 @@ type PaperPlanBindingProvenance struct {
 	Node       string              `json:"node,omitempty"`
 	Kind       string              `json:"kind"`
 	Path       string              `json:"path"`
+	Instance   string              `json:"instance,omitempty"`
 	Source     PaperPlanSourceSpan `json:"source"`
 	Nullable   bool                `json:"nullable,omitempty"`
 	Collection bool                `json:"collection,omitempty"`
@@ -194,7 +195,8 @@ func (p PaperPlan) Provenance() (PaperPlanProvenance, error) {
 		}
 		result.Bindings = append(result.Bindings, PaperPlanBindingProvenance{
 			Node: node.ID, Kind: string(node.Kind), Path: node.BindingPath,
-			Source: paperPlanSourceSpan(node.BindingSpan), Nullable: node.BindingNullable,
+			Instance: node.InstancePath,
+			Source:   paperPlanSourceSpan(node.BindingSpan), Nullable: node.BindingNullable,
 			Collection: node.BindingCollection,
 		})
 	}

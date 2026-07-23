@@ -1,0 +1,506 @@
+document @peer-review:
+  language: "en"
+  title: "Peer review report"
+
+  schema review:
+    string journal
+    string manuscriptId
+    string manuscriptTitle
+    string articleType
+    string reviewRound
+    string reviewDate
+    string reviewerRole
+    string expertise
+    string recommendation
+    number overallScore
+    string summary
+    string rationale
+    string confidentialComments
+    string declaration
+    list object scores:
+      max-items: 12
+      string criterion
+      number score
+      string assessment
+    list object majorComments:
+      max-items: 20
+      string number
+      string title
+      string finding
+      string requestedAction
+    list object minorComments:
+      max-items: 30
+      string number
+      string location
+      string comment
+
+  style @body:
+    font: "Times"
+    size: 9.2pt
+    line-height: 13.2pt
+    color: "#2E2A29"
+
+  style @sans:
+    font: "Helvetica"
+    size: 8.3pt
+    line-height: 11.5pt
+    color: "#2E2A29"
+
+  style @label:
+    style: "@sans"
+    size: 6.8pt
+    line-height: 9pt
+    bold: true
+    color: "#8C2F45"
+
+  style @display:
+    font: "Times"
+    size: 23pt
+    line-height: 27pt
+    bold: true
+    color: "#251E1F"
+
+  style @section:
+    font: "Times"
+    size: 15pt
+    line-height: 19pt
+    bold: true
+    color: "#251E1F"
+
+  style @score:
+    style: "@sans"
+    size: 25pt
+    line-height: 28pt
+    bold: true
+    color: "#FFFFFF"
+
+  style @comment-title:
+    style: "@sans"
+    size: 9pt
+    line-height: 12pt
+    bold: true
+    color: "#8C2F45"
+
+  style @micro:
+    style: "@sans"
+    size: 7pt
+    line-height: 9.5pt
+    color: "#746B69"
+
+  page @review-pages:
+    size: "A4"
+    margin: 46pt
+    page-numbers: true
+    page-number-format: "MERIDIAN PEER REVIEW / %d of {pages}"
+    page-total-alias: "{pages}"
+    page-number-align: "outer"
+
+    body @review-body:
+      table @journal-head:
+        split: "avoid"
+        table-column:
+          width: 64%
+        table-column:
+          width: 36%
+        table-row:
+          cell:
+            padding-bottom: 8pt
+            border-bottom-width: 2pt
+            border-color: "#B89558"
+            paragraph:
+              style: "@label"
+              text: "MERIDIAN EDITORIAL OFFICE / EXTERNAL REVIEW"
+            paragraph:
+              style: "@sans"
+              bind: "journal"
+              bold: true
+          cell:
+            padding-bottom: 8pt
+            border-bottom-width: 2pt
+            border-color: "#B89558"
+            align: "right"
+            paragraph:
+              style: "@label"
+              align: "right"
+              text: "MANUSCRIPT"
+            paragraph:
+              style: "@sans"
+              align: "right"
+              bind: "manuscriptId"
+              bold: true
+
+      paragraph @report-label:
+        style: "@label"
+        margin-top: 20pt
+        text: "REVIEWER REPORT / EDITORIAL DECISION SUPPORT"
+
+      heading @manuscript-title:
+        level: 1
+        style: "@display"
+        bind: "manuscriptTitle"
+        margin-top: 5pt
+
+      table @review-metadata:
+        split: "avoid"
+        table-column:
+          width: 26%
+        table-column:
+          width: 25%
+        table-column:
+          width: 24%
+        table-column:
+          width: 25%
+        table-row:
+          cell:
+            padding: 8pt
+            background: "#F4EFE8"
+            paragraph:
+              style: "@label"
+              text: "ARTICLE TYPE"
+            paragraph:
+              style: "@sans"
+              bind: "articleType"
+              bold: true
+          cell:
+            padding: 8pt
+            background: "#F4EFE8"
+            paragraph:
+              style: "@label"
+              text: "ROUND"
+            paragraph:
+              style: "@sans"
+              bind: "reviewRound"
+              bold: true
+          cell:
+            padding: 8pt
+            background: "#F4EFE8"
+            paragraph:
+              style: "@label"
+              text: "REVIEW DATE"
+            paragraph:
+              style: "@sans"
+              bind: "reviewDate"
+              bold: true
+          cell:
+            padding: 8pt
+            background: "#F4EFE8"
+            paragraph:
+              style: "@label"
+              text: "REVIEWER"
+            paragraph:
+              style: "@sans"
+              bind: "reviewerRole"
+              bold: true
+
+      row @decision-row:
+        gap: 12pt
+        table @recommendation-card:
+          width: 2fr
+          split: "avoid"
+          table-column:
+            width: 100%
+          table-row:
+            cell:
+              padding: 15pt
+              background: "#8C2F45"
+              paragraph:
+                style: "@label"
+                color: "#F2D6A2"
+                text: "RECOMMENDATION"
+              paragraph:
+                style: "@section"
+                bind: "recommendation"
+                color: "#FFFFFF"
+        table @score-card:
+          width: 1fr
+          split: "avoid"
+          table-column:
+            width: 100%
+          table-row:
+            cell:
+              padding: 11pt
+              background: "#B89558"
+              paragraph:
+                style: "@score"
+                bind: "overallScore"
+                format: "decimal"
+                format-locale: "en-US"
+                format-min-fraction: 0
+                format-max-fraction: 0
+                align: "center"
+              paragraph:
+                style: "@label"
+                color: "#FFFFFF"
+                align: "center"
+                text: "OVERALL / 100"
+
+      paragraph @summary-label:
+        style: "@label"
+        margin-top: 18pt
+        margin-bottom: 5pt
+        text: "SUMMARY ASSESSMENT"
+
+      paragraph @summary:
+        style: "@body"
+        bind: "summary"
+        size: 10.2pt
+        line-height: 15pt
+        padding: 12pt
+        background: "#FAF7F1"
+        border-left-width: 4pt
+        border-color: "#B89558"
+
+      paragraph @scorecard-label:
+        style: "@label"
+        margin-top: 18pt
+        margin-bottom: 5pt
+        text: "EDITORIAL SCORECARD"
+
+      table @scorecard:
+        split: "avoid"
+        table-column:
+          width: 29%
+        table-column:
+          width: 13%
+        table-column:
+          width: 58%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#251E1F"
+              color: "#FFFFFF"
+              text: "CRITERION"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#251E1F"
+              color: "#FFFFFF"
+              align: "center"
+              text: "SCORE"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#251E1F"
+              color: "#FFFFFF"
+              text: "ASSESSMENT"
+        repeat @score-rows:
+          source: "scores"
+          instance-prefix: "scores"
+          max-items: 12
+          table-row:
+            cell:
+              style: "@sans"
+              bind: "criterion"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#DED5C8"
+              bold: true
+            cell:
+              style: "@sans"
+              bind: "score"
+              format: "decimal"
+              format-locale: "en-US"
+              format-min-fraction: 0
+              format-max-fraction: 0
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#DED5C8"
+              align: "center"
+              color: "#8C2F45"
+              bold: true
+            cell:
+              style: "@body"
+              bind: "assessment"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#DED5C8"
+
+      paragraph @rationale-label:
+        style: "@label"
+        margin-top: 18pt
+        margin-bottom: 5pt
+        text: "DECISION RATIONALE"
+
+      paragraph @rationale:
+        style: "@body"
+        bind: "rationale"
+
+      table @reviewer-profile:
+        split: "avoid"
+        table-column:
+          width: 22%
+        table-column:
+          width: 78%
+        table-row:
+          cell:
+            style: "@label"
+            padding: 9pt
+            background: "#251E1F"
+            color: "#FFFFFF"
+            text: "EXPERTISE"
+          cell:
+            style: "@sans"
+            bind: "expertise"
+            padding: 9pt
+            background: "#F4EFE8"
+
+      page-break @comments-page:
+
+      table @comments-head:
+        split: "avoid"
+        table-column:
+          width: 64%
+        table-column:
+          width: 36%
+        table-row:
+          cell:
+            style: "@label"
+            padding-bottom: 8pt
+            border-bottom-width: 2pt
+            border-color: "#B89558"
+            text: "MERIDIAN EDITORIAL OFFICE / REVIEW COMMENTS"
+          cell:
+            style: "@sans"
+            padding-bottom: 8pt
+            border-bottom-width: 2pt
+            border-color: "#B89558"
+            align: "right"
+            bind: "manuscriptId"
+            bold: true
+
+      paragraph @major-kicker:
+        style: "@label"
+        margin-top: 20pt
+        text: "COMMENTS FOR THE AUTHORS"
+
+      heading @major-title:
+        level: 1
+        style: "@display"
+        margin-top: 5pt
+        text: "Major comments"
+
+      table @major-comments:
+        split: "rows"
+        table-column:
+          width: 9%
+        table-column:
+          width: 91%
+        repeat @major-comment-rows:
+          source: "majorComments"
+          instance-prefix: "majorComments"
+          max-items: 20
+          table-row:
+            cell:
+              style: "@section"
+              bind: "number"
+              padding: 9pt
+              background: "#8C2F45"
+              color: "#FFFFFF"
+              align: "center"
+            cell:
+              padding: 10pt
+              border-bottom-width: 1pt
+              border-color: "#DED5C8"
+              paragraph:
+                style: "@comment-title"
+                bind: "title"
+              paragraph:
+                style: "@body"
+                bind: "finding"
+              paragraph:
+                style: "@label"
+                text: "REQUESTED ACTION"
+              paragraph:
+                style: "@body"
+                bind: "requestedAction"
+                italic: true
+
+      paragraph @minor-label:
+        style: "@label"
+        margin-top: 20pt
+        margin-bottom: 5pt
+        text: "MINOR COMMENTS"
+
+      table @minor-comments:
+        split: "rows"
+        table-column:
+          width: 9%
+        table-column:
+          width: 23%
+        table-column:
+          width: 68%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#251E1F"
+              color: "#FFFFFF"
+              text: "NO."
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#251E1F"
+              color: "#FFFFFF"
+              text: "LOCATION"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#251E1F"
+              color: "#FFFFFF"
+              text: "COMMENT"
+        repeat @minor-comment-rows:
+          source: "minorComments"
+          instance-prefix: "minorComments"
+          max-items: 30
+          table-row:
+            cell:
+              style: "@sans"
+              bind: "number"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#DED5C8"
+              bold: true
+            cell:
+              style: "@sans"
+              bind: "location"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#DED5C8"
+              color: "#8C2F45"
+            cell:
+              style: "@body"
+              bind: "comment"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#DED5C8"
+
+      paragraph @confidential-label:
+        style: "@label"
+        margin-top: 20pt
+        margin-bottom: 5pt
+        text: "CONFIDENTIAL COMMENTS TO THE EDITOR"
+
+      paragraph @confidential-comments:
+        style: "@body"
+        bind: "confidentialComments"
+        padding: 10pt
+        background: "#F4EFE8"
+        border-width: 1pt
+        border-color: "#B89558"
+        border-radius: 4pt
+
+      paragraph @declaration-label:
+        style: "@label"
+        margin-top: 16pt
+        margin-bottom: 4pt
+        text: "REVIEWER DECLARATION"
+
+      paragraph @declaration:
+        style: "@micro"
+        bind: "declaration"
+        padding-top: 8pt
+        border-top-width: 1pt
+        border-color: "#DED5C8"

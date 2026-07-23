@@ -1,32 +1,13 @@
-# Projects and data
+# Documents and data
 
-Projects combine a template, schema, data, assets, and output settings.
+Paper documents combine a template, schema, data, and optional assets. Pass the
+source file explicitly and select external inputs with command options:
 
-## Project discovery
-
-`paper check`, `paper render`, and `paper studio` search the current directory
-and its parents for `paper.project.json`:
-
-```json
-{
-  "source": "invoice.paper",
-  "data": "invoice.json",
-  "output": "dist/invoice.pdf",
-  "format": "pdf",
-  "locale": "en",
-  "assets": "project.assets.json"
-}
+```sh
+paper check --data invoice.json invoice.paper
+paper render --data invoice.json -o invoice.pdf invoice.paper
+paper studio invoice.paper
 ```
-
-Paths are relative to the project file. Precedence:
-
-1. command flags and an explicit source argument;
-2. `PAPER_SOURCE`, `PAPER_DATA`, `PAPER_OUTPUT`, `PAPER_FORMAT`,
-   `PAPER_LOCALE`, and `PAPER_ASSETS`;
-3. `paper.project.json`;
-4. command defaults.
-
-See [Project file](/reference/project-file) for output behavior.
 
 ## Declare a schema
 

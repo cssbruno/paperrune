@@ -51,7 +51,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return exitOK
 	}
 	commands := map[string]func([]string, io.Reader, io.Writer, io.Writer) int{
-		"init":     runInit,
 		"fmt":      runFmt,
 		"check":    runCheck,
 		"render":   runRender,
@@ -86,7 +85,6 @@ Usage:
   paper <command> [options]
 
 Authoring:
-  init        Create a new Paper project
   fmt         Format Paper source
   check       Validate and plan a document
   render      Render PDF or HTML
@@ -251,11 +249,10 @@ func runCheck(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	var edgeInputs stringList
 	set.Var(&edgeInputs, "edge-input", "validate a user JSON case from FILE (repeatable)")
 	assets := addAssetFlags(set)
-	file, project, code := parseProjectFile(set, args)
+	file, code := parseOneFile(set, args)
 	if code >= 0 {
 		return code
 	}
-	applyCheckProject(project, set, data, assets)
 	catalog, err := assets.load()
 	if err != nil {
 		return commandError(*jsonMode, stdout, stderr, "check", err)
@@ -329,11 +326,10 @@ func runRender(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	scenario := set.String("scenario", "", "plan with the selected scenario")
 	data := addDataFlags(set)
 	assets := addAssetFlags(set)
-	file, project, code := parseProjectFile(set, args)
+	file, code := parseOneFile(set, args)
 	if code >= 0 {
 		return code
 	}
-	applyRenderProject(project, set, output, format, data, assets)
 	if *jsonMode && (*output == "" || *output == "-") {
 		return commandError(true, stdout, stderr, "render", errors.New("--json requires -o so JSON and rendered output do not share stdout"))
 	}

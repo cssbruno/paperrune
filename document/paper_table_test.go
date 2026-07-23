@@ -95,6 +95,42 @@ func TestPaperTablePlansRendersCapturesAndRetainsTableSemantics(t *testing.T) {
 	}
 }
 
+func TestPaperTablePreservesAnonymousHeaderTextSourceIdentityInMixedFlow(t *testing.T) {
+	const source = "document @doc:\n" +
+		"  page @page:\n" +
+		"    width: 180pt\n" +
+		"    height: 120pt\n" +
+		"    margin: 8pt\n" +
+		"    body @body:\n" +
+		"      paragraph @lead:\n" +
+		"        text: \"Lead\"\n" +
+		"      table @results:\n" +
+		"        table-column:\n" +
+		"          width: 100%\n" +
+		"        table-header:\n" +
+		"          table-row:\n" +
+		"            cell:\n" +
+		"              text: \"ANALYTE\"\n" +
+		"        table-row:\n" +
+		"          cell:\n" +
+		"            text: \"Leukocytes\"\n"
+	plan, result, err := PlanPaper("mixed-table.paper", source)
+	if err != nil || !result.OK() {
+		t.Fatalf("PlanPaper() = %#v, %v", result, err)
+	}
+	for _, semantic := range plan.plan.Projection().SemanticNodes {
+		if semantic.Role != layoutengine.SemanticRoleParagraph || semantic.Attributes.ActualText != "ANALYTE" {
+			continue
+		}
+		if semantic.Source.File != "mixed-table.paper" || semantic.Source.Start.Line != 15 ||
+			strings.Contains(string(semantic.Key), "@results#") {
+			t.Fatalf("anonymous header text identity = %+v", semantic)
+		}
+		return
+	}
+	t.Fatal("ANALYTE paragraph semantic was not retained")
+}
+
 func TestPaperTableResolvesPercentageTracksAgainstContainingBody(t *testing.T) {
 	source := strings.Replace(paperTableSource, "width: 100pt", "width: 50%", 1)
 	source = strings.Replace(source, "width: 84pt", "width: 50%", 1)

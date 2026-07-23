@@ -6,11 +6,10 @@ Run `paper help COMMAND` for exact flags and examples.
 
 | Command | Purpose | Main options |
 | --- | --- | --- |
-| `init TEMPLATE DIR` | Create a project | templates: `blank`, `invoice`, `report`, `table-report`, `letter` |
 | `fmt FILE` | Canonically format source | `-w`, `--json`; `FILE` may be `-` |
-| `check [FILE]` | Parse, type-check, select data, and plan | data/assets options; `--scenario`; edge-case options |
-| `render [FILE]` | Write PDF or standalone HTML | data/assets options; `--scenario`, `--format`, `-o`, `--json` |
-| `studio [FILE\|DIR]` | Open Paper Studio | forwards Studio options; discovers projects |
+| `check FILE` | Parse, type-check, select data, and plan | data/assets options; `--scenario`; edge-case options |
+| `render FILE` | Write PDF or standalone HTML | data/assets options; `--scenario`, `--format`, `-o`, `--json` |
+| `studio FILE` | Open Paper Studio | forwards Studio options |
 | `explain FILE` | Inspect plan structure | one or more of `--node`, `--key`, `--instance`, `--fragment`, `--page`; `--max-results` |
 | `capture FILE` | Capture SVG plan evidence | `--node`, `--fragment`, `--mode`, `--contact-sheet`, `--columns`, `--max-pages`, `--max-crops`, `-o`, `--json` |
 | `scenario FILE` | List or resolve scenarios | `--scenario`, `--json` |
@@ -48,15 +47,13 @@ Data options apply to `check` and `render`. Asset options also apply to
 ## Normal authoring flow
 
 ```sh
-paper init invoice my-invoice
-cd my-invoice
-paper check
-paper render
-paper studio
+paper check --data data.json invoice.paper
+paper render --data data.json invoice.paper
+paper studio invoice.paper
 ```
 
-`check` and `render` discover `paper.project.json` in the current directory or
-a parent. Pass a source file explicitly for scripts or one-off documents.
+Commands take the source file explicitly. Data, asset manifests, output paths,
+formats, and locales are selected with command options.
 
 ## Output behavior
 

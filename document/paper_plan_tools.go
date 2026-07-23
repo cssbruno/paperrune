@@ -450,7 +450,7 @@ func paperProvenanceForFragment(provenance PaperPlanProvenance, fragment layoute
 	span := fragment.Source.Source
 	result := PaperPlanProvenance{}
 	for _, entry := range provenance.Bindings {
-		if paperFragmentProvenanceMatch(entry.Node, "", entry.Source, key, instance, span) {
+		if paperFragmentProvenanceMatch(entry.Node, entry.Instance, entry.Source, key, instance, span) {
 			result.Bindings = append(result.Bindings, entry)
 		}
 	}
@@ -480,6 +480,10 @@ func paperFragmentProvenanceMatch(node, mappedInstance string, source PaperPlanS
 		}
 	}
 	if source.File != "" && fragmentSource.File != "" && source.File != fragmentSource.File {
+		return false
+	}
+	if mappedInstance != "" && instance != mappedInstance && !strings.HasPrefix(instance, mappedInstance+"/") &&
+		!strings.Contains(instance, "/"+mappedInstance+"/") && !strings.Contains(instance, "-"+mappedInstance+"/") {
 		return false
 	}
 	return source.EndOffset > source.StartOffset && source.StartOffset >= fragmentSource.Start.Offset && source.EndOffset <= fragmentSource.End.Offset

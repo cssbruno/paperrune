@@ -6,9 +6,12 @@
   values, visibility, lazy ternaries, readable switches, null guards, exact
   decimal/unit arithmetic, and data-dependent component selection.
 - Replaced the scattered language notes with a VitePress documentation site,
-  complete Paper reference, project/data guides, local search, and an exact
+  complete Paper reference, document/data guides, local search, and an exact
   Go/WASM compiler playground. CI now smoke-tests the built browser compiler,
   and pushes to `main` publish the verified site through GitHub Pages.
+- Removed `paper init` and `paper.project.json` discovery. CLI and Studio
+  workflows now select their source and optional data, assets, locale, format,
+  and output explicitly.
 - Replaced the playground's SVG capture iframe with lossless PNG pages painted
   directly by the Go WebAssembly display-list renderer.
 - Rebuilt the bundled playground documents as a coherent editorial set with

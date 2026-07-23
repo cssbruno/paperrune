@@ -1,0 +1,21 @@
+{
+  "invoiceNumber": "INV-2026-0042",
+  "issued": "July 20, 2026",
+  "due": "August 19, 2026",
+  "seller": "PaperRune Studio",
+  "sellerContact": "accounts@paperrune.studio / +1 555 0124",
+  "customer": "Northwind Operations",
+  "customerAddress": "22 Market Street, Seattle, WA 98101",
+  "status": "DUE",
+  "subtotal": "$1,850.00",
+  "tax": "$0.00",
+  "total": "$1,850.00",
+  "paymentReference": "NW-8421-PR",
+  "remittance": "Remit by bank transfer within 30 days and include NW-8421-PR. Questions: accounts@paperrune.studio",
+  "items": [
+    {"description":"Document platform license","quantity":"1","rate":"$800.00","amount":"$800.00"},
+    {"description":"Editorial template system","quantity":"6","rate":"$95.00","amount":"$570.00"},
+    {"description":"Automated output checks","quantity":"4","rate":"$75.00","amount":"$300.00"},
+    {"description":"Launch support","quantity":"1","rate":"$180.00","amount":"$180.00"}
+  ]
+}

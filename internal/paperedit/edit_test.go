@@ -74,6 +74,56 @@ func TestApplyDeletesOneExactProperty(t *testing.T) {
 	}
 }
 
+func TestApplyReplacesAnonymousTextAtExactOffset(t *testing.T) {
+	source := "document @doc:\n" +
+		"  page @page:\n" +
+		"    body @body:\n" +
+		"      table @table:\n" +
+		"        table-row:\n" +
+		"          cell:\n" +
+		"            text: \"First\"\n" +
+		"          cell:\n" +
+		"            text: \"Second\"\n"
+	parsed := paperlang.Parse("anonymous.paper", source)
+	if !parsed.OK() {
+		t.Fatalf("fixture diagnostics = %+v", parsed.Diagnostics)
+	}
+	var secondText *paperlang.Node
+	var walk func(*paperlang.Node)
+	walk = func(node *paperlang.Node) {
+		if node == nil {
+			return
+		}
+		if node.Kind == paperlang.NodeText && node.Value != nil &&
+			node.Value.StringValue != nil && *node.Value.StringValue == "Second" {
+			secondText = node
+		}
+		for _, member := range node.Members {
+			walk(member.Node)
+		}
+	}
+	walk(parsed.AST.Root)
+	if secondText == nil {
+		t.Fatal("anonymous second text node was not found")
+	}
+
+	result, err := Apply(Transaction{
+		File: "anonymous.paper", Source: source, ExpectedRevision: SourceRevision(source),
+		Operations: []Operation{ReplaceTextAtOffset{
+			NodeOffset: secondText.HeaderSpan.Start.Offset,
+			Text:       "Changed",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Apply(set anonymous property) = %v, diagnostics %+v", err, result.Diagnostics)
+	}
+	if !strings.Contains(result.Source, "text: \"First\"") ||
+		!strings.Contains(result.Source, "text: \"Changed\"") ||
+		strings.Contains(result.Source, "text: \"Second\"") {
+		t.Fatalf("anonymous property edit changed the wrong source:\n%s", result.Source)
+	}
+}
+
 func TestApplyInsertsTypedNodeAtReadableID(t *testing.T) {
 	source := editableFixture()
 	text := StringValue("Inserted title")

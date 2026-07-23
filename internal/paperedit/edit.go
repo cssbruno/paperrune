@@ -168,6 +168,18 @@ type SetProperty struct {
 
 func (SetProperty) paperEditOperation() {}
 
+// SetPropertyAtOffset replaces one existing scalar property on the exact
+// source node whose header starts at NodeOffset. It exists for rendered
+// anonymous nodes that have no readable ID; callers must still bind the
+// transaction to the exact source revision.
+type SetPropertyAtOffset struct {
+	NodeOffset uint64
+	Name       string
+	Value      Value
+}
+
+func (SetPropertyAtOffset) paperEditOperation() {}
+
 // DeleteProperty removes one uniquely named property line from a readable-ID
 // node. It is intentionally distinct from setting a zero value because zero
 // can be meaningful in the Paper language.
@@ -215,6 +227,16 @@ type ReplaceText struct {
 }
 
 func (ReplaceText) paperEditOperation() {}
+
+// ReplaceTextAtOffset updates one anonymous inline text node selected by the
+// exact start of its authored header. The enclosing transaction revision makes
+// the source offset safe against concurrent edits.
+type ReplaceTextAtOffset struct {
+	NodeOffset uint64
+	Text       string
+}
+
+func (ReplaceTextAtOffset) paperEditOperation() {}
 
 // ReplaceInlineText updates the one anonymous inline text child of an
 // addressed paragraph or heading. The parent remains the exact mutation
@@ -387,6 +409,7 @@ type sourcePatch struct {
 
 type sourceIndex struct {
 	byID      map[string]*paperlang.Node
+	byOffset  map[uint64]*paperlang.Node
 	idSpans   map[string]paperlang.Span
 	parents   map[string]*paperlang.Node
 	instances map[string]string
@@ -566,6 +589,8 @@ func operationTargetIDs(operation Operation) []string {
 	switch edit := operation.(type) {
 	case SetProperty:
 		return []string{edit.Target}
+	case SetPropertyAtOffset:
+		return nil
 	case DeleteProperty:
 		return []string{edit.Target}
 	case SetProperties:
@@ -576,6 +601,8 @@ func operationTargetIDs(operation Operation) []string {
 		return []string{edit.Target}
 	case ReplaceText:
 		return []string{edit.Target}
+	case ReplaceTextAtOffset:
+		return nil
 	case ReplaceInlineText:
 		return []string{edit.Parent}
 	case InsertNode:
@@ -659,7 +686,7 @@ func parserDiagnostics(diagnostics []paperlang.Diagnostic) []Diagnostic {
 
 func indexSource(root *paperlang.Node, tokens []paperlang.Token) sourceIndex {
 	index := sourceIndex{
-		byID: make(map[string]*paperlang.Node), idSpans: make(map[string]paperlang.Span),
+		byID: make(map[string]*paperlang.Node), byOffset: make(map[uint64]*paperlang.Node), idSpans: make(map[string]paperlang.Span),
 		parents: make(map[string]*paperlang.Node), instances: make(map[string]string),
 	}
 	for _, token := range tokens {
@@ -672,6 +699,7 @@ func indexSource(root *paperlang.Node, tokens []paperlang.Token) sourceIndex {
 		if node == nil {
 			return
 		}
+		index.byOffset[node.HeaderSpan.Start.Offset] = node
 		if node.ID != "" {
 			index.byID[node.ID] = node
 			index.parents[node.ID] = parent
@@ -734,6 +762,36 @@ func resolveOperation(source string, index sourceIndex, operationIndex int, oper
 		point, prefix, newline := insertionPoint(source, int(node.Span.End.Offset)) // #nosec G115 -- source offset is bounded by validated input or parser state
 		patch.start, patch.end = point, point
 		patch.replacement = prefix + strings.Repeat(" ", indent) + edit.Name + ": " + value + newline
+		return []sourcePatch{patch}, patch.target, nil
+
+	case SetPropertyAtOffset:
+		patch.target = fmt.Sprintf("offset:%d", edit.NodeOffset)
+		node := index.byOffset[edit.NodeOffset]
+		if node == nil {
+			return nil, patch.target, fmt.Errorf("node offset %d does not resolve uniquely", edit.NodeOffset)
+		}
+		if !validPropertyName(edit.Name) {
+			return nil, patch.target, fmt.Errorf("property name %q is not a .paper identifier", edit.Name)
+		}
+		value, err := renderValue(edit.Value)
+		if err != nil {
+			return nil, patch.target, err
+		}
+		var found *paperlang.Property
+		for _, member := range node.Members {
+			if member.Property == nil || member.Property.Name != edit.Name {
+				continue
+			}
+			if found != nil {
+				return nil, patch.target, fmt.Errorf("property %q is ambiguous at node offset %d", edit.Name, edit.NodeOffset)
+			}
+			found = member.Property
+		}
+		if found == nil {
+			return nil, patch.target, fmt.Errorf("property %q does not exist at node offset %d", edit.Name, edit.NodeOffset)
+		}
+		patch.start, patch.end = int(found.Value.Span.Start.Offset), int(found.Value.Span.End.Offset) // #nosec G115 -- source offset is bounded by validated parser state
+		patch.replacement = value
 		return []sourcePatch{patch}, patch.target, nil
 
 	case DeleteProperty:
@@ -872,6 +930,19 @@ func resolveOperation(source string, index sourceIndex, operationIndex int, oper
 			return nil, patch.target, fmt.Errorf("target %s is not a text node with an inline value", edit.Target)
 		}
 		patch.start, patch.end = int(node.Value.Span.Start.Offset), int(node.Value.Span.End.Offset) // #nosec G115 -- source offset is bounded by validated input or parser state
+		patch.replacement = strconv.Quote(edit.Text)
+		return []sourcePatch{patch}, patch.target, nil
+
+	case ReplaceTextAtOffset:
+		patch.target = fmt.Sprintf("offset:%d", edit.NodeOffset)
+		node := index.byOffset[edit.NodeOffset]
+		if node == nil {
+			return nil, patch.target, fmt.Errorf("node offset %d does not resolve uniquely", edit.NodeOffset)
+		}
+		if node.Kind != paperlang.NodeText || node.Value == nil {
+			return nil, patch.target, fmt.Errorf("node at offset %d is not a text node with an inline value", edit.NodeOffset)
+		}
+		patch.start, patch.end = int(node.Value.Span.Start.Offset), int(node.Value.Span.End.Offset) // #nosec G115 -- source offset is bounded by validated parser state
 		patch.replacement = strconv.Quote(edit.Text)
 		return []sourcePatch{patch}, patch.target, nil
 
@@ -1691,6 +1762,8 @@ func invalidationScope(index sourceIndex, operations []Operation) *InvalidationS
 		switch edit := operation.(type) {
 		case SetProperty:
 			addNodeAndAncestors(edit.Target)
+		case SetPropertyAtOffset:
+			// Anonymous nodes have no readable-ID ancestry to invalidate.
 		case DeleteProperty:
 			addNodeAndAncestors(edit.Target)
 		case SetProperties:
@@ -1701,6 +1774,8 @@ func invalidationScope(index sourceIndex, operations []Operation) *InvalidationS
 			addNodeAndAncestors(edit.Target)
 		case ReplaceText:
 			addNodeAndAncestors(edit.Target)
+		case ReplaceTextAtOffset:
+			// Anonymous nodes have no readable-ID ancestry to invalidate.
 		case ReplaceInlineText:
 			addNodeAndAncestors(edit.Parent)
 		case InsertNode:

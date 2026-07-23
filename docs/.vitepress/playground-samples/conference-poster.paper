@@ -1,0 +1,323 @@
+document @conference-poster:
+  title: "Conference poster"
+  language: "en"
+
+  schema poster:
+    string title
+    string authors
+    string affiliation
+    string track
+    string abstract
+    string objective
+    string methods
+    string primaryResult
+    string interpretation
+    string conclusion
+    string contact
+    string doi
+    string posterCode
+    string browserVariance
+    string plannedVariance
+    number documents
+    number stableRuns
+    number reduction
+
+  style @body:
+    font: "Helvetica"
+    size: 12pt
+    line-height: 17pt
+    color: "#22313A"
+
+  style @small:
+    style: "@body"
+    size: 9pt
+    line-height: 13pt
+    color: "#5C6D72"
+
+  style @label:
+    style: "@body"
+    size: 8pt
+    line-height: 11pt
+    bold: true
+    color: "#0B6B67"
+
+  style @title:
+    style: "@body"
+    size: 30pt
+    line-height: 34pt
+    bold: true
+    color: "#F7FBF8"
+
+  style @author:
+    style: "@body"
+    size: 12pt
+    line-height: 17pt
+    bold: true
+    color: "#DDEDE8"
+
+  style @section:
+    style: "@body"
+    size: 15pt
+    line-height: 19pt
+    bold: true
+    color: "#113C3B"
+
+  style @metric:
+    style: "@body"
+    size: 25pt
+    line-height: 28pt
+    bold: true
+    color: "#0B6B67"
+
+  page @poster-page:
+    width: 1000pt
+    height: 700pt
+    margin: 34pt
+
+    body @poster-body:
+      table @masthead:
+        split: "avoid"
+        table-column:
+          width: 73%
+        table-column:
+          width: 27%
+        table-row:
+          cell:
+            padding: 20pt
+            background: "#113C3B"
+            paragraph @track:
+              style: "@label"
+              color: "#76D3C5"
+              bind: "track"
+            paragraph @poster-title:
+              style: "@title"
+              bind: "title"
+            paragraph @poster-authors:
+              style: "@author"
+              bind: "authors"
+            paragraph @poster-affiliation:
+              style: "@small"
+              color: "#BFD8D2"
+              bind: "affiliation"
+          cell:
+            padding: 20pt
+            background: "#0B6B67"
+            vertical-align: "middle"
+            paragraph:
+              style: "@label"
+              color: "#D9FFF7"
+              text: "OPEN METHODS"
+            paragraph @poster-doi:
+              style: "@body"
+              color: "#FFFFFF"
+              bold: true
+              bind: "doi"
+            paragraph:
+              style: "@small"
+              color: "#C0E9E1"
+              text: "Reproducible source, typed data, and deterministic page geometry."
+
+      paragraph @masthead-gap:
+        size: 1pt
+        line-height: 14pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @summary-band:
+        split: "avoid"
+        table-column:
+          width: 48%
+        table-column:
+          width: 17.333%
+        table-column:
+          width: 17.333%
+        table-column:
+          width: 17.334%
+        table-row:
+          cell:
+            padding: 14pt
+            background: "#E7F0ED"
+            paragraph:
+              style: "@label"
+              text: "STUDY ABSTRACT"
+            paragraph @poster-abstract:
+              style: "@body"
+              bind: "abstract"
+          cell:
+            padding: 13pt
+            border-left-width: 1pt
+            border-color: "#A9C7C0"
+            paragraph @documents:
+              style: "@metric"
+              bind: "documents"
+              format: "integer"
+              format-locale: "en-US"
+            paragraph:
+              style: "@label"
+              text: "DOCUMENTS"
+          cell:
+            padding: 13pt
+            border-left-width: 1pt
+            border-color: "#A9C7C0"
+            paragraph @stable-runs:
+              style: "@metric"
+              bind: "stableRuns"
+              format: "integer"
+              format-locale: "en-US"
+            paragraph:
+              style: "@label"
+              text: "STABLE RUNS"
+          cell:
+            padding: 13pt
+            border-left-width: 1pt
+            border-color: "#A9C7C0"
+            paragraph @reduction:
+              style: "@metric"
+              bind: "reduction"
+              format: "decimal"
+              format-locale: "en-US"
+              format-min-fraction: 1
+              format-max-fraction: 1
+            paragraph:
+              style: "@label"
+              text: "% VARIANCE REDUCTION"
+
+      paragraph @content-gap:
+        size: 1pt
+        line-height: 14pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @poster-grid:
+        split: "avoid"
+        table-column:
+          width: 31.5%
+        table-column:
+          width: 37%
+        table-column:
+          width: 31.5%
+        table-row:
+          cell:
+            padding-right: 17pt
+            border-right-width: 1pt
+            border-color: "#B9C8C5"
+            paragraph:
+              style: "@section"
+              text: "01 / Objective"
+            paragraph @objective:
+              style: "@body"
+              bind: "objective"
+            paragraph:
+              style: "@section"
+              text: "02 / Methods"
+            paragraph @methods:
+              style: "@body"
+              bind: "methods"
+            paragraph:
+              style: "@small"
+              italic: true
+              text: "Preregistered analysis / frozen fixtures / exact raster dimensions / blinded difference review"
+          cell:
+            padding-left: 17pt
+            padding-right: 17pt
+            border-right-width: 1pt
+            border-color: "#B9C8C5"
+            paragraph:
+              style: "@section"
+              text: "03 / Primary result"
+            paragraph @primary-result:
+              style: "@body"
+              size: 14pt
+              line-height: 20pt
+              bold: true
+              color: "#0B6B67"
+              bind: "primaryResult"
+            paragraph:
+              style: "@label"
+              text: "GEOMETRY VARIANCE BY PIPELINE"
+            paragraph:
+              style: "@small"
+              text: "Browser flow"
+            paragraph @browser-variance:
+              style: "@body"
+              size: 16pt
+              line-height: 20pt
+              bold: true
+              color: "#A7482D"
+              bind: "browserVariance"
+            paragraph:
+              style: "@small"
+              text: "Planned layout"
+            paragraph @planned-variance:
+              style: "@body"
+              size: 16pt
+              line-height: 20pt
+              bold: true
+              color: "#0B6B67"
+              bind: "plannedVariance"
+            paragraph @interpretation:
+              style: "@small"
+              italic: true
+              bind: "interpretation"
+          cell:
+            padding-left: 17pt
+            paragraph:
+              style: "@section"
+              text: "04 / Conclusion"
+            paragraph @conclusion:
+              style: "@body"
+              size: 14pt
+              line-height: 20pt
+              bold: true
+              bind: "conclusion"
+            paragraph:
+              style: "@label"
+              text: "TAKE-HOME MESSAGE"
+            paragraph:
+              style: "@body"
+              bold: true
+              color: "#113C3B"
+              text: "Layout becomes scientific evidence when dimensions, line breaks, and pixels are resolved from explicit inputs."
+            paragraph:
+              style: "@label"
+              text: "CORRESPONDENCE"
+            paragraph @contact:
+              style: "@small"
+              bind: "contact"
+
+      paragraph @footer-gap:
+        size: 1pt
+        line-height: 110pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @poster-footer:
+        split: "avoid"
+        table-column:
+          width: 38%
+        table-column:
+          width: 24%
+        table-column:
+          width: 38%
+        table-row:
+          cell:
+            style: "@small"
+            padding-top: 8pt
+            border-top-width: 1pt
+            border-color: "#8BA7A0"
+            text: "AURORA COMPUTATIONAL METHODS"
+          cell:
+            style: "@small"
+            padding-top: 8pt
+            border-top-width: 1pt
+            border-color: "#8BA7A0"
+            align: "center"
+            bold: true
+            bind: "posterCode"
+          cell:
+            style: "@small"
+            padding-top: 8pt
+            border-top-width: 1pt
+            border-color: "#8BA7A0"
+            align: "right"
+            text: "JULY 2026"

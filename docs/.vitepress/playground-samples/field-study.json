@@ -1,0 +1,43 @@
+{
+  "projectTitle": "Cloud-forest edge biodiversity survey",
+  "expedition": "EXPEDITION CF-27",
+  "region": "Serra do Mar transition forest / Parana, Brazil",
+  "coordinates": "25.412 S, 48.987 W",
+  "surveyWindow": "12-15 July 2026",
+  "leadObserver": "Dr. Maya Santos",
+  "permit": "SISBIO 88421-3",
+  "conditions": "16-21 C / intermittent mist / light southeast wind",
+  "habitat": "Montane evergreen forest, 980-1,140 m elevation",
+  "summary": "Four stratified transects sampled the forest edge, closed-canopy interior, riparian corridor, and a regenerating slope. Timed visual encounter surveys were paired with acoustic and leaf-litter searches.",
+  "primaryFinding": "Species richness remained high at the forest edge, but moisture-sensitive amphibians were concentrated in the shaded riparian transect.",
+  "methods": "Observers completed two 200 m passes per transect at dawn and after dusk. Records required a photograph, diagnostic call, or agreement by two observers. Plot canopy was estimated at five fixed points.",
+  "limitations": "Heavy mist reduced detectability during the second evening survey. Counts describe encounter frequency rather than population size, and cryptic leaf-litter taxa are probably underrepresented.",
+  "recommendation": "Protect the riparian corridor as a no-disturbance buffer, retain coarse woody debris, and repeat the survey in the wet season before approving new trail work.",
+  "plots": 24,
+  "speciesRichness": 67,
+  "canopyCover": 82,
+  "observations": [
+    {"time":"05:42","station":"T1-03","taxon":"Ramphastos dicolorus","count":3,"confidence":"high","note":"Foraging pair with juvenile in canopy."},
+    {"time":"06:18","station":"T2-01","taxon":"Brachycephalus ferruginus","count":5,"confidence":"high","note":"Calling from saturated leaf litter."},
+    {"time":"07:04","station":"T2-05","taxon":"Tangara seledon","count":8,"confidence":"high","note":"Mixed flock crossing the riparian gap."},
+    {"time":"18:37","station":"T3-02","taxon":"Boana bischoffi","count":11,"confidence":"high","note":"Chorus at temporary pool margin."},
+    {"time":"19:12","station":"T4-04","taxon":"Gracilinanus microtarsus","count":1,"confidence":"medium","note":"Brief visual record on low branch."},
+    {"time":"20:06","station":"T2-06","taxon":"Hylodes cardosoi","count":2,"confidence":"high","note":"Streamside call and voucher photograph."},
+    {"time":"20:41","station":"T3-05","taxon":"Aegla schmitti","count":4,"confidence":"high","note":"Observed beneath cobble in clear seep."},
+    {"time":"21:10","station":"T1-06","taxon":"Akodon montensis","count":2,"confidence":"medium","note":"Track and movement in dense grass."},
+    {"time":"05:58","station":"T4-01","taxon":"Stephanophorus diadematus","count":2,"confidence":"high","note":"Pair vocalizing at regenerating edge."},
+    {"time":"08:26","station":"T2-04","taxon":"Dicksonia sellowiana","count":14,"confidence":"high","note":"Mature tree ferns along shaded drainage."}
+  ],
+  "transects": [
+    {"id":"T1 Edge","elevation":"980-1,020 m","canopy":"68%","moisture":"moderate","richness":31,"condition":"regenerating"},
+    {"id":"T2 Riparian","elevation":"1,010-1,060 m","canopy":"91%","moisture":"high","richness":44,"condition":"intact"},
+    {"id":"T3 Interior","elevation":"1,070-1,120 m","canopy":"88%","moisture":"moderate","richness":38,"condition":"intact"},
+    {"id":"T4 Slope","elevation":"1,090-1,140 m","canopy":"74%","moisture":"low","richness":27,"condition":"recovering"}
+  ],
+  "actions": [
+    {"priority":"P1","action":"Establish a 30 m no-disturbance buffer along the riparian transect.","timing":"Immediate","owner":"Reserve manager"},
+    {"priority":"P1","action":"Suspend new trail grading until wet-season amphibian surveys are complete.","timing":"Before works","owner":"Planning unit"},
+    {"priority":"P2","action":"Retain fallen timber and deep leaf litter in edge restoration plots.","timing":"Ongoing","owner":"Field crew"},
+    {"priority":"P2","action":"Repeat acoustic and encounter surveys after peak seasonal rainfall.","timing":"Jan-Mar 2027","owner":"Ecology team"}
+  ]
+}

@@ -32,7 +32,7 @@ export default defineConfig({
       '/guide/': [
         {text: 'Start', items: [
           {text: 'Getting started', link: '/guide/getting-started'},
-          {text: 'Projects and data', link: '/guide/projects-and-data'},
+          {text: 'Documents and data', link: '/guide/documents-and-data'},
           {text: 'Assets and imports', link: '/paper-assets'},
           {text: 'Documentation site', link: '/guide/documentation-site'},
         ]},
@@ -56,7 +56,6 @@ export default defineConfig({
         ]},
         {text: 'Tools', items: [
           {text: 'Command line', link: '/reference/cli'},
-          {text: 'Project file', link: '/reference/project-file'},
         ]},
       ],
       '/playground': [

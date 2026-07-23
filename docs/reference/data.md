@@ -25,7 +25,7 @@ Types are `string`, `number`, `bool`, `object`, `list`, and named objects.
 Prefix a field with `optional`. Lists require an item type and positive
 `max-items`. Schemas reject undeclared fields and coercion.
 
-See [Projects and data](/guide/projects-and-data) for JSON and scenarios.
+See [Documents and data](/guide/documents-and-data) for JSON and scenarios.
 
 ## Scenarios
 

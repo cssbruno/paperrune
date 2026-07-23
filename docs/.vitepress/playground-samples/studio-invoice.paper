@@ -1,0 +1,363 @@
+document @invoice:
+  title: "Studio invoice"
+  language: "en"
+
+  schema billing:
+    string invoiceNumber
+    string issued
+    string due
+    string seller
+    string sellerContact
+    string customer
+    string customerAddress
+    string status
+    string subtotal
+    string tax
+    string total
+    string paymentReference
+    string remittance
+    list object items:
+      max-items: 100
+      string description
+      string quantity
+      string rate
+      string amount
+
+  style @base:
+    font: "Helvetica"
+    size: 9.5pt
+    line-height: 14pt
+    color: "#25313A"
+
+  style @label:
+    style: "@base"
+    size: 7pt
+    line-height: 10pt
+    bold: true
+    color: "#D94F2B"
+
+  style @display:
+    style: "@base"
+    size: 31pt
+    line-height: 35pt
+    bold: true
+    color: "#111A21"
+
+  style @total:
+    style: "@base"
+    size: 19pt
+    line-height: 23pt
+    bold: true
+    color: "#FFFFFF"
+
+  page @invoice-page:
+    size: "A4"
+    margin: 48pt
+    page-numbers: true
+    page-number-format: "Invoice / Page %d of {pages}"
+    page-total-alias: "{pages}"
+
+    body @invoice-content:
+      paragraph @masthead:
+        style: "@label"
+        padding-bottom: 12pt
+        margin-bottom: 30pt
+        background: "#111A21"
+        color: "#F7F2E9"
+        border-bottom-width: 5pt
+        border-color: "#D94F2B"
+        text: "PAPERRUNE STUDIO                         BILLING / 2026"
+
+      row @title-row:
+        gap: 16pt
+        align-items: "end"
+        heading @invoice-heading:
+          width: 2fr
+          level: 1
+          style: "@display"
+          text: "INVOICE"
+        paragraph @number:
+          width: 1fr
+          style: "@base"
+          bind: "invoiceNumber"
+          bold: true
+          align: "right"
+
+      paragraph @title-gap:
+        size: 1pt
+        line-height: 20pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @parties:
+        split: "avoid"
+        table-column:
+          width: 50%
+        table-column:
+          width: 50%
+        table-header:
+          table-row:
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 8pt
+              border-bottom-width: 2pt
+              border-color: "#111A21"
+              text: "FROM"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 8pt
+              border-bottom-width: 2pt
+              border-color: "#111A21"
+              text: "BILL TO"
+        table-row:
+          cell:
+            padding: 10pt
+            paragraph @seller:
+              style: "@base"
+              bind: "seller"
+              bold: true
+          cell:
+            padding: 10pt
+            paragraph @customer:
+              style: "@base"
+              bind: "customer"
+              bold: true
+        table-row:
+          cell:
+            padding: 10pt
+            paragraph @seller-contact:
+              style: "@base"
+              bind: "sellerContact"
+              color: "#697078"
+          cell:
+            padding: 10pt
+            paragraph @customer-address:
+              style: "@base"
+              bind: "customerAddress"
+              color: "#697078"
+
+      paragraph @parties-gap:
+        size: 1pt
+        line-height: 14pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @dates:
+        split: "avoid"
+        table-column:
+          width: 33.333%
+        table-column:
+          width: 33.333%
+        table-column:
+          width: 33.334%
+        table-row:
+          cell:
+            style: "@label"
+            padding: 9pt
+            background: "#F2EEE6"
+            text: "ISSUED"
+          cell:
+            style: "@label"
+            padding: 9pt
+            background: "#F2EEE6"
+            text: "DUE"
+          cell:
+            style: "@label"
+            padding: 9pt
+            background: "#F2EEE6"
+            text: "STATUS"
+        table-row:
+          cell:
+            style: "@base"
+            bind: "issued"
+            padding: 9pt
+            bold: true
+          cell:
+            style: "@base"
+            bind: "due"
+            padding: 9pt
+            bold: true
+          cell:
+            style: "@base"
+            bind: "status"
+            padding: 9pt
+            bold: true
+            color: "#D94F2B"
+
+      paragraph @dates-gap:
+        size: 1pt
+        line-height: 24pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @items-table:
+        repeat-header: true
+        split: "rows"
+        table-column:
+          width: 52%
+        table-column:
+          width: 12%
+        table-column:
+          width: 18%
+        table-column:
+          width: 18%
+        table-header:
+          table-row:
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "DESCRIPTION"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "QTY"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "RATE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              align: "right"
+              text: "AMOUNT"
+        repeat @item-rows:
+          source: "items"
+          instance-prefix: "items"
+          max-items: 100
+          table-row:
+            cell:
+              padding: 10pt
+              border-bottom-width: 1pt
+              border-color: "#D5CFC5"
+              paragraph:
+                style: "@base"
+                bind: "description"
+            cell:
+              padding: 10pt
+              border-bottom-width: 1pt
+              border-color: "#D5CFC5"
+              paragraph:
+                style: "@base"
+                bind: "quantity"
+            cell:
+              padding: 10pt
+              border-bottom-width: 1pt
+              border-color: "#D5CFC5"
+              paragraph:
+                style: "@base"
+                bind: "rate"
+            cell:
+              padding: 10pt
+              border-bottom-width: 1pt
+              border-color: "#D5CFC5"
+              paragraph:
+                style: "@base"
+                bind: "amount"
+                align: "right"
+                bold: true
+
+      paragraph @financials-gap:
+        size: 1pt
+        line-height: 14pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @financials:
+        split: "avoid"
+        table-column:
+          width: 72%
+        table-column:
+          width: 28%
+        table-row:
+          cell:
+            style: "@label"
+            padding: 7pt
+            border-bottom-width: 1pt
+            border-color: "#D5CFC5"
+            align: "right"
+            text: "SUBTOTAL"
+          cell:
+            style: "@base"
+            bind: "subtotal"
+            padding: 7pt
+            border-bottom-width: 1pt
+            border-color: "#D5CFC5"
+            align: "right"
+            bold: true
+        table-row:
+          cell:
+            style: "@label"
+            padding: 7pt
+            border-bottom-width: 1pt
+            border-color: "#D5CFC5"
+            align: "right"
+            text: "TAX"
+          cell:
+            style: "@base"
+            bind: "tax"
+            padding: 7pt
+            border-bottom-width: 1pt
+            border-color: "#D5CFC5"
+            align: "right"
+            bold: true
+        table-row:
+          cell:
+            style: "@label"
+            padding: 7pt
+            align: "right"
+            text: "PAYMENT REFERENCE"
+          cell:
+            style: "@base"
+            bind: "paymentReference"
+            padding: 7pt
+            align: "right"
+            bold: true
+
+      table @summary:
+        split: "avoid"
+        table-column:
+          width: 65%
+        table-column:
+          width: 35%
+        table-row:
+          cell:
+            style: "@base"
+            padding: 15pt
+            background: "#F2EEE6"
+            color: "#596169"
+            text: "Payment due within 30 days. Reference the invoice number with your remittance."
+          cell:
+            style: "@total"
+            bind: "total"
+            padding: 15pt
+            background: "#D94F2B"
+            align: "right"
+
+      paragraph @terms:
+        style: "@base"
+        bind: "remittance"
+        margin-top: 28pt
+        padding-top: 10pt
+        border-top-width: 1pt
+        border-color: "#CDC7BD"
+        size: 8pt
+        color: "#687078"
+
+      paragraph @footer:
+        style: "@label"
+        margin-top: 34pt
+        text: "PAPERRUNE / TYPED BILLING / DETERMINISTIC OUTPUT"

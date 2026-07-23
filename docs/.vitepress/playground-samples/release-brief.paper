@@ -1,0 +1,479 @@
+document @release-brief:
+  title: "Release brief"
+  language: "en"
+
+  schema release:
+    string product
+    string releaseId
+    string owner
+    string targetDate
+    string environment
+    string evidenceHash
+    string deploymentWindow
+    string approver
+    number score
+    bool blocked
+    optional string blocker
+
+  style @base:
+    font: "Helvetica"
+    size: 10pt
+    line-height: 15pt
+    color: "#25313A"
+
+  style @label:
+    style: "@base"
+    size: 8pt
+    line-height: 10pt
+    bold: true
+    color: "#D94F2B"
+
+  style @display:
+    style: "@base"
+    size: 36pt
+    line-height: 40pt
+    bold: true
+    color: "#111A21"
+
+  style @score:
+    style: "@base"
+    size: 46pt
+    line-height: 50pt
+    bold: true
+    color: "#D94F2B"
+
+  component @ready:
+    paragraph @ready-label:
+      style: "@label"
+      margin-top: 22pt
+      padding: 13pt
+      background: "#111A21"
+      color: "#FFFFFF"
+      text: "DECISION / READY TO SHIP"
+    paragraph @ready-copy:
+      style: "@base"
+      padding: 15pt
+      background: "#F2EEE6"
+      text: "Every release gate is closed. Publication can proceed."
+
+  component @blocked:
+    paragraph @blocked-label:
+      style: "@label"
+      margin-top: 22pt
+      padding: 13pt
+      background: "#D94F2B"
+      color: "#FFFFFF"
+      text: "DECISION / HOLD RELEASE"
+    paragraph @blocked-copy:
+      style: "@base"
+      padding: 15pt
+      background: "#F2EEE6"
+      text: "One gate remains open. Resolve the named blocker before publication."
+
+  page @sheet:
+    size: "A4"
+    margin: 54pt
+    page-numbers: true
+    page-number-format: "RELEASE CONTROL / %d of {pages}"
+    page-total-alias: "{pages}"
+    page-number-align: "outer"
+    body @content:
+      paragraph @masthead:
+        style: "@label"
+        padding: 14pt
+        background: "#111A21"
+        color: "#F7F2E9"
+        border-bottom-width: 5pt
+        border-color: "#D94F2B"
+        text: "04 / RELEASE CONTROL                         PAPERRUNE"
+
+      paragraph @brief-label:
+        style: "@label"
+        margin-top: 36pt
+        text: "SHIP / HOLD DECISION"
+
+      heading @product:
+        level: 1
+        style: "@display"
+        bind: "product"
+        margin-top: 8pt
+
+      paragraph @subtitle:
+        style: "@base"
+        margin-top: 10pt
+        margin-bottom: 30pt
+        size: 13pt
+        line-height: 19pt
+        color: "#59636B"
+        text: "A typed decision record for the people responsible for publication."
+
+      table @release-metadata:
+        split: "avoid"
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "RELEASE"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "OWNER"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "TARGET"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "ENVIRONMENT"
+        table-row:
+          cell:
+            style: "@base"
+            bind: "releaseId"
+            padding: 8pt
+            background: "#F2EEE6"
+            bold: true
+          cell:
+            style: "@base"
+            bind: "owner"
+            padding: 8pt
+            background: "#F2EEE6"
+            bold: true
+          cell:
+            style: "@base"
+            bind: "targetDate"
+            padding: 8pt
+            background: "#F2EEE6"
+            bold: true
+          cell:
+            style: "@base"
+            bind: "environment"
+            padding: 8pt
+            background: "#F2EEE6"
+            bold: true
+
+      paragraph @score-gap:
+        size: 1pt
+        line-height: 18pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @scoreboard:
+        split: "avoid"
+        table-column:
+          width: 34%
+        table-column:
+          width: 66%
+        table-row:
+          cell:
+            style: "@score"
+            padding: 16pt
+            background: "#D94F2B"
+            color: "#FFFFFF"
+            bind: "score"
+            format: "decimal"
+            format-locale: "en-US"
+            format-min-fraction: 0
+            format-max-fraction: 0
+          cell:
+            style: "@base"
+            padding: 20pt
+            background: "#F2EEE6"
+            bold: true
+            text: switch:
+              case score >= 90: "EXCELLENT / all release evidence is complete"
+              case score >= 70: "REVIEW / inspect the remaining open gate"
+              default: "AT RISK / intervention is required"
+
+      paragraph @score-label:
+        style: "@label"
+        margin-top: 8pt
+        text: "READINESS SCORE / 100"
+
+      use @decision:
+        component: blocked ? @blocked : @ready
+
+      paragraph @blocker:
+        visible: blocker != null && blocked
+        style: "@base"
+        bind: "blocker"
+        bind-required: false
+        margin-top: 12pt
+        padding: 14pt
+        background: "#FFF4F0"
+        border-width: 1pt
+        border-color: "#D94F2B"
+        border-radius: 4pt
+        bold: true
+
+      page-break @release-evidence-page:
+
+      paragraph @evidence-masthead:
+        style: "@label"
+        padding: 14pt
+        background: "#111A21"
+        color: "#F7F2E9"
+        border-bottom-width: 5pt
+        border-color: "#D94F2B"
+        text: "04 / RELEASE CONTROL                         EVIDENCE"
+
+      paragraph @gates-label:
+        style: "@label"
+        margin-top: 30pt
+        margin-bottom: 8pt
+        text: "RELEASE GATES"
+
+      table @gates:
+        split: "avoid"
+        table-column:
+          width: 34%
+        table-column:
+          width: 38%
+        table-column:
+          width: 28%
+        table-header:
+          table-row:
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "GATE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "EVIDENCE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 9pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "STATE"
+        table-row:
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Typed source"
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Schema and expressions"
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            color: "#25313A"
+            text: "PASSED"
+        table-row:
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Layout plan"
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Stable page geometry"
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            color: "#25313A"
+            text: "PASSED"
+        table-row:
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Publication"
+          cell:
+            style: "@base"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: blocked ? "Approval outstanding" : "Approval recorded"
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            color: "#D94F2B"
+            text: blocked ? "OPEN" : "PASSED"
+
+      paragraph @sequence-label:
+        style: "@label"
+        margin-top: 30pt
+        margin-bottom: 8pt
+        text: "DEPLOYMENT SEQUENCE"
+
+      table @sequence:
+        split: "avoid"
+        table-column:
+          width: 30%
+        table-column:
+          width: 28%
+        table-column:
+          width: 24%
+        table-column:
+          width: 18%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 8pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "STEP"
+            cell:
+              style: "@label"
+              padding: 8pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "OWNER"
+            cell:
+              style: "@label"
+              padding: 8pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "WINDOW"
+            cell:
+              style: "@label"
+              padding: 8pt
+              background: "#111A21"
+              color: "#FFFFFF"
+              text: "STATE"
+        table-row:
+          cell:
+            style: "@base"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Freeze release candidate"
+          cell:
+            style: "@base"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Publishing Platform"
+          cell:
+            style: "@base"
+            bind: "deploymentWindow"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+          cell:
+            style: "@label"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            color: "#25313A"
+            text: "COMPLETE"
+        table-row:
+          cell:
+            style: "@base"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Promote signed artifacts"
+          cell:
+            style: "@base"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Release Engineering"
+          cell:
+            style: "@base"
+            bind: "targetDate"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+          cell:
+            style: "@label"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            color: "#D94F2B"
+            text: blocked ? "PAUSED" : "READY"
+        table-row:
+          cell:
+            style: "@base"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Verify production plan"
+          cell:
+            style: "@base"
+            bind: "approver"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+          cell:
+            style: "@base"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "Post-deploy"
+          cell:
+            style: "@label"
+            padding: 9pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            color: "#687078"
+            text: "PENDING"
+
+      paragraph @signoff:
+        style: "@base"
+        margin-top: 26pt
+        padding: 13pt
+        background: "#F2EEE6"
+        border-width: 1pt
+        border-color: "#CDC7BD"
+        border-radius: 4pt
+        text: blocked ? "Sign-off is withheld until the open publication gate is closed." : "All named evidence is complete; final sign-off may proceed."
+
+      paragraph @footer:
+        style: "@label"
+        margin-top: 38pt
+        padding-top: 10pt
+        border-top-width: 1pt
+        border-color: "#CDC7BD"
+        text: "DECISION RECORD / GENERATED LOCALLY / HASHED EXACTLY"
+
+      paragraph @evidence-hash:
+        font: "Courier"
+        size: 8pt
+        line-height: 11pt
+        bind: "evidenceHash"
+        color: "#687078"

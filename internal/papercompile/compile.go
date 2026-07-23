@@ -860,13 +860,13 @@ func parseCanvasOffset(source string) (float64, bool) {
 
 func (c *compiler) compileTable(node *paperlang.Node) {
 	properties, children := c.members(node, tableProperties)
-	table := c.compileTableBlock(node, properties, children)
 	index := len(c.result.Document.Body)
+	table := c.compileTableBlock(node, properties, children, index)
 	c.result.Document.Body = append(c.result.Document.Body, table)
 	c.mapNode(node, index, -1)
 }
 
-func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string]paperlang.Property, children []*paperlang.Node) layout.TableBlock {
+func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string]paperlang.Property, children []*paperlang.Node, bodyIndex int) layout.TableBlock {
 	table := layout.TableBlock{}
 	if property, ok := properties["caption"]; ok {
 		if value, valid := c.stringProperty(property); valid {
@@ -917,8 +917,12 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 				c.unsupportedNode(cellNode, "table-row accepts only cell children")
 				continue
 			}
+			cellIndex := cellCount
 			cellCount++
 			cellProperties, content := c.members(cellNode, tableCellProperties)
+			if bodyIndex >= 0 {
+				c.mapNestedNode(cellNode, bodyIndex, cellIndex, -1)
+			}
 			cell := layout.TableCell{Header: header, ColSpan: 1, RowSpan: 1, Style: c.compileTextStyle(cellNode, cellProperties), Box: c.compileBoxStyle(cellProperties)}
 			if property, ok := cellProperties["header-cell"]; ok {
 				cell.Header, _ = c.boolProperty(property)
@@ -947,6 +951,7 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 				}
 			}
 			for _, child := range content {
+				blockIndex := len(cell.Blocks)
 				switch child.Kind {
 				case paperlang.NodeText:
 					text := ""
@@ -954,10 +959,19 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 						text = *child.Value.StringValue
 					}
 					cell.Blocks = append(cell.Blocks, layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: text}}})
+					if bodyIndex >= 0 {
+						c.mapNestedNode(child, bodyIndex, cellIndex, blockIndex)
+					}
 				case paperlang.NodeParagraph:
 					p, textNodes := c.members(child, boxedTextProperties)
-					segments, _ := c.compileTextChildren(child, textNodes)
+					segments, inlineTextNodes := c.compileTextChildren(child, textNodes)
 					cell.Blocks = append(cell.Blocks, layout.ParagraphBlock{Segments: segments, Style: c.compileTextStyle(child, p), Box: c.compileBoxStyle(p)})
+					if bodyIndex >= 0 {
+						c.mapNestedNode(child, bodyIndex, cellIndex, blockIndex)
+						for _, textNode := range inlineTextNodes {
+							c.mapNestedNode(textNode, bodyIndex, cellIndex, blockIndex)
+						}
+					}
 				case paperlang.NodeList:
 					listProperties, items := c.members(child, listProperties)
 					list := layout.ListBlock{Style: c.compileTextStyle(child, listProperties), Box: c.compileBoxStyle(listProperties)}
@@ -978,6 +992,9 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 					}
 					if len(list.Items) > 0 {
 						cell.Blocks = append(cell.Blocks, list)
+						if bodyIndex >= 0 {
+							c.mapNestedNode(child, bodyIndex, cellIndex, blockIndex)
+						}
 					}
 				case paperlang.NodeImage:
 					p, _ := c.members(child, imageProperties)
@@ -1015,6 +1032,9 @@ func (c *compiler) compileTableBlock(node *paperlang.Node, properties map[string
 					}
 					if len(image.Data) > 0 && (image.Decorative || strings.TrimSpace(image.Alt) != "") {
 						cell.Blocks = append(cell.Blocks, image)
+						if bodyIndex >= 0 {
+							c.mapNestedNode(child, bodyIndex, cellIndex, blockIndex)
+						}
 					}
 				default:
 					c.unsupportedNode(child, "table cell supports text, paragraph, list, and image content")
@@ -1391,7 +1411,7 @@ func (c *compiler) compileRowColumnItem(node *paperlang.Node, bodyIndex, itemInd
 		}
 		child = image
 	case paperlang.NodeTable:
-		child = c.compileTableBlock(node, properties, children)
+		child = c.compileTableBlock(node, properties, children, -1)
 	case paperlang.NodeRow, paperlang.NodeColumn:
 		nested := c.compileRowColumnSurface(node, properties, true)
 		for nestedIndex, nestedChild := range children {

@@ -1,0 +1,80 @@
+{
+  "journal": "Journal of Reproducible Systems",
+  "manuscriptId": "JRS-2026-1842",
+  "manuscriptTitle": "Deterministic Pagination as an Experimental Control in Computational Publishing",
+  "articleType": "Original Research",
+  "reviewRound": "Round 1",
+  "reviewDate": "22 July 2026",
+  "reviewerRole": "Reviewer 2",
+  "expertise": "Scientific publishing systems, reproducible computation, document layout engines, and research software evaluation",
+  "recommendation": "Major revision",
+  "overallScore": 78,
+  "summary": "This manuscript presents a timely and technically credible argument that pagination should be treated as part of the reproducible computational environment. The architecture is clearly described and the benchmark is unusually transparent. The central claim is promising, but the evaluation currently conflates geometric stability with scientific usability and needs a stronger comparison against established paged-media systems.",
+  "rationale": "The work is suitable for reconsideration after the authors broaden the baseline set, report uncertainty around performance measurements, and clarify which guarantees follow from the planner versus the pinned font and raster environment.",
+  "confidentialComments": "The submission appears original and falls squarely within the journal's scope. I found no ethical concerns or undisclosed conflicts. The requested revision is substantial but achievable without a new study cohort.",
+  "declaration": "I reviewed this manuscript independently, have no financial or professional conflict of interest, and did not attempt to identify the authors. This report contains no confidential third-party material.",
+  "scores": [
+    {
+      "criterion": "Originality",
+      "score": 86,
+      "assessment": "A useful reframing of page geometry as inspectable experimental evidence."
+    },
+    {
+      "criterion": "Methodological rigor",
+      "score": 74,
+      "assessment": "The deterministic protocol is strong; baseline selection and uncertainty reporting need work."
+    },
+    {
+      "criterion": "Reproducibility",
+      "score": 92,
+      "assessment": "Inputs, units, layout constraints, and verification stages are described precisely."
+    },
+    {
+      "criterion": "Clarity",
+      "score": 81,
+      "assessment": "Well structured overall, with several dense implementation passages that should be shortened."
+    }
+  ],
+  "majorComments": [
+    {
+      "number": "01",
+      "title": "Separate geometric identity from document usability",
+      "finding": "The evaluation demonstrates identical page plans and rasters, but it does not test whether the resulting reading order, table breaks, or footnote placement meet scholarly publishing expectations.",
+      "requestedAction": "Add a qualitative audit rubric and report independent assessments for pagination quality alongside pixel identity."
+    },
+    {
+      "number": "02",
+      "title": "Expand the comparison set",
+      "finding": "The browser-flow baseline is informative but too broad. Mature paged-media engines and TeX-based workflows already reduce several sources of instability discussed in the paper.",
+      "requestedAction": "Include at least one paged CSS engine and one TeX workflow, or narrow the comparative claims and explain why those systems were excluded."
+    },
+    {
+      "number": "03",
+      "title": "Report timing distributions",
+      "finding": "Compilation time is summarized by a mean over five runs. Initialization, font loading, and long-tail behavior are important for the proposed production use case.",
+      "requestedAction": "Provide medians, dispersion, warm and cold measurements, and the exact hardware and runtime configuration."
+    }
+  ],
+  "minorComments": [
+    {
+      "number": "1",
+      "location": "Abstract",
+      "comment": "Define \"geometry variance\" at first use and state the corpus size."
+    },
+    {
+      "number": "2",
+      "location": "Figure 2",
+      "comment": "Increase label contrast and identify which stages are deterministic by construction."
+    },
+    {
+      "number": "3",
+      "location": "Methods 2.4",
+      "comment": "Clarify whether fallback fonts are rejected or incorporated into the plan hash."
+    },
+    {
+      "number": "4",
+      "location": "References",
+      "comment": "Add recent work on reproducible containers for scholarly publishing pipelines."
+    }
+  ]
+}

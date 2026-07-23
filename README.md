@@ -61,25 +61,9 @@ go build -o ./bin/paper-studio ./cmd/paper-studio
 
 Confirm the installation with `paper version` and `paper-studio version`.
 
-## Start a project
+## Create a document
 
-`paper init` creates a template, sample data, and a `paper.project.json` file:
-
-```sh
-paper init invoice my-invoice
-cd my-invoice
-paper check
-paper render
-paper studio
-```
-
-The project file supplies the source, data, output format, and output path, so
-the commands do not need repeated arguments. See the
-[project-file reference](docs/reference/project-file.md) for configuration and
-environment-variable precedence.
-
-For a single-file workflow, save the opening example as `hello.paper`, create
-`data.json`:
+Save the opening example as `hello.paper` and create `data.json`:
 
 ```json
 {"name":"Ada Lovelace"}
@@ -105,7 +89,6 @@ properties, visibility, switches, optional data, and component selection.
 
 | Command | Purpose |
 | --- | --- |
-| `paper init` | Create a project from a built-in template |
 | `paper fmt` | Format Paper source |
 | `paper check` | Parse, validate, and plan a document |
 | `paper render` | Generate PDF or standalone HTML |
@@ -120,7 +103,7 @@ Run `paper help COMMAND` for command-specific options and examples. The
 
 ## Paper Studio
 
-Studio opens a local editing session for a Paper file or project:
+Studio opens a local editing session for a Paper file:
 
 ```sh
 paper studio examples/hello-world/hello-world.paper
@@ -195,7 +178,7 @@ are private. Custom fonts are supplied directly as TTF/OTF assets.
 make bootstrap   # install pinned development tools
 make test-fast   # formatting, vet, command, and internal tests
 make test        # complete Go test suite
-make docs-check  # build the CLI and exercise the documented project flow
+make docs-check  # build the CLI and exercise the documented command flow
 npm ci
 make docs-site-check # build VitePress and smoke-test the browser compiler
 ```

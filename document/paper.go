@@ -2827,7 +2827,11 @@ func paperBlockIdentity(mapping papercompile.CompileMapping, bodyIndex, segmentI
 		return paperRevisionScopedFallbackIdentity(mapping.SourceRevision, identity, bodyIndex, segmentIndex, nestedIndex, fallback, paperlang.NodeKind("block"), paperlang.Span{})
 	}
 	if selected.ID == "" {
-		return paperRevisionScopedFallbackIdentity(mapping.SourceRevision, identity, bodyIndex, segmentIndex, nestedIndex, fallback, selected.Kind, selected.Span)
+		fallbackIdentity := paperRevisionScopedFallbackIdentity(mapping.SourceRevision, identity, bodyIndex, segmentIndex, nestedIndex, fallback, selected.Kind, selected.Span)
+		if selected.InstancePath != "" {
+			fallbackIdentity.instance = layoutengine.InstanceID(selected.InstancePath + "/" + string(fallbackIdentity.key))
+		}
+		return fallbackIdentity
 	}
 	readableID := selected.ID
 	if segmentIndex >= 0 && selected.SegmentIndex != segmentIndex {

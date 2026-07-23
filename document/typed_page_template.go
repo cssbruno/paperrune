@@ -113,7 +113,7 @@ func (f *pdfDocument) planTypedPageTemplate(ctx context.Context, doc *layout.Lay
 		}
 		var err error
 		if soleTable != nil {
-			bodyPlan, err = f.planTypedTableBodies(ctx, doc, *soleTable, "body[0]", selector)
+			bodyPlan, err = f.planTypedTableBodies(ctx, doc, *soleTable, "body[0]", selector, nil, -1)
 		} else if hasMixedTable || hasMixedRowColumn {
 			bodyPlan, err = f.planTypedMixedBodiesMapped(ctx, doc, paperMappingForRegion(mapping, layoutengine.RegionBody), selector)
 		} else {
@@ -401,7 +401,7 @@ func (f *pdfDocument) planTypedPageRegion(ctx context.Context, doc *layout.Layou
 	var plan layoutengine.LayoutPlan
 	if len(normalized) == 1 {
 		if table, ok := normalized[0].(layout.TableBlock); ok {
-			plan, err = f.planTypedTableBodies(ctx, &regionDoc, table, boxPath+".blocks[0]", selector)
+			plan, err = f.planTypedTableBodies(ctx, &regionDoc, table, boxPath+".blocks[0]", selector, nil, -1)
 		} else {
 			plan, err = f.planPaperTextBlocksMappedBodiesContext(ctx, &regionDoc, mapping, selector)
 		}

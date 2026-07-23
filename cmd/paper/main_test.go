@@ -715,6 +715,12 @@ func TestRunUsageAndSourceLimit(t *testing.T) {
 	if code != exitOK || stderr != "" || !strings.Contains(stdout, "PaperRune compiles") || !strings.Contains(stdout, "paper <command>") {
 		t.Fatalf("no args = %d, %q, %q", code, stdout, stderr)
 	}
+	for _, command := range []string{"check", "render"} {
+		code, stdout, stderr = invoke([]string{command}, "")
+		if code != exitUsage || stdout != "" || !strings.Contains(stderr, "expected exactly one FILE") {
+			t.Fatalf("%s without file = %d, %q, %q", command, code, stdout, stderr)
+		}
+	}
 	code, stdout, stderr = invoke([]string{"fmt", "--json", "-"}, strings.Repeat("x", maxSourceBytes+1))
 	if code != exitFailure || stderr != "" || !strings.Contains(stdout, "source exceeds") {
 		t.Fatalf("source limit = %d, %q, %q", code, stdout, stderr)
@@ -723,12 +729,16 @@ func TestRunUsageAndSourceLimit(t *testing.T) {
 
 func TestRunHelpVersionAndTypoSuggestion(t *testing.T) {
 	code, stdout, stderr := invoke([]string{"help", "render"}, "")
-	if code != exitOK || stderr != "" || !strings.Contains(stdout, "paper render [options] [FILE]") || !strings.Contains(stdout, "Examples:") {
+	if code != exitOK || stderr != "" || !strings.Contains(stdout, "paper render [options] FILE") || !strings.Contains(stdout, "Examples:") {
 		t.Fatalf("render help = %d, %q, %q", code, stdout, stderr)
 	}
 	code, stdout, stderr = invoke([]string{"renfer"}, "")
 	if code != exitUsage || stdout != "" || !strings.Contains(stderr, `Did you mean "render"?`) {
 		t.Fatalf("typo = %d, %q, %q", code, stdout, stderr)
+	}
+	code, stdout, stderr = invoke([]string{"init"}, "")
+	if code != exitUsage || stdout != "" || !strings.Contains(stderr, `unknown command "init"`) {
+		t.Fatalf("removed init = %d, %q, %q", code, stdout, stderr)
 	}
 	oldVersion := version
 	version = "v9.8.7-test"
@@ -736,31 +746,5 @@ func TestRunHelpVersionAndTypoSuggestion(t *testing.T) {
 	code, stdout, stderr = invoke([]string{"version", "--json"}, "")
 	if code != exitOK || stderr != "" || !strings.Contains(stdout, `"version":"v9.8.7-test"`) {
 		t.Fatalf("version = %d, %q, %q", code, stdout, stderr)
-	}
-}
-
-func TestRunInitCreatesRenderableProjects(t *testing.T) {
-	root := t.TempDir()
-	for _, template := range []string{"blank", "invoice", "report", "table-report", "letter"} {
-		t.Run(template, func(t *testing.T) {
-			dir := filepath.Join(root, template)
-			code, stdout, stderr := invoke([]string{"init", template, dir}, "")
-			if code != exitOK || stderr != "" || !strings.Contains(stdout, "Created "+template+" project") {
-				t.Fatalf("init = %d, %q, %q", code, stdout, stderr)
-			}
-			t.Chdir(dir)
-			code, stdout, stderr = invoke([]string{"check", "--json"}, "")
-			if code != exitOK || stderr != "" || !strings.Contains(stdout, `"ok":true`) {
-				t.Fatalf("project check = %d, %q, %q", code, stdout, stderr)
-			}
-			code, stdout, stderr = invoke([]string{"render"}, "")
-			if code != exitOK || stderr != "" || !strings.Contains(stdout, "Rendered ") {
-				t.Fatalf("project render = %d, %q, %q", code, stdout, stderr)
-			}
-			pdf, err := os.ReadFile(filepath.Join(dir, "dist", template+".pdf"))
-			if err != nil || !bytes.HasPrefix(pdf, []byte("%PDF-")) {
-				t.Fatalf("project PDF = %d bytes, %v", len(pdf), err)
-			}
-		})
 	}
 }

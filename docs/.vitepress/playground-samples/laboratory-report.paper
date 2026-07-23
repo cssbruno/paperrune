@@ -1,0 +1,675 @@
+document @laboratory-report:
+  language: "en"
+  title: "Laboratory report"
+
+  schema report:
+    string laboratory
+    string laboratoryAddress
+    string reportId
+    string panel
+    string status
+    string patientName
+    string patientId
+    string dateOfBirth
+    string sex
+    string accession
+    string specimen
+    string collectedAt
+    string receivedAt
+    string reportedAt
+    string authorizedAt
+    string orderingClinician
+    string interpretation
+    string specimenComment
+    string methodSummary
+    string authorizedBy
+    string credentials
+    string accreditation
+    string analyzer
+    string analyzerSerial
+    string reagentLot
+    string calibrationStatus
+    list object results:
+      max-items: 40
+      string analyte
+      string result
+      string unit
+      string reference
+      string flag
+    list object qualityControls:
+      max-items: 20
+      string control
+      string observed
+      string acceptance
+      string state
+
+  style @base:
+    font: "Helvetica"
+    size: 8.7pt
+    line-height: 12.5pt
+    color: "#23343B"
+
+  style @label:
+    style: "@base"
+    size: 6.8pt
+    line-height: 9pt
+    bold: true
+    color: "#137C82"
+
+  style @micro:
+    style: "@base"
+    size: 7pt
+    line-height: 9.5pt
+    color: "#687A80"
+
+  style @display:
+    style: "@base"
+    size: 24pt
+    line-height: 27pt
+    bold: true
+    color: "#12333B"
+
+  style @section:
+    style: "@base"
+    size: 11pt
+    line-height: 14pt
+    bold: true
+    color: "#12333B"
+
+  style @value:
+    style: "@base"
+    size: 9pt
+    line-height: 12pt
+    bold: true
+    color: "#193A42"
+
+  style @result:
+    font: "Courier"
+    size: 8.3pt
+    line-height: 11pt
+    color: "#23343B"
+
+  page @report-pages:
+    size: "A4"
+    margin: 42pt
+    page-numbers: true
+    page-number-format: "NORTHSTAR DIAGNOSTICS / %d of {pages}"
+    page-total-alias: "{pages}"
+    page-number-align: "outer"
+
+    body @report-body:
+      table @masthead:
+        split: "avoid"
+        table-column:
+          width: 68%
+        table-column:
+          width: 32%
+        table-row:
+          cell:
+            padding-bottom: 9pt
+            border-bottom-width: 3pt
+            border-color: "#137C82"
+            paragraph @laboratory:
+              style: "@section"
+              bind: "laboratory"
+            paragraph @laboratory-address:
+              style: "@micro"
+              bind: "laboratoryAddress"
+          cell:
+            padding-bottom: 9pt
+            border-bottom-width: 3pt
+            border-color: "#137C82"
+            align: "right"
+            paragraph @report-kind:
+              style: "@label"
+              align: "right"
+              text: "CLINICAL PATHOLOGY / FINAL REPORT"
+            paragraph @report-id:
+              style: "@result"
+              align: "right"
+              bind: "reportId"
+
+      paragraph @discipline:
+        style: "@label"
+        margin-top: 18pt
+        text: "HEMATOLOGY / AUTOMATED DIFFERENTIAL"
+
+      heading @panel:
+        level: 1
+        style: "@display"
+        bind: "panel"
+        margin-top: 4pt
+
+      paragraph @report-deck:
+        style: "@base"
+        margin-top: 5pt
+        margin-bottom: 14pt
+        color: "#617278"
+        text: "Quantitative findings, reference intervals, and instrument quality evidence in one signed analytical record."
+
+      table @patient-summary:
+        split: "avoid"
+        table-column:
+          width: 39%
+        table-column:
+          width: 21%
+        table-column:
+          width: 20%
+        table-column:
+          width: 20%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#12333B"
+              color: "#FFFFFF"
+              text: "PATIENT"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#12333B"
+              color: "#FFFFFF"
+              text: "PATIENT ID"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#12333B"
+              color: "#FFFFFF"
+              text: "DATE OF BIRTH"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#12333B"
+              color: "#FFFFFF"
+              text: "SEX"
+        table-row:
+          cell:
+            style: "@value"
+            bind: "patientName"
+            padding: 8pt
+            background: "#ECF4F4"
+          cell:
+            style: "@value"
+            bind: "patientId"
+            padding: 8pt
+            background: "#ECF4F4"
+          cell:
+            style: "@value"
+            bind: "dateOfBirth"
+            padding: 8pt
+            background: "#ECF4F4"
+          cell:
+            style: "@value"
+            bind: "sex"
+            padding: 8pt
+            background: "#ECF4F4"
+
+      paragraph @specimen-gap:
+        size: 1pt
+        line-height: 10pt
+        color: "#FFFFFF"
+        text: "."
+
+      table @specimen-strip:
+        split: "avoid"
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-row:
+          cell:
+            padding: 6pt
+            border-bottom-width: 1pt
+            border-color: "#BCD0D1"
+            paragraph:
+              style: "@label"
+              text: "ACCESSION"
+            paragraph:
+              style: "@result"
+              bind: "accession"
+          cell:
+            padding: 6pt
+            border-bottom-width: 1pt
+            border-color: "#BCD0D1"
+            paragraph:
+              style: "@label"
+              text: "SPECIMEN"
+            paragraph:
+              style: "@result"
+              bind: "specimen"
+          cell:
+            padding: 6pt
+            border-bottom-width: 1pt
+            border-color: "#BCD0D1"
+            paragraph:
+              style: "@label"
+              text: "COLLECTED"
+            paragraph:
+              style: "@result"
+              bind: "collectedAt"
+          cell:
+            padding: 6pt
+            border-bottom-width: 1pt
+            border-color: "#BCD0D1"
+            paragraph:
+              style: "@label"
+              text: "STATUS"
+            paragraph:
+              style: "@label"
+              bind: "status"
+              color: "#D05A3A"
+
+      paragraph @results-label:
+        style: "@label"
+        margin-top: 17pt
+        margin-bottom: 5pt
+        text: "ANALYTICAL RESULTS"
+
+      table @results-table:
+        repeat-header: true
+        split: "rows"
+        table-column:
+          width: 33%
+        table-column:
+          width: 18%
+        table-column:
+          width: 14%
+        table-column:
+          width: 23%
+        table-column:
+          width: 12%
+        table-header:
+          table-row:
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 7pt
+              background: "#137C82"
+              color: "#FFFFFF"
+              text: "ANALYTE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 7pt
+              background: "#137C82"
+              color: "#FFFFFF"
+              align: "right"
+              text: "RESULT"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 7pt
+              background: "#137C82"
+              color: "#FFFFFF"
+              text: "UNIT"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 7pt
+              background: "#137C82"
+              color: "#FFFFFF"
+              text: "REFERENCE"
+            cell:
+              header-cell: true
+              style: "@label"
+              padding: 7pt
+              background: "#137C82"
+              color: "#FFFFFF"
+              align: "center"
+              text: "FLAG"
+        repeat @result-rows:
+          source: "results"
+          instance-prefix: "results"
+          max-items: 40
+          table-row:
+            cell:
+              style: "@base"
+              bind: "analyte"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7E1E2"
+              bold: true
+            cell:
+              style: "@result"
+              bind: "result"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7E1E2"
+              align: "right"
+              bold: true
+            cell:
+              style: "@result"
+              bind: "unit"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7E1E2"
+            cell:
+              style: "@result"
+              bind: "reference"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7E1E2"
+            cell:
+              style: "@label"
+              bind: "flag"
+              padding: 7pt
+              border-bottom-width: 1pt
+              border-color: "#D7E1E2"
+              color: "#D05A3A"
+              align: "center"
+
+      table @interpretation:
+        split: "avoid"
+        table-column:
+          width: 18%
+        table-column:
+          width: 82%
+        table-row:
+          cell:
+            style: "@label"
+            padding: 10pt
+            background: "#12333B"
+            color: "#FFFFFF"
+            text: "INTERPRETATION"
+          cell:
+            style: "@base"
+            bind: "interpretation"
+            padding: 10pt
+            background: "#ECF4F4"
+
+      paragraph @ordering-line:
+        style: "@micro"
+        margin-top: 9pt
+        text: "ORDERING CLINICIAN"
+
+      paragraph @ordering-clinician:
+        style: "@value"
+        bind: "orderingClinician"
+
+      page-break @analytical-record:
+
+      table @methods-masthead:
+        split: "avoid"
+        table-column:
+          width: 68%
+        table-column:
+          width: 32%
+        table-row:
+          cell:
+            style: "@label"
+            padding-bottom: 9pt
+            border-bottom-width: 3pt
+            border-color: "#137C82"
+            text: "NORTHSTAR DIAGNOSTICS / ANALYTICAL RECORD"
+          cell:
+            style: "@result"
+            padding-bottom: 9pt
+            border-bottom-width: 3pt
+            border-color: "#137C82"
+            align: "right"
+            bind: "accession"
+
+      paragraph @methods-kicker:
+        style: "@label"
+        margin-top: 21pt
+        text: "METHODS / QUALITY / AUTHORIZATION"
+
+      heading @methods-title:
+        level: 1
+        style: "@display"
+        margin-top: 4pt
+        text: "Analytical record"
+
+      table @timing:
+        split: "avoid"
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-column:
+          width: 25%
+        table-row:
+          cell:
+            padding: 9pt
+            background: "#ECF4F4"
+            paragraph:
+              style: "@label"
+              text: "COLLECTED"
+            paragraph:
+              style: "@result"
+              bind: "collectedAt"
+          cell:
+            padding: 9pt
+            background: "#ECF4F4"
+            paragraph:
+              style: "@label"
+              text: "RECEIVED"
+            paragraph:
+              style: "@result"
+              bind: "receivedAt"
+          cell:
+            padding: 9pt
+            background: "#ECF4F4"
+            paragraph:
+              style: "@label"
+              text: "REPORTED"
+            paragraph:
+              style: "@result"
+              bind: "reportedAt"
+          cell:
+            padding: 9pt
+            background: "#ECF4F4"
+            paragraph:
+              style: "@label"
+              text: "AUTHORIZED"
+            paragraph:
+              style: "@result"
+              bind: "authorizedAt"
+
+      paragraph @method-label:
+        style: "@label"
+        margin-top: 22pt
+        margin-bottom: 5pt
+        text: "METHOD SUMMARY"
+
+      paragraph @method-summary:
+        style: "@base"
+        bind: "methodSummary"
+        padding: 12pt
+        background: "#F5F8F8"
+        border-left-width: 4pt
+        border-color: "#137C82"
+
+      paragraph @quality-label:
+        style: "@label"
+        margin-top: 22pt
+        margin-bottom: 5pt
+        text: "INSTRUMENT QUALITY CONTROLS"
+
+      table @quality-table:
+        split: "avoid"
+        table-column:
+          width: 32%
+        table-column:
+          width: 22%
+        table-column:
+          width: 30%
+        table-column:
+          width: 16%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#12333B"
+              color: "#FFFFFF"
+              text: "CONTROL"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#12333B"
+              color: "#FFFFFF"
+              text: "OBSERVED"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#12333B"
+              color: "#FFFFFF"
+              text: "ACCEPTANCE"
+            cell:
+              style: "@label"
+              padding: 7pt
+              background: "#12333B"
+              color: "#FFFFFF"
+              align: "center"
+              text: "STATE"
+        repeat @quality-rows:
+          source: "qualityControls"
+          instance-prefix: "qualityControls"
+          max-items: 20
+          table-row:
+            cell:
+              style: "@base"
+              bind: "control"
+              padding: 8pt
+              border-bottom-width: 1pt
+              border-color: "#D7E1E2"
+            cell:
+              style: "@result"
+              bind: "observed"
+              padding: 8pt
+              border-bottom-width: 1pt
+              border-color: "#D7E1E2"
+            cell:
+              style: "@result"
+              bind: "acceptance"
+              padding: 8pt
+              border-bottom-width: 1pt
+              border-color: "#D7E1E2"
+            cell:
+              style: "@label"
+              bind: "state"
+              padding: 8pt
+              border-bottom-width: 1pt
+              border-color: "#D7E1E2"
+              align: "center"
+
+      paragraph @provenance-label:
+        style: "@label"
+        margin-top: 18pt
+        margin-bottom: 5pt
+        text: "ANALYTICAL PROVENANCE"
+
+      table @provenance:
+        split: "avoid"
+        table-column:
+          width: 30%
+        table-column:
+          width: 22%
+        table-column:
+          width: 22%
+        table-column:
+          width: 26%
+        table-header:
+          table-row:
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#ECF4F4"
+              text: "ANALYZER"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#ECF4F4"
+              text: "SERIAL"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#ECF4F4"
+              text: "REAGENT LOT"
+            cell:
+              style: "@label"
+              padding: 6pt
+              background: "#ECF4F4"
+              text: "CALIBRATION"
+        table-row:
+          cell:
+            style: "@base"
+            padding: 7pt
+            bind: "analyzer"
+          cell:
+            style: "@result"
+            padding: 7pt
+            bind: "analyzerSerial"
+          cell:
+            style: "@result"
+            padding: 7pt
+            bind: "reagentLot"
+          cell:
+            style: "@base"
+            padding: 7pt
+            bind: "calibrationStatus"
+
+      paragraph @specimen-comment-label:
+        style: "@label"
+        margin-top: 18pt
+        margin-bottom: 5pt
+        text: "SPECIMEN COMMENT"
+
+      paragraph @specimen-comment:
+        style: "@base"
+        bind: "specimenComment"
+        padding: 11pt
+        background: "#FFFFFF"
+        border-width: 1pt
+        border-color: "#BCD0D1"
+        border-radius: 4pt
+
+      table @authorization:
+        split: "avoid"
+        table-column:
+          width: 62%
+        table-column:
+          width: 38%
+        table-row:
+          cell:
+            padding: 12pt
+            background: "#12333B"
+            paragraph:
+              style: "@label"
+              color: "#8ED8D7"
+              text: "AUTHORIZED ELECTRONICALLY BY"
+            paragraph:
+              style: "@value"
+              bind: "authorizedBy"
+              color: "#FFFFFF"
+            paragraph:
+              style: "@micro"
+              bind: "credentials"
+              color: "#D7E8E8"
+          cell:
+            padding: 12pt
+            background: "#137C82"
+            paragraph:
+              style: "@label"
+              color: "#FFFFFF"
+              text: "ACCREDITATION"
+            paragraph:
+              style: "@micro"
+              bind: "accreditation"
+              color: "#FFFFFF"
+
+      paragraph @legal:
+        style: "@micro"
+        margin-top: 16pt
+        padding-top: 9pt
+        border-top-width: 1pt
+        border-color: "#BCD0D1"
+        text: "Results apply to the specimen received. Reference intervals may vary by method, population, age, and sex. Clinical correlation is required."

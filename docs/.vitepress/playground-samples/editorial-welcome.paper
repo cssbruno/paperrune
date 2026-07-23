@@ -1,0 +1,167 @@
+document @welcome:
+  language: "en"
+  title: "Editorial welcome"
+
+  schema input:
+    string name
+    string deck
+    bool premium
+    optional string note
+    string principleOne
+    string principleTwo
+    string principleThree
+    string closing
+
+  style @base:
+    font: "Helvetica"
+    size: 10pt
+    line-height: 15pt
+    color: "#25313A"
+
+  style @label:
+    style: "@base"
+    size: 8pt
+    line-height: 10pt
+    bold: true
+    color: "#D94F2B"
+
+  style @display:
+    style: "@base"
+    size: 39pt
+    line-height: 42pt
+    bold: true
+    color: "#111A21"
+
+  style @small:
+    style: "@base"
+    size: 8pt
+    line-height: 12pt
+    color: "#687078"
+
+  page @sheet:
+    size: "A4"
+    margin: 54pt
+    page-numbers: true
+    page-number-format: "FIELD NOTE / %d of {pages}"
+    page-total-alias: "{pages}"
+    page-number-align: "outer"
+    body @content:
+      paragraph @masthead:
+        style: "@label"
+        padding-bottom: 11pt
+        border-bottom-width: 2pt
+        border-color: "#111A21"
+        color: "#111A21"
+        text: "PAPERRUNE / FIELD NOTE 01                         2026"
+
+      paragraph @edition:
+        style: "@label"
+        margin-top: 38pt
+        text: premium ? "THE PREMIUM DOCUMENT WORKSPACE" : "THE DOCUMENT WORKSPACE"
+
+      heading @title:
+        level: 1
+        style: "@display"
+        bind: "name"
+        margin-top: 8pt
+        padding: 22pt
+        background: "#111A21"
+        color: "#FFFFFF"
+        border-left-width: 7pt
+        border-color: "#D94F2B"
+
+      paragraph @deck:
+        style: "@base"
+        bind: "deck"
+        size: 14pt
+        line-height: 21pt
+        margin-top: 16pt
+        margin-bottom: 26pt
+        color: "#56616A"
+
+      paragraph @manifesto:
+        style: "@base"
+        bind: "note"
+        bind-required: false
+        padding: 15pt
+        padding-left: 18pt
+        background: "#F2EEE6"
+        border-width: 1pt
+        border-color: "#D94F2B"
+        border-radius: 5pt
+        size: 13pt
+        line-height: 20pt
+        bold: true
+
+      paragraph @principles-label:
+        style: "@label"
+        margin-top: 36pt
+        margin-bottom: 8pt
+        text: "THREE RULES FOR A SERIOUS DOCUMENT"
+
+      table @principles:
+        split: "avoid"
+        table-column:
+          width: 23%
+        table-column:
+          width: 77%
+        table-row:
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "01 / STRUCTURE"
+          cell:
+            style: "@base"
+            bind: "principleOne"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+        table-row:
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "02 / RHYTHM"
+          cell:
+            style: "@base"
+            bind: "principleTwo"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+        table-row:
+          cell:
+            style: "@label"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+            text: "03 / PROOF"
+          cell:
+            style: "@base"
+            bind: "principleThree"
+            padding: 11pt
+            border-bottom-width: 1pt
+            border-color: "#CDC7BD"
+
+      paragraph @closing-label:
+        style: "@label"
+        margin-top: 34pt
+        text: "DESIGNED IN PAPER / RENDERED IN GO WASM"
+
+      heading @closing:
+        level: 2
+        bind: "closing"
+        margin-top: 7pt
+        size: 23pt
+        line-height: 28pt
+        color: "#111A21"
+
+      paragraph @footer:
+        style: "@small"
+        margin-top: 42pt
+        padding-top: 10pt
+        border-top-width: 1pt
+        border-color: "#CDC7BD"
+        text: "Edit the Paper source or JSON. The WebAssembly renderer rebuilds this page automatically."
