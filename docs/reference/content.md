@@ -41,8 +41,11 @@ Local properties override named styles.
 
 ## Text construction and binding
 
-Use either `text: expression` or child `text` segments. `bind` formats a schema
-path and replaces fallback text when data is selected.
+Use `text: expression` (or child `text` segments) for authored and computed
+copy. Use `bind` by itself for JSON-backed copy. A bind-only node uses its
+canonical schema path as the deterministic placeholder when no data is
+selected; selected data replaces that internal placeholder. Legacy templates
+that combine `bind` with fallback `text` remain supported.
 
 | `format` | Input | Additional properties |
 | --- | --- | --- |

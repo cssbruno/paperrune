@@ -66,6 +66,7 @@ let layoutResult;
 let academicSample;
 let academicResult;
 for (const sample of playgroundSamples) {
+  assertNoMixedBindAndText(sample);
   const result = await globalThis.PaperStudioWASM.compile({source: sample.source, data: sample.data, dataName: 'playground', page: 1});
   const samplePNG = Buffer.from(result.png || '', 'base64');
   if (!result.ok || 'svg' in result || samplePNG.length < 8 || samplePNG[0] !== 0x89 || samplePNG[1] !== 0x50 ||
@@ -117,6 +118,23 @@ assertFractionBand(Buffer.from(compactLayout.png || '', 'base64'), 3, 16);
 
 console.log(`docs WASM smoke: ${compiled.pages} page, ${playgroundSamples.length} samples, plan ${compiled.hash.slice(0, 12)}`);
 process.exit(0);
+
+function assertNoMixedBindAndText(sample) {
+  const lines = sample.source.split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    const bind = lines[index].match(/^(\s*)bind:/);
+    if (!bind) continue;
+    const propertyIndent = bind[1].length;
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      if (!lines[cursor].trim()) continue;
+      const indent = lines[cursor].match(/^\s*/)[0].length;
+      if (indent < propertyIndent) break;
+      if (indent === propertyIndent && /^\s*text:/.test(lines[cursor])) {
+        throw new Error(`playground sample ${JSON.stringify(sample.name)} mixes bind and text at source lines ${index + 1} and ${cursor + 1}`);
+      }
+    }
+  }
+}
 
 function assertFractionBand(png, ratio, expectedGap) {
   const image = decodeRasterPNG(png);

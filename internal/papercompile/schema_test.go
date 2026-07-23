@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 )
 
@@ -19,6 +20,22 @@ const schemaFixture = `document:
       number price
     number total
 `
+
+func TestCompileAllowsBindOnlyTextNode(t *testing.T) {
+	source := schemaFixture + "  page:\n    body:\n      paragraph @total-output:\n        bind: \"total\"\n"
+	parsed := paperlang.Parse("bind-only.paper", source)
+	compiled := Compile(parsed.AST)
+	if !parsed.OK() || !compiled.OK() {
+		t.Fatalf("diagnostics = %+v / %+v", parsed.Diagnostics, compiled.Diagnostics)
+	}
+	if len(compiled.Document.Body) != 1 {
+		t.Fatalf("body = %#v", compiled.Document.Body)
+	}
+	paragraph := compiled.Document.Body[0].(layout.ParagraphBlock)
+	if got := layout.TextSegmentsPlainText(paragraph.Segments); got != "@invoice.total" {
+		t.Fatalf("bind-only placeholder = %q, want @invoice.total", got)
+	}
+}
 
 func TestCompileBuildsDeterministicSchemaIRAndValidatesListPath(t *testing.T) {
 	source := schemaFixture + "  page:\n    body:\n      paragraph @price-output:\n        bind: \"total\"\n        text: \"Price\"\n"

@@ -1712,11 +1712,18 @@ func (c *compiler) compileTextChildren(parent *paperlang.Node, children []*paper
 			textNodes = append(textNodes, child)
 		}
 	}
+	binding, bound := c.bindings[parent]
 	if len(segments) == 0 {
-		c.add("PAPER_COMPILE_TEXT_REQUIRED", fmt.Sprintf("%s has no compilable text", parent.Kind), "add a text child with a quoted string", parent.HeaderSpan)
-		return segments, textNodes
+		if !bound {
+			c.add("PAPER_COMPILE_TEXT_REQUIRED", fmt.Sprintf("%s has no compilable text", parent.Kind), "add text or a primitive bind path", parent.HeaderSpan)
+			return segments, textNodes
+		}
+		// Bind-only authored nodes use the canonical path as a deterministic
+		// template placeholder when no fixture is selected. Scenario compilation
+		// replaces it below with the formatted JSON value.
+		segments = append(segments, layout.TextSegment{Text: binding.path})
 	}
-	if binding, bound := c.bindings[parent]; bound && c.fixture != nil {
+	if bound && c.fixture != nil {
 		text, ok := c.bindingText(parent, binding)
 		if !ok {
 			text = ""

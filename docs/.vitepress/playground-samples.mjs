@@ -15,6 +15,15 @@ export const playgroundSamples = [
     number improvement
     number confidence
     bool peerReviewed
+    string measureLabel
+    string endpointLabel
+    string browserFlowLabel
+    string plannedLabel
+    string changeLabel
+    string confidenceIntervalLabel
+    string subgroupLabel
+    string sampleSizeLabel
+    string flowVarianceLabel
 
   style @body:
     font: "Times"
@@ -130,19 +139,16 @@ export const playgroundSamples = [
         style: "@title"
         bind: "title"
         margin-top: 7pt
-        text: "Article title"
 
       paragraph @authors:
         style: "@author"
         bind: "authors"
         margin-top: 10pt
-        text: "Authors"
 
       paragraph @affiliation-line:
         style: "@affiliation"
         bind: "affiliation"
         margin-top: 2pt
-        text: "Affiliation"
 
       paragraph @identity-gap:
         size: 1pt
@@ -170,13 +176,11 @@ export const playgroundSamples = [
             bind: "abstract"
             padding: 9pt
             background: "#EEF2F3"
-            text: "Abstract"
           cell:
             style: "@caption"
             bind: "doi"
             padding: 9pt
             background: "#E2EAED"
-            text: "DOI"
 
       paragraph @keywords:
         style: "@caption"
@@ -211,7 +215,6 @@ export const playgroundSamples = [
               format-locale: "en-US"
               format-min-fraction: 0
               format-max-fraction: 0
-              text: "0"
             paragraph @participants-label:
               style: "@label"
               text: "DOCUMENTS / TEST CORPUS"
@@ -227,7 +230,6 @@ export const playgroundSamples = [
               format-locale: "en-US"
               format-min-fraction: 1
               format-max-fraction: 1
-              text: "0.0"
             paragraph @improvement-label:
               style: "@label"
               text: "PERCENT FEWER LAYOUT SHIFTS"
@@ -243,7 +245,6 @@ export const playgroundSamples = [
               format-locale: "en-US"
               format-min-fraction: 0
               format-max-fraction: 0
-              text: "0"
             paragraph @confidence-label:
               style: "@label"
               text: "PERCENT CONFIDENCE"
@@ -327,31 +328,31 @@ export const playgroundSamples = [
           table-row:
             cell:
               style: "@label"
+              bind: "measureLabel"
               padding: 6pt
               background: "#315D7A"
               color: "#FFFFFF"
-              text: "MEASURE"
             cell:
               style: "@label"
+              bind: "browserFlowLabel"
               padding: 6pt
               background: "#315D7A"
               color: "#FFFFFF"
               align: "right"
-              text: "BROWSER FLOW"
             cell:
               style: "@label"
+              bind: "plannedLabel"
               padding: 6pt
               background: "#315D7A"
               color: "#FFFFFF"
               align: "right"
-              text: "PLANNED"
             cell:
               style: "@label"
+              bind: "changeLabel"
               padding: 6pt
               background: "#315D7A"
               color: "#FFFFFF"
               align: "right"
-              text: "CHANGE"
         table-row:
           cell:
             style: "@caption"
@@ -886,31 +887,31 @@ export const playgroundSamples = [
           table-row:
             cell:
               style: "@label"
+              bind: "endpointLabel"
               padding: 7pt
               background: "#17232D"
               color: "#FFFFFF"
-              text: "ENDPOINT"
             cell:
               style: "@label"
+              bind: "browserFlowLabel"
               padding: 7pt
               background: "#17232D"
               color: "#FFFFFF"
               align: "right"
-              text: "BROWSER FLOW"
             cell:
               style: "@label"
+              bind: "plannedLabel"
               padding: 7pt
               background: "#17232D"
               color: "#FFFFFF"
               align: "right"
-              text: "PLANNED"
             cell:
               style: "@label"
+              bind: "confidenceIntervalLabel"
               padding: 7pt
               background: "#17232D"
               color: "#FFFFFF"
               align: "right"
-              text: "95% CI"
         table-row:
           cell:
             style: "@body"
@@ -1314,31 +1315,31 @@ export const playgroundSamples = [
           table-row:
             cell:
               style: "@label"
+              bind: "subgroupLabel"
               padding: 6pt
               background: "#315D7A"
               color: "#FFFFFF"
-              text: "SUBGROUP"
             cell:
               style: "@label"
+              bind: "sampleSizeLabel"
               padding: 6pt
               background: "#315D7A"
               color: "#FFFFFF"
               align: "right"
-              text: "N"
             cell:
               style: "@label"
+              bind: "flowVarianceLabel"
               padding: 6pt
               background: "#315D7A"
               color: "#FFFFFF"
               align: "right"
-              text: "FLOW VARIANCE"
             cell:
               style: "@label"
+              bind: "plannedLabel"
               padding: 6pt
               background: "#315D7A"
               color: "#FFFFFF"
               align: "right"
-              text: "PLANNED"
         table-row:
           cell:
             style: "@body"
@@ -1696,7 +1697,16 @@ export const playgroundSamples = [
   "participants": 1248,
   "improvement": 18.4,
   "confidence": 95,
-  "peerReviewed": true
+  "peerReviewed": true,
+  "measureLabel": "MEASURE",
+  "endpointLabel": "ENDPOINT",
+  "browserFlowLabel": "BROWSER FLOW",
+  "plannedLabel": "PLANNED",
+  "changeLabel": "CHANGE",
+  "confidenceIntervalLabel": "95% CI",
+  "subgroupLabel": "SUBGROUP",
+  "sampleSizeLabel": "N",
+  "flowVarianceLabel": "FLOW VARIANCE"
 }`,
   },
   {
@@ -1772,7 +1782,6 @@ export const playgroundSamples = [
         color: "#FFFFFF"
         border-left-width: 7pt
         border-color: "#D94F2B"
-        text: name
 
       paragraph @deck:
         style: "@base"
@@ -1782,7 +1791,6 @@ export const playgroundSamples = [
         margin-top: 16pt
         margin-bottom: 26pt
         color: "#56616A"
-        text: "A page with a point of view, compiled from typed data and exact decisions."
 
       paragraph @manifesto:
         style: "@base"
@@ -1797,7 +1805,6 @@ export const playgroundSamples = [
         size: 13pt
         line-height: 20pt
         bold: true
-        text: "Make the hierarchy obvious. Make every measurement intentional."
 
       paragraph @principles-label:
         style: "@label"
@@ -1824,7 +1831,6 @@ export const playgroundSamples = [
             padding: 11pt
             border-bottom-width: 1pt
             border-color: "#CDC7BD"
-            text: "Lead with meaning. Let spacing and scale establish the reading order."
         table-row:
           cell:
             style: "@label"
@@ -1838,7 +1844,6 @@ export const playgroundSamples = [
             padding: 11pt
             border-bottom-width: 1pt
             border-color: "#CDC7BD"
-            text: "Alternate dense evidence with quiet space so the page can breathe."
         table-row:
           cell:
             style: "@label"
@@ -1852,7 +1857,6 @@ export const playgroundSamples = [
             padding: 11pt
             border-bottom-width: 1pt
             border-color: "#CDC7BD"
-            text: "Compile the same inputs into the same pixels, every single time."
 
       paragraph @closing-label:
         style: "@label"
@@ -1866,7 +1870,6 @@ export const playgroundSamples = [
         size: 23pt
         line-height: 28pt
         color: "#111A21"
-        text: "The browser is the press. The plan is the contract."
 
       paragraph @footer:
         style: "@small"
@@ -1950,7 +1953,6 @@ export const playgroundSamples = [
         style: "@display"
         bind: "title"
         margin-top: 8pt
-        text: "A measured page."
 
       paragraph @intro:
         style: "@base"
@@ -1960,7 +1962,6 @@ export const playgroundSamples = [
         size: 13pt
         line-height: 19pt
         color: "#59636B"
-        text: "Fractions, physical units, and typed expressions resolve before a single pixel is painted."
 
       row @ratio:
         gap: compact ? 8pt : 16pt
@@ -2213,7 +2214,6 @@ export const playgroundSamples = [
           bind: "invoiceNumber"
           bold: true
           align: "right"
-          text: "INV-0000"
 
       paragraph @title-gap:
         size: 1pt
@@ -2250,14 +2250,12 @@ export const playgroundSamples = [
               style: "@base"
               bind: "seller"
               bold: true
-              text: "Seller"
           cell:
             padding: 10pt
             paragraph @customer:
               style: "@base"
               bind: "customer"
               bold: true
-              text: "Customer"
         table-row:
           cell:
             padding: 10pt
@@ -2265,14 +2263,12 @@ export const playgroundSamples = [
               style: "@base"
               bind: "sellerContact"
               color: "#697078"
-              text: "Contact"
           cell:
             padding: 10pt
             paragraph @customer-address:
               style: "@base"
               bind: "customerAddress"
               color: "#697078"
-              text: "Address"
 
       paragraph @parties-gap:
         size: 1pt
@@ -2310,20 +2306,17 @@ export const playgroundSamples = [
             bind: "issued"
             padding: 9pt
             bold: true
-            text: "Issue date"
           cell:
             style: "@base"
             bind: "due"
             padding: 9pt
             bold: true
-            text: "Due date"
           cell:
             style: "@base"
             bind: "status"
             padding: 9pt
             bold: true
             color: "#D94F2B"
-            text: "Status"
 
       paragraph @dates-gap:
         size: 1pt
@@ -2385,7 +2378,6 @@ export const playgroundSamples = [
               paragraph:
                 style: "@base"
                 bind: "description"
-                text: "Item"
             cell:
               padding: 10pt
               border-bottom-width: 1pt
@@ -2393,7 +2385,6 @@ export const playgroundSamples = [
               paragraph:
                 style: "@base"
                 bind: "quantity"
-                text: "1"
             cell:
               padding: 10pt
               border-bottom-width: 1pt
@@ -2401,7 +2392,6 @@ export const playgroundSamples = [
               paragraph:
                 style: "@base"
                 bind: "rate"
-                text: "$0.00"
             cell:
               padding: 10pt
               border-bottom-width: 1pt
@@ -2411,7 +2401,6 @@ export const playgroundSamples = [
                 bind: "amount"
                 align: "right"
                 bold: true
-                text: "$0.00"
 
       paragraph @financials-gap:
         size: 1pt
@@ -2441,7 +2430,6 @@ export const playgroundSamples = [
             border-color: "#D5CFC5"
             align: "right"
             bold: true
-            text: "$0.00"
         table-row:
           cell:
             style: "@label"
@@ -2458,7 +2446,6 @@ export const playgroundSamples = [
             border-color: "#D5CFC5"
             align: "right"
             bold: true
-            text: "$0.00"
         table-row:
           cell:
             style: "@label"
@@ -2471,7 +2458,6 @@ export const playgroundSamples = [
             padding: 7pt
             align: "right"
             bold: true
-            text: "REFERENCE"
 
       table @summary:
         split: "avoid"
@@ -2492,7 +2478,6 @@ export const playgroundSamples = [
             padding: 15pt
             background: "#D94F2B"
             align: "right"
-            text: "$0.00"
 
       paragraph @terms:
         style: "@base"
@@ -2503,7 +2488,6 @@ export const playgroundSamples = [
         border-color: "#CDC7BD"
         size: 8pt
         color: "#687078"
-        text: "Thank you for the collaboration. Questions: accounts@paperrune.studio"
 
       paragraph @footer:
         style: "@label"
@@ -2633,7 +2617,6 @@ export const playgroundSamples = [
         style: "@display"
         bind: "product"
         margin-top: 8pt
-        text: product
 
       paragraph @subtitle:
         style: "@base"
@@ -2687,28 +2670,24 @@ export const playgroundSamples = [
             padding: 8pt
             background: "#F2EEE6"
             bold: true
-            text: "REL-000"
           cell:
             style: "@base"
             bind: "owner"
             padding: 8pt
             background: "#F2EEE6"
             bold: true
-            text: "Owner"
           cell:
             style: "@base"
             bind: "targetDate"
             padding: 8pt
             background: "#F2EEE6"
             bold: true
-            text: "Target"
           cell:
             style: "@base"
             bind: "environment"
             padding: 8pt
             background: "#F2EEE6"
             bold: true
-            text: "Environment"
 
       paragraph @score-gap:
         size: 1pt
@@ -2733,7 +2712,6 @@ export const playgroundSamples = [
             format-locale: "en-US"
             format-min-fraction: 0
             format-max-fraction: 0
-            text: "0"
           cell:
             style: "@base"
             padding: 20pt
@@ -2764,7 +2742,6 @@ export const playgroundSamples = [
         border-color: "#D94F2B"
         border-radius: 4pt
         bold: true
-        text: "No blocker recorded."
 
       page-break @release-evidence-page:
 
@@ -2936,7 +2913,6 @@ export const playgroundSamples = [
             padding: 9pt
             border-bottom-width: 1pt
             border-color: "#CDC7BD"
-            text: "Window"
           cell:
             style: "@label"
             padding: 9pt
@@ -2963,7 +2939,6 @@ export const playgroundSamples = [
             padding: 9pt
             border-bottom-width: 1pt
             border-color: "#CDC7BD"
-            text: "Target"
           cell:
             style: "@label"
             padding: 9pt
@@ -2984,7 +2959,6 @@ export const playgroundSamples = [
             padding: 9pt
             border-bottom-width: 1pt
             border-color: "#CDC7BD"
-            text: "Approver"
           cell:
             style: "@base"
             padding: 9pt
@@ -3023,7 +2997,6 @@ export const playgroundSamples = [
         line-height: 11pt
         bind: "evidenceHash"
         color: "#687078"
-        text: "evidence hash"
 `,
     data: `{
   "product": "PaperRune 0.4",

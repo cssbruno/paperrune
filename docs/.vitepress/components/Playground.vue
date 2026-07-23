@@ -16,8 +16,12 @@ const png = ref('');
 const pages = ref(0);
 const page = ref(1);
 const planHash = ref('');
+const previewStale = ref(false);
 let compileSequence = 0;
 let debounceTimer;
+let suppressLiveCompile = false;
+
+const liveCompileDelay = 300;
 
 const sourceLines = computed(() => source.value.split('\n').length);
 const documentImage = computed(() => png.value ? `data:image/png;base64,${png.value}` : '');
@@ -69,7 +73,9 @@ async function loadRuntime() {
 }
 
 async function compile(targetPage = page.value) {
+  clearTimeout(debounceTimer);
   const sequence = ++compileSequence;
+  previewStale.value = Boolean(png.value);
   state.value = 'compiling';
   status.value = 'Compiling in WebAssembly…';
   try {
@@ -80,18 +86,17 @@ async function compile(targetPage = page.value) {
     pages.value = result.pages || 0;
     planHash.value = result.hash || '';
     if (!result.ok || !result.png) {
-      png.value = '';
       state.value = 'error';
       status.value = diagnostics.value.length ? `${diagnostics.value.length} diagnostic${diagnostics.value.length === 1 ? '' : 's'}` : (result.error || 'Compilation failed');
       return;
     }
     page.value = result.page;
     png.value = result.png;
+    previewStale.value = false;
     state.value = diagnostics.value.length ? 'warning' : 'ready';
     status.value = `${result.pages} page${result.pages === 1 ? '' : 's'} · plan ${result.hash.slice(0, 10)}`;
   } catch (error) {
     if (sequence !== compileSequence) return;
-    png.value = '';
     diagnostics.value = [];
     state.value = 'error';
     status.value = error instanceof Error ? error.message : String(error);
@@ -99,20 +104,27 @@ async function compile(targetPage = page.value) {
 }
 
 function scheduleCompile() {
+  if (suppressLiveCompile) return;
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => compile(1), 550);
+  compileSequence += 1;
+  previewStale.value = Boolean(png.value);
+  state.value = 'editing';
+  status.value = 'Live changes queued…';
+  debounceTimer = setTimeout(() => compile(1), liveCompileDelay);
 }
 
 function chooseSample(event) {
   const index = Number(event.target.value);
   selectedSample.value = index;
+  suppressLiveCompile = true;
   source.value = samples[index].source;
   data.value = samples[index].data;
+  suppressLiveCompile = false;
   page.value = 1;
   compile(1);
 }
 
-watch([source, data], scheduleCompile);
+watch([source, data], scheduleCompile, {flush: 'sync'});
 onMounted(() => compile(1));
 onBeforeUnmount(() => clearTimeout(debounceTimer));
 </script>
@@ -128,6 +140,7 @@ onBeforeUnmount(() => clearTimeout(debounceTimer));
         </div>
       </div>
       <div class="playground-actions">
+        <span class="live-indicator"><i aria-hidden="true"></i>Live preview</span>
         <label>
           <span class="sr-only">Example</span>
           <select :value="selectedSample" @change="chooseSample">
@@ -150,14 +163,15 @@ onBeforeUnmount(() => clearTimeout(debounceTimer));
       <div class="preview-pane">
         <div class="preview-toolbar">
           <span>Generated document · WebAssembly</span>
+          <span v-if="previewStale" class="preview-stale" role="status">Showing last valid render</span>
           <div v-if="pages > 1" class="page-controls" aria-label="Preview pages">
             <button type="button" :disabled="page <= 1 || state === 'compiling'" @click="compile(page - 1)">←</button>
             <span>{{ page }} / {{ pages }}</span>
             <button type="button" :disabled="page >= pages || state === 'compiling'" @click="compile(page + 1)">→</button>
           </div>
         </div>
-        <div v-if="documentImage" class="document-stage">
-          <img :key="documentImage" :src="documentImage" alt="Generated Paper document rendered by WebAssembly">
+        <div v-if="documentImage" class="document-stage" :class="{'is-stale': previewStale}">
+          <img :key="documentImage" :src="documentImage" :alt="previewStale ? 'Last valid Paper document while live changes compile' : 'Generated Paper document rendered by WebAssembly'">
         </div>
         <div v-else class="preview-empty">
           <strong>{{ state === 'loading' || state === 'compiling' ? 'Generating document' : 'No document' }}</strong>
@@ -198,7 +212,7 @@ onBeforeUnmount(() => clearTimeout(debounceTimer));
   justify-content: space-between;
 }
 .playground-bar { min-height: 58px; padding: 10px max(20px, calc((100vw - 1320px) / 2)); border-bottom: 1px solid var(--play-border); }
-.playground-heading, .playground-status, .playground-actions { display: flex; align-items: center; gap: 10px; }
+.playground-heading, .playground-status, .playground-actions, .live-indicator { display: flex; align-items: center; gap: 10px; }
 .playground-heading { gap: 14px; }
 .back-link { color: inherit; font-weight: 750; text-decoration: none; }
 .back-link:hover { color: #2459d3; }
@@ -206,10 +220,13 @@ onBeforeUnmount(() => clearTimeout(debounceTimer));
 .playground-status { font: 600 0.78rem/1.2 var(--vp-font-family-mono); text-transform: uppercase; letter-spacing: 0.06em; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #777; transition: background .2s, transform .2s; }
 .status-dot.compiling, .status-dot.loading { background: #2459d3; animation: pulse 1s infinite alternate; }
+.status-dot.editing { background: #745ee6; animation: pulse .65s infinite alternate; }
 .status-dot.ready { background: #1d8a57; }
 .status-dot.warning { background: #b16b00; }
 .status-dot.error { background: #c0362c; }
 select, button { font: inherit; color: inherit; }
+.live-indicator { color: #526056; font: 700 .7rem/1 var(--vp-font-family-mono); letter-spacing: .05em; text-transform: uppercase; }
+.live-indicator i { width: 7px; height: 7px; border-radius: 50%; background: #1d8a57; box-shadow: 0 0 0 3px rgba(29, 138, 87, .12); }
 select { max-width: 180px; border: 0; border-bottom: 1px solid #8f8b83; background: transparent; padding: 7px 22px 7px 4px; }
 button { border: 0; background: none; cursor: pointer; }
 button:disabled { cursor: wait; opacity: .48; }
@@ -222,8 +239,11 @@ button:disabled { cursor: wait; opacity: .48; }
 .editor-tabs span { margin-left: 5px; opacity: .58; text-transform: none; }
 textarea { display: block; width: 100%; height: 100%; min-height: 0; resize: none; border: 0; outline: 0; padding: 22px; background: #171a1f; color: #ece8df; caret-color: #87a7ff; font: 13px/1.65 var(--vp-font-family-mono); tab-size: 2; }
 .preview-pane { display: grid; grid-template-rows: 48px 1fr; background: #c9c1b4; }
-.preview-toolbar { padding: 0 18px; border-bottom: 1px solid var(--play-border); font: 650 .76rem/1 var(--vp-font-family-mono); text-transform: uppercase; letter-spacing: .06em; }
+.preview-toolbar { justify-content: flex-start; gap: 14px; padding: 0 18px; border-bottom: 1px solid var(--play-border); font: 650 .76rem/1 var(--vp-font-family-mono); text-transform: uppercase; letter-spacing: .06em; }
+.preview-stale { color: #76531b; font-size: .67rem; }
+.preview-stale::before { content: '·'; margin-right: 14px; color: #77716a; }
 .page-controls { display: flex; align-items: center; gap: 8px; }
+.page-controls { margin-left: auto; }
 .page-controls button { width: 27px; height: 27px; border: 1px solid #aaa59d; border-radius: 50%; }
 .document-stage {
   min-height: 0;
@@ -240,7 +260,9 @@ textarea { display: block; width: 100%; height: 100%; min-height: 0; resize: non
   border: 1px solid rgba(41, 36, 30, .12);
   box-shadow: 0 24px 65px rgba(28, 24, 19, .22), 0 2px 8px rgba(28, 24, 19, .12);
   animation: document-in .28s cubic-bezier(.2,.72,.24,1);
+  transition: filter .18s, opacity .18s;
 }
+.document-stage.is-stale img { filter: saturate(.72); opacity: .72; }
 .preview-empty { display: grid; place-content: center; gap: 5px; text-align: center; color: #66645f; }
 .preview-empty strong { color: #2c2e32; }
 .diagnostic-list { max-height: min(28svh, 260px); padding: 0 max(20px, calc((100vw - 1320px) / 2)); overflow-y: auto; background: #f4f0e7; }
