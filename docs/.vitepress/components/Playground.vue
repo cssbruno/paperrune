@@ -47,6 +47,8 @@ const pageX = ref(0);
 const pageY = ref(0);
 const pageWidth = ref(0);
 const pageHeight = ref(0);
+const fixedScale = ref(1);
+const overflow = ref(null);
 const previewStale = ref(false);
 const selected = ref(null);
 const inlineEditor = ref(null);
@@ -171,6 +173,8 @@ async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
     pageY.value = Number(result.page_y_fixed || 0);
     pageWidth.value = Number(result.page_width_fixed || 0);
     pageHeight.value = Number(result.page_height_fixed || 0);
+    fixedScale.value = Number(result.fixed_scale || 1);
+    overflow.value = result.overflow || null;
     previewStale.value = false;
     failure.value = '';
     selected.value = null;
@@ -211,6 +215,7 @@ function chooseSample(event) {
   page.value = 1;
   png.value = '';
   svg.value = '';
+  overflow.value = null;
   ast.value = null;
   selected.value = null;
   inlineEditor.value = null;
@@ -293,10 +298,10 @@ function requestInlineEdit() {
   const selection = selected.value;
   if (!selection?.content?.editable || !selection.bounds || !selectionSnapshotCurrent(selection.snapshot)) return;
   const bounds = {
-    left: Math.max(1, Math.min(76, selection.bounds.left)),
-    top: Math.max(1, Math.min(91, selection.bounds.top)),
-    width: Math.max(24, Math.min(98 - selection.bounds.left, selection.bounds.width)),
-    height: Math.max(5, selection.bounds.height),
+    left: selection.bounds.left,
+    top: selection.bounds.top,
+    width: selection.bounds.width,
+    height: selection.bounds.height,
   };
   const transaction = ++inlineEditSequence;
   inlineEditor.value = {
@@ -359,6 +364,8 @@ function acceptEditedWorkspace(edited, rendered) {
   pageY.value = Number(rendered.page_y_fixed || 0);
   pageWidth.value = Number(rendered.page_width_fixed || 0);
   pageHeight.value = Number(rendered.page_height_fixed || 0);
+  fixedScale.value = Number(rendered.fixed_scale || 1);
+  overflow.value = rendered.overflow || null;
   previewStale.value = false;
   failure.value = '';
   selected.value = null;
@@ -389,6 +396,8 @@ function acceptFileSnapshot(result) {
   pageY.value = Number(result.page_y_fixed || 0);
   pageWidth.value = Number(result.page_width_fixed || 0);
   pageHeight.value = Number(result.page_height_fixed || 0);
+  fixedScale.value = Number(result.fixed_scale || 1);
+  overflow.value = result.overflow || null;
   previewStale.value = false;
   failure.value = '';
   selected.value = null;
@@ -502,6 +511,8 @@ function handleOnline() {
         :page-y="pageY"
         :page-width="pageWidth"
         :page-height="pageHeight"
+        :fixed-scale="fixedScale"
+        :overflow="overflow"
         :state="state"
         :status="status"
         :failure="failure"

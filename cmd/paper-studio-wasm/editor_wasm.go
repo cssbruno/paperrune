@@ -18,7 +18,7 @@ type playgroundEditorApplied struct {
 }
 
 type playgroundEditorDOM struct {
-	host, form, input, message, cancel, apply js.Value
+	host, input, message js.Value
 }
 
 type playgroundDOMEditor struct {
@@ -26,10 +26,12 @@ type playgroundDOMEditor struct {
 	request              playgroundEditRequest
 	page                 uint32
 	onApplied, onCancel  js.Value
-	submit, keydown      js.Func
-	cancelClick, destroy js.Func
+	keydown, input, blur js.Func
+	pointerDown, destroy js.Func
 	mu                   sync.Mutex
 	busy, destroyed      bool
+	history              []string
+	historyIndex         int
 }
 
 func mountPlaygroundEditor(_ js.Value, arguments []js.Value) any {
@@ -62,55 +64,55 @@ func newPlaygroundDOMEditor(value js.Value) (*playgroundDOMEditor, error) {
 	return &playgroundDOMEditor{
 		dom:     buildPlaygroundEditorDOM(host, request.text, playgroundEditorLabel(value)),
 		request: request, page: page, onApplied: onApplied, onCancel: onCancel,
+		history: []string{request.text},
 	}, nil
 }
 
 func buildPlaygroundEditorDOM(host js.Value, text, label string) playgroundEditorDOM {
 	document := js.Global().Get("document")
-	form := document.Call("createElement", "form")
-	form.Set("className", "wasm-inline-editor")
-	input := document.Call("createElement", "textarea")
-	input.Set("value", text)
-	input.Set("rows", 2)
+	input := document.Call("createElement", "div")
+	input.Set("className", "wasm-direct-editor")
+	input.Set("textContent", text)
+	input.Set("contentEditable", "plaintext-only")
 	input.Set("spellcheck", true)
 	input.Call("setAttribute", "aria-label", "Edit selected document text")
-	actions := document.Call("createElement", "div")
-	actions.Set("className", "wasm-inline-actions")
+	input.Call("setAttribute", "role", "textbox")
+	input.Call("setAttribute", "aria-multiline", "true")
+	input.Call("setAttribute", "title", label+" · click outside to apply · Escape to cancel")
 	message := document.Call("createElement", "span")
-	message.Set("textContent", label)
-	cancel := document.Call("createElement", "button")
-	cancel.Set("type", "button")
-	cancel.Set("textContent", "Cancel")
-	apply := document.Call("createElement", "button")
-	apply.Set("type", "submit")
-	apply.Set("textContent", "Apply")
-	actions.Call("append", message, cancel, apply)
-	form.Call("append", input, actions)
+	message.Set("className", "wasm-direct-editor-error")
+	message.Call("setAttribute", "aria-live", "polite")
 	host.Set("textContent", "")
-	host.Call("append", form)
-	return playgroundEditorDOM{host: host, form: form, input: input, message: message, cancel: cancel, apply: apply}
+	host.Call("append", input, message)
+	adoptPlaygroundEditorTypography(host, input)
+	return playgroundEditorDOM{host: host, input: input, message: message}
 }
 
 func (editor *playgroundDOMEditor) mount() js.Value {
-	editor.submit = js.FuncOf(func(_ js.Value, event []js.Value) any {
-		event[0].Call("preventDefault")
+	editor.keydown = js.FuncOf(editor.handleKeydown)
+	editor.input = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		editor.recordHistory()
+		return nil
+	})
+	editor.blur = js.FuncOf(func(_ js.Value, _ []js.Value) any {
 		editor.applyEdit()
 		return nil
 	})
-	editor.keydown = js.FuncOf(editor.handleKeydown)
-	editor.cancelClick = js.FuncOf(func(_ js.Value, _ []js.Value) any {
-		editor.onCancel.Invoke()
+	editor.pointerDown = js.FuncOf(func(_ js.Value, event []js.Value) any {
+		event[0].Call("stopPropagation")
 		return nil
 	})
 	editor.destroy = js.FuncOf(func(_ js.Value, _ []js.Value) any {
 		editor.unmount()
 		return nil
 	})
-	editor.dom.form.Call("addEventListener", "submit", editor.submit)
 	editor.dom.input.Call("addEventListener", "keydown", editor.keydown)
-	editor.dom.cancel.Call("addEventListener", "click", editor.cancelClick)
+	editor.dom.input.Call("addEventListener", "input", editor.input)
+	editor.dom.input.Call("addEventListener", "blur", editor.blur)
+	editor.dom.input.Call("addEventListener", "pointerdown", editor.pointerDown)
+	editor.dom.input.Call("addEventListener", "dblclick", editor.pointerDown)
 	editor.dom.input.Call("focus", map[string]any{"preventScroll": true})
-	editor.dom.input.Call("select")
+	selectPlaygroundEditorText(editor.dom.input)
 
 	controller := js.Global().Get("Object").New()
 	controller.Set("destroy", editor.destroy)
@@ -119,15 +121,45 @@ func (editor *playgroundDOMEditor) mount() js.Value {
 
 func (editor *playgroundDOMEditor) handleKeydown(_ js.Value, event []js.Value) any {
 	key := event[0].Get("key").String()
+	modifier := event[0].Get("metaKey").Bool() || event[0].Get("ctrlKey").Bool()
 	switch {
 	case key == "Escape":
 		event[0].Call("preventDefault")
 		editor.onCancel.Invoke()
-	case key == "Enter" && (event[0].Get("metaKey").Bool() || event[0].Get("ctrlKey").Bool()):
+	case modifier && (key == "z" || key == "Z"):
+		event[0].Call("preventDefault")
+		direction := -1
+		if event[0].Get("shiftKey").Bool() {
+			direction = 1
+		}
+		editor.moveHistory(direction)
+	case modifier && (key == "y" || key == "Y"):
+		event[0].Call("preventDefault")
+		editor.moveHistory(1)
+	case key == "Enter" && modifier:
 		event[0].Call("preventDefault")
 		editor.applyEdit()
 	}
 	return nil
+}
+
+func (editor *playgroundDOMEditor) recordHistory() {
+	text := editor.dom.input.Get("textContent").String()
+	if editor.history[editor.historyIndex] == text {
+		return
+	}
+	editor.history = append(editor.history[:editor.historyIndex+1], text)
+	editor.historyIndex++
+}
+
+func (editor *playgroundDOMEditor) moveHistory(direction int) {
+	next := editor.historyIndex + direction
+	if next < 0 || next >= len(editor.history) {
+		return
+	}
+	editor.historyIndex = next
+	editor.dom.input.Set("textContent", editor.history[next])
+	selectPlaygroundEditorText(editor.dom.input)
 }
 
 func (editor *playgroundDOMEditor) applyEdit() {
@@ -137,7 +169,7 @@ func (editor *playgroundDOMEditor) applyEdit() {
 		return
 	}
 	editor.busy = true
-	editor.request.text = editor.dom.input.Get("value").String()
+	editor.request.text = editor.dom.input.Get("textContent").String()
 	editor.mu.Unlock()
 	editor.setBusyDOM(true)
 	go func() {
@@ -170,7 +202,7 @@ func applyAndRenderPlaygroundEdit(request playgroundEditRequest, page uint32) ([
 
 func (editor *playgroundDOMEditor) showError(err error) {
 	editor.dom.message.Set("textContent", err.Error())
-	editor.dom.message.Get("classList").Call("add", "is-error")
+	editor.dom.host.Get("classList").Call("add", "has-error")
 	editor.mu.Lock()
 	editor.busy = false
 	editor.mu.Unlock()
@@ -178,16 +210,12 @@ func (editor *playgroundDOMEditor) showError(err error) {
 }
 
 func (editor *playgroundDOMEditor) setBusyDOM(busy bool) {
-	editor.dom.input.Set("disabled", busy)
-	editor.dom.cancel.Set("disabled", busy)
-	editor.dom.apply.Set("disabled", busy)
+	editor.dom.input.Set("contentEditable", map[bool]string{true: "false", false: "plaintext-only"}[busy])
 	if busy {
-		editor.dom.form.Get("classList").Call("add", "is-busy")
-		editor.dom.apply.Set("textContent", "Applying…")
+		editor.dom.host.Get("classList").Call("add", "is-busy")
 		return
 	}
-	editor.dom.form.Get("classList").Call("remove", "is-busy")
-	editor.dom.apply.Set("textContent", "Apply")
+	editor.dom.host.Get("classList").Call("remove", "is-busy")
 }
 
 func (editor *playgroundDOMEditor) unmount() {
@@ -198,14 +226,60 @@ func (editor *playgroundDOMEditor) unmount() {
 	}
 	editor.destroyed = true
 	editor.mu.Unlock()
-	editor.dom.form.Call("removeEventListener", "submit", editor.submit)
 	editor.dom.input.Call("removeEventListener", "keydown", editor.keydown)
-	editor.dom.cancel.Call("removeEventListener", "click", editor.cancelClick)
+	editor.dom.input.Call("removeEventListener", "input", editor.input)
+	editor.dom.input.Call("removeEventListener", "blur", editor.blur)
+	editor.dom.input.Call("removeEventListener", "pointerdown", editor.pointerDown)
+	editor.dom.input.Call("removeEventListener", "dblclick", editor.pointerDown)
 	editor.dom.host.Set("textContent", "")
-	editor.submit.Release()
 	editor.keydown.Release()
-	editor.cancelClick.Release()
+	editor.input.Release()
+	editor.blur.Release()
+	editor.pointerDown.Release()
 	editor.destroy.Release()
+}
+
+func selectPlaygroundEditorText(input js.Value) {
+	selection := js.Global().Get("getSelection").Invoke()
+	rangeValue := js.Global().Get("document").Call("createRange")
+	rangeValue.Call("selectNodeContents", input)
+	selection.Call("removeAllRanges")
+	selection.Call("addRange", rangeValue)
+}
+
+func adoptPlaygroundEditorTypography(host, input js.Value) {
+	hostRect := host.Call("getBoundingClientRect")
+	lines := host.Get("parentElement").Call("querySelectorAll", ".selectable-line")
+	var best js.Value
+	bestArea := 0.0
+	for index := 0; index < lines.Get("length").Int(); index++ {
+		line := lines.Index(index)
+		rect := line.Call("getBoundingClientRect")
+		width := overlap(
+			hostRect.Get("left").Float(), hostRect.Get("right").Float(),
+			rect.Get("left").Float(), rect.Get("right").Float(),
+		)
+		height := overlap(
+			hostRect.Get("top").Float(), hostRect.Get("bottom").Float(),
+			rect.Get("top").Float(), rect.Get("bottom").Float(),
+		)
+		if area := width * height; area > bestArea {
+			best, bestArea = line, area
+		}
+	}
+	if bestArea == 0 {
+		return
+	}
+	style := js.Global().Call("getComputedStyle", best)
+	input.Get("style").Set("fontFamily", style.Get("fontFamily").String())
+	input.Get("style").Set("fontSize", style.Get("fontSize").String())
+	input.Get("style").Set("letterSpacing", style.Get("letterSpacing").String())
+}
+
+func overlap(aStart, aEnd, bStart, bEnd float64) float64 {
+	start := max(aStart, bStart)
+	end := min(aEnd, bEnd)
+	return max(0, end-start)
 }
 
 func playgroundEditorLabel(value js.Value) string {

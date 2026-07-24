@@ -1,5 +1,5 @@
 <script setup>
-import {nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue';
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue';
 
 const props = defineProps({
   image: {type: String, default: ''},
@@ -8,6 +8,8 @@ const props = defineProps({
   pageY: {type: Number, default: 0},
   pageWidth: {type: Number, default: 0},
   pageHeight: {type: Number, default: 0},
+  fixedScale: {type: Number, default: 64},
+  overflow: {type: Object, default: null},
   state: {type: String, default: 'loading'},
   status: {type: String, default: ''},
   failure: {type: String, default: ''},
@@ -26,6 +28,17 @@ const editorHost = ref(null);
 let resizeObserver;
 let measureToken = 0;
 let wasmEditorController;
+const overflowText = computed(() => {
+  if (!props.overflow?.records) return '';
+  const edges = [
+    ['left', props.overflow.left_fixed],
+    ['top', props.overflow.top_fixed],
+    ['right', props.overflow.right_fixed],
+    ['bottom', props.overflow.bottom_fixed],
+  ].filter(([, amount]) => Number(amount) > 0)
+    .map(([edge, amount]) => `${formatFixedPoints(amount)}pt ${edge}`);
+  return `Content extends outside the page${edges.length ? ` · ${edges.join(' · ')}` : ''}`;
+});
 
 watch(() => props.svg, (svg) => {
   selectableLines.value = [];
@@ -186,6 +199,11 @@ function overlayStyle(bounds) {
   };
 }
 
+function formatFixedPoints(value) {
+  const points = Number(value) / Math.max(1, props.fixedScale);
+  return Number.isInteger(points) ? String(points) : points.toFixed(1);
+}
+
 </script>
 
 <template>
@@ -220,6 +238,10 @@ function overlayStyle(bounds) {
           class="inline-editor-host"
           :style="overlayStyle(inlineEditor.bounds)"
         ></div>
+        <div v-if="overflowText" class="overflow-warning" role="alert">
+          <strong>Layout overflow</strong>
+          <span>{{ overflowText }}</span>
+        </div>
         <div v-if="stale" class="stale-veil" aria-live="polite">
           <span>Last valid render</span>
         </div>
@@ -293,36 +315,57 @@ function overlayStyle(bounds) {
 .inline-editor-host {
   position: absolute;
   z-index: 8;
-  min-width: min(250px, 72%);
-  min-height: 72px;
+  min-width: 1px;
+  min-height: 1px;
 }
-.inline-editor-host :deep(.wasm-inline-editor) {
-  display: grid;
+.inline-editor-host :deep(.wasm-direct-editor) {
+  box-sizing: border-box;
   width: 100%;
-  min-height: 72px;
+  min-height: 100%;
   overflow: visible;
-  border: 1px solid #2e5bd6;
-  border-radius: 3px;
-  background: rgba(255,255,255,.98);
-  box-shadow: 0 16px 38px rgba(18, 29, 52, .24), 0 0 0 3px rgba(46, 91, 214, .13);
-}
-.inline-editor-host :deep(textarea) {
-  width: 100%;
-  min-height: 54px;
-  resize: vertical;
   border: 0;
   outline: 0;
-  padding: 9px 10px;
-  background: transparent;
+  padding: 0;
+  background: #fff;
   color: #20242a;
-  font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.2;
+  white-space: pre-wrap;
+  word-break: break-word;
+  caret-color: #2e5bd6;
+  box-shadow: inset 0 -1px #2e5bd6;
 }
-.inline-editor-host :deep(.wasm-inline-editor.is-busy) { opacity: .72; pointer-events: none; }
-.inline-editor-host :deep(.wasm-inline-actions) { display: flex; align-items: center; gap: 7px; min-height: 32px; padding: 4px 5px 4px 9px; border-top: 1px solid #ddd9d0; background: #f6f4ef; }
-.inline-editor-host :deep(.wasm-inline-actions span) { min-width: 0; margin-right: auto; overflow: hidden; color: #6c6d70; font: 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
-.inline-editor-host :deep(.wasm-inline-actions span.is-error) { color: #a12e27; }
-.inline-editor-host :deep(.wasm-inline-actions button) { min-height: 24px; padding: 3px 8px; border: 1px solid #cbc8c0; border-radius: 3px; background: white; color: #25282d; font-size: 10px; cursor: pointer; }
-.inline-editor-host :deep(.wasm-inline-actions button[type="submit"]) { border-color: #2e5bd6; background: #2e5bd6; color: white; }
+.inline-editor-host.is-busy { opacity: .72; pointer-events: none; }
+.inline-editor-host :deep(.wasm-direct-editor-error) { display: none; }
+.inline-editor-host.has-error :deep(.wasm-direct-editor) { box-shadow: inset 0 -1px #b3312b; }
+.inline-editor-host.has-error :deep(.wasm-direct-editor-error) {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  display: block;
+  width: max(220px, 100%);
+  padding: 5px 7px;
+  background: #fff1ef;
+  color: #9b2d27;
+  font: 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  box-shadow: 0 3px 10px rgba(65, 24, 20, .14);
+}
+.overflow-warning {
+  position: absolute;
+  z-index: 9;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  gap: 2px;
+  max-width: min(300px, calc(100% - 20px));
+  padding: 8px 10px;
+  border: 1px solid #c47a16;
+  background: rgba(255, 247, 226, .97);
+  color: #71420b;
+  box-shadow: 0 5px 16px rgba(83, 52, 14, .16);
+  pointer-events: none;
+}
+.overflow-warning strong { font: 700 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.overflow-warning span { font: 11px/1.35 ui-sans-serif, system-ui, sans-serif; }
 .stale-veil { position: absolute; inset: 0; z-index: 7; display: grid; place-items: start end; padding: 10px; cursor: wait; pointer-events: auto; }
 .stale-veil span { padding: 5px 8px; background: rgba(28, 31, 37, .82); color: white; font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; letter-spacing: .07em; }
 .canvas-empty { display: grid; place-items: center; align-content: center; width: min(100%, 760px); min-height: min(72vh, 840px); margin: 0 auto; border: 1px solid rgba(37, 40, 45, .14); background: rgba(246, 244, 239, .72); color: #66676a; text-align: center; }

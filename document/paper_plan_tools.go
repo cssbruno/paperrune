@@ -57,6 +57,19 @@ type PaperPlanPageSummaryLimits struct {
 	MaxIssuesPerPage uint32
 }
 
+// PaperPlanPageOverflow reports rendered plan geometry that extends beyond a
+// physical page. Amounts use the plan fixed-point scale and are zero when that
+// edge is contained. Records is the number of fragments or paint commands
+// with at least one off-page edge.
+type PaperPlanPageOverflow struct {
+	Page    uint32 `json:"page"`
+	Left    int64  `json:"left_fixed,omitempty"`
+	Top     int64  `json:"top_fixed,omitempty"`
+	Right   int64  `json:"right_fixed,omitempty"`
+	Bottom  int64  `json:"bottom_fixed,omitempty"`
+	Records uint32 `json:"records"`
+}
+
 type paperPlanPageCommandEvidence struct {
 	Command     layoutengine.DisplayCommand      `json:"command"`
 	GlyphRun    *layoutengine.CoreGlyphRun       `json:"glyph_run,omitempty"`
@@ -139,6 +152,75 @@ func (p PaperPlan) PageSummariesWithLimits(limits PaperPlanPageSummaryLimits) ([
 		result = append(result, PaperPlanPageSummary{Page: page.Number, Selector: selector,
 			Regions: regions, RepeatedRegions: repeated, IssueCount: uint32(issueCount), IssuesTruncated: issueCount > len(issues), // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 			Issues: append([]PaperPlanPageIssue(nil), issues...), ContentHash: hex.EncodeToString(digest[:])})
+	}
+	return result, nil
+}
+
+// PageOverflow inspects retained fragment and paint-command bounds without
+// rasterizing or relying on a browser viewport.
+func (p PaperPlan) PageOverflow(pageNumber uint32) (PaperPlanPageOverflow, error) {
+	if p.hash == "" || p.pages == 0 {
+		return PaperPlanPageOverflow{}, errors.New("document: paper plan has no pages")
+	}
+	projection := p.plan.Projection()
+	if pageNumber == 0 || uint64(pageNumber) > uint64(len(projection.Pages)) {
+		return PaperPlanPageOverflow{}, errors.New("document: paper page is outside the plan")
+	}
+	page := projection.Pages[pageNumber-1]
+	fragmentStart, fragmentEnd, fragmentsOK := paperPageSummaryRange(page.Fragments, len(projection.Fragments))
+	commandStart, commandEnd, commandsOK := paperPageSummaryRange(page.Commands, len(projection.Commands))
+	if !fragmentsOK || !commandsOK {
+		return PaperPlanPageOverflow{}, errors.New("document: paper page has invalid retained ranges")
+	}
+	result := PaperPlanPageOverflow{Page: pageNumber}
+	pageRight, err := layoutengine.Fixed(0).Add(page.Size.Width)
+	if err != nil {
+		return PaperPlanPageOverflow{}, fmt.Errorf("document: paper page right edge: %w", err)
+	}
+	pageBottom, err := layoutengine.Fixed(0).Add(page.Size.Height)
+	if err != nil {
+		return PaperPlanPageOverflow{}, fmt.Errorf("document: paper page bottom edge: %w", err)
+	}
+	inspect := func(bounds layoutengine.Rect) error {
+		right, err := bounds.Right()
+		if err != nil {
+			return err
+		}
+		bottom, err := bounds.Bottom()
+		if err != nil {
+			return err
+		}
+		offPage := false
+		if bounds.X < 0 {
+			result.Left = max(result.Left, int64(-bounds.X))
+			offPage = true
+		}
+		if bounds.Y < 0 {
+			result.Top = max(result.Top, int64(-bounds.Y))
+			offPage = true
+		}
+		if right > pageRight {
+			result.Right = max(result.Right, int64(right-pageRight))
+			offPage = true
+		}
+		if bottom > pageBottom {
+			result.Bottom = max(result.Bottom, int64(bottom-pageBottom))
+			offPage = true
+		}
+		if offPage {
+			result.Records++
+		}
+		return nil
+	}
+	for _, fragment := range projection.Fragments[fragmentStart:fragmentEnd] {
+		if err := inspect(fragment.BorderBox); err != nil {
+			return PaperPlanPageOverflow{}, fmt.Errorf("document: inspect fragment overflow: %w", err)
+		}
+	}
+	for _, command := range projection.Commands[commandStart:commandEnd] {
+		if err := inspect(command.Bounds); err != nil {
+			return PaperPlanPageOverflow{}, fmt.Errorf("document: inspect display overflow: %w", err)
+		}
 	}
 	return result, nil
 }

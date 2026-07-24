@@ -69,25 +69,26 @@ func main() {
 }
 
 type playgroundCompileResult struct {
-	OK              bool                       `json:"ok"`
-	Pages           int                        `json:"pages"`
-	Page            uint32                     `json:"page,omitempty"`
-	Hash            string                     `json:"hash,omitempty"`
-	Diagnostics     []document.PaperDiagnostic `json:"diagnostics,omitempty"`
-	Error           string                     `json:"error,omitempty"`
-	SourceRevision  string                     `json:"source_revision,omitempty"`
-	AST             json.RawMessage            `json:"ast,omitempty"`
-	SVG             string                     `json:"svg,omitempty"`
-	PageXFixed      int64                      `json:"page_x_fixed"`
-	PageYFixed      int64                      `json:"page_y_fixed"`
-	PageWidthFixed  int64                      `json:"page_width_fixed"`
-	PageHeightFixed int64                      `json:"page_height_fixed"`
-	FixedScale      int64                      `json:"fixed_scale"`
-	PNG             string                     `json:"png,omitempty"`
-	PixelWidth      uint32                     `json:"pixel_width,omitempty"`
-	PixelHeight     uint32                     `json:"pixel_height,omitempty"`
-	DPI             uint32                     `json:"dpi,omitempty"`
-	Renderer        string                     `json:"renderer,omitempty"`
+	OK              bool                            `json:"ok"`
+	Pages           int                             `json:"pages"`
+	Page            uint32                          `json:"page,omitempty"`
+	Hash            string                          `json:"hash,omitempty"`
+	Diagnostics     []document.PaperDiagnostic      `json:"diagnostics,omitempty"`
+	Error           string                          `json:"error,omitempty"`
+	SourceRevision  string                          `json:"source_revision,omitempty"`
+	AST             json.RawMessage                 `json:"ast,omitempty"`
+	SVG             string                          `json:"svg,omitempty"`
+	PageXFixed      int64                           `json:"page_x_fixed"`
+	PageYFixed      int64                           `json:"page_y_fixed"`
+	PageWidthFixed  int64                           `json:"page_width_fixed"`
+	PageHeightFixed int64                           `json:"page_height_fixed"`
+	FixedScale      int64                           `json:"fixed_scale"`
+	PNG             string                          `json:"png,omitempty"`
+	PixelWidth      uint32                          `json:"pixel_width,omitempty"`
+	PixelHeight     uint32                          `json:"pixel_height,omitempty"`
+	DPI             uint32                          `json:"dpi,omitempty"`
+	Renderer        string                          `json:"renderer,omitempty"`
+	Overflow        *document.PaperPlanPageOverflow `json:"overflow,omitempty"`
 }
 
 type playgroundPlanCache struct {
@@ -293,6 +294,10 @@ func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.Pape
 		return playgroundCompileFailure(result, err)
 	}
 	manifest := artifact.Manifest()
+	overflow, err := plan.PageOverflow(page)
+	if err != nil {
+		return playgroundCompileFailure(result, err)
+	}
 	result.Page = page
 	result.SVG = string(capture.SVG)
 	result.PageXFixed, result.PageYFixed = capture.PageX, capture.PageY
@@ -301,6 +306,9 @@ func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.Pape
 	result.PNG = base64.StdEncoding.EncodeToString(artifact.PNG())
 	result.PixelWidth, result.PixelHeight = manifest.PixelWidth, manifest.PixelHeight
 	result.DPI, result.Renderer = manifest.Profile.DPI, manifest.Identity.RendererVersion
+	if overflow.Records > 0 {
+		result.Overflow = &overflow
+	}
 	return result, nil
 }
 
