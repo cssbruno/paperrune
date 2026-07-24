@@ -149,14 +149,23 @@ const repeatedHit = {
 assert.equal(pickHitTarget(repeatedHit, root, data).content.binding, 'analyte');
 
 const canvasSource = await readFile(new URL('../docs/.vitepress/components/playground/StudioCanvas.vue', import.meta.url), 'utf8');
+const playgroundSource = await readFile(new URL('../docs/.vitepress/components/Playground.vue', import.meta.url), 'utf8');
+const fileEditorComponent = await readFile(new URL('../docs/.vitepress/components/playground/WASMFileEditor.vue', import.meta.url), 'utf8');
 const wasmEditorSource = await readFile(new URL('../cmd/paper-studio-wasm/editor_wasm.go', import.meta.url), 'utf8');
+const wasmFileEditorSource = await readFile(new URL('../cmd/paper-studio-wasm/file_editor_wasm.go', import.meta.url), 'utf8');
 assert(!canvasSource.includes('v-model="inlineDraft"'));
 assert(!canvasSource.includes('commit-inline'));
 assert(canvasSource.includes('engine.mountEditor(request)'));
+assert(!playgroundSource.includes('v-model="source"'));
+assert(!playgroundSource.includes('v-model="data"'));
+assert(!playgroundSource.includes('watch([source, data]'));
+assert(fileEditorComponent.includes('props.engine.mountFileEditor'));
 assert(wasmEditorSource.includes('document.Call("createElement", "textarea")'));
 assert(wasmEditorSource.includes('applyPlaygroundEdit(request)'));
+assert(wasmFileEditorSource.includes('time.AfterFunc(playgroundFileEditDelay'));
+assert(wasmFileEditorSource.includes('planPlaygroundRequest(source, data'));
 
-console.log('playground Studio model: selection and WASM-owned editor verified');
+console.log('playground Studio model: selection plus WASM-owned inline and file editors verified');
 
 function node(kind, id, members = [], offset = 0) {
   return {

@@ -1,8 +1,9 @@
 <script setup>
-import {computed, onBeforeUnmount, onMounted, ref, shallowRef, watch} from 'vue';
+import {computed, onBeforeUnmount, onMounted, ref, shallowRef} from 'vue';
 import {withBase} from 'vitepress';
 import {playgroundSampleManifest} from '../playground-samples.mjs';
 import StudioCanvas from './playground/StudioCanvas.vue';
+import WASMFileEditor from './playground/WASMFileEditor.vue';
 import {
   boxAsPercent,
   normalizeFailure,
@@ -67,11 +68,7 @@ let runtimeLoader;
 let unsubscribeRuntime;
 let compileSequence = 0;
 let inlineEditSequence = 0;
-let debounceTimer;
 let compileSlowTimer;
-let suppressLiveCompile = false;
-
-const liveCompileDelay = 360;
 const sourceLines = computed(() => source.value.split('\n').length);
 const documentImage = computed(() => png.value ? `data:image/png;base64,${png.value}` : '');
 const loadProgress = computed(() => {
@@ -113,7 +110,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  clearTimeout(debounceTimer);
   clearTimeout(compileSlowTimer);
   unsubscribeRuntime?.();
   globalThis.removeEventListener('online', handleOnline);
@@ -121,7 +117,6 @@ onBeforeUnmount(() => {
 });
 
 async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
-  clearTimeout(debounceTimer);
   clearTimeout(compileSlowTimer);
   const sequence = ++compileSequence;
   previewStale.value = Boolean(png.value);
@@ -196,28 +191,23 @@ async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
   }
 }
 
-function scheduleCompile() {
-  if (suppressLiveCompile) return;
+function handleFileEditing() {
   inlineEditSequence += 1;
-  clearTimeout(debounceTimer);
   clearTimeout(compileSlowTimer);
   compileSequence += 1;
   previewStale.value = Boolean(png.value);
   selected.value = null;
   inlineEditor.value = null;
   state.value = 'editing';
-  status.value = 'Live changes queued…';
-  debounceTimer = setTimeout(() => void compile(1), liveCompileDelay);
+  status.value = 'WASM is updating the document…';
 }
 
 function chooseSample(event) {
   const index = Number(event.target.value);
   if (!Number.isInteger(index) || !samples[index]) return;
   selectedSample.value = index;
-  suppressLiveCompile = true;
   source.value = samples[index].source;
   data.value = samples[index].data;
-  suppressLiveCompile = false;
   page.value = 1;
   png.value = '';
   svg.value = '';
@@ -355,10 +345,8 @@ function acceptEditedWorkspace(edited, rendered) {
   if (!rendered?.ok || !rendered.png || rendered.hash !== edited.hash) {
     throw new Error(rendered?.error || 'WASM did not render the edited workspace.');
   }
-  suppressLiveCompile = true;
   source.value = edited.source;
   data.value = edited.data;
-  suppressLiveCompile = false;
   diagnostics.value = edited.diagnostics || [];
   pages.value = edited.pages || 0;
   page.value = rendered.page;
@@ -376,6 +364,43 @@ function acceptEditedWorkspace(edited, rendered) {
   selected.value = null;
   state.value = diagnostics.value.length ? 'warning' : 'ready';
   status.value = `${edited.pages} page${edited.pages === 1 ? '' : 's'} · plan ${edited.hash.slice(0, 10)}`;
+}
+
+function acceptFileSnapshot(result) {
+  source.value = result.source;
+  data.value = result.data;
+  diagnostics.value = result.diagnostics || [];
+  if (!result.ok || !result.png) {
+    failure.value = diagnostics.value.length ? '' : normalizeFailure(result.error, 'WASM could not compile this draft.');
+    state.value = diagnostics.value.length ? 'warning' : 'error';
+    status.value = diagnostics.value.length
+      ? `${diagnostics.value.length} diagnostic${diagnostics.value.length === 1 ? '' : 's'}`
+      : failure.value;
+    return;
+  }
+  pages.value = result.pages || 0;
+  page.value = result.page;
+  planHash.value = result.hash || '';
+  sourceRevision.value = result.source_revision || '';
+  png.value = result.png;
+  svg.value = result.svg || '';
+  ast.value = result.ast || null;
+  pageX.value = Number(result.page_x_fixed || 0);
+  pageY.value = Number(result.page_y_fixed || 0);
+  pageWidth.value = Number(result.page_width_fixed || 0);
+  pageHeight.value = Number(result.page_height_fixed || 0);
+  previewStale.value = false;
+  failure.value = '';
+  selected.value = null;
+  inlineEditor.value = null;
+  state.value = diagnostics.value.length ? 'warning' : 'ready';
+  status.value = `${result.pages} page${result.pages === 1 ? '' : 's'} · plan ${result.hash.slice(0, 10)}`;
+}
+
+function handleFileEditorError(error) {
+  failure.value = normalizeFailure(error, 'The WASM file editor could not be mounted.');
+  status.value = failure.value;
+  state.value = 'error';
 }
 
 async function retryCompiler() {
@@ -409,7 +434,6 @@ function handleOnline() {
   if (shouldRetry) void retryCompiler();
 }
 
-watch([source, data], scheduleCompile, {flush: 'sync'});
 </script>
 
 <template>
@@ -499,19 +523,27 @@ watch([source, data], scheduleCompile, {flush: 'sync'});
           <small v-if="activePanel === 'source'">{{ sourceLines }} lines</small>
           <small v-else-if="activePanel === 'inspect'">{{ selectedKind }}</small>
         </div>
-        <textarea
-          v-if="activePanel === 'source'"
-          v-model="source"
-          aria-label="Paper source"
-          spellcheck="false"
-        ></textarea>
-        <textarea
-          v-else-if="activePanel === 'data'"
-          v-model="data"
-          aria-label="JSON data"
-          spellcheck="false"
-        ></textarea>
-        <div v-else class="selection-inspector">
+        <WASMFileEditor
+          v-show="activePanel === 'source'"
+          :engine="wasmEngine"
+          :hash="planHash"
+          :page="page"
+          kind="source"
+          @editing="handleFileEditing"
+          @snapshot="acceptFileSnapshot"
+          @error="handleFileEditorError"
+        />
+        <WASMFileEditor
+          v-show="activePanel === 'data'"
+          :engine="wasmEngine"
+          :hash="planHash"
+          :page="page"
+          kind="data"
+          @editing="handleFileEditing"
+          @snapshot="acceptFileSnapshot"
+          @error="handleFileEditorError"
+        />
+        <div v-show="activePanel === 'inspect'" class="selection-inspector">
           <template v-if="selected">
             <div class="selection-title"><strong>{{ selected.id }}</strong><span>{{ selected.node.kind }}</span></div>
             <p>{{ selected.content.reason || (selected.content.mode === 'data' ? `Bound to ${selected.content.binding}` : 'Authored literal text') }}</p>
@@ -619,7 +651,6 @@ button { cursor: pointer; }
 .right-panel { display: grid; grid-template-rows: 38px minmax(0, 1fr) auto; border-left: 1px solid var(--line); overflow: hidden; }
 .panel-heading { justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--line); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
 .panel-heading small { color: var(--muted); font-weight: 500; }
-.right-panel > textarea { display: block; width: 100%; height: 100%; min-height: 0; resize: none; border: 0; outline: 0; padding: 15px; background: #20242a; color: #ece9e1; caret-color: #8da8ff; font: 12px/1.62 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; }
 .selection-inspector { min-height: 0; overflow: auto; padding: 14px; }
 .selection-title { justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .selection-title strong { font: 700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
