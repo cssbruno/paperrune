@@ -38,7 +38,7 @@ for (let attempt = 0; attempt < 200 && !globalThis.PaperStudioWASM?.compile; att
 if (runtimeFailure) throw runtimeFailure;
 if (!globalThis.PaperStudioWASM?.compile || !globalThis.PaperStudioWASM?.hit ||
     !globalThis.PaperStudioWASM?.trace || !globalThis.PaperStudioWASM?.editText ||
-    !globalThis.PaperStudioWASM?.workspacePage) {
+    !globalThis.PaperStudioWASM?.workspacePage || !globalThis.PaperStudioWASM?.mountEditor) {
   throw new Error('documentation compiler did not initialize the Studio API');
 }
 

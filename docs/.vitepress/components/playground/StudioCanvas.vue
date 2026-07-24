@@ -15,16 +15,17 @@ const props = defineProps({
   loadProgress: {type: Number, default: 0},
   selection: {type: Object, default: null},
   inlineEditor: {type: Object, default: null},
+  wasmEngine: {type: Object, default: null},
 });
 
-const emit = defineEmits(['page-point', 'edit-point', 'commit-inline', 'cancel-inline', 'retry']);
+const emit = defineEmits(['page-point', 'edit-point', 'editor-applied', 'editor-error', 'cancel-inline', 'retry']);
 const pageStage = ref(null);
 const selectableSVG = ref('');
 const selectableLines = ref([]);
-const inlineDraft = ref('');
-const inlineInput = ref(null);
+const editorHost = ref(null);
 let resizeObserver;
 let measureToken = 0;
+let wasmEditorController;
 
 watch(() => props.svg, (svg) => {
   selectableLines.value = [];
@@ -32,12 +33,9 @@ watch(() => props.svg, (svg) => {
   void materializeSelectableText();
 }, {immediate: true});
 
-watch(() => props.inlineEditor, (editor) => {
-  inlineDraft.value = editor?.value ?? '';
-  if (editor) void nextTick(() => {
-    inlineInput.value?.focus({preventScroll: true});
-    inlineInput.value?.select();
-  });
+watch([() => props.inlineEditor, () => props.wasmEngine], ([editor, engine]) => {
+  destroyWASMEditor();
+  if (editor && engine) void mountWASMEditor(editor, engine);
 }, {immediate: true});
 
 onMounted(() => {
@@ -48,7 +46,39 @@ onMounted(() => {
   void materializeSelectableText();
 });
 
-onBeforeUnmount(() => resizeObserver?.disconnect());
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect();
+  destroyWASMEditor();
+});
+
+async function mountWASMEditor(editor, engine) {
+  await nextTick();
+  if (props.inlineEditor !== editor || props.wasmEngine !== engine || !editorHost.value) return;
+  const request = {
+    host: editorHost.value,
+    hash: editor.planHash,
+    page: editor.page,
+    text: editor.value,
+    mode: editor.mode,
+    binding: editor.binding,
+    onApplied: (result) => emit('editor-applied', {transaction: editor.transaction, result}),
+    onCancel: () => emit('cancel-inline'),
+  };
+  if (editor.mode === 'data') request.jsonPointer = editor.pointer;
+  else if (Number.isInteger(editor.sourceOffset)) request.sourceOffset = editor.sourceOffset;
+  else request.target = editor.target;
+  const controller = engine.mountEditor(request);
+  if (controller instanceof Error) {
+    emit('editor-error', {transaction: editor.transaction, error: controller});
+    return;
+  }
+  wasmEditorController = controller;
+}
+
+function destroyWASMEditor() {
+  wasmEditorController?.destroy?.();
+  wasmEditorController = undefined;
+}
 
 async function materializeSelectableText() {
   const token = ++measureToken;
@@ -156,15 +186,6 @@ function overlayStyle(bounds) {
   };
 }
 
-function handleInlineKeydown(event) {
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    emit('cancel-inline');
-  } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-    event.preventDefault();
-    emit('commit-inline', inlineDraft.value);
-  }
-}
 </script>
 
 <template>
@@ -193,28 +214,12 @@ function handleInlineKeydown(event) {
         <div v-if="selection?.bounds" class="block-selection" :style="overlayStyle(selection.bounds)">
           <span>{{ selection.id }}</span>
         </div>
-        <form
+        <div
           v-if="inlineEditor"
-          class="inline-editor"
-          :class="{'is-busy': inlineEditor.busy}"
+          ref="editorHost"
+          class="inline-editor-host"
           :style="overlayStyle(inlineEditor.bounds)"
-          @submit.prevent="$emit('commit-inline', inlineDraft)"
-        >
-          <textarea
-            ref="inlineInput"
-            v-model="inlineDraft"
-            :disabled="inlineEditor.busy"
-            rows="2"
-            spellcheck="true"
-            aria-label="Edit selected document text"
-            @keydown="handleInlineKeydown"
-          ></textarea>
-          <div class="inline-actions">
-            <span>{{ inlineEditor.error || (inlineEditor.mode === 'data' ? `JSON · ${inlineEditor.binding}` : 'Paper source') }}</span>
-            <button type="button" :disabled="inlineEditor.busy" @click="$emit('cancel-inline')">Cancel</button>
-            <button type="submit" :disabled="inlineEditor.busy">{{ inlineEditor.busy ? 'Applying…' : 'Apply' }}</button>
-          </div>
-        </form>
+        ></div>
         <div v-if="stale" class="stale-veil" aria-live="polite">
           <span>Last valid render</span>
         </div>
@@ -285,11 +290,15 @@ function handleInlineKeydown(event) {
   color: white;
   font: 600 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.inline-editor {
+.inline-editor-host {
   position: absolute;
   z-index: 8;
-  display: grid;
   min-width: min(250px, 72%);
+  min-height: 72px;
+}
+.inline-editor-host :deep(.wasm-inline-editor) {
+  display: grid;
+  width: 100%;
   min-height: 72px;
   overflow: visible;
   border: 1px solid #2e5bd6;
@@ -297,7 +306,7 @@ function handleInlineKeydown(event) {
   background: rgba(255,255,255,.98);
   box-shadow: 0 16px 38px rgba(18, 29, 52, .24), 0 0 0 3px rgba(46, 91, 214, .13);
 }
-.inline-editor textarea {
+.inline-editor-host :deep(textarea) {
   width: 100%;
   min-height: 54px;
   resize: vertical;
@@ -308,11 +317,12 @@ function handleInlineKeydown(event) {
   color: #20242a;
   font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
 }
-.inline-editor.is-busy { opacity: .72; pointer-events: none; }
-.inline-actions { display: flex; align-items: center; gap: 7px; min-height: 32px; padding: 4px 5px 4px 9px; border-top: 1px solid #ddd9d0; background: #f6f4ef; }
-.inline-actions span { min-width: 0; margin-right: auto; overflow: hidden; color: #6c6d70; font: 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
-.inline-actions button { min-height: 24px; padding: 3px 8px; border: 1px solid #cbc8c0; border-radius: 3px; background: white; color: #25282d; font-size: 10px; cursor: pointer; }
-.inline-actions button[type="submit"] { border-color: #2e5bd6; background: #2e5bd6; color: white; }
+.inline-editor-host :deep(.wasm-inline-editor.is-busy) { opacity: .72; pointer-events: none; }
+.inline-editor-host :deep(.wasm-inline-actions) { display: flex; align-items: center; gap: 7px; min-height: 32px; padding: 4px 5px 4px 9px; border-top: 1px solid #ddd9d0; background: #f6f4ef; }
+.inline-editor-host :deep(.wasm-inline-actions span) { min-width: 0; margin-right: auto; overflow: hidden; color: #6c6d70; font: 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.inline-editor-host :deep(.wasm-inline-actions span.is-error) { color: #a12e27; }
+.inline-editor-host :deep(.wasm-inline-actions button) { min-height: 24px; padding: 3px 8px; border: 1px solid #cbc8c0; border-radius: 3px; background: white; color: #25282d; font-size: 10px; cursor: pointer; }
+.inline-editor-host :deep(.wasm-inline-actions button[type="submit"]) { border-color: #2e5bd6; background: #2e5bd6; color: white; }
 .stale-veil { position: absolute; inset: 0; z-index: 7; display: grid; place-items: start end; padding: 10px; cursor: wait; pointer-events: auto; }
 .stale-veil span { padding: 5px 8px; background: rgba(28, 31, 37, .82); color: white; font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; letter-spacing: .07em; }
 .canvas-empty { display: grid; place-items: center; align-content: center; width: min(100%, 760px); min-height: min(72vh, 840px); margin: 0 auto; border: 1px solid rgba(37, 40, 45, .14); background: rgba(246, 244, 239, .72); color: #66676a; text-align: center; }

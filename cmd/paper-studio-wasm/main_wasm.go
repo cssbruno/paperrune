@@ -31,6 +31,7 @@ var hitFunction js.Func
 var traceFunction js.Func
 var editTextFunction js.Func
 var workspacePageFunction js.Func
+var mountEditorFunction js.Func
 var renderCache layoutengine.WebDisplayRenderCache
 var planCache playgroundPlanCache
 
@@ -49,6 +50,7 @@ func main() {
 	traceFunction = js.FuncOf(tracePaper)
 	editTextFunction = js.FuncOf(editPaperText)
 	workspacePageFunction = js.FuncOf(renderWorkspacePage)
+	mountEditorFunction = js.FuncOf(mountPlaygroundEditor)
 	engine := js.Global().Get("Object").New()
 	engine.Set("formatVersion", layoutengine.WebDisplayRenderPayloadVersion)
 	engine.Set("rendererVersion", layoutengine.DisplayRasterRendererVersion)
@@ -58,6 +60,7 @@ func main() {
 	engine.Set("trace", traceFunction)
 	engine.Set("editText", editTextFunction)
 	engine.Set("workspacePage", workspacePageFunction)
+	engine.Set("mountEditor", mountEditorFunction)
 	js.Global().Set("PaperStudioWASM", engine)
 	<-make(chan struct{})
 }

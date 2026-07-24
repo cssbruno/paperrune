@@ -2,6 +2,7 @@
 // Copyright (c) 2026 cssBruno
 
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 
 import {
   boxAsPercent,
@@ -147,7 +148,15 @@ const repeatedHit = {
 };
 assert.equal(pickHitTarget(repeatedHit, root, data).content.binding, 'analyte');
 
-console.log('playground Vue Studio model: source, direct binding, and repeated JSON editing verified');
+const canvasSource = await readFile(new URL('../docs/.vitepress/components/playground/StudioCanvas.vue', import.meta.url), 'utf8');
+const wasmEditorSource = await readFile(new URL('../cmd/paper-studio-wasm/editor_wasm.go', import.meta.url), 'utf8');
+assert(!canvasSource.includes('v-model="inlineDraft"'));
+assert(!canvasSource.includes('commit-inline'));
+assert(canvasSource.includes('engine.mountEditor(request)'));
+assert(wasmEditorSource.includes('document.Call("createElement", "textarea")'));
+assert(wasmEditorSource.includes('applyPlaygroundEdit(request)'));
+
+console.log('playground Studio model: selection and WASM-owned editor verified');
 
 function node(kind, id, members = [], offset = 0) {
   return {

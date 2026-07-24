@@ -1,5 +1,5 @@
 <script setup>
-import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue';
+import {computed, onBeforeUnmount, onMounted, ref, shallowRef, watch} from 'vue';
 import {withBase} from 'vitepress';
 import {playgroundSampleManifest} from '../playground-samples.mjs';
 import StudioCanvas from './playground/StudioCanvas.vue';
@@ -49,6 +49,7 @@ const pageHeight = ref(0);
 const previewStale = ref(false);
 const selected = ref(null);
 const inlineEditor = ref(null);
+const wasmEngine = shallowRef(null);
 const online = ref(true);
 const compileSlow = ref(false);
 const runtimeSnapshot = ref({
@@ -143,6 +144,7 @@ async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
     }
     const engine = retryRuntime ? await runtimeLoader.retry() : await runtimeLoader.load();
     if (sequence !== compileSequence) return;
+    wasmEngine.value = engine;
     state.value = 'compiling';
     status.value = 'Compiling exact document plan…';
     const result = await engine.compile({
@@ -316,57 +318,34 @@ function requestInlineEdit() {
     pointer: selection.content.pointer || '',
     value: selection.content.value,
     bounds,
-    busy: false,
-    error: '',
     planHash: selection.snapshot.hash,
     compileSequence: selection.snapshot.sequence,
     page: selection.snapshot.page,
   };
 }
 
-async function commitInlineEdit(nextText) {
+function acceptWASMEditorResult(payload) {
   const editor = inlineEditor.value;
-  if (!editor || editor.busy || !runtimeLoader) return;
-  const transaction = editor.transaction;
-  inlineEditor.value = {...editor, busy: true, error: ''};
+  if (!editor || payload?.transaction !== editor.transaction ||
+      editor.compileSequence !== compileSequence ||
+      editor.planHash !== planHash.value ||
+      previewStale.value) return;
   try {
-    const engine = await runtimeLoader.load();
-    if (!inlineTransactionCurrent(editor, transaction)) return;
-    const request = {
-      hash: editor.planHash,
-      text: nextText,
-    };
-    if (editor.mode === 'data') {
-      if (!editor.pointer) throw new Error('The selected binding has no concrete JSON pointer.');
-      request.jsonPointer = editor.pointer;
-    } else {
-      if (Number.isInteger(editor.sourceOffset)) request.sourceOffset = editor.sourceOffset;
-      else request.target = editor.target;
-    }
-    const edited = await engine.editText(request);
-    if (!inlineTransactionCurrent(editor, transaction)) return;
-    const rendered = await engine.workspacePage({hash: edited.hash, page: editor.page});
-    if (!inlineTransactionCurrent(editor, transaction)) return;
-    acceptEditedWorkspace(edited, rendered);
-    if (inlineEditSequence !== transaction) return;
+    acceptEditedWorkspace(payload.result?.edit, payload.result?.page);
     inlineEditor.value = null;
   } catch (error) {
-    suppressLiveCompile = false;
-    if (inlineEditSequence !== transaction || inlineEditor.value?.transaction !== transaction) return;
-    inlineEditor.value = {
-      ...inlineEditor.value,
-      busy: false,
-      error: normalizeFailure(error, 'The edit could not be applied.'),
-    };
+    failure.value = normalizeFailure(error, 'The WASM editor returned an invalid workspace.');
+    status.value = failure.value;
+    state.value = 'error';
   }
 }
 
-function inlineTransactionCurrent(editor, transaction) {
-  return inlineEditSequence === transaction &&
-    inlineEditor.value?.transaction === transaction &&
-    editor.compileSequence === compileSequence &&
-    editor.planHash === planHash.value &&
-    !previewStale.value;
+function handleWASMEditorError(payload) {
+  if (payload?.transaction !== inlineEditor.value?.transaction) return;
+  failure.value = normalizeFailure(payload.error, 'The WASM editor could not be mounted.');
+  status.value = failure.value;
+  state.value = 'error';
+  inlineEditor.value = null;
 }
 
 function acceptEditedWorkspace(edited, rendered) {
@@ -492,6 +471,7 @@ watch([source, data], scheduleCompile, {flush: 'sync'});
       </aside>
 
       <StudioCanvas
+        :wasm-engine="wasmEngine"
         :image="documentImage"
         :svg="svg"
         :page-x="pageX"
@@ -507,7 +487,8 @@ watch([source, data], scheduleCompile, {flush: 'sync'});
         :inline-editor="inlineEditor"
         @page-point="selectPagePoint($event, false)"
         @edit-point="selectPagePoint($event, true)"
-        @commit-inline="commitInlineEdit"
+        @editor-applied="acceptWASMEditorResult"
+        @editor-error="handleWASMEditorError"
         @cancel-inline="inlineEditor = null"
         @retry="retryCompiler"
       />
