@@ -3,6 +3,8 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue';
 
 const props = defineProps({
   svg: {type: String, default: ''},
+  textRuns: {type: Array, default: () => []},
+  fonts: {type: Array, default: () => []},
   pageX: {type: Number, default: 0},
   pageY: {type: Number, default: 0},
   pageWidth: {type: Number, default: 0},
@@ -22,11 +24,12 @@ const props = defineProps({
 const emit = defineEmits(['page-point', 'edit-point', 'editor-applied', 'editor-error', 'cancel-inline', 'retry']);
 const pageStage = ref(null);
 const displaySVG = ref('');
-const selectableLines = ref([]);
+const displayTextRuns = ref([]);
 const editorHost = ref(null);
 let resizeObserver;
 let measureToken = 0;
 let wasmEditorController;
+const loadedFontFamilies = new Set();
 const overflowText = computed(() => {
   if (!props.overflow?.records) return '';
   const edges = [
@@ -39,10 +42,10 @@ const overflowText = computed(() => {
   return `Content extends outside the page${edges.length ? ` · ${edges.join(' · ')}` : ''}`;
 });
 
-watch(() => props.svg, (svg) => {
-  selectableLines.value = [];
+watch([() => props.svg, () => props.textRuns, () => props.fonts], ([svg]) => {
+  displayTextRuns.value = [];
   displaySVG.value = sanitizeDisplaySVG(svg);
-  void materializeSelectableText();
+  void materializeDocumentText();
 }, {immediate: true});
 
 watch([() => props.inlineEditor, () => props.wasmEngine], ([editor, engine]) => {
@@ -52,10 +55,10 @@ watch([() => props.inlineEditor, () => props.wasmEngine], ([editor, engine]) => 
 
 onMounted(() => {
   if (typeof ResizeObserver === 'function') {
-    resizeObserver = new ResizeObserver(() => void materializeSelectableText());
+    resizeObserver = new ResizeObserver(() => void materializeDocumentText());
     if (pageStage.value) resizeObserver.observe(pageStage.value);
   }
-  void materializeSelectableText();
+  void materializeDocumentText();
 });
 
 onBeforeUnmount(() => {
@@ -93,50 +96,58 @@ function destroyWASMEditor() {
   wasmEditorController = undefined;
 }
 
-async function materializeSelectableText() {
+async function materializeDocumentText() {
   const token = ++measureToken;
-  selectableLines.value = [];
+  displayTextRuns.value = [];
+  await installDocumentFonts(props.fonts);
   await nextTick();
-  if (token !== measureToken || !pageStage.value || !displaySVG.value) return;
+  if (token !== measureToken || !pageStage.value || !displaySVG.value || !(props.pageWidth > 0)) return;
   const stageBounds = pageStage.value.getBoundingClientRect();
   if (!(stageBounds.width > 0 && stageBounds.height > 0)) return;
-  const textNodes = [...pageStage.value.querySelectorAll('.display-svg text')];
-  const grouped = [];
-  let line = null;
-  for (const text of textNodes) {
-    const rect = text.getBoundingClientRect();
-    const usable = rect.width > 0 && rect.height > 0;
-    const family = text.getAttribute('font-family') || 'serif';
-    const top = usable ? rect.top - stageBounds.top : line?.top ?? 0;
-    const left = usable ? rect.left - stageBounds.left : line?.right ?? 0;
-    const height = usable ? rect.height : line?.height ?? 1;
-    const separated = line && usable && (
-      Math.abs(top - line.top) > 1.25 ||
-      family !== line.family ||
-      left < line.lastLeft ||
-      left - line.right > height * 4
-    );
-    if (!line || separated) {
-      line = {text: '', left, top, right: left, lastLeft: left, height, family, spacing: 0};
-      grouped.push(line);
-    }
-    line.text += text.textContent || '';
-    if (usable) {
-      line.right = rect.right - stageBounds.left;
-      line.lastLeft = left;
-      line.height = Math.max(line.height, height);
-    }
-  }
-  selectableLines.value = grouped.filter((item) => item.text);
-  await nextTick();
-  if (token !== measureToken) return;
-  const spans = [...pageStage.value.querySelectorAll('.selectable-line')];
-  selectableLines.value = selectableLines.value.map((item, index) => {
-    const naturalWidth = spans[index]?.getBoundingClientRect().width || 0;
-    const targetWidth = Math.max(0, item.right - item.left);
-    const spacing = item.text.length > 1 && naturalWidth > 0 ? (targetWidth - naturalWidth) / (item.text.length - 1) : 0;
-    return {...item, spacing};
-  });
+  const scale = stageBounds.width / props.pageWidth;
+  const context = document.createElement('canvas').getContext('2d');
+  displayTextRuns.value = props.textRuns.map((run, index) => materializeTextRun(run, index, scale, context));
+}
+
+async function installDocumentFonts(fonts) {
+  if (typeof FontFace !== 'function' || !document.fonts) return;
+  await Promise.all(fonts.map(async (font) => {
+    if (!font?.family || !font?.data || loadedFontFamilies.has(font.family)) return;
+    const binary = atob(font.data);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    const loaded = await new FontFace(font.family, bytes.buffer).load();
+    document.fonts.add(loaded);
+    loadedFontFamilies.add(font.family);
+  }));
+}
+
+function materializeTextRun(run, index, scale, context) {
+  const fontSize = Number(run.font_size_fixed || 0) * scale;
+  const family = run.font_family || 'sans-serif';
+  const weight = run.font_weight || '400';
+  const fontStyle = run.font_style || 'normal';
+  context.font = `${fontStyle} ${weight} ${fontSize}px ${family}`;
+  const metrics = context.measureText(run.text || '');
+  const ascent = metrics.actualBoundingBoxAscent || fontSize * .8;
+  const descent = metrics.actualBoundingBoxDescent || fontSize * .2;
+  const naturalWidth = metrics.width || 1;
+  const targetWidth = Number(run.width_fixed || 0) * scale;
+  return {
+    index,
+    text: run.text || '',
+    style: {
+      left: `${(Number(run.x_fixed || 0) - props.pageX) * scale}px`,
+      top: `${(Number(run.baseline_fixed || 0) - props.pageY) * scale - ascent}px`,
+      height: `${Math.max(1, ascent + descent)}px`,
+      color: run.color || '#000000',
+      opacity: String(Number(run.opacity_fixed || props.fixedScale) / Math.max(1, props.fixedScale)),
+      fontFamily: family,
+      fontWeight: weight,
+      fontStyle,
+      fontSize: `${fontSize}px`,
+      transform: `scaleX(${targetWidth > 0 ? targetWidth / naturalWidth : 1})`,
+    },
+  };
 }
 
 function sanitizeDisplaySVG(svgText) {
@@ -144,6 +155,7 @@ function sanitizeDisplaySVG(svgText) {
   const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml');
   if (parsed.querySelector('parsererror')) return '';
   parsed.querySelectorAll('script, foreignObject, a, use').forEach((node) => node.remove());
+  parsed.querySelectorAll('text').forEach((node) => node.remove());
   parsed.querySelectorAll('*').forEach((node) => {
     [...node.attributes].forEach((attribute) => {
       const name = attribute.name.toLowerCase();
@@ -153,22 +165,10 @@ function sanitizeDisplaySVG(svgText) {
       }
     });
   });
-  parsed.querySelectorAll('text[font-family]').forEach(normalizeDisplayFont);
   const root = parsed.documentElement;
   root.setAttribute('aria-hidden', 'true');
   root.setAttribute('focusable', 'false');
   return new XMLSerializer().serializeToString(root);
-}
-
-function normalizeDisplayFont(text) {
-  const raw = (text.getAttribute('font-family') || '').toLowerCase();
-  const bold = raw.includes('bold');
-  const italic = raw.includes('italic') || raw.includes('oblique');
-  if (raw.startsWith('times')) text.setAttribute('font-family', 'Times New Roman, Times, serif');
-  else if (raw.startsWith('helvetica')) text.setAttribute('font-family', 'Helvetica, Arial, sans-serif');
-  else if (raw.startsWith('courier')) text.setAttribute('font-family', 'Courier New, Courier, monospace');
-  if (bold) text.setAttribute('font-weight', '700');
-  if (italic) text.setAttribute('font-style', 'italic');
 }
 
 function pointFromEvent(event) {
@@ -195,16 +195,6 @@ function editAt(event) {
   globalThis.getSelection?.()?.removeAllRanges();
   const point = pointFromEvent(event);
   if (point) emit('edit-point', point);
-}
-
-function lineStyle(line) {
-  return {
-    left: `${line.left}px`,
-    top: `${line.top}px`,
-    fontFamily: line.family,
-    fontSize: `${Math.max(1, line.height)}px`,
-    letterSpacing: `${line.spacing}px`,
-  };
 }
 
 function overlayStyle(bounds) {
@@ -238,13 +228,13 @@ function formatFixedPoints(value) {
         @dblclick="editAt"
       >
         <div class="display-svg" v-html="displaySVG"></div>
-        <div class="selectable-plane" aria-label="Selectable document text">
+        <div class="document-text-plane" aria-label="Selectable document text">
           <span
-            v-for="(line, index) in selectableLines"
-            :key="`${index}-${line.text}`"
-            class="selectable-line"
-            :style="lineStyle(line)"
-          >{{ line.text }}</span>
+            v-for="run in displayTextRuns"
+            :key="`${run.index}-${run.text}`"
+            class="document-text-run"
+            :style="run.style"
+          >{{ run.text }}</span>
         </div>
         <div v-if="selection?.bounds" class="block-selection" :style="overlayStyle(selection.bounds)">
           <span>{{ selection.id }}</span>
@@ -299,17 +289,22 @@ function formatFixedPoints(value) {
 }
 .display-svg :deep(svg) { display: block; width: 100%; height: auto; }
 .page-stage.is-stale .display-svg { filter: saturate(.72); opacity: .68; }
-.selectable-plane { position: absolute; inset: 0; z-index: 3; pointer-events: none; user-select: text; }
-.selectable-line {
+.document-text-plane { position: absolute; inset: 0; z-index: 3; pointer-events: none; user-select: text; }
+.document-text-run {
   position: absolute;
   display: inline-block;
-  color: transparent;
   line-height: 1;
   white-space: pre;
+  transform-origin: left top;
   pointer-events: auto;
   user-select: text;
 }
-.selectable-plane ::selection { background: rgba(46, 91, 214, .34); color: transparent; }
+.document-text-plane ::selection {
+  background: rgba(46, 91, 214, .28);
+  color: currentColor;
+  -webkit-text-fill-color: currentColor;
+  text-shadow: none;
+}
 .block-selection {
   position: absolute;
   z-index: 4;

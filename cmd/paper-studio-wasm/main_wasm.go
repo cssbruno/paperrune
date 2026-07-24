@@ -78,6 +78,8 @@ type playgroundCompileResult struct {
 	SourceRevision  string                          `json:"source_revision,omitempty"`
 	AST             json.RawMessage                 `json:"ast,omitempty"`
 	SVG             string                          `json:"svg,omitempty"`
+	TextRuns        []document.PaperPlanWebTextRun  `json:"text_runs,omitempty"`
+	Fonts           []document.PaperPlanWebFont     `json:"fonts,omitempty"`
 	PageXFixed      int64                           `json:"page_x_fixed"`
 	PageYFixed      int64                           `json:"page_y_fixed"`
 	PageWidthFixed  int64                           `json:"page_width_fixed"`
@@ -291,6 +293,10 @@ func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.Pape
 	}
 	result.Page = page
 	result.SVG = string(capture.SVG)
+	result.TextRuns, result.Fonts, err = plan.WebDisplayTextPage(page)
+	if err != nil {
+		return playgroundCompileFailure(result, err)
+	}
 	result.PageXFixed, result.PageYFixed = capture.PageX, capture.PageY
 	result.PageWidthFixed, result.PageHeightFixed = capture.PageWidth, capture.PageHeight
 	result.FixedScale = capture.FixedScale

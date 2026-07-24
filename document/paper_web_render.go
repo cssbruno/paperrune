@@ -19,6 +19,130 @@ import (
 	"golang.org/x/image/font/gofont/goregular"
 )
 
+// PaperPlanWebTextRun is one already-positioned text run for an HTML painter.
+// Geometry is fixed-point page space; the browser may paint and select the
+// glyphs but must not reflow or repaginate them.
+type PaperPlanWebTextRun struct {
+	Text       string `json:"text"`
+	FontFamily string `json:"font_family"`
+	FontWeight string `json:"font_weight"`
+	FontStyle  string `json:"font_style"`
+	Color      string `json:"color"`
+	X          int64  `json:"x_fixed"`
+	Baseline   int64  `json:"baseline_fixed"`
+	Width      int64  `json:"width_fixed"`
+	FontSize   int64  `json:"font_size_fixed"`
+	Opacity    int64  `json:"opacity_fixed"`
+}
+
+// PaperPlanWebFont carries the deterministic font program used by the WASM
+// raster painter so an HTML text painter can use the same outlines.
+type PaperPlanWebFont struct {
+	Family string `json:"family"`
+	Data   []byte `json:"data"`
+}
+
+// PaperPlanWebTextPage returns positioned text and exact painter font programs
+// for one retained page. It performs no browser measurement or layout.
+func (p PaperPlan) WebDisplayTextPage(page uint32) ([]PaperPlanWebTextRun, []PaperPlanWebFont, error) {
+	projection := p.plan.Projection()
+	if page == 0 || int(page) > len(projection.Pages) {
+		return nil, nil, errors.New("document: invalid paper plan web text page")
+	}
+	plannedPage := projection.Pages[page-1]
+	lineEnd := uint64(plannedPage.Lines.Start) + uint64(plannedPage.Lines.Count)
+	runs := make([]PaperPlanWebTextRun, 0, plannedPage.Lines.Count)
+	usedFonts := make(map[layoutengine.FontResourceID]struct{})
+	for _, run := range projection.GlyphRuns {
+		if run.Line < plannedPage.Lines.Start || uint64(run.Line) >= lineEnd {
+			continue
+		}
+		width := layoutengine.Fixed(0)
+		for _, advance := range run.Advances {
+			var err error
+			width, err = width.Add(advance)
+			if err != nil {
+				return nil, nil, fmt.Errorf("document: web text run width: %w", err)
+			}
+		}
+		resource := projection.Fonts[run.Font-1]
+		opacity := run.Opacity
+		if opacity == 0 {
+			opacity = layoutengine.Fixed(layoutengine.FixedScale)
+		}
+		family, weight, style := paperWebFontAppearance(resource)
+		runs = append(runs, PaperPlanWebTextRun{
+			Text: run.Codes, FontFamily: family, FontWeight: weight, FontStyle: style, Color: paperWebTextColor(run.Color),
+			X: int64(run.Origin.X), Baseline: int64(run.Origin.Y), Width: int64(width),
+			FontSize: int64(run.FontSize), Opacity: int64(opacity),
+		})
+		if resource.EmbeddedUTF8 != nil {
+			usedFonts[run.Font] = struct{}{}
+		}
+	}
+	fonts := make([]PaperPlanWebFont, 0, len(usedFonts))
+	for _, resource := range projection.Fonts {
+		if _, used := usedFonts[resource.ID]; !used {
+			continue
+		}
+		program := paperWebCoreFontProgram(resource.Face)
+		if resource.EmbeddedUTF8 != nil {
+			program = p.fontSources[resource.EmbeddedUTF8.Digest]
+		}
+		if len(program) == 0 {
+			return nil, nil, fmt.Errorf("document: web text font %s is unavailable", paperWebFontFamily(resource))
+		}
+		fonts = append(fonts, PaperPlanWebFont{Family: paperWebFontFamily(resource), Data: append([]byte(nil), program...)})
+	}
+	return runs, fonts, nil
+}
+
+func paperWebFontAppearance(resource layoutengine.CoreFontResource) (family, weight, style string) {
+	if resource.EmbeddedUTF8 != nil {
+		return fmt.Sprintf("PaperRune-%x", resource.MetricsDigest[:8]), "400", "normal"
+	}
+	weight, style = "400", "normal"
+	switch resource.Face {
+	case layoutengine.CoreFontCourierBold, layoutengine.CoreFontCourierBoldOblique,
+		layoutengine.CoreFontHelveticaBold, layoutengine.CoreFontHelveticaBoldOblique,
+		layoutengine.CoreFontTimesBold, layoutengine.CoreFontTimesBoldItalic:
+		weight = "700"
+	}
+	switch resource.Face {
+	case layoutengine.CoreFontCourierOblique, layoutengine.CoreFontCourierBoldOblique,
+		layoutengine.CoreFontHelveticaOblique, layoutengine.CoreFontHelveticaBoldOblique,
+		layoutengine.CoreFontTimesItalic, layoutengine.CoreFontTimesBoldItalic:
+		style = "italic"
+	}
+	switch resource.Face {
+	case layoutengine.CoreFontCourier, layoutengine.CoreFontCourierBold,
+		layoutengine.CoreFontCourierOblique, layoutengine.CoreFontCourierBoldOblique:
+		family = `"Courier New", Courier, monospace`
+	case layoutengine.CoreFontTimesRoman, layoutengine.CoreFontTimesBold,
+		layoutengine.CoreFontTimesItalic, layoutengine.CoreFontTimesBoldItalic:
+		family = `"Times New Roman", Times, serif`
+	case layoutengine.CoreFontSymbol:
+		family = `Symbol, serif`
+	case layoutengine.CoreFontZapfDingbats:
+		family = `"Zapf Dingbats", serif`
+	default:
+		family = `Helvetica, Arial, sans-serif`
+	}
+	return family, weight, style
+}
+
+func paperWebFontFamily(resource layoutengine.CoreFontResource) string {
+	family, _, _ := paperWebFontAppearance(resource)
+	return family
+}
+
+func paperWebTextColor(color layoutengine.CoreRGBColor) string {
+	if !color.Set {
+		return "#000000"
+	}
+	return fmt.Sprintf("#%02x%02x%02x", color.R, color.G, color.B)
+}
+
 // PaperPlanWebRenderRequest selects one immutable page and a bounded raster
 // density for a browser WASM renderer. No layout choices are accepted here.
 type PaperPlanWebRenderRequest struct {

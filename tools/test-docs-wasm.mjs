@@ -81,8 +81,13 @@ const vectorCompiled = await globalThis.PaperStudioWASM.compile({
   page: 1,
   vectorOnly: true,
 });
+const vectorSmokeRun = vectorCompiled.text_runs?.find((run) => run.text === 'WASM documentation smoke');
 if (!vectorCompiled.ok || !vectorCompiled.svg || Object.hasOwn(vectorCompiled, 'png') ||
-    Object.hasOwn(vectorCompiled, 'pixel_width') || Object.hasOwn(vectorCompiled, 'pixel_height')) {
+    Object.hasOwn(vectorCompiled, 'pixel_width') || Object.hasOwn(vectorCompiled, 'pixel_height') ||
+    !vectorSmokeRun || !vectorSmokeRun.font_family?.includes('Helvetica') ||
+    !vectorSmokeRun.font_weight || !vectorSmokeRun.font_style ||
+    !(vectorSmokeRun.width_fixed > 0) || !(vectorSmokeRun.font_size_fixed > 0) ||
+    !Array.isArray(vectorCompiled.fonts || [])) {
   throw new Error(`documentation compiler rasterized a vector-only page: ${JSON.stringify(vectorCompiled)}`);
 }
 

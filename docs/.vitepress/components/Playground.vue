@@ -37,6 +37,8 @@ const status = ref('Loading compiler…');
 const failure = ref('');
 const diagnostics = ref([]);
 const svg = ref('');
+const textRuns = ref([]);
+const fonts = ref([]);
 const ast = ref(null);
 const pages = ref(0);
 const page = ref(1);
@@ -166,6 +168,8 @@ async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
     }
     page.value = result.page;
     svg.value = result.svg;
+    textRuns.value = result.text_runs || [];
+    fonts.value = result.fonts || [];
     ast.value = result.ast || null;
     pageX.value = Number(result.page_x_fixed || 0);
     pageY.value = Number(result.page_y_fixed || 0);
@@ -212,6 +216,8 @@ function chooseSample(event) {
   data.value = samples[index].data;
   page.value = 1;
   svg.value = '';
+  textRuns.value = [];
+  fonts.value = [];
   overflow.value = null;
   ast.value = null;
   selected.value = null;
@@ -355,6 +361,8 @@ function acceptEditedWorkspace(edited, rendered) {
   planHash.value = edited.hash || '';
   sourceRevision.value = edited.source_revision || '';
   svg.value = rendered.svg;
+  textRuns.value = rendered.text_runs || [];
+  fonts.value = rendered.fonts || [];
   ast.value = edited.ast || null;
   pageX.value = Number(rendered.page_x_fixed || 0);
   pageY.value = Number(rendered.page_y_fixed || 0);
@@ -386,6 +394,8 @@ function acceptFileSnapshot(result) {
   planHash.value = result.hash || '';
   sourceRevision.value = result.source_revision || '';
   svg.value = result.svg;
+  textRuns.value = result.text_runs || [];
+  fonts.value = result.fonts || [];
   ast.value = result.ast || null;
   pageX.value = Number(result.page_x_fixed || 0);
   pageY.value = Number(result.page_y_fixed || 0);
@@ -501,6 +511,8 @@ function handleOnline() {
       <StudioCanvas
         :wasm-engine="wasmEngine"
         :svg="svg"
+        :text-runs="textRuns"
+        :fonts="fonts"
         :page-x="pageX"
         :page-y="pageY"
         :page-width="pageWidth"

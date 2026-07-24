@@ -8,8 +8,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"strconv"
-	"strings"
 	"sync"
 	"syscall/js"
 )
@@ -258,7 +256,7 @@ func selectPlaygroundEditorText(input js.Value) {
 
 func adoptPlaygroundEditorTypography(host, input js.Value) {
 	hostRect := host.Call("getBoundingClientRect")
-	lines := host.Get("parentElement").Call("querySelectorAll", ".display-svg text")
+	lines := host.Get("parentElement").Call("querySelectorAll", ".document-text-run")
 	var best js.Value
 	bestArea := 0.0
 	for index := 0; index < lines.Get("length").Int(); index++ {
@@ -280,70 +278,17 @@ func adoptPlaygroundEditorTypography(host, input js.Value) {
 		return
 	}
 	inputStyle := input.Get("style")
-	family, weight, fontStyle := playgroundEditorFont(best.Call("getAttribute", "font-family").String())
-	if value := best.Call("getAttribute", "font-weight").String(); value != "" {
-		weight = value
-	}
-	if value := best.Call("getAttribute", "font-style").String(); value != "" {
-		fontStyle = value
-	}
-	inputStyle.Set("fontFamily", family)
-	inputStyle.Set("fontWeight", weight)
-	inputStyle.Set("fontStyle", fontStyle)
-	if size := scaledPlaygroundEditorFontSize(best); size != "" {
-		inputStyle.Set("fontSize", size)
-	}
-	if fill := best.Call("getAttribute", "fill").String(); fill != "" && fill != "none" {
-		inputStyle.Set("color", fill)
-	}
-}
-
-func scaledPlaygroundEditorFontSize(text js.Value) string {
-	raw, err := strconv.ParseFloat(text.Call("getAttribute", "font-size").String(), 64)
-	if err != nil || raw <= 0 {
-		return ""
-	}
-	svg := text.Call("closest", "svg")
-	viewBox := strings.Fields(svg.Call("getAttribute", "viewBox").String())
-	if len(viewBox) != 4 {
-		return ""
-	}
-	viewWidth, err := strconv.ParseFloat(viewBox[2], 64)
-	if err != nil || viewWidth <= 0 {
-		return ""
-	}
-	width := svg.Call("getBoundingClientRect").Get("width").Float()
-	if width <= 0 {
-		return ""
-	}
-	return strconv.FormatFloat(raw*width/viewWidth, 'f', 3, 64) + "px"
-}
-
-func playgroundEditorFont(raw string) (family, weight, style string) {
-	name := strings.ToLower(strings.Trim(strings.TrimSpace(strings.Split(raw, ",")[0]), `"'`))
-	weight, style = "400", "normal"
-	if strings.Contains(name, "bold") {
-		weight = "700"
-	}
-	if strings.Contains(name, "italic") || strings.Contains(name, "oblique") {
-		style = "italic"
-	}
-	switch {
-	case strings.HasPrefix(name, "times"):
-		family = `"Times New Roman", Times, serif`
-	case strings.HasPrefix(name, "helvetica"):
-		family = `Helvetica, Arial, sans-serif`
-	case strings.HasPrefix(name, "courier"):
-		family = `"Courier New", Courier, monospace`
-	default:
-		family = raw
-	}
-	return family, weight, style
+	computed := js.Global().Call("getComputedStyle", best)
+	inputStyle.Set("fontFamily", computed.Get("fontFamily").String())
+	inputStyle.Set("fontWeight", computed.Get("fontWeight").String())
+	inputStyle.Set("fontStyle", computed.Get("fontStyle").String())
+	inputStyle.Set("fontSize", computed.Get("fontSize").String())
+	inputStyle.Set("color", computed.Get("color").String())
 }
 
 func hidePlaygroundEditorGlyphs(host js.Value) []js.Value {
 	hostRect := host.Call("getBoundingClientRect")
-	lines := host.Get("parentElement").Call("querySelectorAll", ".display-svg text")
+	lines := host.Get("parentElement").Call("querySelectorAll", ".document-text-run")
 	hidden := make([]js.Value, 0, lines.Get("length").Int())
 	for index := 0; index < lines.Get("length").Int(); index++ {
 		line := lines.Index(index)

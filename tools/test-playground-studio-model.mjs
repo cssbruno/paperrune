@@ -159,6 +159,9 @@ assert(canvasSource.includes('engine.mountEditor(request)'));
 assert(canvasSource.includes('class="display-svg"'));
 assert(!canvasSource.includes('<img'));
 assert(canvasSource.includes('vectorOnly: true'));
+assert(canvasSource.includes('class="document-text-run"'));
+assert(canvasSource.includes("parsed.querySelectorAll('text').forEach"));
+assert(!canvasSource.includes('class="selectable-line"'));
 assert(!playgroundSource.includes('v-model="source"'));
 assert(!playgroundSource.includes('v-model="data"'));
 assert(!playgroundSource.includes('watch([source, data]'));
@@ -171,7 +174,7 @@ assert(!wasmEditorSource.includes('document.Call("createElement", "textarea")'))
 assert(!wasmEditorSource.includes('textContent", "Apply"'));
 assert(wasmEditorSource.includes('editor.moveHistory(direction)'));
 assert(wasmEditorSource.includes('applyPlaygroundEdit(request)'));
-assert(wasmEditorSource.includes('".display-svg text"'));
+assert(wasmEditorSource.includes('".document-text-run"'));
 assert(!wasmEditorSource.includes('querySelector", ":scope > img"'));
 assert(wasmFileEditorSource.includes('time.AfterFunc(playgroundFileEditDelay'));
 assert(wasmFileEditorSource.includes('planPlaygroundRequest(source, data'));
