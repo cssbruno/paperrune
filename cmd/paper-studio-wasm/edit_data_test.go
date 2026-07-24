@@ -7,7 +7,6 @@ package main
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 )
 
@@ -28,17 +27,29 @@ func TestPlaygroundEditJSONDataPreservesBindingTypes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", test.pointer, err)
 		}
-		if !result.Applied || result.JSONPointer != test.pointer || !strings.HasSuffix(result.Data, "\n") {
+		if !result.Applied || result.JSONPointer != test.pointer {
 			t.Fatalf("%s: result = %#v", test.pointer, result)
 		}
 		var decoded map[string]any
 		if err := json.Unmarshal([]byte(result.Data), &decoded); err != nil {
 			t.Fatal(err)
 		}
-		value, err := playgroundJSONValue(decoded, test.pointer)
+		value, err := playgroundDecodedJSONValue(decoded, test.pointer)
 		if err != nil || value != test.want {
 			t.Fatalf("%s: value = %#v, %v; want %#v", test.pointer, value, err, test.want)
 		}
+	}
+}
+
+func TestPlaygroundEditJSONDataChangesOnlySelectedScalar(t *testing.T) {
+	source := "{\n\t\"untouched\": \"keep  spacing & <markup>\",\n\t\"report\": { \"title\" : \"Draft\", \"score\": 5.80 },\n\t\"tail\": true\n}\n"
+	result, err := playgroundEditJSONData(source, "/report/title", "Published")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "{\n\t\"untouched\": \"keep  spacing & <markup>\",\n\t\"report\": { \"title\" : \"Published\", \"score\": 5.80 },\n\t\"tail\": true\n}\n"
+	if result.Data != want {
+		t.Fatalf("edited data reformatted unrelated bytes\n got: %q\nwant: %q", result.Data, want)
 	}
 }
 
@@ -62,17 +73,10 @@ func TestPlaygroundEditJSONDataRejectsUnsafeOrIncompatibleEdits(t *testing.T) {
 	}
 }
 
-func playgroundJSONValue(document any, pointer string) (any, error) {
+func playgroundDecodedJSONValue(document any, pointer string) (any, error) {
 	parts, err := playgroundJSONPointerParts(pointer)
 	if err != nil {
 		return nil, err
 	}
-	value := document
-	for _, part := range parts {
-		value, err = playgroundJSONMember(value, part)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return value, nil
+	return playgroundJSONValue(document, parts)
 }

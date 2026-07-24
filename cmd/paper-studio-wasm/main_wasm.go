@@ -30,6 +30,7 @@ var compileFunction js.Func
 var hitFunction js.Func
 var traceFunction js.Func
 var editTextFunction js.Func
+var workspacePageFunction js.Func
 var renderCache layoutengine.WebDisplayRenderCache
 var planCache playgroundPlanCache
 
@@ -47,6 +48,7 @@ func main() {
 	hitFunction = js.FuncOf(hitPaper)
 	traceFunction = js.FuncOf(tracePaper)
 	editTextFunction = js.FuncOf(editPaperText)
+	workspacePageFunction = js.FuncOf(renderWorkspacePage)
 	engine := js.Global().Get("Object").New()
 	engine.Set("formatVersion", layoutengine.WebDisplayRenderPayloadVersion)
 	engine.Set("rendererVersion", layoutengine.DisplayRasterRendererVersion)
@@ -55,6 +57,7 @@ func main() {
 	engine.Set("hit", hitFunction)
 	engine.Set("trace", traceFunction)
 	engine.Set("editText", editTextFunction)
+	engine.Set("workspacePage", workspacePageFunction)
 	js.Global().Set("PaperStudioWASM", engine)
 	<-make(chan struct{})
 }
@@ -97,10 +100,25 @@ type playgroundCachedPlan struct {
 }
 
 type playgroundEditResult struct {
-	playgroundCompileResult
-	Applied bool   `json:"applied"`
-	Source  string `json:"source"`
-	Data    string `json:"data"`
+	OK             bool                       `json:"ok"`
+	Applied        bool                       `json:"applied"`
+	Pages          int                        `json:"pages"`
+	Hash           string                     `json:"hash"`
+	Diagnostics    []document.PaperDiagnostic `json:"diagnostics,omitempty"`
+	Error          string                     `json:"error,omitempty"`
+	SourceRevision string                     `json:"source_revision"`
+	AST            json.RawMessage            `json:"ast"`
+	Source         string                     `json:"source"`
+	Data           string                     `json:"data"`
+}
+
+type playgroundEditRequest struct {
+	hash            string
+	text            string
+	jsonPointer     string
+	target          string
+	sourceOffset    uint64
+	hasSourceOffset bool
 }
 
 func (cache *playgroundPlanCache) store(plan document.PaperPlan, itemIndexes map[string]int, source, data, scenario string, options document.PaperJSONOptions) {
@@ -206,19 +224,28 @@ func compilePaper(_ js.Value, arguments []js.Value) any {
 }
 
 func compilePlaygroundRequest(source, data, scenario string, page uint32, options document.PaperJSONOptions) (playgroundCompileResult, error) {
+	result, plan, err := planPlaygroundRequest(source, data, scenario, options)
+	if err != nil {
+		return result, err
+	}
+	return renderPlaygroundPlanPage(result, plan, page)
+}
+
+func planPlaygroundRequest(source, data, scenario string, options document.PaperJSONOptions) (playgroundCompileResult, document.PaperPlan, error) {
 	parsed := paperlang.Parse(playgroundFile, source)
 	ast, astErr := parsed.AST.CanonicalJSON()
 	if astErr != nil {
-		return playgroundCompileResult{}, astErr
+		return playgroundCompileResult{}, document.PaperPlan{}, astErr
 	}
 	var plan document.PaperPlan
 	var planned document.PaperPlanResult
 	var err error
 	switch {
 	case data != "" && scenario != "":
-		return playgroundCompileFailure(playgroundCompileResult{
+		result, failure := playgroundCompileFailure(playgroundCompileResult{
 			SourceRevision: string(paperedit.SourceRevision(source)), AST: ast,
 		}, errors.New("paper-studio-wasm: choose JSON data or a declared scenario, not both"))
+		return result, document.PaperPlan{}, failure
 	case data != "":
 		plan, planned, err = document.PlanPaperJSONWithOptions(playgroundFile, source, []byte(data), options)
 	case scenario != "":
@@ -235,8 +262,14 @@ func compilePlaygroundRequest(source, data, scenario string, page uint32, option
 		Diagnostics: planned.Diagnostics, SourceRevision: sourceRevision, AST: ast,
 	}
 	if err != nil {
-		return playgroundCompileFailure(result, err)
+		failure, failureErr := playgroundCompileFailure(result, err)
+		return failure, document.PaperPlan{}, failureErr
 	}
+	planCache.store(plan, playgroundJSONItemIndexes(parsed.AST, data, options), source, data, scenario, options)
+	return result, plan, nil
+}
+
+func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.PaperPlan, page uint32) (playgroundCompileResult, error) {
 	if page == 0 || int(page) > plan.PageCount() {
 		return playgroundCompileFailure(result, errors.New("paper-studio-wasm: requested page is outside the compiled plan"))
 	}
@@ -262,7 +295,6 @@ func compilePlaygroundRequest(source, data, scenario string, page uint32, option
 	result.PNG = base64.StdEncoding.EncodeToString(artifact.PNG())
 	result.PixelWidth, result.PixelHeight = manifest.PixelWidth, manifest.PixelHeight
 	result.DPI, result.Renderer = manifest.Profile.DPI, manifest.Identity.RendererVersion
-	planCache.store(plan, playgroundJSONItemIndexes(parsed.AST, data, options), source, data, scenario, options)
 	return result, nil
 }
 
@@ -404,6 +436,52 @@ func playgroundInstanceKeys(instance string) []string {
 	return keys
 }
 
+func renderWorkspacePage(_ js.Value, arguments []js.Value) any {
+	promise := js.Global().Get("Promise")
+	executor := js.FuncOf(func(_ js.Value, callbacks []js.Value) any {
+		resolve, reject := callbacks[0], callbacks[1]
+		if len(arguments) != 1 || arguments[0].Type() != js.TypeObject {
+			reject.Invoke(jsError(errors.New("paper-studio-wasm: workspacePage expects one request object")))
+			return nil
+		}
+		request := arguments[0]
+		hash, err := jsRequiredString(request, "hash")
+		if err != nil || !playgroundDigest(hash) {
+			reject.Invoke(jsError(errors.New("paper-studio-wasm: workspacePage hash must be a lowercase SHA-256 digest")))
+			return nil
+		}
+		page, err := jsRequiredPage(request)
+		if err != nil {
+			reject.Invoke(jsError(err))
+			return nil
+		}
+		go func() {
+			workspace, ok := planCache.load(hash)
+			if !ok {
+				reject.Invoke(jsError(errors.New("paper-studio-wasm: workspacePage hash is not retained")))
+				return
+			}
+			result, renderErr := renderPlaygroundPlanPage(playgroundCompileResult{
+				OK: true, Pages: workspace.plan.PageCount(), Hash: hash,
+			}, workspace.plan, page)
+			if renderErr != nil {
+				reject.Invoke(jsError(renderErr))
+				return
+			}
+			encoded, encodeErr := json.Marshal(result)
+			if encodeErr != nil {
+				reject.Invoke(jsError(encodeErr))
+				return
+			}
+			resolve.Invoke(js.Global().Get("JSON").Call("parse", string(encoded)))
+		}()
+		return nil
+	})
+	result := promise.New(executor)
+	executor.Release()
+	return result
+}
+
 func hitPaper(_ js.Value, arguments []js.Value) any {
 	promise := js.Global().Get("Promise")
 	executor := js.FuncOf(func(_ js.Value, callbacks []js.Value) any {
@@ -513,97 +591,16 @@ func editPaperText(_ js.Value, arguments []js.Value) any {
 			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText expects one request object")))
 			return nil
 		}
-		request := arguments[0]
-		hash, err := jsRequiredString(request, "hash")
+		request, err := playgroundEditRequestFromJS(arguments[0])
 		if err != nil {
 			reject.Invoke(jsError(err))
-			return nil
-		}
-		if !playgroundDigest(hash) {
-			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText hash must be a lowercase SHA-256 digest")))
-			return nil
-		}
-		page, err := jsRequiredPage(request)
-		if err != nil {
-			reject.Invoke(jsError(err))
-			return nil
-		}
-		textValue := request.Get("text")
-		if textValue.Type() != js.TypeString {
-			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText text must be a string")))
-			return nil
-		}
-		text := textValue.String()
-		if len(text) > paperedit.MaxReplacementBytes {
-			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText input exceeds playground limits")))
-			return nil
-		}
-		jsonPointer := strings.TrimSpace(jsOptionalString(request, "jsonPointer"))
-		target := strings.TrimSpace(jsOptionalString(request, "target"))
-		sourceOffset, hasSourceOffset, err := jsOptionalSourceOffset(request)
-		if err != nil {
-			reject.Invoke(jsError(err))
-			return nil
-		}
-		selectors := 0
-		if jsonPointer != "" {
-			selectors++
-		}
-		if target != "" {
-			selectors++
-		}
-		if hasSourceOffset {
-			selectors++
-		}
-		if selectors != 1 {
-			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText requires exactly one of jsonPointer, target, or sourceOffset")))
-			return nil
-		}
-		if len(jsonPointer) > 4096 || len(target) > 256 {
-			reject.Invoke(jsError(errors.New("paper-studio-wasm: editText input exceeds playground limits")))
 			return nil
 		}
 		go func() {
-			workspace, ok := planCache.load(hash)
-			if !ok {
-				reject.Invoke(jsError(errors.New("paper-studio-wasm: editText workspace hash is not retained")))
+			result, editErr := applyPlaygroundEdit(request)
+			if editErr != nil {
+				reject.Invoke(jsError(editErr))
 				return
-			}
-			source, data := workspace.source, workspace.data
-			if jsonPointer != "" {
-				edited, editErr := playgroundEditJSONData(data, jsonPointer, text)
-				if editErr != nil {
-					reject.Invoke(jsError(editErr))
-					return
-				}
-				data = edited.Data
-			} else {
-				operation, operationErr := playgroundTextOperation(source, target, sourceOffset, hasSourceOffset, text)
-				if operationErr != nil {
-					reject.Invoke(jsError(operationErr))
-					return
-				}
-				edited, editErr := paperedit.Apply(paperedit.Transaction{
-					File: playgroundFile, Source: source,
-					ExpectedRevision: paperedit.SourceRevision(source),
-					Operations:       []paperedit.Operation{operation},
-				})
-				if editErr != nil {
-					reject.Invoke(jsError(editErr))
-					return
-				}
-				source = edited.Source
-			}
-			compiled, compileErr := compilePlaygroundRequest(source, data, workspace.scenario, page, workspace.options)
-			if compileErr != nil {
-				reject.Invoke(jsError(compileErr))
-				return
-			}
-			result := playgroundEditResult{
-				playgroundCompileResult: compiled,
-				Applied:                 true,
-				Source:                  source,
-				Data:                    data,
 			}
 			encoded, encodeErr := json.Marshal(result)
 			if encodeErr != nil {
@@ -617,6 +614,92 @@ func editPaperText(_ js.Value, arguments []js.Value) any {
 	result := promise.New(executor)
 	executor.Release()
 	return result
+}
+
+func playgroundEditRequestFromJS(value js.Value) (playgroundEditRequest, error) {
+	hash, err := jsRequiredString(value, "hash")
+	if err != nil {
+		return playgroundEditRequest{}, err
+	}
+	if !playgroundDigest(hash) {
+		return playgroundEditRequest{}, errors.New("paper-studio-wasm: editText hash must be a lowercase SHA-256 digest")
+	}
+	textValue := value.Get("text")
+	if textValue.Type() != js.TypeString {
+		return playgroundEditRequest{}, errors.New("paper-studio-wasm: editText text must be a string")
+	}
+	request := playgroundEditRequest{
+		hash: hash, text: textValue.String(),
+		jsonPointer: strings.TrimSpace(jsOptionalString(value, "jsonPointer")),
+		target:      strings.TrimSpace(jsOptionalString(value, "target")),
+	}
+	request.sourceOffset, request.hasSourceOffset, err = jsOptionalSourceOffset(value)
+	if err != nil {
+		return playgroundEditRequest{}, err
+	}
+	if len(request.text) > paperedit.MaxReplacementBytes || len(request.jsonPointer) > 4096 || len(request.target) > 256 {
+		return playgroundEditRequest{}, errors.New("paper-studio-wasm: editText input exceeds playground limits")
+	}
+	selectors := boolCount(request.jsonPointer != "", request.target != "", request.hasSourceOffset)
+	if selectors != 1 {
+		return playgroundEditRequest{}, errors.New("paper-studio-wasm: editText requires exactly one of jsonPointer, target, or sourceOffset")
+	}
+	return request, nil
+}
+
+func applyPlaygroundEdit(request playgroundEditRequest) (playgroundEditResult, error) {
+	workspace, ok := planCache.load(request.hash)
+	if !ok {
+		return playgroundEditResult{}, errors.New("paper-studio-wasm: editText workspace hash is not retained")
+	}
+	source, data := workspace.source, workspace.data
+	var err error
+	if request.jsonPointer != "" {
+		var edited playgroundDataEditResult
+		edited, err = playgroundEditJSONData(data, request.jsonPointer, request.text)
+		data = edited.Data
+	} else {
+		source, err = applyPlaygroundSourceEdit(source, request)
+	}
+	if err != nil {
+		return playgroundEditResult{}, err
+	}
+	planned, _, err := planPlaygroundRequest(source, data, workspace.scenario, workspace.options)
+	if err != nil {
+		return playgroundEditResult{}, err
+	}
+	return playgroundEditResult{
+		OK: true, Applied: true,
+		Pages: planned.Pages, Hash: planned.Hash,
+		Diagnostics: planned.Diagnostics, SourceRevision: planned.SourceRevision, AST: planned.AST,
+		Source: source, Data: data,
+	}, nil
+}
+
+func applyPlaygroundSourceEdit(source string, request playgroundEditRequest) (string, error) {
+	operation, err := playgroundTextOperation(source, request.target, request.sourceOffset, request.hasSourceOffset, request.text)
+	if err != nil {
+		return "", err
+	}
+	edited, err := paperedit.Apply(paperedit.Transaction{
+		File: playgroundFile, Source: source,
+		ExpectedRevision: paperedit.SourceRevision(source),
+		Operations:       []paperedit.Operation{operation},
+	})
+	if err != nil {
+		return "", err
+	}
+	return edited.Source, nil
+}
+
+func boolCount(values ...bool) int {
+	count := 0
+	for _, value := range values {
+		if value {
+			count++
+		}
+	}
+	return count
 }
 
 func playgroundTextOperation(source, target string, sourceOffset uint64, hasSourceOffset bool, text string) (paperedit.Operation, error) {

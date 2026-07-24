@@ -37,7 +37,8 @@ for (let attempt = 0; attempt < 200 && !globalThis.PaperStudioWASM?.compile; att
 }
 if (runtimeFailure) throw runtimeFailure;
 if (!globalThis.PaperStudioWASM?.compile || !globalThis.PaperStudioWASM?.hit ||
-    !globalThis.PaperStudioWASM?.trace || !globalThis.PaperStudioWASM?.editText) {
+    !globalThis.PaperStudioWASM?.trace || !globalThis.PaperStudioWASM?.editText ||
+    !globalThis.PaperStudioWASM?.workspacePage) {
   throw new Error('documentation compiler did not initialize the Studio API');
 }
 
@@ -125,24 +126,26 @@ if (editableHit.Page !== 1 || !editableHit.Fragments?.some((fragment) => fragmen
 }
 const edited = await globalThis.PaperStudioWASM.editText({
   hash: editableFirst.hash,
-  page: 1,
   target: '@editable-title',
   text: 'Edited "title"\\nnext',
 });
 if (!edited.applied || !edited.ok || edited.source === editableSource ||
     !/^[0-9a-f]{64}$/.test(edited.source_revision || '') || edited.hash === editableFirst.hash ||
-    !edited.source.includes('text: "Edited \\"title\\"\\\\nnext"')) {
-  throw new Error(`authored text edit did not return a recompiled WASM workspace: ${JSON.stringify(edited)}`);
+    !edited.source.includes('text: "Edited \\"title\\"\\\\nnext"') ||
+    Object.hasOwn(edited, 'png') || Object.hasOwn(edited, 'svg')) {
+  throw new Error(`authored text edit did not return an image-independent WASM workspace: ${JSON.stringify(edited)}`);
+}
+const editedPage = await globalThis.PaperStudioWASM.workspacePage({hash: edited.hash, page: 1});
+if (!editedPage.ok || editedPage.hash !== edited.hash || !editedPage.png || !editedPage.svg) {
+  throw new Error(`edited WASM workspace did not render independently: ${JSON.stringify(editedPage)}`);
 }
 const paragraphEdited = await globalThis.PaperStudioWASM.editText({
   hash: editableFirst.hash,
-  page: 1,
   target: '@editable-paragraph',
   text: 'Edited paragraph',
 });
 const textEdited = await globalThis.PaperStudioWASM.editText({
   hash: editableFirst.hash,
-  page: 1,
   target: '@editable-text',
   text: 'Edited text',
 });
@@ -154,7 +157,6 @@ let boundEditError = '';
 try {
   await globalThis.PaperStudioWASM.editText({
     hash: compiled.hash,
-    page: 1,
     target: '@title',
     text: 'Must not replace JSON data',
   });
@@ -203,13 +205,11 @@ if (!Number.isInteger(anonymousCellText?.header_span?.start?.offset)) {
 }
 const addressedCellEdited = await globalThis.PaperStudioWASM.editText({
   hash: editableCellCompiled.hash,
-  page: 1,
   target: '@addressed-cell',
   text: 'Edited addressed cell',
 });
 const anonymousCellEdited = await globalThis.PaperStudioWASM.editText({
   hash: editableCellCompiled.hash,
-  page: 1,
   sourceOffset: anonymousCellText.header_span.start.offset,
   text: 'Edited anonymous cell',
 });
@@ -219,7 +219,6 @@ if (!addressedCellEdited.applied || !addressedCellEdited.source.includes('text: 
 }
 const boundCellEdited = await globalThis.PaperStudioWASM.editText({
   hash: editableCellCompiled.hash,
-  page: 1,
   jsonPointer: '/variable',
   text: 'Edited directly in WASM',
 });
@@ -251,7 +250,6 @@ for (const sample of playgroundSamples) {
     const pointer = await assertLaboratoryRepeatTrace(first);
     const repeatedEdit = await globalThis.PaperStudioWASM.editText({
       hash: first.hash,
-      page: first.page,
       jsonPointer: pointer,
       text: 'White blood cells',
     });

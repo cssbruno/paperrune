@@ -45,42 +45,46 @@ func playgroundEditJSONData(data, pointer, text string) (playgroundDataEditResul
 		return playgroundDataEditResult{}, errors.New("paper-studio-wasm: editText data must be a JSON object")
 	}
 
-	parent := document
-	for _, part := range parts[:len(parts)-1] {
-		parent, err = playgroundJSONMember(parent, part)
-		if err != nil {
-			return playgroundDataEditResult{}, fmt.Errorf("paper-studio-wasm: editText pointer %s does not resolve", pointer)
-		}
-	}
-	leaf := parts[len(parts)-1]
-	switch value := parent.(type) {
-	case map[string]any:
-		current, exists := value[leaf]
-		if !exists {
-			return playgroundDataEditResult{}, fmt.Errorf("paper-studio-wasm: editText pointer %s does not resolve", pointer)
-		}
-		value[leaf], err = playgroundJSONTextValue(current, text)
-	case []any:
-		index, indexErr := playgroundJSONArrayIndex(leaf, len(value))
-		if indexErr != nil {
-			return playgroundDataEditResult{}, fmt.Errorf("paper-studio-wasm: editText pointer %s does not resolve", pointer)
-		}
-		value[index], err = playgroundJSONTextValue(value[index], text)
-	default:
+	current, err := playgroundJSONValue(document, parts)
+	if err != nil {
 		return playgroundDataEditResult{}, fmt.Errorf("paper-studio-wasm: editText pointer %s does not resolve", pointer)
 	}
+	replacement, err := playgroundJSONTextValue(current, text)
 	if err != nil {
 		return playgroundDataEditResult{}, err
 	}
+	encoded, err := playgroundJSONScalar(replacement)
+	if err != nil {
+		return playgroundDataEditResult{}, err
+	}
+	start, end, err := playgroundJSONValueSpan(data, parts)
+	if err != nil {
+		return playgroundDataEditResult{}, fmt.Errorf("paper-studio-wasm: editText pointer %s does not resolve", pointer)
+	}
+	edited := data[:start] + encoded + data[end:]
+	return playgroundDataEditResult{Applied: true, Data: edited, JSONPointer: pointer}, nil
+}
 
+func playgroundJSONValue(document any, parts []string) (any, error) {
+	value := document
+	var err error
+	for _, part := range parts {
+		value, err = playgroundJSONMember(value, part)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return value, nil
+}
+
+func playgroundJSONScalar(value any) (string, error) {
 	var encoded bytes.Buffer
 	encoder := json.NewEncoder(&encoded)
-	encoder.SetIndent("", "  ")
 	encoder.SetEscapeHTML(false)
-	if err := encoder.Encode(document); err != nil {
-		return playgroundDataEditResult{}, fmt.Errorf("paper-studio-wasm: encode edited JSON data: %w", err)
+	if err := encoder.Encode(value); err != nil {
+		return "", fmt.Errorf("paper-studio-wasm: encode edited JSON data: %w", err)
 	}
-	return playgroundDataEditResult{Applied: true, Data: encoded.String(), JSONPointer: pointer}, nil
+	return strings.TrimSuffix(encoded.String(), "\n"), nil
 }
 
 func playgroundJSONPointerParts(pointer string) ([]string, error) {

@@ -332,30 +332,22 @@ async function commitInlineEdit(nextText) {
   try {
     const engine = await runtimeLoader.load();
     if (!inlineTransactionCurrent(editor, transaction)) return;
+    const request = {
+      hash: editor.planHash,
+      text: nextText,
+    };
     if (editor.mode === 'data') {
       if (!editor.pointer) throw new Error('The selected binding has no concrete JSON pointer.');
-      const result = await engine.editText({
-        hash: editor.planHash,
-        page: editor.page,
-        jsonPointer: editor.pointer,
-        text: nextText,
-      });
-      if (!inlineTransactionCurrent(editor, transaction)) return;
-      acceptEditedWorkspace(result);
+      request.jsonPointer = editor.pointer;
     } else {
-      const request = {
-        hash: editor.planHash,
-        page: editor.page,
-        text: nextText,
-      };
       if (Number.isInteger(editor.sourceOffset)) request.sourceOffset = editor.sourceOffset;
       else request.target = editor.target;
-      const result = await engine.editText({
-        ...request,
-      });
-      if (!inlineTransactionCurrent(editor, transaction)) return;
-      acceptEditedWorkspace(result);
     }
+    const edited = await engine.editText(request);
+    if (!inlineTransactionCurrent(editor, transaction)) return;
+    const rendered = await engine.workspacePage({hash: edited.hash, page: editor.page});
+    if (!inlineTransactionCurrent(editor, transaction)) return;
+    acceptEditedWorkspace(edited, rendered);
     if (inlineEditSequence !== transaction) return;
     inlineEditor.value = null;
   } catch (error) {
@@ -377,31 +369,34 @@ function inlineTransactionCurrent(editor, transaction) {
     !previewStale.value;
 }
 
-function acceptEditedWorkspace(result) {
-  if (!result?.ok || !result.png || !result.applied) {
-    throw new Error(result?.error || 'WASM did not return an edited document snapshot.');
+function acceptEditedWorkspace(edited, rendered) {
+  if (!edited?.ok || !edited.applied) {
+    throw new Error(edited?.error || 'WASM did not apply the document edit.');
+  }
+  if (!rendered?.ok || !rendered.png || rendered.hash !== edited.hash) {
+    throw new Error(rendered?.error || 'WASM did not render the edited workspace.');
   }
   suppressLiveCompile = true;
-  source.value = result.source;
-  data.value = result.data;
+  source.value = edited.source;
+  data.value = edited.data;
   suppressLiveCompile = false;
-  diagnostics.value = result.diagnostics || [];
-  pages.value = result.pages || 0;
-  page.value = result.page;
-  planHash.value = result.hash || '';
-  sourceRevision.value = result.source_revision || '';
-  png.value = result.png;
-  svg.value = result.svg || '';
-  ast.value = result.ast || null;
-  pageX.value = Number(result.page_x_fixed || 0);
-  pageY.value = Number(result.page_y_fixed || 0);
-  pageWidth.value = Number(result.page_width_fixed || 0);
-  pageHeight.value = Number(result.page_height_fixed || 0);
+  diagnostics.value = edited.diagnostics || [];
+  pages.value = edited.pages || 0;
+  page.value = rendered.page;
+  planHash.value = edited.hash || '';
+  sourceRevision.value = edited.source_revision || '';
+  png.value = rendered.png;
+  svg.value = rendered.svg || '';
+  ast.value = edited.ast || null;
+  pageX.value = Number(rendered.page_x_fixed || 0);
+  pageY.value = Number(rendered.page_y_fixed || 0);
+  pageWidth.value = Number(rendered.page_width_fixed || 0);
+  pageHeight.value = Number(rendered.page_height_fixed || 0);
   previewStale.value = false;
   failure.value = '';
   selected.value = null;
   state.value = diagnostics.value.length ? 'warning' : 'ready';
-  status.value = `${result.pages} page${result.pages === 1 ? '' : 's'} · plan ${result.hash.slice(0, 10)}`;
+  status.value = `${edited.pages} page${edited.pages === 1 ? '' : 's'} · plan ${edited.hash.slice(0, 10)}`;
 }
 
 async function retryCompiler() {
