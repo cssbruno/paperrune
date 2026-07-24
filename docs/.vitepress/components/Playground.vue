@@ -6,8 +6,12 @@ import StudioCanvas from './playground/StudioCanvas.vue';
 import WASMFileEditor from './playground/WASMFileEditor.vue';
 import {
   boxAsPercent,
+  contentDescriptor,
+  findNodeByID,
+  nodePropertyValue,
   normalizeFailure,
   pickHitTarget,
+  styleClasses,
   traceBindingDescriptor,
 } from './playground/studio-model.mjs';
 import {
@@ -31,7 +35,7 @@ const sampleGroups = Object.freeze([...new Set(samples.map((sample) => sample.ca
 const selectedSample = ref(0);
 const source = ref(samples[0].source);
 const data = ref(samples[0].data);
-const activePanel = ref('source');
+const activePanel = ref('inspect');
 const state = ref('loading');
 const status = ref('Loading compiler…');
 const failure = ref('');
@@ -55,6 +59,9 @@ const inlineEditor = ref(null);
 const wasmEngine = shallowRef(null);
 const online = ref(true);
 const compileSlow = ref(false);
+const mutationBusy = ref(false);
+const canUndo = ref(false);
+const canRedo = ref(false);
 const runtimeSnapshot = ref({
   state: 'idle',
   phase: 'idle',
@@ -89,6 +96,15 @@ const statusDetail = computed(() => {
 });
 const canRetry = computed(() => Boolean(failure.value) || state.value === 'offline' || runtimeSnapshot.value.state === 'error');
 const selectedKind = computed(() => selected.value?.node?.kind || 'Nothing selected');
+const selectedTarget = computed(() => selected.value?.node?.id || '');
+const selectedStyle = computed(() => nodePropertyValue(selected.value?.node, 'style', ''));
+const selectedSize = computed(() => nodePropertyValue(selected.value?.node, 'size', ''));
+const selectedColor = computed(() => nodePropertyValue(selected.value?.node, 'color', '#202A33'));
+const selectedBold = computed(() => Boolean(nodePropertyValue(selected.value?.node, 'bold', false)));
+const selectedItalic = computed(() => Boolean(nodePropertyValue(selected.value?.node, 'italic', false)));
+const selectedAlign = computed(() => nodePropertyValue(selected.value?.node, 'align', 'left'));
+const availableStyles = computed(() => styleClasses(ast.value?.root));
+const canFormatSelection = computed(() => Boolean(selectedTarget.value) && !previewStale.value && !mutationBusy.value);
 
 onMounted(() => {
   online.value = navigator.onLine;
@@ -107,6 +123,7 @@ onMounted(() => {
   }, {immediate: true});
   globalThis.addEventListener('online', handleOnline);
   globalThis.addEventListener('offline', handleOffline);
+  globalThis.addEventListener('keydown', handleWorkspaceKeydown);
   void compile(1);
 });
 
@@ -115,6 +132,7 @@ onBeforeUnmount(() => {
   unsubscribeRuntime?.();
   globalThis.removeEventListener('online', handleOnline);
   globalThis.removeEventListener('offline', handleOffline);
+  globalThis.removeEventListener('keydown', handleWorkspaceKeydown);
 });
 
 async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
@@ -181,6 +199,7 @@ async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
     inlineEditor.value = null;
     state.value = diagnostics.value.length ? 'warning' : 'ready';
     status.value = `${result.pages} page${result.pages === 1 ? '' : 's'} · plan ${result.hash.slice(0, 10)}`;
+    updateHistoryState();
   } catch (error) {
     if (sequence !== compileSequence) return;
     diagnostics.value = [];
@@ -219,6 +238,8 @@ function chooseSample(event) {
   ast.value = null;
   selected.value = null;
   inlineEditor.value = null;
+  canUndo.value = false;
+  canRedo.value = false;
   void compile(1);
 }
 
@@ -319,6 +340,114 @@ function requestInlineEdit() {
   };
 }
 
+async function mutateSelected(properties = [], movement = null) {
+  const selection = selected.value;
+  if (!selection?.node?.id || !wasmEngine.value?.mutateNode || mutationBusy.value || previewStale.value) return;
+  const target = selection.node.id;
+  const retainedBounds = selection.bounds ? {...selection.bounds} : null;
+  if (movement && retainedBounds) {
+    retainedBounds.left += movement.xFixed / pageWidth.value * 100;
+    retainedBounds.top += movement.yFixed / pageHeight.value * 100;
+  }
+  mutationBusy.value = true;
+  previewStale.value = true;
+  state.value = 'editing';
+  status.value = movement ? 'Moving block with WASM…' : 'Applying formatting with WASM…';
+  try {
+    const result = await wasmEngine.value.mutateNode({
+      hash: planHash.value,
+      page: page.value,
+      target,
+      properties,
+      moveXPoints: movement ? movement.xFixed / fixedScale.value : 0,
+      moveYPoints: movement ? movement.yFixed / fixedScale.value : 0,
+      vectorOnly: true,
+    });
+    acceptEditedWorkspace(result?.edit, result?.page, {target, bounds: retainedBounds, previous: selection});
+  } catch (error) {
+    previewStale.value = false;
+    failure.value = normalizeFailure(error, 'The WASM editor could not update this element.');
+    status.value = failure.value;
+    state.value = 'error';
+  } finally {
+    mutationBusy.value = false;
+  }
+}
+
+function setSelectedStyle(event) {
+  const style = event.target.value;
+  if (style) void mutateSelected([{name: 'style', kind: 'string', text: style}]);
+}
+
+function setSelectedUnit(name, rawValue) {
+  const number = Number(rawValue);
+  if (Number.isFinite(number) && number >= 1 && number <= 240) {
+    void mutateSelected([{name, kind: 'unit', number}]);
+  }
+}
+
+function setSelectedString(name, text) {
+  void mutateSelected([{name, kind: 'string', text}]);
+}
+
+function toggleSelectedBool(name, current) {
+  void mutateSelected([{name, kind: 'bool', bool: !current}]);
+}
+
+function nudgeSelection(xPoints, yPoints) {
+  void mutateSelected([], {
+    xFixed: Math.round(xPoints * fixedScale.value),
+    yFixed: Math.round(yPoints * fixedScale.value),
+  });
+}
+
+function moveSelected(payload) {
+  if (payload?.target !== selectedTarget.value) return;
+  void mutateSelected([], payload);
+}
+
+async function travelHistory(direction) {
+  if (!wasmEngine.value?.historyPage || mutationBusy.value || !planHash.value) return;
+  const preservation = selected.value?.node?.id && selected.value?.bounds
+    ? {target: selected.value.node.id, bounds: {...selected.value.bounds}, previous: selected.value}
+    : null;
+  mutationBusy.value = true;
+  previewStale.value = true;
+  state.value = 'editing';
+  status.value = direction < 0 ? 'Undoing document change…' : 'Redoing document change…';
+  try {
+    const result = await wasmEngine.value.historyPage({
+      hash: planHash.value,
+      page: page.value,
+      direction,
+      vectorOnly: true,
+    });
+    acceptEditedWorkspace(result?.edit, result?.page, preservation);
+  } catch (error) {
+    previewStale.value = false;
+    failure.value = normalizeFailure(error, 'Document history is unavailable.');
+    status.value = failure.value;
+    state.value = 'error';
+  } finally {
+    mutationBusy.value = false;
+  }
+}
+
+function updateHistoryState() {
+  const state = wasmEngine.value?.historyState?.({hash: planHash.value});
+  canUndo.value = !(state instanceof Error) && Boolean(state?.canUndo);
+  canRedo.value = !(state instanceof Error) && Boolean(state?.canRedo);
+}
+
+function handleWorkspaceKeydown(event) {
+  const target = event.target;
+  if (!(event.metaKey || event.ctrlKey) || !['z', 'y'].includes(event.key.toLowerCase()) ||
+      target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName)) return;
+  event.preventDefault();
+  const redo = event.key.toLowerCase() === 'y' || event.shiftKey;
+  if (redo ? canRedo.value : canUndo.value) void travelHistory(redo ? 1 : -1);
+}
+
 function acceptWASMEditorResult(payload) {
   const editor = inlineEditor.value;
   if (!editor || payload?.transaction !== editor.transaction ||
@@ -343,7 +472,7 @@ function handleWASMEditorError(payload) {
   inlineEditor.value = null;
 }
 
-function acceptEditedWorkspace(edited, rendered) {
+function acceptEditedWorkspace(edited, rendered, preserveSelection = null) {
   if (!edited?.ok || !edited.applied) {
     throw new Error(edited?.error || 'WASM did not apply the document edit.');
   }
@@ -369,9 +498,36 @@ function acceptEditedWorkspace(edited, rendered) {
   overflow.value = rendered.overflow || null;
   previewStale.value = false;
   failure.value = '';
-  selected.value = null;
+  selected.value = retainedSelection(preserveSelection);
   state.value = diagnostics.value.length ? 'warning' : 'ready';
   status.value = `${edited.pages} page${edited.pages === 1 ? '' : 's'} · plan ${edited.hash.slice(0, 10)}`;
+  updateHistoryState();
+}
+
+function retainedSelection(preserve) {
+  if (!preserve?.target || !preserve.bounds) return null;
+  const node = findNodeByID(ast.value?.root, preserve.target);
+  if (!node) return null;
+  return {
+    ...preserve.previous,
+    id: preserve.target,
+    node,
+    content: contentDescriptor(node, data.value),
+    bounds: preserve.bounds,
+    snapshot: {
+      sequence: compileSequence,
+      hash: planHash.value,
+      page: page.value,
+      astRoot: ast.value?.root,
+      data: data.value,
+      source: source.value,
+      sourceRevision: sourceRevision.value,
+      pageX: pageX.value,
+      pageY: pageY.value,
+      pageWidth: pageWidth.value,
+      pageHeight: pageHeight.value,
+    },
+  };
 }
 
 function acceptFileSnapshot(result) {
@@ -405,6 +561,7 @@ function acceptFileSnapshot(result) {
   inlineEditor.value = null;
   state.value = diagnostics.value.length ? 'warning' : 'ready';
   status.value = `${result.pages} page${result.pages === 1 ? '' : 's'} · plan ${result.hash.slice(0, 10)}`;
+  updateHistoryState();
 }
 
 function handleFileEditorError(error) {
@@ -473,13 +630,45 @@ function handleOnline() {
     </header>
 
     <div class="studio-toolbar">
-      <div class="mode-switcher" aria-label="Inspector view">
-        <button type="button" :class="{active: activePanel === 'source'}" @click="activePanel = 'source'">Paper</button>
-        <button type="button" :class="{active: activePanel === 'data'}" @click="activePanel = 'data'">JSON</button>
-        <button type="button" :class="{active: activePanel === 'inspect'}" @click="activePanel = 'inspect'">Inspect</button>
+      <div class="history-tools" aria-label="Document history">
+        <button type="button" title="Undo (Ctrl/Cmd+Z)" :disabled="!canUndo || mutationBusy" @click="travelHistory(-1)">↶</button>
+        <button type="button" title="Redo (Ctrl/Cmd+Shift+Z)" :disabled="!canRedo || mutationBusy" @click="travelHistory(1)">↷</button>
       </div>
-      <span class="edit-hint">Drag to select · double-click text to edit</span>
-      <span v-if="!online" class="offline-badge">Offline</span>
+      <i class="tool-divider" aria-hidden="true"></i>
+      <label class="style-tool">
+        <span>Style</span>
+        <select :value="selectedStyle" :disabled="!canFormatSelection" @change="setSelectedStyle">
+          <option value="" disabled>{{ selectedTarget ? 'Choose style' : 'Select an element' }}</option>
+          <option v-for="style in availableStyles" :key="style.id" :value="style.id">{{ style.label }}</option>
+        </select>
+      </label>
+      <label class="size-tool">
+        <span>Size</span>
+        <input
+          type="number"
+          min="1"
+          max="240"
+          step="0.5"
+          :value="selectedSize"
+          :disabled="!canFormatSelection"
+          @change="setSelectedUnit('size', $event.target.value)"
+        />
+      </label>
+      <div class="format-tools" aria-label="Text formatting">
+        <button type="button" title="Bold" :class="{active: selectedBold}" :disabled="!canFormatSelection" @click="toggleSelectedBool('bold', selectedBold)"><b>B</b></button>
+        <button type="button" title="Italic" :class="{active: selectedItalic}" :disabled="!canFormatSelection" @click="toggleSelectedBool('italic', selectedItalic)"><i>I</i></button>
+      </div>
+      <i class="tool-divider" aria-hidden="true"></i>
+      <div class="align-tools" aria-label="Paragraph alignment">
+        <button v-for="alignment in ['left', 'center', 'right', 'justify']" :key="alignment" type="button" :title="`Align ${alignment}`" :class="{active: selectedAlign === alignment}" :disabled="!canFormatSelection" @click="setSelectedString('align', alignment)">{{ alignment === 'left' ? '≡' : alignment === 'center' ? '≣' : alignment === 'right' ? '≡' : '☰' }}</button>
+      </div>
+      <label class="color-tool" title="Text color">
+        <input type="color" :value="selectedColor" :disabled="!canFormatSelection" @change="setSelectedString('color', $event.target.value)" />
+      </label>
+      <button class="edit-tool" type="button" :disabled="!selected?.content?.editable || mutationBusy" @click="requestInlineEdit">Edit text</button>
+      <span class="edit-hint">{{ selectedTarget ? `${selectedTarget} · drag the six-dot handle to move` : 'Click an element to format · double-click text to edit' }}</span>
+      <span v-if="mutationBusy" class="editing-badge">Applying…</span>
+      <span v-else-if="!online" class="offline-badge">Offline</span>
       <span v-else-if="loadProgress > 0 && loadProgress < 1" class="download-badge">{{ Math.round(loadProgress * 100) }}% compiler</span>
     </div>
 
@@ -525,6 +714,7 @@ function handleOnline() {
         :inline-editor="inlineEditor"
         @page-point="selectPagePoint($event, false)"
         @edit-point="selectPagePoint($event, true)"
+        @move-selection="moveSelected"
         @editor-applied="acceptWASMEditorResult"
         @editor-error="handleWASMEditorError"
         @render-error="handleFileEditorError"
@@ -534,7 +724,11 @@ function handleOnline() {
 
       <aside class="right-panel" aria-label="Paper Studio inspector">
         <div class="panel-heading">
-          <span>{{ activePanel === 'source' ? 'Paper source' : activePanel === 'data' ? 'JSON data' : 'Selection' }}</span>
+          <div class="panel-tabs" aria-label="Side panel">
+            <button type="button" :class="{active: activePanel === 'inspect'}" @click="activePanel = 'inspect'">Properties</button>
+            <button type="button" :class="{active: activePanel === 'source'}" @click="activePanel = 'source'">Paper</button>
+            <button type="button" :class="{active: activePanel === 'data'}" @click="activePanel = 'data'">Data</button>
+          </div>
           <small v-if="activePanel === 'source'">{{ sourceLines }} lines</small>
           <small v-else-if="activePanel === 'inspect'">{{ selectedKind }}</small>
         </div>
@@ -562,7 +756,28 @@ function handleOnline() {
           <template v-if="selected">
             <div class="selection-title"><strong>{{ selected.id }}</strong><span>{{ selected.node.kind }}</span></div>
             <p>{{ selected.content.reason || (selected.content.mode === 'data' ? `Bound to ${selected.content.binding}` : 'Authored literal text') }}</p>
-            <button v-if="selected.content.editable" type="button" @click="requestInlineEdit">Edit on page</button>
+            <label class="property-field">
+              <span>Style class</span>
+              <select :value="selectedStyle" :disabled="!canFormatSelection" @change="setSelectedStyle">
+                <option value="" disabled>Choose style</option>
+                <option v-for="style in availableStyles" :key="style.id" :value="style.id">{{ style.id }}</option>
+              </select>
+            </label>
+            <div class="property-actions">
+              <button v-if="selected.content.editable" type="button" @click="requestInlineEdit">Edit text</button>
+              <button type="button" :disabled="!canFormatSelection" @click="toggleSelectedBool('bold', selectedBold)">{{ selectedBold ? 'Remove bold' : 'Bold' }}</button>
+              <button type="button" :disabled="!canFormatSelection" @click="toggleSelectedBool('italic', selectedItalic)">{{ selectedItalic ? 'Remove italic' : 'Italic' }}</button>
+            </div>
+            <div class="move-control">
+              <span>Move block</span>
+              <div>
+                <button type="button" aria-label="Move up" :disabled="!canFormatSelection" @click="nudgeSelection(0, -4)">↑</button>
+                <button type="button" aria-label="Move left" :disabled="!canFormatSelection" @click="nudgeSelection(-4, 0)">←</button>
+                <button type="button" aria-label="Move right" :disabled="!canFormatSelection" @click="nudgeSelection(4, 0)">→</button>
+                <button type="button" aria-label="Move down" :disabled="!canFormatSelection" @click="nudgeSelection(0, 4)">↓</button>
+              </div>
+              <small>4pt steps · or drag the handle on the page</small>
+            </div>
             <dl>
               <div><dt>Page</dt><dd>{{ page }} / {{ pages }}</dd></div>
               <div><dt>Plan</dt><dd>{{ planHash.slice(0, 12) }}</dd></div>
@@ -570,8 +785,8 @@ function handleOnline() {
             </dl>
           </template>
           <div v-else class="inspector-empty">
-            <strong>Select document text</strong>
-            <p>Click a rendered block to inspect it. Drag across the page to copy text, or double-click an editable value.</p>
+            <strong>Select an element</strong>
+            <p>Click a block to format it. Double-click text to edit in place, or drag the six-dot handle to move it.</p>
           </div>
         </div>
 
@@ -610,7 +825,7 @@ function handleOnline() {
   inset: 0;
   z-index: 1000;
   display: grid;
-  grid-template-rows: 54px 40px minmax(0, 1fr) 26px;
+  grid-template-rows: 54px 44px minmax(0, 1fr) 26px;
   width: 100vw;
   height: 100vh;
   height: 100svh;
@@ -623,7 +838,7 @@ function handleOnline() {
 button, select, textarea { color: inherit; font: inherit; }
 button { cursor: pointer; }
 .studio-topbar { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(250px, 1.5fr) minmax(280px, 1fr); align-items: center; gap: 20px; padding: 0 18px; border-bottom: 1px solid var(--line); background: #fbfaf7; }
-.brand-block, .brand, .document-state > span, .top-actions, .sample-picker, .studio-toolbar, .mode-switcher, .rail-heading, .panel-heading, .selection-title, .issues header, .issues article > div, .studio-statusbar { display: flex; align-items: center; }
+.brand-block, .brand, .document-state > span, .top-actions, .sample-picker, .studio-toolbar, .history-tools, .format-tools, .align-tools, .rail-heading, .panel-heading, .panel-tabs, .selection-title, .issues header, .issues article > div, .studio-statusbar { display: flex; align-items: center; }
 .brand-block { gap: 9px; }
 .brand { color: var(--ink); text-decoration: none; letter-spacing: -.02em; }
 .brand i { width: 12px; height: 18px; margin-right: 8px; border-radius: 1px; background: var(--accent); box-shadow: inset -4px 0 rgba(255,255,255,.24); }
@@ -642,12 +857,27 @@ button { cursor: pointer; }
 .sample-picker { gap: 8px; color: var(--muted); font-size: 10px; }
 .sample-picker select { width: min(190px, 20vw); border: 0; border-bottom: 1px solid #9e9b94; outline: 0; padding: 5px 18px 5px 2px; background: transparent; font-size: 11px; }
 .retry-action { border: 0; border-radius: 3px; padding: 7px 10px; background: var(--ink); color: white; font-size: 10px; }
-.studio-toolbar { justify-content: space-between; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--line); background: #f1efe9; }
-.mode-switcher { align-self: stretch; }
-.mode-switcher button { border: 0; background: none; color: var(--muted); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
-.mode-switcher button { min-width: 68px; border-bottom: 2px solid transparent; }
-.mode-switcher button.active { border-color: var(--accent); color: var(--ink); }
-.edit-hint, .offline-badge, .download-badge { color: var(--muted); font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.studio-toolbar { justify-content: flex-start; gap: 5px; overflow-x: auto; padding: 0 12px; border-bottom: 1px solid var(--line); background: #f1efe9; }
+.studio-toolbar button { flex: none; height: 28px; border: 0; border-radius: 3px; background: transparent; font-size: 11px; }
+.studio-toolbar button:hover:not(:disabled) { background: #e2e0d9; }
+.studio-toolbar button.active { background: #dbe3f8; color: #244db8; }
+.studio-toolbar button:disabled, .selection-inspector button:disabled { cursor: default; opacity: .38; }
+.history-tools, .format-tools, .align-tools { gap: 1px; }
+.history-tools button { width: 28px; font-size: 18px; }
+.format-tools button, .align-tools button { width: 28px; }
+.align-tools button:nth-child(3) { transform: scaleX(-1); }
+.tool-divider { flex: none; width: 1px; height: 22px; margin: 0 4px; background: #cbc8c0; }
+.style-tool, .size-tool { display: flex; align-items: center; gap: 5px; height: 30px; }
+.style-tool span, .size-tool span { color: var(--muted); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.style-tool select, .size-tool input { height: 28px; border: 1px solid #c7c4bc; border-radius: 3px; background: #fbfaf7; outline: none; font-size: 10px; }
+.style-tool select { width: 122px; padding: 0 22px 0 7px; }
+.size-tool input { width: 54px; padding: 0 4px; }
+.color-tool { display: grid; place-items: center; flex: none; width: 30px; height: 28px; border-radius: 3px; }
+.color-tool input { width: 20px; height: 20px; border: 0; padding: 0; background: none; cursor: pointer; }
+.edit-tool { padding: 0 10px; background: var(--ink) !important; color: white; }
+.edit-hint { min-width: 180px; margin-left: auto; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.edit-hint, .offline-badge, .download-badge, .editing-badge { color: var(--muted); font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.editing-badge { color: var(--accent); }
 .offline-badge { color: #a3362f; }
 .download-badge { color: var(--accent); }
 .studio-workspace { display: grid; grid-template-columns: 154px minmax(360px, 1fr) minmax(300px, 27vw); min-width: 0; min-height: 0; overflow: hidden; }
@@ -664,14 +894,26 @@ button { cursor: pointer; }
 .page-list > button.active > span { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .page-list p { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .right-panel { display: grid; grid-template-rows: 38px minmax(0, 1fr) auto; border-left: 1px solid var(--line); overflow: hidden; }
-.panel-heading { justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--line); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
+.panel-heading { justify-content: space-between; padding: 0 8px 0 4px; border-bottom: 1px solid var(--line); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
 .panel-heading small { color: var(--muted); font-weight: 500; }
+.panel-tabs { align-self: stretch; }
+.panel-tabs button { border: 0; border-bottom: 2px solid transparent; padding: 0 8px; background: none; color: var(--muted); font: inherit; text-transform: inherit; }
+.panel-tabs button.active { border-color: var(--accent); color: var(--ink); }
 .selection-inspector { min-height: 0; overflow: auto; padding: 14px; }
 .selection-title { justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .selection-title strong { font: 700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .selection-title span { color: var(--muted); font-size: 9px; text-transform: uppercase; }
 .selection-inspector > p, .inspector-empty p { color: var(--muted); font-size: 11px; line-height: 1.55; }
-.selection-inspector > button { width: 100%; border: 0; border-radius: 3px; padding: 8px; background: var(--accent); color: white; font-size: 10px; }
+.property-field { display: grid; gap: 6px; margin-top: 14px; }
+.property-field > span, .move-control > span { color: var(--muted); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
+.property-field select { width: 100%; height: 32px; border: 1px solid var(--line); border-radius: 3px; padding: 0 8px; background: #fbfaf7; font-size: 10px; }
+.property-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 9px; }
+.property-actions button { min-height: 31px; border: 0; border-radius: 3px; padding: 5px; background: #e7e4dc; font-size: 9px; }
+.property-actions button:first-child { background: var(--accent); color: white; }
+.move-control { display: grid; gap: 7px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.move-control > div { display: grid; grid-template-columns: repeat(4, 31px); gap: 4px; }
+.move-control button { height: 31px; border: 1px solid var(--line); border-radius: 3px; background: #fbfaf7; }
+.move-control small { color: var(--muted); font-size: 9px; }
 .selection-inspector dl { margin: 16px 0 0; }
 .selection-inspector dl div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 10px; }
 .selection-inspector dt { color: var(--muted); }
@@ -695,7 +937,7 @@ button { cursor: pointer; }
   .edit-hint { display: none; }
 }
 @media (max-width: 760px) {
-  .studio-shell { grid-template-rows: auto 40px minmax(0, 1fr) 26px; }
+  .studio-shell { grid-template-rows: auto 44px minmax(0, 1fr) 26px; }
   .studio-topbar { grid-template-columns: 1fr auto; gap: 8px; padding: 9px 12px; }
   .document-state { grid-column: 1 / -1; grid-row: 2; }
   .sample-picker > span { display: none; }

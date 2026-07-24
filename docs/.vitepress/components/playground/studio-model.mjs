@@ -65,13 +65,36 @@ export function contentDescriptor(node, dataText = '') {
 
 export function pickHitTarget(hit, astRoot, dataText = '') {
   const fragments = hit?.Fragments || hit?.fragments || [];
+  let fallback = null;
   for (const fragment of fragments) {
     const node = findNodeForFragment(astRoot, fragment);
     if (!node) continue;
     const content = contentDescriptor(node, dataText);
     if (content.editable || content.computed || content.binding) return {id: node.id, node, fragment, content};
+    fallback ||= {id: node.id, node, fragment, content};
   }
-  return null;
+  return fallback;
+}
+
+export function styleClasses(root) {
+  const styles = [];
+  (function walk(node) {
+    if (!node) return;
+    if (node.kind === 'style' && node.id) styles.push({id: node.id, label: node.id.replace(/^@/, '')});
+    for (const member of node.members || []) walk(member.node);
+  })(root);
+  return styles;
+}
+
+export function nodePropertyValue(node, name, fallback = null) {
+  if (!node) return fallback;
+  const value = property(node, name)?.value;
+  if (!value) return fallback;
+  if (value.kind === 'string') return value.string_value ?? fallback;
+  if (value.kind === 'bool') return value.bool_value ?? fallback;
+  if (value.kind === 'number') return value.number_value ?? fallback;
+  if (value.kind === 'unit') return value.unit_value?.number ?? fallback;
+  return fallback;
 }
 
 export function traceBindingDescriptor(trace, dataText = '') {

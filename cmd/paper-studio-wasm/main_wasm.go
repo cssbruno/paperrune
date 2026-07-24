@@ -34,6 +34,9 @@ var workspacePageFunction js.Func
 var mountEditorFunction js.Func
 var mountFileEditorFunction js.Func
 var paintPageFunction js.Func
+var mutateNodeFunction js.Func
+var historyPageFunction js.Func
+var historyStateFunction js.Func
 var renderCache layoutengine.WebDisplayRenderCache
 var planCache playgroundPlanCache
 
@@ -55,6 +58,9 @@ func main() {
 	mountEditorFunction = js.FuncOf(mountPlaygroundEditor)
 	mountFileEditorFunction = js.FuncOf(mountPlaygroundFileEditor)
 	paintPageFunction = js.FuncOf(paintPlaygroundPage)
+	mutateNodeFunction = js.FuncOf(mutatePlaygroundNode)
+	historyPageFunction = js.FuncOf(renderPlaygroundHistoryPage)
+	historyStateFunction = js.FuncOf(playgroundHistoryState)
 	engine := js.Global().Get("Object").New()
 	engine.Set("formatVersion", layoutengine.WebDisplayRenderPayloadVersion)
 	engine.Set("rendererVersion", layoutengine.DisplayRasterRendererVersion)
@@ -67,6 +73,9 @@ func main() {
 	engine.Set("mountEditor", mountEditorFunction)
 	engine.Set("mountFileEditor", mountFileEditorFunction)
 	engine.Set("paintPage", paintPageFunction)
+	engine.Set("mutateNode", mutateNodeFunction)
+	engine.Set("historyPage", historyPageFunction)
+	engine.Set("historyState", historyStateFunction)
 	js.Global().Set("PaperStudioWASM", engine)
 	<-make(chan struct{})
 }
@@ -699,6 +708,7 @@ func applyPlaygroundEdit(request playgroundEditRequest) (playgroundEditResult, e
 	if err != nil {
 		return playgroundEditResult{}, err
 	}
+	playgroundHistory.record(request.hash, planned.Hash)
 	return playgroundEditResult{
 		OK: true, Applied: true,
 		Pages: planned.Pages, Hash: planned.Hash,

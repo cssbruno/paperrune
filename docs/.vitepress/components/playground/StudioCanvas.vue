@@ -22,11 +22,12 @@ const props = defineProps({
   wasmEngine: {type: Object, default: null},
 });
 
-const emit = defineEmits(['page-point', 'edit-point', 'editor-applied', 'editor-error', 'render-error', 'cancel-inline', 'retry']);
+const emit = defineEmits(['page-point', 'edit-point', 'move-selection', 'editor-applied', 'editor-error', 'render-error', 'cancel-inline', 'retry']);
 const pageStage = ref(null);
 const graphicsCanvas = ref(null);
 const displayTextRuns = ref([]);
 const editorHost = ref(null);
+const dragState = ref(null);
 let resizeObserver;
 let measureToken = 0;
 let wasmEditorController;
@@ -216,6 +217,43 @@ function overlayStyle(bounds) {
   };
 }
 
+function movableSelectionStyle(bounds) {
+  const style = overlayStyle(bounds);
+  if (dragState.value) style.transform = `translate(${dragState.value.dx}px, ${dragState.value.dy}px)`;
+  return style;
+}
+
+function beginSelectionMove(event) {
+  if (props.stale || !props.selection?.node?.id || props.inlineEditor) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+  dragState.value = {pointerId: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, dy: 0};
+}
+
+function updateSelectionMove(event) {
+  const drag = dragState.value;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  drag.dx = event.clientX - drag.x;
+  drag.dy = event.clientY - drag.y;
+  dragState.value = {...drag};
+}
+
+function finishSelectionMove(event) {
+  const drag = dragState.value;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  event.stopPropagation();
+  dragState.value = null;
+  const bounds = pageStage.value?.getBoundingClientRect();
+  if (!bounds || Math.hypot(drag.dx, drag.dy) < 3) return;
+  emit('move-selection', {
+    target: props.selection.node.id,
+    xFixed: Math.round(drag.dx / bounds.width * props.pageWidth),
+    yFixed: Math.round(drag.dy / bounds.height * props.pageHeight),
+  });
+}
+
 function formatFixedPoints(value) {
   const points = Number(value) / Math.max(1, props.fixedScale);
   return Number.isInteger(points) ? String(points) : points.toFixed(1);
@@ -246,8 +284,19 @@ function formatFixedPoints(value) {
             :style="run.style"
           >{{ run.text }}</span>
         </div>
-        <div v-if="selection?.bounds" class="block-selection" :style="overlayStyle(selection.bounds)">
+        <div v-if="selection?.bounds" class="block-selection" :class="{'is-moving': dragState}" :style="movableSelectionStyle(selection.bounds)">
           <span>{{ selection.id }}</span>
+          <button
+            v-if="selection.node?.id"
+            type="button"
+            class="selection-move-handle"
+            title="Drag to move this block"
+            aria-label="Drag to move selected block"
+            @pointerdown="beginSelectionMove"
+            @pointermove="updateSelectionMove"
+            @pointerup="finishSelectionMove"
+            @pointercancel="dragState = null"
+          ><i></i><i></i><i></i><i></i><i></i><i></i></button>
         </div>
         <div
           v-if="inlineEditor"
@@ -324,7 +373,9 @@ function formatFixedPoints(value) {
   background: rgba(46, 91, 214, .035);
   pointer-events: none;
   animation: selection-in .14s ease-out;
+  transition: transform .08s linear;
 }
+.block-selection.is-moving { border-style: dashed; background: rgba(46, 91, 214, .08); transition: none; }
 .block-selection span {
   position: absolute;
   left: -1px;
@@ -334,6 +385,26 @@ function formatFixedPoints(value) {
   color: white;
   font: 600 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+.selection-move-handle {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  display: grid;
+  grid-template-columns: repeat(3, 2px);
+  gap: 2px;
+  width: 22px;
+  height: 14px;
+  margin-left: -11px;
+  border: 0;
+  border-radius: 3px 3px 0 0;
+  padding: 4px 6px;
+  background: #2e5bd6;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+}
+.selection-move-handle:active { cursor: grabbing; }
+.selection-move-handle i { width: 2px; height: 2px; border-radius: 50%; background: white; }
 .inline-editor-host {
   position: absolute;
   z-index: 8;

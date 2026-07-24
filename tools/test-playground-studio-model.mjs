@@ -10,6 +10,8 @@ import {
   findNodeByID,
   outlineNodes,
   pickHitTarget,
+  nodePropertyValue,
+  styleClasses,
   traceBindingDescriptor,
 } from '../docs/.vitepress/components/playground/studio-model.mjs';
 
@@ -38,6 +40,9 @@ const repeatedCell = node('cell', '', [
   property('bind', {kind: 'string', string_value: 'analyte'}),
 ], 518);
 const root = node('document', '@document', [
+  {node: node('style', '@body-style', [
+    property('size', {kind: 'unit', unit_value: {number: 10, unit: 'pt'}}),
+  ])},
   {node: node('page', '@page', [
     {node: node('body', '@body', [
       {node: literal},
@@ -109,6 +114,8 @@ assert.deepEqual(boxAsPercent(hit.Fragments[1].ContentBox, 100, 200), {
   height: 20,
 });
 assert(outlineNodes(root).some(({id}) => id === '@literal'));
+assert.deepEqual(styleClasses(root), [{id: '@body-style', label: 'body-style'}]);
+assert.equal(nodePropertyValue(root.members[0].node, 'size'), 10);
 
 const trace = {
   provenance: {
@@ -153,6 +160,7 @@ const playgroundSource = await readFile(new URL('../docs/.vitepress/components/P
 const fileEditorComponent = await readFile(new URL('../docs/.vitepress/components/playground/WASMFileEditor.vue', import.meta.url), 'utf8');
 const wasmEditorSource = await readFile(new URL('../cmd/paper-studio-wasm/editor_wasm.go', import.meta.url), 'utf8');
 const wasmFileEditorSource = await readFile(new URL('../cmd/paper-studio-wasm/file_editor_wasm.go', import.meta.url), 'utf8');
+const wasmNodeMutationSource = await readFile(new URL('../cmd/paper-studio-wasm/node_mutation_wasm.go', import.meta.url), 'utf8');
 assert(!canvasSource.includes('v-model="inlineDraft"'));
 assert(!canvasSource.includes('commit-inline'));
 assert(canvasSource.includes('engine.mountEditor(request)'));
@@ -165,6 +173,8 @@ assert(!canvasSource.includes('display-svg'));
 assert(!canvasSource.includes('sanitizeDisplaySVG'));
 assert(canvasSource.includes('vectorOnly: true'));
 assert(canvasSource.includes('class="document-text-run"'));
+assert(canvasSource.includes('class="selection-move-handle"'));
+assert(canvasSource.includes("emit('move-selection'"));
 assert(canvasSource.includes("'--selection-color': run.color"));
 assert(canvasSource.includes('color: var(--selection-color)'));
 assert(!canvasSource.includes('class="selectable-line"'));
@@ -175,6 +185,9 @@ assert(!playgroundSource.includes('result.png'));
 assert(!playgroundSource.includes('result.svg'));
 assert(!playgroundSource.includes(':svg='));
 assert(playgroundSource.includes('vectorOnly: true'));
+assert(playgroundSource.includes('wasmEngine.value.mutateNode'));
+assert(playgroundSource.includes('wasmEngine.value.historyPage'));
+assert(playgroundSource.includes('Style class'));
 assert(fileEditorComponent.includes('props.engine.mountFileEditor'));
 assert(fileEditorComponent.includes('vectorOnly: true'));
 assert(wasmEditorSource.includes('input.Set("contentEditable", "plaintext-only")'));
@@ -186,8 +199,11 @@ assert(wasmEditorSource.includes('".document-text-run"'));
 assert(!wasmEditorSource.includes('querySelector", ":scope > img"'));
 assert(wasmFileEditorSource.includes('time.AfterFunc(playgroundFileEditDelay'));
 assert(wasmFileEditorSource.includes('planPlaygroundRequest(source, data'));
+assert(wasmNodeMutationSource.includes('paperedit.SetProperties'));
+assert(wasmNodeMutationSource.includes('playgroundHistory.record'));
+assert(wasmNodeMutationSource.includes('"margin-left"'));
 
-console.log('playground Studio model: selection plus WASM-owned inline and file editors verified');
+console.log('playground Studio model: direct text, style, movement, and history controls verified');
 
 function node(kind, id, members = [], offset = 0) {
   return {

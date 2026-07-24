@@ -39,7 +39,9 @@ if (runtimeFailure) throw runtimeFailure;
 if (!globalThis.PaperStudioWASM?.compile || !globalThis.PaperStudioWASM?.hit ||
     !globalThis.PaperStudioWASM?.trace || !globalThis.PaperStudioWASM?.editText ||
     !globalThis.PaperStudioWASM?.workspacePage || !globalThis.PaperStudioWASM?.mountEditor ||
-    !globalThis.PaperStudioWASM?.mountFileEditor || !globalThis.PaperStudioWASM?.paintPage) {
+    !globalThis.PaperStudioWASM?.mountFileEditor || !globalThis.PaperStudioWASM?.paintPage ||
+    !globalThis.PaperStudioWASM?.mutateNode || !globalThis.PaperStudioWASM?.historyPage ||
+    !globalThis.PaperStudioWASM?.historyState) {
   throw new Error('documentation compiler did not initialize the Studio API');
 }
 
@@ -102,6 +104,9 @@ if (invalid.ok || !invalid.diagnostics?.some((diagnostic) => diagnostic.code ===
 }
 
 const editableSource = `document @editable:
+  style @heading-style:
+    font: "Helvetica"
+    size: 18pt
   page @sheet:
     size: "A4"
     margin: 36pt
@@ -131,6 +136,52 @@ const editableSecond = await globalThis.PaperStudioWASM.compile({
 if (!editableFirst.ok || !editableSecond.ok || editableFirst.pages !== 2 ||
     editableSecond.pages !== 2 || editableFirst.hash !== editableSecond.hash) {
   throw new Error(`adjacent editable pages failed: first=${JSON.stringify(editableFirst)} second=${JSON.stringify(editableSecond)}`);
+}
+const formatted = await globalThis.PaperStudioWASM.mutateNode({
+  hash: editableFirst.hash,
+  page: 1,
+  target: '@editable-title',
+  properties: [
+    {name: 'style', kind: 'string', text: '@heading-style'},
+    {name: 'bold', kind: 'bool', bool: true},
+    {name: 'size', kind: 'unit', number: 21},
+    {name: 'color', kind: 'string', text: '#315d7a'},
+    {name: 'align', kind: 'string', text: 'center'},
+  ],
+  moveXPoints: 4,
+  moveYPoints: 6,
+  vectorOnly: true,
+});
+if (!formatted.edit?.ok || !formatted.page?.ok || formatted.edit.hash === editableFirst.hash ||
+    !formatted.edit.source.includes('style: "@heading-style"') ||
+    !formatted.edit.source.includes('bold: true') || !formatted.edit.source.includes('size: 21pt') ||
+    !formatted.edit.source.includes('color: "#315D7A"') || !formatted.edit.source.includes('align: "center"') ||
+    !formatted.edit.source.includes('margin-left: 4pt') || !formatted.edit.source.includes('margin-top: 6pt') ||
+    Object.hasOwn(formatted.page, 'svg') || Object.hasOwn(formatted.page, 'png')) {
+  throw new Error(`WASM node formatting/movement failed: ${JSON.stringify(formatted)}`);
+}
+const formattedHistory = globalThis.PaperStudioWASM.historyState({hash: formatted.edit.hash});
+if (!formattedHistory.canUndo) {
+  throw new Error(`WASM history did not retain the formatting mutation: ${JSON.stringify(formattedHistory)}`);
+}
+const undoneFormatting = await globalThis.PaperStudioWASM.historyPage({
+  hash: formatted.edit.hash,
+  page: 1,
+  direction: -1,
+  vectorOnly: true,
+});
+if (undoneFormatting.edit?.hash !== editableFirst.hash || !undoneFormatting.page?.ok ||
+    Object.hasOwn(undoneFormatting.page, 'svg')) {
+  throw new Error(`WASM formatting undo failed: ${JSON.stringify(undoneFormatting)}`);
+}
+const redoneFormatting = await globalThis.PaperStudioWASM.historyPage({
+  hash: undoneFormatting.edit.hash,
+  page: 1,
+  direction: 1,
+  vectorOnly: true,
+});
+if (redoneFormatting.edit?.hash !== formatted.edit.hash || !redoneFormatting.page?.ok) {
+  throw new Error(`WASM formatting redo failed: ${JSON.stringify(redoneFormatting)}`);
 }
 const editableHit = await globalThis.PaperStudioWASM.hit({
   hash: editableFirst.hash,
