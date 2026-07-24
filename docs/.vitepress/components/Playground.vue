@@ -4,6 +4,7 @@ import {withBase} from 'vitepress';
 import {playgroundSampleManifest} from '../playground-samples.mjs';
 import StudioCanvas from './playground/StudioCanvas.vue';
 import WASMFileEditor from './playground/WASMFileEditor.vue';
+import WASMValueEditor from './playground/WASMValueEditor.vue';
 import {
   boxAsPercent,
   contentDescriptor,
@@ -36,6 +37,7 @@ const selectedSample = ref(0);
 const source = ref(samples[0].source);
 const data = ref(samples[0].data);
 const activePanel = ref('inspect');
+const activeTool = ref('select');
 const state = ref('loading');
 const status = ref('Loading compiler…');
 const failure = ref('');
@@ -105,6 +107,54 @@ const selectedItalic = computed(() => Boolean(nodePropertyValue(selected.value?.
 const selectedAlign = computed(() => nodePropertyValue(selected.value?.node, 'align', 'left'));
 const availableStyles = computed(() => styleClasses(ast.value?.root));
 const canFormatSelection = computed(() => Boolean(selectedTarget.value) && !previewStale.value && !mutationBusy.value);
+const selectedValueState = computed(() => {
+  const content = selected.value?.content;
+  if (!content) {
+    return {
+      kind: 'none',
+      label: 'No selection',
+      title: 'Select text or a layout block',
+      detail: 'The value source and available editing controls will appear here.',
+      syntax: '',
+    };
+  }
+  if (content.mode === 'data' || content.binding) {
+    return {
+      kind: content.editable ? 'bound' : 'locked',
+      label: content.editable ? 'Bound · editable' : 'Bound · locked',
+      title: content.binding || content.pointer || 'JSON value',
+      detail: content.editable
+        ? 'This is a scalar JSON value. Editing it updates sample data through WASM.'
+        : content.reason || 'This binding cannot be edited as one scalar value.',
+      syntax: content.binding ? `bind: "${content.binding}"` : 'bind: <expression>',
+    };
+  }
+  if (content.computed) {
+    return {
+      kind: 'computed',
+      label: 'Computed · locked',
+      title: 'Expression result',
+      detail: content.reason || 'Change the expression or its JSON inputs in the file editors.',
+      syntax: 'text: <expression>',
+    };
+  }
+  if (content.mode === 'source') {
+    return {
+      kind: 'fixed',
+      label: 'Fixed · editable',
+      title: 'Paper source text',
+      detail: 'This value is authored with text, is not linked to JSON, and can be edited directly.',
+      syntax: 'text: "…"',
+    };
+  }
+  return {
+    kind: 'layout',
+    label: 'Layout only',
+    title: 'No direct text value',
+    detail: content.reason || 'Select a text-bearing node to edit its value.',
+    syntax: '',
+  };
+});
 
 onMounted(() => {
   online.value = navigator.onLine;
@@ -340,6 +390,12 @@ function requestInlineEdit() {
   };
 }
 
+function chooseTool(tool) {
+  activeTool.value = tool;
+  activePanel.value = 'inspect';
+  if (tool === 'edit' && selected.value?.content?.editable) requestInlineEdit();
+}
+
 async function mutateSelected(properties = [], movement = null) {
   const selection = selected.value;
   if (!selection?.node?.id || !wasmEngine.value?.mutateNode || mutationBusy.value || previewStale.value) return;
@@ -462,6 +518,27 @@ function acceptWASMEditorResult(payload) {
     status.value = failure.value;
     state.value = 'error';
   }
+}
+
+function acceptValueEditorResult(payload) {
+  const selection = selected.value;
+  if (!selection || payload?.hash !== planHash.value || previewStale.value) return;
+  const preservation = selection.node?.id && selection.bounds
+    ? {target: selection.node.id, bounds: {...selection.bounds}, previous: selection}
+    : null;
+  try {
+    acceptEditedWorkspace(payload.result?.edit, payload.result?.page, preservation);
+  } catch (error) {
+    failure.value = normalizeFailure(error, 'The WASM value editor returned an invalid workspace.');
+    status.value = failure.value;
+    state.value = 'error';
+  }
+}
+
+function handleValueEditorError(error) {
+  failure.value = normalizeFailure(error, 'The WASM value editor could not be mounted.');
+  status.value = failure.value;
+  state.value = 'error';
 }
 
 function handleWASMEditorError(payload) {
@@ -673,24 +750,50 @@ function handleOnline() {
     </div>
 
     <div class="studio-workspace">
-      <aside class="left-rail" aria-label="Document navigation">
-        <header class="rail-heading">
-          <span>Pages</span>
-          <small>{{ pages || '—' }}</small>
-        </header>
-        <div class="page-list">
-          <button
-            v-for="pageNumber in pages"
-            :key="pageNumber"
-            type="button"
-            :class="{active: page === pageNumber}"
-            :disabled="state === 'compiling' || state === 'loading'"
-            @click="compile(pageNumber)"
-          >
-            <span>{{ pageNumber }}</span><small>Page {{ pageNumber }}</small>
-          </button>
-          <p v-if="!pages">Pages appear after a valid plan.</p>
-        </div>
+      <aside class="left-rail" aria-label="Document toolbox and navigation">
+        <section class="toolbox" aria-label="Toolbox">
+          <header class="rail-heading">
+            <span>Toolbox</span>
+            <small>{{ activeTool }}</small>
+          </header>
+          <div class="tool-list">
+            <button type="button" :class="{active: activeTool === 'select'}" @click="chooseTool('select')">
+              <b>↖</b><span><strong>Select</strong><small>Pick and format</small></span>
+            </button>
+            <button type="button" :class="{active: activeTool === 'edit'}" :disabled="selected && !selected.content?.editable" @click="chooseTool('edit')">
+              <b>T</b><span><strong>Edit text</strong><small>{{ selected?.content?.editable ? 'Edit on page' : 'Select editable text' }}</small></span>
+            </button>
+            <button type="button" :class="{active: activeTool === 'move'}" :disabled="!selectedTarget" @click="chooseTool('move')">
+              <b>✥</b><span><strong>Move</strong><small>Drag page handle</small></span>
+            </button>
+          </div>
+          <div class="value-key" aria-label="Value source legend">
+            <strong>Value source</strong>
+            <span><i class="bound"></i>JSON bound</span>
+            <span><i class="fixed"></i>Fixed Paper text</span>
+            <span><i class="computed"></i>Computed / locked</span>
+            <small>Use <code>bind</code> for variable JSON values. Use <code>text</code> for fixed copy.</small>
+          </div>
+        </section>
+        <section class="pages-panel" aria-label="Document pages">
+          <header class="rail-heading">
+            <span>Pages</span>
+            <small>{{ pages || '—' }}</small>
+          </header>
+          <div class="page-list">
+            <button
+              v-for="pageNumber in pages"
+              :key="pageNumber"
+              type="button"
+              :class="{active: page === pageNumber}"
+              :disabled="state === 'compiling' || state === 'loading'"
+              @click="compile(pageNumber)"
+            >
+              <span>{{ pageNumber }}</span><small>Page {{ pageNumber }}</small>
+            </button>
+            <p v-if="!pages">Pages appear after a valid plan.</p>
+          </div>
+        </section>
       </aside>
 
       <StudioCanvas
@@ -712,7 +815,7 @@ function handleOnline() {
         :load-progress="loadProgress"
         :selection="selected"
         :inline-editor="inlineEditor"
-        @page-point="selectPagePoint($event, false)"
+        @page-point="selectPagePoint($event, activeTool === 'edit')"
         @edit-point="selectPagePoint($event, true)"
         @move-selection="moveSelected"
         @editor-applied="acceptWASMEditorResult"
@@ -755,7 +858,37 @@ function handleOnline() {
         <div v-show="activePanel === 'inspect'" class="selection-inspector">
           <template v-if="selected">
             <div class="selection-title"><strong>{{ selected.id }}</strong><span>{{ selected.node.kind }}</span></div>
-            <p>{{ selected.content.reason || (selected.content.mode === 'data' ? `Bound to ${selected.content.binding}` : 'Authored literal text') }}</p>
+            <section class="value-origin" :class="selectedValueState.kind">
+              <span>{{ selectedValueState.label }}</span>
+              <strong>{{ selectedValueState.title }}</strong>
+              <p>{{ selectedValueState.detail }}</p>
+              <code v-if="selectedValueState.syntax">{{ selectedValueState.syntax }}</code>
+            </section>
+            <section class="edit-box">
+              <header>
+                <span>Edit value</span>
+                <small>{{ selected.content.editable ? 'WASM editor' : 'Not directly editable' }}</small>
+              </header>
+              <WASMValueEditor
+                v-if="selected.content.editable && !inlineEditor"
+                :engine="wasmEngine"
+                :hash="planHash"
+                :page="page"
+                :descriptor="selected.content"
+                :target="selectedTarget"
+                :disabled="mutationBusy || previewStale"
+                @applied="acceptValueEditorResult"
+                @error="handleValueEditorError"
+              />
+              <div v-else-if="inlineEditor" class="edit-box-message">
+                <strong>Editing on page</strong>
+                <span>Press Ctrl/Cmd + Enter to apply or Escape to cancel.</span>
+              </div>
+              <div v-else class="edit-box-message">
+                <strong>Direct editing unavailable</strong>
+                <span>{{ selected.content.reason || 'Choose a fixed text or scalar JSON-bound value.' }}</span>
+              </div>
+            </section>
             <label class="property-field">
               <span>Style class</span>
               <select :value="selectedStyle" :disabled="!canFormatSelection" @change="setSelectedStyle">
@@ -786,7 +919,12 @@ function handleOnline() {
           </template>
           <div v-else class="inspector-empty">
             <strong>Select an element</strong>
-            <p>Click a block to format it. Double-click text to edit in place, or drag the six-dot handle to move it.</p>
+            <p>Click a block to see whether its value is JSON-bound, fixed Paper text, computed, or layout-only.</p>
+            <div class="empty-value-key">
+              <span><i class="bound"></i><b>Bound</b> changes JSON</span>
+              <span><i class="fixed"></i><b>Fixed</b> changes Paper text</span>
+              <span><i class="computed"></i><b>Computed</b> changes its inputs</span>
+            </div>
           </div>
         </div>
 
@@ -880,11 +1018,32 @@ button { cursor: pointer; }
 .editing-badge { color: var(--accent); }
 .offline-badge { color: #a3362f; }
 .download-badge { color: var(--accent); }
-.studio-workspace { display: grid; grid-template-columns: 154px minmax(360px, 1fr) minmax(300px, 27vw); min-width: 0; min-height: 0; overflow: hidden; }
+.studio-workspace { display: grid; grid-template-columns: 204px minmax(360px, 1fr) minmax(330px, 28vw); min-width: 0; min-height: 0; overflow: hidden; }
 .left-rail, .right-panel { min-width: 0; min-height: 0; background: #f7f5ef; }
-.left-rail { display: grid; grid-template-rows: 38px minmax(0, 1fr); border-right: 1px solid var(--line); }
+.left-rail { display: grid; grid-template-rows: auto minmax(0, 1fr); border-right: 1px solid var(--line); overflow: hidden; }
 .rail-heading { justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--line); color: var(--muted); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
 .rail-heading small { font-size: 8px; font-weight: 500; }
+.toolbox { border-bottom: 1px solid var(--line); background: #f1efe9; }
+.toolbox .rail-heading, .pages-panel .rail-heading { display: flex; height: 38px; }
+.tool-list { display: grid; gap: 3px; padding: 8px; }
+.tool-list button { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 8px; width: 100%; border: 0; border-radius: 3px; padding: 6px; background: transparent; text-align: left; }
+.tool-list button:hover:not(:disabled) { background: #e3e0d8; }
+.tool-list button.active { background: #dbe3f8; color: #244db8; }
+.tool-list button:disabled { cursor: default; opacity: .42; }
+.tool-list button > b { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid #c6c3ba; border-radius: 3px; background: #fbfaf7; font-size: 13px; }
+.tool-list button > span { display: grid; gap: 2px; min-width: 0; }
+.tool-list button strong { font-size: 10px; }
+.tool-list button small { overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.value-key { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; padding: 10px 12px 12px; border-top: 1px solid #d8d5cd; }
+.value-key > strong { grid-column: 1 / -1; color: var(--muted); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
+.value-key > span { display: flex; align-items: center; gap: 5px; font-size: 8px; white-space: nowrap; }
+.value-key > small { grid-column: 1 / -1; color: var(--muted); font-size: 8px; line-height: 1.45; }
+.value-key code { padding: 1px 3px; border-radius: 2px; background: #e1ded5; color: var(--ink); font-size: 8px; }
+.value-key i, .empty-value-key i { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+.value-key i.bound, .empty-value-key i.bound { background: #2e5bd6; }
+.value-key i.fixed, .empty-value-key i.fixed { background: #21805a; }
+.value-key i.computed, .empty-value-key i.computed { background: #8a7c68; }
+.pages-panel { display: grid; grid-template-rows: 38px minmax(0, 1fr); min-height: 0; }
 .page-list { min-height: 0; overflow: auto; padding: 10px; }
 .page-list > button { width: 100%; border: 0; background: none; text-align: left; }
 .page-list > button { display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 8px; margin-bottom: 7px; padding: 5px; border-radius: 3px; }
@@ -904,6 +1063,21 @@ button { cursor: pointer; }
 .selection-title strong { font: 700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .selection-title span { color: var(--muted); font-size: 9px; text-transform: uppercase; }
 .selection-inspector > p, .inspector-empty p { color: var(--muted); font-size: 11px; line-height: 1.55; }
+.value-origin { display: grid; gap: 6px; margin-top: 12px; padding: 11px 12px; border-left: 3px solid #8a7c68; background: #eeebe4; }
+.value-origin.bound { border-color: #2e5bd6; background: #e8edfb; }
+.value-origin.fixed { border-color: #21805a; background: #e6f0ea; }
+.value-origin.computed, .value-origin.locked { border-color: #9a6a25; background: #f5ecdc; }
+.value-origin > span { width: max-content; border-radius: 2px; padding: 3px 5px; background: rgba(255,255,255,.65); color: var(--muted); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; text-transform: uppercase; }
+.value-origin > strong { font-size: 11px; overflow-wrap: anywhere; }
+.value-origin > p { margin: 0; color: #555960; font-size: 10px; line-height: 1.45; }
+.value-origin > code { width: max-content; max-width: 100%; overflow: hidden; padding: 3px 5px; background: rgba(255,255,255,.7); color: #34383e; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.edit-box { margin-top: 14px; }
+.edit-box > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+.edit-box > header span { font-size: 11px; font-weight: 700; }
+.edit-box > header small { color: var(--muted); font: 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
+.edit-box-message { display: grid; gap: 5px; min-height: 82px; align-content: center; padding: 12px; border: 1px dashed #c6c2b8; border-radius: 4px; background: #f2f0ea; text-align: center; }
+.edit-box-message strong { font-size: 10px; }
+.edit-box-message span { color: var(--muted); font-size: 9px; line-height: 1.45; }
 .property-field { display: grid; gap: 6px; margin-top: 14px; }
 .property-field > span, .move-control > span { color: var(--muted); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
 .property-field select { width: 100%; height: 32px; border: 1px solid var(--line); border-radius: 3px; padding: 0 8px; background: #fbfaf7; font-size: 10px; }
@@ -918,8 +1092,11 @@ button { cursor: pointer; }
 .selection-inspector dl div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 10px; }
 .selection-inspector dt { color: var(--muted); }
 .selection-inspector dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.inspector-empty { max-width: 240px; margin: 12vh auto 0; text-align: center; }
+.inspector-empty { max-width: 250px; margin: 7vh auto 0; text-align: center; }
 .inspector-empty strong { font-size: 12px; }
+.empty-value-key { display: grid; gap: 7px; margin-top: 18px; padding: 12px; border-top: 1px solid var(--line); text-align: left; }
+.empty-value-key span { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 9px; }
+.empty-value-key b { color: var(--ink); font-size: 9px; }
 .issues { max-height: min(38svh, 320px); overflow: auto; border-top: 1px solid var(--line); background: #fbfaf7; }
 .issues header { justify-content: space-between; min-height: 34px; padding: 0 12px; font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; letter-spacing: .06em; }
 .issues header strong { display: grid; place-items: center; min-width: 18px; height: 18px; border-radius: 9px; background: #b23b32; color: white; font-size: 9px; }
@@ -933,8 +1110,10 @@ button { cursor: pointer; }
 @keyframes pulse { to { transform: scale(1.35); opacity: .5; } }
 @media (prefers-reduced-motion: reduce) { .status-dot { animation: none; } }
 @media (max-width: 980px) {
-  .studio-workspace { grid-template-columns: 112px minmax(320px, 1fr) minmax(260px, 34vw); }
+  .studio-workspace { grid-template-columns: 176px minmax(320px, 1fr) minmax(300px, 34vw); }
   .edit-hint { display: none; }
+  .value-key { grid-template-columns: 1fr; }
+  .value-key > strong, .value-key > small { grid-column: 1; }
 }
 @media (max-width: 760px) {
   .studio-shell { grid-template-rows: auto 44px minmax(0, 1fr) 26px; }
@@ -942,11 +1121,15 @@ button { cursor: pointer; }
   .document-state { grid-column: 1 / -1; grid-row: 2; }
   .sample-picker > span { display: none; }
   .sample-picker select { width: 150px; }
-  .studio-workspace { grid-template-columns: 72px minmax(0, 1fr); grid-template-rows: minmax(0, 58%) minmax(220px, 42%); }
+  .studio-workspace { grid-template-columns: 78px minmax(0, 1fr); grid-template-rows: minmax(0, 58%) minmax(220px, 42%); }
   .left-rail { grid-row: 1 / -1; }
   .right-panel { grid-column: 2; grid-row: 2; border-top: 1px solid var(--line); border-left: 0; }
   .studio-canvas { grid-column: 2; grid-row: 1; }
   .rail-heading { height: 34px; padding: 0 7px; font-size: 7px; }
+  .rail-heading small, .value-key, .tool-list button > span { display: none; }
+  .tool-list { padding: 5px; }
+  .tool-list button { display: grid; grid-template-columns: 1fr; justify-items: center; padding: 4px; }
+  .tool-list button > b { width: 30px; height: 30px; }
   .page-list { padding: 6px; }
   .page-list > button { grid-template-columns: 1fr; }
   .page-list > button small { display: none; }

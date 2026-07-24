@@ -22,18 +22,21 @@ type playgroundEditorDOM struct {
 }
 
 type playgroundDOMEditor struct {
-	dom                  playgroundEditorDOM
-	request              playgroundEditRequest
-	page                 uint32
-	vectorOnly           bool
-	onApplied, onCancel  js.Value
-	keydown, input, blur js.Func
-	pointerDown, destroy js.Func
-	mu                   sync.Mutex
-	busy, destroyed      bool
-	history              []string
-	historyIndex         int
-	hiddenGlyphs         []js.Value
+	dom                         playgroundEditorDOM
+	request                     playgroundEditRequest
+	page                        uint32
+	vectorOnly                  bool
+	onApplied, onCancel         js.Value
+	onError                     js.Value
+	keydown, input, blur        js.Func
+	pointerDown, apply, destroy js.Func
+	mu                          sync.Mutex
+	busy, destroyed             bool
+	autoFocus                   bool
+	applyOnBlur                 bool
+	history                     []string
+	historyIndex                int
+	hiddenGlyphs                []js.Value
 }
 
 func mountPlaygroundEditor(_ js.Value, arguments []js.Value) any {
@@ -65,8 +68,11 @@ func newPlaygroundDOMEditor(value js.Value) (*playgroundDOMEditor, error) {
 	}
 	editor := &playgroundDOMEditor{
 		dom:     buildPlaygroundEditorDOM(host, request.text, playgroundEditorLabel(value)),
-		request: request, page: page, onApplied: onApplied, onCancel: onCancel,
-		history: []string{request.text}, vectorOnly: jsOptionalBool(value, "vectorOnly"),
+		request: request, page: page, onApplied: onApplied, onCancel: onCancel, onError: value.Get("onError"),
+		history:     []string{request.text},
+		vectorOnly:  jsOptionalBool(value, "vectorOnly"),
+		autoFocus:   playgroundEditorBool(value, "autoFocus", true),
+		applyOnBlur: playgroundEditorBool(value, "applyOnBlur", true),
 	}
 	editor.hiddenGlyphs = hidePlaygroundEditorGlyphs(host)
 	return editor, nil
@@ -106,19 +112,28 @@ func (editor *playgroundDOMEditor) mount() js.Value {
 		event[0].Call("stopPropagation")
 		return nil
 	})
+	editor.apply = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		editor.applyEdit()
+		return nil
+	})
 	editor.destroy = js.FuncOf(func(_ js.Value, _ []js.Value) any {
 		editor.unmount()
 		return nil
 	})
 	editor.dom.input.Call("addEventListener", "keydown", editor.keydown)
 	editor.dom.input.Call("addEventListener", "input", editor.input)
-	editor.dom.input.Call("addEventListener", "blur", editor.blur)
+	if editor.applyOnBlur {
+		editor.dom.input.Call("addEventListener", "blur", editor.blur)
+	}
 	editor.dom.input.Call("addEventListener", "pointerdown", editor.pointerDown)
 	editor.dom.input.Call("addEventListener", "dblclick", editor.pointerDown)
-	editor.dom.input.Call("focus", map[string]any{"preventScroll": true})
-	selectPlaygroundEditorText(editor.dom.input)
+	if editor.autoFocus {
+		editor.dom.input.Call("focus", map[string]any{"preventScroll": true})
+		selectPlaygroundEditorText(editor.dom.input)
+	}
 
 	controller := js.Global().Get("Object").New()
+	controller.Set("apply", editor.apply)
 	controller.Set("destroy", editor.destroy)
 	return controller
 }
@@ -175,6 +190,8 @@ func (editor *playgroundDOMEditor) applyEdit() {
 	editor.busy = true
 	editor.request.text = editor.dom.input.Get("textContent").String()
 	editor.mu.Unlock()
+	editor.dom.message.Set("textContent", "")
+	editor.dom.host.Get("classList").Call("remove", "has-error")
 	editor.setBusyDOM(true)
 	go func() {
 		result, err := applyAndRenderPlaygroundEdit(editor.request, editor.page, editor.vectorOnly)
@@ -211,6 +228,9 @@ func (editor *playgroundDOMEditor) showError(err error) {
 	editor.busy = false
 	editor.mu.Unlock()
 	editor.setBusyDOM(false)
+	if editor.onError.Type() == js.TypeFunction {
+		editor.onError.Invoke(jsError(err))
+	}
 }
 
 func (editor *playgroundDOMEditor) setBusyDOM(busy bool) {
@@ -232,7 +252,9 @@ func (editor *playgroundDOMEditor) unmount() {
 	editor.mu.Unlock()
 	editor.dom.input.Call("removeEventListener", "keydown", editor.keydown)
 	editor.dom.input.Call("removeEventListener", "input", editor.input)
-	editor.dom.input.Call("removeEventListener", "blur", editor.blur)
+	if editor.applyOnBlur {
+		editor.dom.input.Call("removeEventListener", "blur", editor.blur)
+	}
 	editor.dom.input.Call("removeEventListener", "pointerdown", editor.pointerDown)
 	editor.dom.input.Call("removeEventListener", "dblclick", editor.pointerDown)
 	for _, glyph := range editor.hiddenGlyphs {
@@ -243,7 +265,16 @@ func (editor *playgroundDOMEditor) unmount() {
 	editor.input.Release()
 	editor.blur.Release()
 	editor.pointerDown.Release()
+	editor.apply.Release()
 	editor.destroy.Release()
+}
+
+func playgroundEditorBool(value js.Value, name string, fallback bool) bool {
+	property := value.Get(name)
+	if property.Type() != js.TypeBoolean {
+		return fallback
+	}
+	return property.Bool()
 }
 
 func selectPlaygroundEditorText(input js.Value) {

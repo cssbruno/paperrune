@@ -389,10 +389,14 @@ function formatFixedPoints(value) {
   position: absolute;
   left: -1px;
   bottom: 100%;
+  max-width: min(260px, 70vw);
+  overflow: hidden;
   padding: 3px 6px;
   background: #2e5bd6;
   color: white;
   font: 600 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .selection-move-handle {
   position: absolute;
