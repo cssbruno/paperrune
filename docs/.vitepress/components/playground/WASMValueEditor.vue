@@ -85,7 +85,7 @@ function destroy() {
     <div ref="host" class="wasm-value-editor-host"></div>
     <footer>
       <span>Ctrl/Cmd + Enter also applies</span>
-      <button type="button" :disabled="disabled || applying" @click="apply">{{ applying ? 'Applying…' : 'Apply value' }}</button>
+      <button type="button" :title="applying ? 'Applying value' : 'Apply value'" :aria-label="applying ? 'Applying value' : 'Apply value'" :disabled="disabled || applying" @click="apply">{{ applying ? '…' : '✓' }}</button>
     </footer>
   </section>
 </template>
@@ -120,6 +120,6 @@ function destroy() {
 .wasm-value-editor-host.has-error :deep(.wasm-direct-editor-error) { display: block; }
 .value-editor footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px; border-top: 1px solid #ddd9d0; background: #f4f2ec; }
 .value-editor footer span { color: #74767a; font: 8px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.value-editor button { border: 0; border-radius: 3px; padding: 7px 9px; background: #20242a; color: #fff; font: 700 9px/1 ui-sans-serif, system-ui, sans-serif; }
+.value-editor button { display: grid; place-items: center; width: 30px; height: 28px; border: 0; border-radius: 3px; padding: 0; background: #20242a; color: #fff; font: 700 13px/1 ui-sans-serif, system-ui, sans-serif; }
 .value-editor button:disabled { cursor: default; opacity: .45; }
 </style>

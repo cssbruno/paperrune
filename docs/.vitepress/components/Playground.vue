@@ -702,7 +702,7 @@ function handleOnline() {
             </optgroup>
           </select>
         </label>
-        <button v-if="canRetry" class="retry-action" type="button" @click="retryCompiler">Retry</button>
+        <button v-if="canRetry" class="retry-action" type="button" title="Retry compiler" aria-label="Retry compiler" @click="retryCompiler">↻</button>
       </div>
     </header>
 
@@ -742,7 +742,7 @@ function handleOnline() {
       <label class="color-tool" title="Text color">
         <input type="color" :value="selectedColor" :disabled="!canFormatSelection" @change="setSelectedString('color', $event.target.value)" />
       </label>
-      <button class="edit-tool" type="button" :disabled="!selected?.content?.editable || mutationBusy" @click="requestInlineEdit">Edit text</button>
+      <button class="edit-tool" type="button" title="Edit text on page" aria-label="Edit text on page" :disabled="!selected?.content?.editable || mutationBusy" @click="requestInlineEdit">✎</button>
       <span class="edit-hint">{{ selectedTarget ? `${selectedTarget} · drag the six-dot handle to move` : 'Click an element to format · double-click text to edit' }}</span>
       <span v-if="mutationBusy" class="editing-badge">Applying…</span>
       <span v-else-if="!online" class="offline-badge">Offline</span>
@@ -753,26 +753,24 @@ function handleOnline() {
       <aside class="left-rail" aria-label="Document toolbox and navigation">
         <section class="toolbox" aria-label="Toolbox">
           <header class="rail-heading">
-            <span>Toolbox</span>
-            <small>{{ activeTool }}</small>
+            <span>Tools</span>
           </header>
           <div class="tool-list">
-            <button type="button" :class="{active: activeTool === 'select'}" @click="chooseTool('select')">
-              <b>↖</b><span><strong>Select</strong><small>Pick and format</small></span>
+            <button type="button" title="Select and format" aria-label="Select and format" :class="{active: activeTool === 'select'}" @click="chooseTool('select')">
+              <b aria-hidden="true">↖</b>
             </button>
-            <button type="button" :class="{active: activeTool === 'edit'}" :disabled="selected && !selected.content?.editable" @click="chooseTool('edit')">
-              <b>T</b><span><strong>Edit text</strong><small>{{ selected?.content?.editable ? 'Edit on page' : 'Select editable text' }}</small></span>
+            <button type="button" title="Edit text" aria-label="Edit text" :class="{active: activeTool === 'edit'}" :disabled="selected && !selected.content?.editable" @click="chooseTool('edit')">
+              <b aria-hidden="true">T</b>
             </button>
-            <button type="button" :class="{active: activeTool === 'move'}" :disabled="!selectedTarget" @click="chooseTool('move')">
-              <b>✥</b><span><strong>Move</strong><small>Drag page handle</small></span>
+            <button type="button" title="Move selected block" aria-label="Move selected block" :class="{active: activeTool === 'move'}" :disabled="!selectedTarget" @click="chooseTool('move')">
+              <b aria-hidden="true">✥</b>
             </button>
           </div>
           <div class="value-key" aria-label="Value source legend">
             <strong>Value source</strong>
-            <span><i class="bound"></i>JSON bound</span>
-            <span><i class="fixed"></i>Fixed Paper text</span>
-            <span><i class="computed"></i>Computed / locked</span>
-            <small>Use <code>bind</code> for variable JSON values. Use <code>text</code> for fixed copy.</small>
+            <span class="bound" title="JSON bound" aria-label="JSON bound" tabindex="0">{ }</span>
+            <span class="fixed" title="Fixed Paper text" aria-label="Fixed Paper text" tabindex="0">T</span>
+            <span class="computed" title="Computed or locked" aria-label="Computed or locked" tabindex="0">ƒ</span>
           </div>
         </section>
         <section class="pages-panel" aria-label="Document pages">
@@ -789,7 +787,7 @@ function handleOnline() {
               :disabled="state === 'compiling' || state === 'loading'"
               @click="compile(pageNumber)"
             >
-              <span>{{ pageNumber }}</span><small>Page {{ pageNumber }}</small>
+              <span :aria-label="`Page ${pageNumber}`">{{ pageNumber }}</span>
             </button>
             <p v-if="!pages">Pages appear after a valid plan.</p>
           </div>
@@ -828,9 +826,9 @@ function handleOnline() {
       <aside class="right-panel" aria-label="Paper Studio inspector">
         <div class="panel-heading">
           <div class="panel-tabs" aria-label="Side panel">
-            <button type="button" :class="{active: activePanel === 'inspect'}" @click="activePanel = 'inspect'">Properties</button>
-            <button type="button" :class="{active: activePanel === 'source'}" @click="activePanel = 'source'">Paper</button>
-            <button type="button" :class="{active: activePanel === 'data'}" @click="activePanel = 'data'">Data</button>
+            <button type="button" title="Properties" aria-label="Properties" :class="{active: activePanel === 'inspect'}" @click="activePanel = 'inspect'">⚙</button>
+            <button type="button" title="Paper source" aria-label="Paper source" :class="{active: activePanel === 'source'}" @click="activePanel = 'source'">¶</button>
+            <button type="button" title="JSON data" aria-label="JSON data" :class="{active: activePanel === 'data'}" @click="activePanel = 'data'">{ }</button>
           </div>
           <small v-if="activePanel === 'source'">{{ sourceLines }} lines</small>
           <small v-else-if="activePanel === 'inspect'">{{ selectedKind }}</small>
@@ -897,9 +895,9 @@ function handleOnline() {
               </select>
             </label>
             <div class="property-actions">
-              <button v-if="selected.content.editable" type="button" @click="requestInlineEdit">Edit text</button>
-              <button type="button" :disabled="!canFormatSelection" @click="toggleSelectedBool('bold', selectedBold)">{{ selectedBold ? 'Remove bold' : 'Bold' }}</button>
-              <button type="button" :disabled="!canFormatSelection" @click="toggleSelectedBool('italic', selectedItalic)">{{ selectedItalic ? 'Remove italic' : 'Italic' }}</button>
+              <button v-if="selected.content.editable" class="primary-icon-action" type="button" title="Edit text on page" aria-label="Edit text on page" @click="requestInlineEdit">✎</button>
+              <button type="button" :title="selectedBold ? 'Remove bold' : 'Bold'" :aria-label="selectedBold ? 'Remove bold' : 'Bold'" :class="{active: selectedBold}" :disabled="!canFormatSelection" @click="toggleSelectedBool('bold', selectedBold)"><b>B</b></button>
+              <button type="button" :title="selectedItalic ? 'Remove italic' : 'Italic'" :aria-label="selectedItalic ? 'Remove italic' : 'Italic'" :class="{active: selectedItalic}" :disabled="!canFormatSelection" @click="toggleSelectedBool('italic', selectedItalic)"><i>I</i></button>
             </div>
             <div class="move-control">
               <span>Move block</span>
@@ -994,7 +992,7 @@ button { cursor: pointer; }
 .top-actions { justify-content: flex-end; gap: 12px; min-width: 0; }
 .sample-picker { gap: 8px; color: var(--muted); font-size: 10px; }
 .sample-picker select { width: min(190px, 20vw); border: 0; border-bottom: 1px solid #9e9b94; outline: 0; padding: 5px 18px 5px 2px; background: transparent; font-size: 11px; }
-.retry-action { border: 0; border-radius: 3px; padding: 7px 10px; background: var(--ink); color: white; font-size: 10px; }
+.retry-action { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 3px; padding: 0; background: var(--ink); color: white; font-size: 15px; }
 .studio-toolbar { justify-content: flex-start; gap: 5px; overflow-x: auto; padding: 0 12px; border-bottom: 1px solid var(--line); background: #f1efe9; }
 .studio-toolbar button { flex: none; height: 28px; border: 0; border-radius: 3px; background: transparent; font-size: 11px; }
 .studio-toolbar button:hover:not(:disabled) { background: #e2e0d9; }
@@ -1012,43 +1010,39 @@ button { cursor: pointer; }
 .size-tool input { width: 54px; padding: 0 4px; }
 .color-tool { display: grid; place-items: center; flex: none; width: 30px; height: 28px; border-radius: 3px; }
 .color-tool input { width: 20px; height: 20px; border: 0; padding: 0; background: none; cursor: pointer; }
-.edit-tool { padding: 0 10px; background: var(--ink) !important; color: white; }
+.edit-tool { width: 30px; padding: 0; background: var(--ink) !important; color: white; font-size: 15px !important; }
 .edit-hint { min-width: 180px; margin-left: auto; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .edit-hint, .offline-badge, .download-badge, .editing-badge { color: var(--muted); font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .editing-badge { color: var(--accent); }
 .offline-badge { color: #a3362f; }
 .download-badge { color: var(--accent); }
-.studio-workspace { display: grid; grid-template-columns: 204px minmax(360px, 1fr) minmax(330px, 28vw); min-width: 0; min-height: 0; overflow: hidden; }
+.studio-workspace { display: grid; grid-template-columns: 82px minmax(360px, 1fr) minmax(330px, 28vw); min-width: 0; min-height: 0; overflow: hidden; }
 .left-rail, .right-panel { min-width: 0; min-height: 0; background: #f7f5ef; }
 .left-rail { display: grid; grid-template-rows: auto minmax(0, 1fr); border-right: 1px solid var(--line); overflow: hidden; }
-.rail-heading { justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--line); color: var(--muted); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.rail-heading { justify-content: space-between; padding: 0 8px; border-bottom: 1px solid var(--line); color: var(--muted); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
 .rail-heading small { font-size: 8px; font-weight: 500; }
 .toolbox { border-bottom: 1px solid var(--line); background: #f1efe9; }
 .toolbox .rail-heading, .pages-panel .rail-heading { display: flex; height: 38px; }
-.tool-list { display: grid; gap: 3px; padding: 8px; }
-.tool-list button { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 8px; width: 100%; border: 0; border-radius: 3px; padding: 6px; background: transparent; text-align: left; }
+.tool-list { display: grid; gap: 4px; padding: 7px; }
+.tool-list button { display: grid; place-items: center; width: 100%; height: 42px; border: 0; border-radius: 3px; padding: 0; background: transparent; }
 .tool-list button:hover:not(:disabled) { background: #e3e0d8; }
 .tool-list button.active { background: #dbe3f8; color: #244db8; }
 .tool-list button:disabled { cursor: default; opacity: .42; }
-.tool-list button > b { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid #c6c3ba; border-radius: 3px; background: #fbfaf7; font-size: 13px; }
-.tool-list button > span { display: grid; gap: 2px; min-width: 0; }
-.tool-list button strong { font-size: 10px; }
-.tool-list button small { overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.value-key { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; padding: 10px 12px 12px; border-top: 1px solid #d8d5cd; }
+.tool-list button > b { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #c6c3ba; border-radius: 3px; background: #fbfaf7; font-size: 14px; }
+.value-key { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 9px 7px 10px; border-top: 1px solid #d8d5cd; }
 .value-key > strong { grid-column: 1 / -1; color: var(--muted); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
-.value-key > span { display: flex; align-items: center; gap: 5px; font-size: 8px; white-space: nowrap; }
-.value-key > small { grid-column: 1 / -1; color: var(--muted); font-size: 8px; line-height: 1.45; }
-.value-key code { padding: 1px 3px; border-radius: 2px; background: #e1ded5; color: var(--ink); font-size: 8px; }
+.value-key > span { display: grid; place-items: center; height: 24px; border: 1px solid #cbc8bf; border-radius: 3px; background: #fbfaf7; font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: help; }
+.value-key > span.bound { border-color: #9eafe4; color: #244db8; }
+.value-key > span.fixed { border-color: #94b8a6; color: #176745; }
+.value-key > span.computed { border-color: #b9ae9e; color: #6f6251; }
 .value-key i, .empty-value-key i { flex: none; width: 7px; height: 7px; border-radius: 50%; }
 .value-key i.bound, .empty-value-key i.bound { background: #2e5bd6; }
 .value-key i.fixed, .empty-value-key i.fixed { background: #21805a; }
 .value-key i.computed, .empty-value-key i.computed { background: #8a7c68; }
 .pages-panel { display: grid; grid-template-rows: 38px minmax(0, 1fr); min-height: 0; }
-.page-list { min-height: 0; overflow: auto; padding: 10px; }
-.page-list > button { width: 100%; border: 0; background: none; text-align: left; }
-.page-list > button { display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 8px; margin-bottom: 7px; padding: 5px; border-radius: 3px; }
-.page-list > button > span { display: grid; place-items: center; aspect-ratio: 210 / 297; border: 1px solid #cbc8c0; background: white; color: #777; font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; box-shadow: 0 2px 5px rgba(20,22,26,.08); }
-.page-list > button small { color: var(--muted); font-size: 9px; }
+.page-list { min-height: 0; overflow: auto; padding: 7px; }
+.page-list > button { display: grid; place-items: center; width: 100%; margin-bottom: 7px; border: 0; border-radius: 3px; padding: 5px; background: none; }
+.page-list > button > span { display: grid; place-items: center; width: 42px; aspect-ratio: 210 / 297; border: 1px solid #cbc8c0; background: white; color: #777; font: 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; box-shadow: 0 2px 5px rgba(20,22,26,.08); }
 .page-list > button.active { background: #e6ebf9; }
 .page-list > button.active > span { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .page-list p { color: var(--muted); font-size: 10px; line-height: 1.5; }
@@ -1056,7 +1050,7 @@ button { cursor: pointer; }
 .panel-heading { justify-content: space-between; padding: 0 8px 0 4px; border-bottom: 1px solid var(--line); font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
 .panel-heading small { color: var(--muted); font-weight: 500; }
 .panel-tabs { align-self: stretch; }
-.panel-tabs button { border: 0; border-bottom: 2px solid transparent; padding: 0 8px; background: none; color: var(--muted); font: inherit; text-transform: inherit; }
+.panel-tabs button { min-width: 34px; border: 0; border-bottom: 2px solid transparent; padding: 0 8px; background: none; color: var(--muted); font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; }
 .panel-tabs button.active { border-color: var(--accent); color: var(--ink); }
 .selection-inspector { min-height: 0; overflow: auto; padding: 14px; }
 .selection-title { justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
@@ -1081,9 +1075,10 @@ button { cursor: pointer; }
 .property-field { display: grid; gap: 6px; margin-top: 14px; }
 .property-field > span, .move-control > span { color: var(--muted); font: 700 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .05em; text-transform: uppercase; }
 .property-field select { width: 100%; height: 32px; border: 1px solid var(--line); border-radius: 3px; padding: 0 8px; background: #fbfaf7; font-size: 10px; }
-.property-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 9px; }
-.property-actions button { min-height: 31px; border: 0; border-radius: 3px; padding: 5px; background: #e7e4dc; font-size: 9px; }
-.property-actions button:first-child { background: var(--accent); color: white; }
+.property-actions { display: grid; grid-template-columns: repeat(3, 32px); gap: 5px; margin-top: 9px; }
+.property-actions button { display: grid; place-items: center; width: 32px; height: 31px; border: 0; border-radius: 3px; padding: 0; background: #e7e4dc; font-size: 11px; }
+.property-actions button.primary-icon-action { background: var(--accent); color: white; }
+.property-actions button.active { background: #dbe3f8; color: #244db8; }
 .move-control { display: grid; gap: 7px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
 .move-control > div { display: grid; grid-template-columns: repeat(4, 31px); gap: 4px; }
 .move-control button { height: 31px; border: 1px solid var(--line); border-radius: 3px; background: #fbfaf7; }
@@ -1110,10 +1105,8 @@ button { cursor: pointer; }
 @keyframes pulse { to { transform: scale(1.35); opacity: .5; } }
 @media (prefers-reduced-motion: reduce) { .status-dot { animation: none; } }
 @media (max-width: 980px) {
-  .studio-workspace { grid-template-columns: 176px minmax(320px, 1fr) minmax(300px, 34vw); }
+  .studio-workspace { grid-template-columns: 74px minmax(320px, 1fr) minmax(300px, 34vw); }
   .edit-hint { display: none; }
-  .value-key { grid-template-columns: 1fr; }
-  .value-key > strong, .value-key > small { grid-column: 1; }
 }
 @media (max-width: 760px) {
   .studio-shell { grid-template-rows: auto 44px minmax(0, 1fr) 26px; }
@@ -1126,7 +1119,7 @@ button { cursor: pointer; }
   .right-panel { grid-column: 2; grid-row: 2; border-top: 1px solid var(--line); border-left: 0; }
   .studio-canvas { grid-column: 2; grid-row: 1; }
   .rail-heading { height: 34px; padding: 0 7px; font-size: 7px; }
-  .rail-heading small, .value-key, .tool-list button > span { display: none; }
+  .rail-heading small, .value-key { display: none; }
   .tool-list { padding: 5px; }
   .tool-list button { display: grid; grid-template-columns: 1fr; justify-items: center; padding: 4px; }
   .tool-list button > b { width: 30px; height: 30px; }
