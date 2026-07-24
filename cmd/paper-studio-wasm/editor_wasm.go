@@ -283,7 +283,10 @@ func adoptPlaygroundEditorTypography(host, input js.Value) {
 	inputStyle.Set("fontWeight", computed.Get("fontWeight").String())
 	inputStyle.Set("fontStyle", computed.Get("fontStyle").String())
 	inputStyle.Set("fontSize", computed.Get("fontSize").String())
-	inputStyle.Set("color", computed.Get("color").String())
+	color := computed.Get("color").String()
+	inputStyle.Set("color", color)
+	inputStyle.Set("-webkit-text-fill-color", color)
+	inputStyle.Call("setProperty", "--selection-color", color)
 }
 
 func hidePlaygroundEditorGlyphs(host js.Value) []js.Value {

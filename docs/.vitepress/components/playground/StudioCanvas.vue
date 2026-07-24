@@ -152,6 +152,7 @@ function materializeTextRun(run, index, scale, context) {
       top: `${(Number(run.baseline_fixed || 0) - props.pageY) * scale - ascent}px`,
       height: `${Math.max(1, ascent + descent)}px`,
       color: run.color || '#000000',
+      WebkitTextFillColor: run.color || '#000000',
       '--selection-color': run.color || '#000000',
       opacity: String(Number(run.opacity_fixed || props.fixedScale) / Math.max(1, props.fixedScale)),
       fontFamily: family,
@@ -360,10 +361,18 @@ function formatFixedPoints(value) {
   pointer-events: auto;
   user-select: text;
 }
-.document-text-run::selection {
-  background: rgba(46, 91, 214, .28);
-  color: var(--selection-color);
-  -webkit-text-fill-color: var(--selection-color);
+.document-text-run::selection,
+.inline-editor-host :deep(.wasm-direct-editor::selection) {
+  background-color: #b9c9fa;
+  color: var(--selection-color, #111827) !important;
+  -webkit-text-fill-color: var(--selection-color, #111827) !important;
+  text-shadow: none;
+}
+.document-text-run::-moz-selection,
+.inline-editor-host :deep(.wasm-direct-editor::-moz-selection) {
+  background-color: #b9c9fa;
+  color: var(--selection-color, #111827) !important;
+  -webkit-text-fill-color: var(--selection-color, #111827) !important;
   text-shadow: none;
 }
 .block-selection {
