@@ -8,6 +8,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall/js"
 )
@@ -85,6 +87,7 @@ func buildPlaygroundEditorDOM(host js.Value, text, label string) playgroundEdito
 	host.Set("textContent", "")
 	host.Call("append", input, message)
 	adoptPlaygroundEditorTypography(host, input)
+	adoptPlaygroundEditorBackground(host, input)
 	return playgroundEditorDOM{host: host, input: input, message: message}
 }
 
@@ -249,7 +252,7 @@ func selectPlaygroundEditorText(input js.Value) {
 
 func adoptPlaygroundEditorTypography(host, input js.Value) {
 	hostRect := host.Call("getBoundingClientRect")
-	lines := host.Get("parentElement").Call("querySelectorAll", ".selectable-line")
+	lines := host.Get("parentElement").Call("querySelectorAll", ".selectable-svg text")
 	var best js.Value
 	bestArea := 0.0
 	for index := 0; index < lines.Get("length").Int(); index++ {
@@ -270,10 +273,93 @@ func adoptPlaygroundEditorTypography(host, input js.Value) {
 	if bestArea == 0 {
 		return
 	}
-	style := js.Global().Call("getComputedStyle", best)
-	input.Get("style").Set("fontFamily", style.Get("fontFamily").String())
-	input.Get("style").Set("fontSize", style.Get("fontSize").String())
-	input.Get("style").Set("letterSpacing", style.Get("letterSpacing").String())
+	inputStyle := input.Get("style")
+	family, weight, fontStyle := playgroundEditorFont(best.Call("getAttribute", "font-family").String())
+	inputStyle.Set("fontFamily", family)
+	inputStyle.Set("fontWeight", weight)
+	inputStyle.Set("fontStyle", fontStyle)
+	if size := scaledPlaygroundEditorFontSize(best); size != "" {
+		inputStyle.Set("fontSize", size)
+	}
+	if fill := best.Call("getAttribute", "fill").String(); fill != "" && fill != "none" {
+		inputStyle.Set("color", fill)
+	}
+}
+
+func scaledPlaygroundEditorFontSize(text js.Value) string {
+	raw, err := strconv.ParseFloat(text.Call("getAttribute", "font-size").String(), 64)
+	if err != nil || raw <= 0 {
+		return ""
+	}
+	svg := text.Call("closest", "svg")
+	viewBox := strings.Fields(svg.Call("getAttribute", "viewBox").String())
+	if len(viewBox) != 4 {
+		return ""
+	}
+	viewWidth, err := strconv.ParseFloat(viewBox[2], 64)
+	if err != nil || viewWidth <= 0 {
+		return ""
+	}
+	width := svg.Call("getBoundingClientRect").Get("width").Float()
+	if width <= 0 {
+		return ""
+	}
+	return strconv.FormatFloat(raw*width/viewWidth, 'f', 3, 64) + "px"
+}
+
+func playgroundEditorFont(raw string) (family, weight, style string) {
+	name := strings.ToLower(strings.Trim(strings.TrimSpace(strings.Split(raw, ",")[0]), `"'`))
+	weight, style = "400", "normal"
+	if strings.Contains(name, "bold") {
+		weight = "700"
+	}
+	if strings.Contains(name, "italic") || strings.Contains(name, "oblique") {
+		style = "italic"
+	}
+	switch {
+	case strings.HasPrefix(name, "times"):
+		family = `"Times New Roman", Times, serif`
+	case strings.HasPrefix(name, "helvetica"):
+		family = `Helvetica, Arial, sans-serif`
+	case strings.HasPrefix(name, "courier"):
+		family = `"Courier New", Courier, monospace`
+	default:
+		family = raw
+	}
+	return family, weight, style
+}
+
+func adoptPlaygroundEditorBackground(host, input js.Value) {
+	page := host.Get("parentElement")
+	image := page.Call("querySelector", ":scope > img")
+	if image.IsNull() || image.Get("naturalWidth").Int() <= 0 || image.Get("naturalHeight").Int() <= 0 {
+		return
+	}
+	hostRect := host.Call("getBoundingClientRect")
+	imageRect := image.Call("getBoundingClientRect")
+	if imageRect.Get("width").Float() <= 0 || imageRect.Get("height").Float() <= 0 {
+		return
+	}
+	naturalWidth := float64(image.Get("naturalWidth").Int())
+	naturalHeight := float64(image.Get("naturalHeight").Int())
+	x := (hostRect.Get("left").Float() - imageRect.Get("left").Float() + 1) /
+		imageRect.Get("width").Float() * naturalWidth
+	y := (hostRect.Get("top").Float() - imageRect.Get("top").Float() + 1) /
+		imageRect.Get("height").Float() * naturalHeight
+	x = max(0, min(naturalWidth-1, x))
+	y = max(0, min(naturalHeight-1, y))
+	document := js.Global().Get("document")
+	canvas := document.Call("createElement", "canvas")
+	canvas.Set("width", 1)
+	canvas.Set("height", 1)
+	context := canvas.Call("getContext", "2d")
+	context.Call("drawImage", image, x, y, 1, 1, 0, 0, 1, 1)
+	pixel := context.Call("getImageData", 0, 0, 1, 1).Get("data")
+	color := "rgb(" +
+		strconv.Itoa(pixel.Index(0).Int()) + ", " +
+		strconv.Itoa(pixel.Index(1).Int()) + ", " +
+		strconv.Itoa(pixel.Index(2).Int()) + ")"
+	input.Get("style").Set("backgroundColor", color)
 }
 
 func overlap(aStart, aEnd, bStart, bEnd float64) float64 {

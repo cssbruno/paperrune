@@ -326,9 +326,9 @@ function formatFixedPoints(value) {
   border: 0;
   outline: 0;
   padding: 0;
-  background: #fff;
-  color: #20242a;
-  line-height: 1.2;
+  background: transparent;
+  color: inherit;
+  line-height: normal;
   white-space: pre-wrap;
   word-break: break-word;
   caret-color: #2e5bd6;
