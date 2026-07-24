@@ -36,7 +36,6 @@ const state = ref('loading');
 const status = ref('Loading compiler…');
 const failure = ref('');
 const diagnostics = ref([]);
-const svg = ref('');
 const textRuns = ref([]);
 const fonts = ref([]);
 const ast = ref(null);
@@ -121,7 +120,7 @@ onBeforeUnmount(() => {
 async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
   clearTimeout(compileSlowTimer);
   const sequence = ++compileSequence;
-  previewStale.value = Boolean(svg.value);
+  previewStale.value = pageWidth.value > 0 && pageHeight.value > 0;
   compileSlow.value = false;
   state.value = runtimeSnapshot.value.state === 'ready' ? 'compiling' : 'loading';
   status.value = state.value === 'loading' ? 'Loading compiler…' : 'Compiling exact document plan…';
@@ -156,7 +155,7 @@ async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
     pages.value = result.pages || 0;
     planHash.value = result.hash || '';
     sourceRevision.value = result.source_revision || '';
-    if (!result.ok || !result.svg) {
+    if (!result.ok || !(Number(result.page_width_fixed) > 0) || !(Number(result.page_height_fixed) > 0)) {
       failure.value = diagnostics.value.length
         ? ''
         : normalizeFailure(result.error, result.ok ? 'The compiler returned no document.' : 'Compilation failed.');
@@ -167,7 +166,6 @@ async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
       return;
     }
     page.value = result.page;
-    svg.value = result.svg;
     textRuns.value = result.text_runs || [];
     fonts.value = result.fonts || [];
     ast.value = result.ast || null;
@@ -201,7 +199,7 @@ function handleFileEditing() {
   inlineEditSequence += 1;
   clearTimeout(compileSlowTimer);
   compileSequence += 1;
-  previewStale.value = Boolean(svg.value);
+  previewStale.value = pageWidth.value > 0 && pageHeight.value > 0;
   selected.value = null;
   inlineEditor.value = null;
   state.value = 'editing';
@@ -215,7 +213,6 @@ function chooseSample(event) {
   source.value = samples[index].source;
   data.value = samples[index].data;
   page.value = 1;
-  svg.value = '';
   textRuns.value = [];
   fonts.value = [];
   overflow.value = null;
@@ -350,7 +347,8 @@ function acceptEditedWorkspace(edited, rendered) {
   if (!edited?.ok || !edited.applied) {
     throw new Error(edited?.error || 'WASM did not apply the document edit.');
   }
-  if (!rendered?.ok || !rendered.svg || rendered.hash !== edited.hash) {
+  if (!rendered?.ok || !(Number(rendered.page_width_fixed) > 0) ||
+      !(Number(rendered.page_height_fixed) > 0) || rendered.hash !== edited.hash) {
     throw new Error(rendered?.error || 'WASM did not render the edited workspace.');
   }
   source.value = edited.source;
@@ -360,7 +358,6 @@ function acceptEditedWorkspace(edited, rendered) {
   page.value = rendered.page;
   planHash.value = edited.hash || '';
   sourceRevision.value = edited.source_revision || '';
-  svg.value = rendered.svg;
   textRuns.value = rendered.text_runs || [];
   fonts.value = rendered.fonts || [];
   ast.value = edited.ast || null;
@@ -381,7 +378,7 @@ function acceptFileSnapshot(result) {
   source.value = result.source;
   data.value = result.data;
   diagnostics.value = result.diagnostics || [];
-  if (!result.ok || !result.svg) {
+  if (!result.ok || !(Number(result.page_width_fixed) > 0) || !(Number(result.page_height_fixed) > 0)) {
     failure.value = diagnostics.value.length ? '' : normalizeFailure(result.error, 'WASM could not compile this draft.');
     state.value = diagnostics.value.length ? 'warning' : 'error';
     status.value = diagnostics.value.length
@@ -393,7 +390,6 @@ function acceptFileSnapshot(result) {
   page.value = result.page;
   planHash.value = result.hash || '';
   sourceRevision.value = result.source_revision || '';
-  svg.value = result.svg;
   textRuns.value = result.text_runs || [];
   fonts.value = result.fonts || [];
   ast.value = result.ast || null;
@@ -510,7 +506,8 @@ function handleOnline() {
 
       <StudioCanvas
         :wasm-engine="wasmEngine"
-        :svg="svg"
+        :plan-hash="planHash"
+        :page="page"
         :text-runs="textRuns"
         :fonts="fonts"
         :page-x="pageX"
@@ -530,6 +527,7 @@ function handleOnline() {
         @edit-point="selectPagePoint($event, true)"
         @editor-applied="acceptWASMEditorResult"
         @editor-error="handleWASMEditorError"
+        @render-error="handleFileEditorError"
         @cancel-inline="inlineEditor = null"
         @retry="retryCompiler"
       />

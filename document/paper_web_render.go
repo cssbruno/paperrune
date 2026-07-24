@@ -42,6 +42,45 @@ type PaperPlanWebFont struct {
 	Data   []byte `json:"data"`
 }
 
+// PaperPlanWebGraphicsPage is the non-text display list for a direct canvas
+// painter. Payload indexes remain plan-local and all geometry is fixed-point.
+type PaperPlanWebGraphicsPage struct {
+	Width      int64                         `json:"width_fixed"`
+	Height     int64                         `json:"height_fixed"`
+	FixedScale int64                         `json:"fixed_scale"`
+	Commands   []layoutengine.DisplayCommand `json:"commands"`
+	Paths      []layoutengine.PlannedPath    `json:"paths"`
+	Transforms []layoutengine.Transform      `json:"transforms"`
+	Clips      []layoutengine.PlannedClip    `json:"clips"`
+	Fills      []layoutengine.PlannedFill    `json:"fills"`
+	Strokes    []layoutengine.PlannedStroke  `json:"strokes"`
+}
+
+// WebDisplayGraphicsPage returns only non-text paint commands for one page.
+// Text is intentionally excluded so browsers render it as selectable HTML.
+func (p PaperPlan) WebDisplayGraphicsPage(page uint32) (PaperPlanWebGraphicsPage, error) {
+	projection := p.plan.Projection()
+	if page == 0 || int(page) > len(projection.Pages) {
+		return PaperPlanWebGraphicsPage{}, errors.New("document: invalid paper plan web graphics page")
+	}
+	plannedPage := projection.Pages[page-1]
+	end := uint64(plannedPage.Commands.Start) + uint64(plannedPage.Commands.Count)
+	if end > uint64(len(projection.Commands)) {
+		return PaperPlanWebGraphicsPage{}, errors.New("document: invalid paper plan web graphics command range")
+	}
+	commands := make([]layoutengine.DisplayCommand, 0, plannedPage.Commands.Count)
+	for _, command := range projection.Commands[plannedPage.Commands.Start:end] {
+		if command.Kind != layoutengine.CommandGlyphRun && command.Kind != layoutengine.CommandImage && command.Kind != layoutengine.CommandLink {
+			commands = append(commands, command)
+		}
+	}
+	return PaperPlanWebGraphicsPage{
+		Width: int64(plannedPage.Size.Width), Height: int64(plannedPage.Size.Height), FixedScale: layoutengine.FixedScale,
+		Commands: commands, Paths: projection.Paths, Transforms: projection.Transforms,
+		Clips: projection.Clips, Fills: projection.Fills, Strokes: projection.Strokes,
+	}, nil
+}
+
 // PaperPlanWebTextPage returns positioned text and exact painter font programs
 // for one retained page. It performs no browser measurement or layout.
 func (p PaperPlan) WebDisplayTextPage(page uint32) ([]PaperPlanWebTextRun, []PaperPlanWebFont, error) {

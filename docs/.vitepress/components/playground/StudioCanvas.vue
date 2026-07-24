@@ -2,9 +2,10 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue';
 
 const props = defineProps({
-  svg: {type: String, default: ''},
   textRuns: {type: Array, default: () => []},
   fonts: {type: Array, default: () => []},
+  planHash: {type: String, default: ''},
+  page: {type: Number, default: 1},
   pageX: {type: Number, default: 0},
   pageY: {type: Number, default: 0},
   pageWidth: {type: Number, default: 0},
@@ -21,9 +22,9 @@ const props = defineProps({
   wasmEngine: {type: Object, default: null},
 });
 
-const emit = defineEmits(['page-point', 'edit-point', 'editor-applied', 'editor-error', 'cancel-inline', 'retry']);
+const emit = defineEmits(['page-point', 'edit-point', 'editor-applied', 'editor-error', 'render-error', 'cancel-inline', 'retry']);
 const pageStage = ref(null);
-const displaySVG = ref('');
+const graphicsCanvas = ref(null);
 const displayTextRuns = ref([]);
 const editorHost = ref(null);
 let resizeObserver;
@@ -41,11 +42,21 @@ const overflowText = computed(() => {
     .map(([edge, amount]) => `${formatFixedPoints(amount)}pt ${edge}`);
   return `Content extends outside the page${edges.length ? ` · ${edges.join(' · ')}` : ''}`;
 });
+const pageStyle = computed(() => ({
+  aspectRatio: props.pageWidth > 0 && props.pageHeight > 0 ? `${props.pageWidth} / ${props.pageHeight}` : undefined,
+}));
 
-watch([() => props.svg, () => props.textRuns, () => props.fonts], ([svg]) => {
+watch([
+  () => props.wasmEngine,
+  () => props.planHash,
+  () => props.page,
+  () => props.pageWidth,
+  () => props.pageHeight,
+  () => props.textRuns,
+  () => props.fonts,
+], () => {
   displayTextRuns.value = [];
-  displaySVG.value = sanitizeDisplaySVG(svg);
-  void materializeDocumentText();
+  void refreshRenderedPage();
 }, {immediate: true});
 
 watch([() => props.inlineEditor, () => props.wasmEngine], ([editor, engine]) => {
@@ -55,10 +66,10 @@ watch([() => props.inlineEditor, () => props.wasmEngine], ([editor, engine]) => 
 
 onMounted(() => {
   if (typeof ResizeObserver === 'function') {
-    resizeObserver = new ResizeObserver(() => void materializeDocumentText());
+    resizeObserver = new ResizeObserver(() => void refreshRenderedPage());
     if (pageStage.value) resizeObserver.observe(pageStage.value);
   }
-  void materializeDocumentText();
+  void refreshRenderedPage();
 });
 
 onBeforeUnmount(() => {
@@ -101,7 +112,7 @@ async function materializeDocumentText() {
   displayTextRuns.value = [];
   await installDocumentFonts(props.fonts);
   await nextTick();
-  if (token !== measureToken || !pageStage.value || !displaySVG.value || !(props.pageWidth > 0)) return;
+  if (token !== measureToken || !pageStage.value || !(props.pageWidth > 0)) return;
   const stageBounds = pageStage.value.getBoundingClientRect();
   if (!(stageBounds.width > 0 && stageBounds.height > 0)) return;
   const scale = stageBounds.width / props.pageWidth;
@@ -140,6 +151,7 @@ function materializeTextRun(run, index, scale, context) {
       top: `${(Number(run.baseline_fixed || 0) - props.pageY) * scale - ascent}px`,
       height: `${Math.max(1, ascent + descent)}px`,
       color: run.color || '#000000',
+      '--selection-color': run.color || '#000000',
       opacity: String(Number(run.opacity_fixed || props.fixedScale) / Math.max(1, props.fixedScale)),
       fontFamily: family,
       fontWeight: weight,
@@ -150,25 +162,22 @@ function materializeTextRun(run, index, scale, context) {
   };
 }
 
-function sanitizeDisplaySVG(svgText) {
-  if (!svgText || typeof DOMParser === 'undefined' || typeof XMLSerializer === 'undefined') return '';
-  const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml');
-  if (parsed.querySelector('parsererror')) return '';
-  parsed.querySelectorAll('script, foreignObject, a, use').forEach((node) => node.remove());
-  parsed.querySelectorAll('text').forEach((node) => node.remove());
-  parsed.querySelectorAll('*').forEach((node) => {
-    [...node.attributes].forEach((attribute) => {
-      const name = attribute.name.toLowerCase();
-      const value = attribute.value.trim().toLowerCase();
-      if (name.startsWith('on') || ((name === 'href' || name === 'xlink:href') && !value.startsWith('data:image/'))) {
-        node.removeAttribute(attribute.name);
-      }
-    });
+async function refreshRenderedPage() {
+  await nextTick();
+  await Promise.all([materializeDocumentText(), paintWASMPage()]);
+}
+
+async function paintWASMPage() {
+  await nextTick();
+  const engine = props.wasmEngine;
+  const canvas = graphicsCanvas.value;
+  if (!engine?.paintPage || !canvas || !props.planHash || !(props.pageWidth > 0) || !(props.pageHeight > 0)) return;
+  const result = engine.paintPage({
+    canvas,
+    hash: props.planHash,
+    page: props.page,
   });
-  const root = parsed.documentElement;
-  root.setAttribute('aria-hidden', 'true');
-  root.setAttribute('focusable', 'false');
-  return new XMLSerializer().serializeToString(root);
+  if (result instanceof Error) emit('render-error', result);
 }
 
 function pointFromEvent(event) {
@@ -218,16 +227,17 @@ function formatFixedPoints(value) {
   <section class="studio-canvas" aria-label="Editable document canvas">
     <div class="canvas-scroll">
       <div
-        v-if="displaySVG"
+        v-if="pageWidth > 0 && pageHeight > 0"
         ref="pageStage"
         class="page-stage"
         :class="{'is-stale': stale}"
+        :style="pageStyle"
         tabindex="0"
         aria-label="Rendered document page. Drag to select text or double-click text to edit."
         @click="selectAt"
         @dblclick="editAt"
       >
-        <div class="display-svg" v-html="displaySVG"></div>
+        <canvas ref="graphicsCanvas" class="document-graphics" aria-hidden="true"></canvas>
         <div class="document-text-plane" aria-label="Selectable document text">
           <span
             v-for="run in displayTextRuns"
@@ -280,16 +290,18 @@ function formatFixedPoints(value) {
   transition: filter .18s ease, opacity .18s ease, transform .18s ease;
 }
 .page-stage:focus-visible { box-shadow: 0 25px 70px rgba(30, 32, 36, .2), 0 0 0 3px rgba(46, 91, 214, .28); }
-.display-svg {
-  position: relative;
-  z-index: 2;
-  overflow: hidden;
+.document-graphics {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   transition: filter .18s ease, opacity .18s ease;
 }
-.display-svg :deep(svg) { display: block; width: 100%; height: auto; }
-.page-stage.is-stale .display-svg { filter: saturate(.72); opacity: .68; }
-.document-text-plane { position: absolute; inset: 0; z-index: 3; pointer-events: none; user-select: text; }
+.page-stage.is-stale .document-graphics { filter: saturate(.72); opacity: .68; }
+.document-text-plane { position: absolute; inset: 0; z-index: 2; pointer-events: none; user-select: text; }
 .document-text-run {
   position: absolute;
   display: inline-block;
@@ -299,10 +311,10 @@ function formatFixedPoints(value) {
   pointer-events: auto;
   user-select: text;
 }
-.document-text-plane ::selection {
+.document-text-run::selection {
   background: rgba(46, 91, 214, .28);
-  color: currentColor;
-  -webkit-text-fill-color: currentColor;
+  color: var(--selection-color);
+  -webkit-text-fill-color: var(--selection-color);
   text-shadow: none;
 }
 .block-selection {

@@ -33,6 +33,7 @@ var editTextFunction js.Func
 var workspacePageFunction js.Func
 var mountEditorFunction js.Func
 var mountFileEditorFunction js.Func
+var paintPageFunction js.Func
 var renderCache layoutengine.WebDisplayRenderCache
 var planCache playgroundPlanCache
 
@@ -53,6 +54,7 @@ func main() {
 	workspacePageFunction = js.FuncOf(renderWorkspacePage)
 	mountEditorFunction = js.FuncOf(mountPlaygroundEditor)
 	mountFileEditorFunction = js.FuncOf(mountPlaygroundFileEditor)
+	paintPageFunction = js.FuncOf(paintPlaygroundPage)
 	engine := js.Global().Get("Object").New()
 	engine.Set("formatVersion", layoutengine.WebDisplayRenderPayloadVersion)
 	engine.Set("rendererVersion", layoutengine.DisplayRasterRendererVersion)
@@ -64,6 +66,7 @@ func main() {
 	engine.Set("workspacePage", workspacePageFunction)
 	engine.Set("mountEditor", mountEditorFunction)
 	engine.Set("mountFileEditor", mountFileEditorFunction)
+	engine.Set("paintPage", paintPageFunction)
 	js.Global().Set("PaperStudioWASM", engine)
 	<-make(chan struct{})
 }
@@ -283,7 +286,7 @@ func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.Pape
 	if page == 0 || int(page) > plan.PageCount() {
 		return playgroundCompileFailure(result, errors.New("paper-studio-wasm: requested page is outside the compiled plan"))
 	}
-	capture, err := plan.CaptureDisplayPageSVG(context.Background(), page, nil)
+	graphics, err := plan.WebDisplayGraphicsPage(page)
 	if err != nil {
 		return playgroundCompileFailure(result, err)
 	}
@@ -292,15 +295,19 @@ func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.Pape
 		return playgroundCompileFailure(result, err)
 	}
 	result.Page = page
-	result.SVG = string(capture.SVG)
 	result.TextRuns, result.Fonts, err = plan.WebDisplayTextPage(page)
 	if err != nil {
 		return playgroundCompileFailure(result, err)
 	}
-	result.PageXFixed, result.PageYFixed = capture.PageX, capture.PageY
-	result.PageWidthFixed, result.PageHeightFixed = capture.PageWidth, capture.PageHeight
-	result.FixedScale = capture.FixedScale
+	result.PageXFixed, result.PageYFixed = 0, 0
+	result.PageWidthFixed, result.PageHeightFixed = graphics.Width, graphics.Height
+	result.FixedScale = graphics.FixedScale
 	if raster {
+		capture, captureErr := plan.CaptureDisplayPageSVG(context.Background(), page, nil)
+		if captureErr != nil {
+			return playgroundCompileFailure(result, captureErr)
+		}
+		result.SVG = string(capture.SVG)
 		request := document.DefaultPaperPlanWebRenderRequest(page)
 		payload, renderErr := plan.WebDisplayRenderPayload(context.Background(), request)
 		if renderErr != nil {

@@ -39,7 +39,7 @@ if (runtimeFailure) throw runtimeFailure;
 if (!globalThis.PaperStudioWASM?.compile || !globalThis.PaperStudioWASM?.hit ||
     !globalThis.PaperStudioWASM?.trace || !globalThis.PaperStudioWASM?.editText ||
     !globalThis.PaperStudioWASM?.workspacePage || !globalThis.PaperStudioWASM?.mountEditor ||
-    !globalThis.PaperStudioWASM?.mountFileEditor) {
+    !globalThis.PaperStudioWASM?.mountFileEditor || !globalThis.PaperStudioWASM?.paintPage) {
   throw new Error('documentation compiler did not initialize the Studio API');
 }
 
@@ -82,7 +82,7 @@ const vectorCompiled = await globalThis.PaperStudioWASM.compile({
   vectorOnly: true,
 });
 const vectorSmokeRun = vectorCompiled.text_runs?.find((run) => run.text === 'WASM documentation smoke');
-if (!vectorCompiled.ok || !vectorCompiled.svg || Object.hasOwn(vectorCompiled, 'png') ||
+if (!vectorCompiled.ok || Object.hasOwn(vectorCompiled, 'svg') || Object.hasOwn(vectorCompiled, 'png') ||
     Object.hasOwn(vectorCompiled, 'pixel_width') || Object.hasOwn(vectorCompiled, 'pixel_height') ||
     !vectorSmokeRun || !vectorSmokeRun.font_family?.includes('Helvetica') ||
     !vectorSmokeRun.font_weight || !vectorSmokeRun.font_style ||
