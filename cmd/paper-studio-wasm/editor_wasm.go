@@ -27,6 +27,7 @@ type playgroundDOMEditor struct {
 	dom                  playgroundEditorDOM
 	request              playgroundEditRequest
 	page                 uint32
+	vectorOnly           bool
 	onApplied, onCancel  js.Value
 	keydown, input, blur js.Func
 	pointerDown, destroy js.Func
@@ -34,6 +35,7 @@ type playgroundDOMEditor struct {
 	busy, destroyed      bool
 	history              []string
 	historyIndex         int
+	hiddenGlyphs         []js.Value
 }
 
 func mountPlaygroundEditor(_ js.Value, arguments []js.Value) any {
@@ -63,11 +65,13 @@ func newPlaygroundDOMEditor(value js.Value) (*playgroundDOMEditor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &playgroundDOMEditor{
+	editor := &playgroundDOMEditor{
 		dom:     buildPlaygroundEditorDOM(host, request.text, playgroundEditorLabel(value)),
 		request: request, page: page, onApplied: onApplied, onCancel: onCancel,
-		history: []string{request.text},
-	}, nil
+		history: []string{request.text}, vectorOnly: jsOptionalBool(value, "vectorOnly"),
+	}
+	editor.hiddenGlyphs = hidePlaygroundEditorGlyphs(host)
+	return editor, nil
 }
 
 func buildPlaygroundEditorDOM(host js.Value, text, label string) playgroundEditorDOM {
@@ -87,7 +91,6 @@ func buildPlaygroundEditorDOM(host js.Value, text, label string) playgroundEdito
 	host.Set("textContent", "")
 	host.Call("append", input, message)
 	adoptPlaygroundEditorTypography(host, input)
-	adoptPlaygroundEditorBackground(host, input)
 	return playgroundEditorDOM{host: host, input: input, message: message}
 }
 
@@ -176,7 +179,7 @@ func (editor *playgroundDOMEditor) applyEdit() {
 	editor.mu.Unlock()
 	editor.setBusyDOM(true)
 	go func() {
-		result, err := applyAndRenderPlaygroundEdit(editor.request, editor.page)
+		result, err := applyAndRenderPlaygroundEdit(editor.request, editor.page, editor.vectorOnly)
 		if err != nil {
 			editor.showError(err)
 			return
@@ -185,7 +188,7 @@ func (editor *playgroundDOMEditor) applyEdit() {
 	}()
 }
 
-func applyAndRenderPlaygroundEdit(request playgroundEditRequest, page uint32) ([]byte, error) {
+func applyAndRenderPlaygroundEdit(request playgroundEditRequest, page uint32, vectorOnly bool) ([]byte, error) {
 	edited, err := applyPlaygroundEdit(request)
 	if err != nil {
 		return nil, err
@@ -196,7 +199,7 @@ func applyAndRenderPlaygroundEdit(request playgroundEditRequest, page uint32) ([
 	}
 	rendered, err := renderPlaygroundPlanPage(playgroundCompileResult{
 		OK: true, Pages: workspace.plan.PageCount(), Hash: edited.Hash,
-	}, workspace.plan, page)
+	}, workspace.plan, page, !vectorOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -234,6 +237,9 @@ func (editor *playgroundDOMEditor) unmount() {
 	editor.dom.input.Call("removeEventListener", "blur", editor.blur)
 	editor.dom.input.Call("removeEventListener", "pointerdown", editor.pointerDown)
 	editor.dom.input.Call("removeEventListener", "dblclick", editor.pointerDown)
+	for _, glyph := range editor.hiddenGlyphs {
+		glyph.Get("style").Set("visibility", "")
+	}
 	editor.dom.host.Set("textContent", "")
 	editor.keydown.Release()
 	editor.input.Release()
@@ -252,7 +258,7 @@ func selectPlaygroundEditorText(input js.Value) {
 
 func adoptPlaygroundEditorTypography(host, input js.Value) {
 	hostRect := host.Call("getBoundingClientRect")
-	lines := host.Get("parentElement").Call("querySelectorAll", ".selectable-svg text")
+	lines := host.Get("parentElement").Call("querySelectorAll", ".display-svg text")
 	var best js.Value
 	bestArea := 0.0
 	for index := 0; index < lines.Get("length").Int(); index++ {
@@ -275,6 +281,12 @@ func adoptPlaygroundEditorTypography(host, input js.Value) {
 	}
 	inputStyle := input.Get("style")
 	family, weight, fontStyle := playgroundEditorFont(best.Call("getAttribute", "font-family").String())
+	if value := best.Call("getAttribute", "font-weight").String(); value != "" {
+		weight = value
+	}
+	if value := best.Call("getAttribute", "font-style").String(); value != "" {
+		fontStyle = value
+	}
 	inputStyle.Set("fontFamily", family)
 	inputStyle.Set("fontWeight", weight)
 	inputStyle.Set("fontStyle", fontStyle)
@@ -329,37 +341,28 @@ func playgroundEditorFont(raw string) (family, weight, style string) {
 	return family, weight, style
 }
 
-func adoptPlaygroundEditorBackground(host, input js.Value) {
-	page := host.Get("parentElement")
-	image := page.Call("querySelector", ":scope > img")
-	if image.IsNull() || image.Get("naturalWidth").Int() <= 0 || image.Get("naturalHeight").Int() <= 0 {
-		return
-	}
+func hidePlaygroundEditorGlyphs(host js.Value) []js.Value {
 	hostRect := host.Call("getBoundingClientRect")
-	imageRect := image.Call("getBoundingClientRect")
-	if imageRect.Get("width").Float() <= 0 || imageRect.Get("height").Float() <= 0 {
-		return
+	lines := host.Get("parentElement").Call("querySelectorAll", ".display-svg text")
+	hidden := make([]js.Value, 0, lines.Get("length").Int())
+	for index := 0; index < lines.Get("length").Int(); index++ {
+		line := lines.Index(index)
+		rect := line.Call("getBoundingClientRect")
+		width := overlap(
+			hostRect.Get("left").Float(), hostRect.Get("right").Float(),
+			rect.Get("left").Float(), rect.Get("right").Float(),
+		)
+		height := overlap(
+			hostRect.Get("top").Float(), hostRect.Get("bottom").Float(),
+			rect.Get("top").Float(), rect.Get("bottom").Float(),
+		)
+		if width*height <= 0 {
+			continue
+		}
+		line.Get("style").Set("visibility", "hidden")
+		hidden = append(hidden, line)
 	}
-	naturalWidth := float64(image.Get("naturalWidth").Int())
-	naturalHeight := float64(image.Get("naturalHeight").Int())
-	x := (hostRect.Get("left").Float() - imageRect.Get("left").Float() + 1) /
-		imageRect.Get("width").Float() * naturalWidth
-	y := (hostRect.Get("top").Float() - imageRect.Get("top").Float() + 1) /
-		imageRect.Get("height").Float() * naturalHeight
-	x = max(0, min(naturalWidth-1, x))
-	y = max(0, min(naturalHeight-1, y))
-	document := js.Global().Get("document")
-	canvas := document.Call("createElement", "canvas")
-	canvas.Set("width", 1)
-	canvas.Set("height", 1)
-	context := canvas.Call("getContext", "2d")
-	context.Call("drawImage", image, x, y, 1, 1, 0, 0, 1, 1)
-	pixel := context.Call("getImageData", 0, 0, 1, 1).Get("data")
-	color := "rgb(" +
-		strconv.Itoa(pixel.Index(0).Int()) + ", " +
-		strconv.Itoa(pixel.Index(1).Int()) + ", " +
-		strconv.Itoa(pixel.Index(2).Int()) + ")"
-	input.Get("style").Set("backgroundColor", color)
+	return hidden
 }
 
 func overlap(aStart, aEnd, bStart, bEnd float64) float64 {

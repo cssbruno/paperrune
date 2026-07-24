@@ -30,6 +30,7 @@ type playgroundFileEditor struct {
 	workspace             *playgroundFileWorkspace
 	kind                  string
 	page                  uint32
+	vectorOnly            bool
 	inputEvent, destroy   js.Func
 	timer                 *time.Timer
 	mu                    sync.Mutex
@@ -90,7 +91,7 @@ func newPlaygroundFileEditor(value js.Value) (*playgroundFileEditor, error) {
 	input := buildPlaygroundFileEditorDOM(host, kind, source, data)
 	return &playgroundFileEditor{
 		host: host, input: input, onEditing: onEditing, onSnapshot: onSnapshot,
-		workspace: draft, kind: kind, page: page,
+		workspace: draft, kind: kind, page: page, vectorOnly: jsOptionalBool(value, "vectorOnly"),
 	}, nil
 }
 
@@ -192,7 +193,7 @@ func (editor *playgroundFileEditor) queue() {
 
 func (editor *playgroundFileEditor) compile(revision uint64) {
 	source, data, scenario, options, _ := editor.workspace.snapshot()
-	snapshot := compilePlaygroundFileSnapshot(source, data, scenario, editor.page, options)
+	snapshot := compilePlaygroundFileSnapshot(source, data, scenario, editor.page, options, editor.vectorOnly)
 	editor.mu.Lock()
 	current := !editor.destroyed && editor.workspace.current(revision)
 	editor.mu.Unlock()
@@ -206,10 +207,10 @@ func (editor *playgroundFileEditor) compile(revision uint64) {
 	editor.onSnapshot.Invoke(js.Global().Get("JSON").Call("parse", string(encoded)))
 }
 
-func compilePlaygroundFileSnapshot(source, data, scenario string, page uint32, options document.PaperJSONOptions) playgroundFileSnapshot {
+func compilePlaygroundFileSnapshot(source, data, scenario string, page uint32, options document.PaperJSONOptions, vectorOnly bool) playgroundFileSnapshot {
 	result, plan, err := planPlaygroundRequest(source, data, scenario, options)
 	if err == nil {
-		result, err = renderPlaygroundPlanPage(result, plan, page)
+		result, err = renderPlaygroundPlanPage(result, plan, page, !vectorOnly)
 	}
 	if err != nil && result.Error == "" {
 		result, _ = playgroundCompileFailure(result, err)

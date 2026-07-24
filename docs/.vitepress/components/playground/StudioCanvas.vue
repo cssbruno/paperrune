@@ -2,7 +2,6 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue';
 
 const props = defineProps({
-  image: {type: String, default: ''},
   svg: {type: String, default: ''},
   pageX: {type: Number, default: 0},
   pageY: {type: Number, default: 0},
@@ -22,7 +21,7 @@ const props = defineProps({
 
 const emit = defineEmits(['page-point', 'edit-point', 'editor-applied', 'editor-error', 'cancel-inline', 'retry']);
 const pageStage = ref(null);
-const selectableSVG = ref('');
+const displaySVG = ref('');
 const selectableLines = ref([]);
 const editorHost = ref(null);
 let resizeObserver;
@@ -42,7 +41,7 @@ const overflowText = computed(() => {
 
 watch(() => props.svg, (svg) => {
   selectableLines.value = [];
-  selectableSVG.value = sanitizeTextSVG(svg);
+  displaySVG.value = sanitizeDisplaySVG(svg);
   void materializeSelectableText();
 }, {immediate: true});
 
@@ -74,6 +73,7 @@ async function mountWASMEditor(editor, engine) {
     text: editor.value,
     mode: editor.mode,
     binding: editor.binding,
+    vectorOnly: true,
     onApplied: (result) => emit('editor-applied', {transaction: editor.transaction, result}),
     onCancel: () => emit('cancel-inline'),
   };
@@ -97,10 +97,10 @@ async function materializeSelectableText() {
   const token = ++measureToken;
   selectableLines.value = [];
   await nextTick();
-  if (token !== measureToken || !pageStage.value || !selectableSVG.value) return;
+  if (token !== measureToken || !pageStage.value || !displaySVG.value) return;
   const stageBounds = pageStage.value.getBoundingClientRect();
   if (!(stageBounds.width > 0 && stageBounds.height > 0)) return;
-  const textNodes = [...pageStage.value.querySelectorAll('.selectable-svg text')];
+  const textNodes = [...pageStage.value.querySelectorAll('.display-svg text')];
   const grouped = [];
   let line = null;
   for (const text of textNodes) {
@@ -139,18 +139,36 @@ async function materializeSelectableText() {
   });
 }
 
-function sanitizeTextSVG(svgText) {
+function sanitizeDisplaySVG(svgText) {
   if (!svgText || typeof DOMParser === 'undefined' || typeof XMLSerializer === 'undefined') return '';
   const parsed = new DOMParser().parseFromString(svgText, 'image/svg+xml');
   if (parsed.querySelector('parsererror')) return '';
-  parsed.querySelectorAll('script, foreignObject, image, a, use').forEach((node) => node.remove());
-  parsed.querySelectorAll('rect, path, circle, ellipse, polygon, polyline, line').forEach((node) => {
-    if (!node.closest('clipPath')) node.remove();
+  parsed.querySelectorAll('script, foreignObject, a, use').forEach((node) => node.remove());
+  parsed.querySelectorAll('*').forEach((node) => {
+    [...node.attributes].forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim().toLowerCase();
+      if (name.startsWith('on') || ((name === 'href' || name === 'xlink:href') && !value.startsWith('data:image/'))) {
+        node.removeAttribute(attribute.name);
+      }
+    });
   });
+  parsed.querySelectorAll('text[font-family]').forEach(normalizeDisplayFont);
   const root = parsed.documentElement;
   root.setAttribute('aria-hidden', 'true');
   root.setAttribute('focusable', 'false');
   return new XMLSerializer().serializeToString(root);
+}
+
+function normalizeDisplayFont(text) {
+  const raw = (text.getAttribute('font-family') || '').toLowerCase();
+  const bold = raw.includes('bold');
+  const italic = raw.includes('italic') || raw.includes('oblique');
+  if (raw.startsWith('times')) text.setAttribute('font-family', 'Times New Roman, Times, serif');
+  else if (raw.startsWith('helvetica')) text.setAttribute('font-family', 'Helvetica, Arial, sans-serif');
+  else if (raw.startsWith('courier')) text.setAttribute('font-family', 'Courier New, Courier, monospace');
+  if (bold) text.setAttribute('font-weight', '700');
+  if (italic) text.setAttribute('font-style', 'italic');
 }
 
 function pointFromEvent(event) {
@@ -210,7 +228,7 @@ function formatFixedPoints(value) {
   <section class="studio-canvas" aria-label="Editable document canvas">
     <div class="canvas-scroll">
       <div
-        v-if="image"
+        v-if="displaySVG"
         ref="pageStage"
         class="page-stage"
         :class="{'is-stale': stale}"
@@ -219,8 +237,7 @@ function formatFixedPoints(value) {
         @click="selectAt"
         @dblclick="editAt"
       >
-        <img :src="image" alt="Exact PaperRune page rendered by WebAssembly">
-        <div class="selectable-svg" v-html="selectableSVG"></div>
+        <div class="display-svg" v-html="displaySVG"></div>
         <div class="selectable-plane" aria-label="Selectable document text">
           <span
             v-for="(line, index) in selectableLines"
@@ -273,17 +290,15 @@ function formatFixedPoints(value) {
   transition: filter .18s ease, opacity .18s ease, transform .18s ease;
 }
 .page-stage:focus-visible { box-shadow: 0 25px 70px rgba(30, 32, 36, .2), 0 0 0 3px rgba(46, 91, 214, .28); }
-.page-stage > img { position: relative; z-index: 1; display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
-.page-stage.is-stale > img { filter: saturate(.72); opacity: .68; }
-.selectable-svg {
-  position: absolute;
-  inset: 0;
+.display-svg {
+  position: relative;
   z-index: 2;
-  visibility: hidden;
   overflow: hidden;
   pointer-events: none;
+  transition: filter .18s ease, opacity .18s ease;
 }
-.selectable-svg :deep(svg) { display: block; width: 100%; height: 100%; }
+.display-svg :deep(svg) { display: block; width: 100%; height: auto; }
+.page-stage.is-stale .display-svg { filter: saturate(.72); opacity: .68; }
 .selectable-plane { position: absolute; inset: 0; z-index: 3; pointer-events: none; user-select: text; }
 .selectable-line {
   position: absolute;

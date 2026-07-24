@@ -31,6 +31,7 @@ async function remount() {
     hash: props.hash,
     page: props.page,
     kind: props.kind,
+    vectorOnly: true,
     onEditing: () => emit('editing'),
     onSnapshot: (snapshot) => emit('snapshot', snapshot),
   });

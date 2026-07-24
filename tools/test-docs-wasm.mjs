@@ -74,6 +74,17 @@ if (!compiled.ok || compiled.pages !== 1 || compiled.page !== 1 || !compiled.has
     compiled.ast?.root?.id !== '@smoke') {
   throw new Error(`documentation compiler returned invalid evidence: ${JSON.stringify(compiled)}`);
 }
+const vectorCompiled = await globalThis.PaperStudioWASM.compile({
+  source,
+  data: '{"name":"WASM documentation smoke","active":true}',
+  dataName: 'input',
+  page: 1,
+  vectorOnly: true,
+});
+if (!vectorCompiled.ok || !vectorCompiled.svg || Object.hasOwn(vectorCompiled, 'png') ||
+    Object.hasOwn(vectorCompiled, 'pixel_width') || Object.hasOwn(vectorCompiled, 'pixel_height')) {
+  throw new Error(`documentation compiler rasterized a vector-only page: ${JSON.stringify(vectorCompiled)}`);
+}
 
 const invalid = await globalThis.PaperStudioWASM.compile({
   source: source.replace('text: name', 'text: missing'),

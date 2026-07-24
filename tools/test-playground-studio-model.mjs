@@ -156,15 +156,23 @@ const wasmFileEditorSource = await readFile(new URL('../cmd/paper-studio-wasm/fi
 assert(!canvasSource.includes('v-model="inlineDraft"'));
 assert(!canvasSource.includes('commit-inline'));
 assert(canvasSource.includes('engine.mountEditor(request)'));
+assert(canvasSource.includes('class="display-svg"'));
+assert(!canvasSource.includes('<img'));
+assert(canvasSource.includes('vectorOnly: true'));
 assert(!playgroundSource.includes('v-model="source"'));
 assert(!playgroundSource.includes('v-model="data"'));
 assert(!playgroundSource.includes('watch([source, data]'));
+assert(!playgroundSource.includes('result.png'));
+assert(playgroundSource.includes('vectorOnly: true'));
 assert(fileEditorComponent.includes('props.engine.mountFileEditor'));
+assert(fileEditorComponent.includes('vectorOnly: true'));
 assert(wasmEditorSource.includes('input.Set("contentEditable", "plaintext-only")'));
 assert(!wasmEditorSource.includes('document.Call("createElement", "textarea")'));
 assert(!wasmEditorSource.includes('textContent", "Apply"'));
 assert(wasmEditorSource.includes('editor.moveHistory(direction)'));
 assert(wasmEditorSource.includes('applyPlaygroundEdit(request)'));
+assert(wasmEditorSource.includes('".display-svg text"'));
+assert(!wasmEditorSource.includes('querySelector", ":scope > img"'));
 assert(wasmFileEditorSource.includes('time.AfterFunc(playgroundFileEditDelay'));
 assert(wasmFileEditorSource.includes('planPlaygroundRequest(source, data'));
 

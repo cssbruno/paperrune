@@ -210,8 +210,9 @@ func compilePaper(_ js.Value, arguments []js.Value) any {
 			return nil
 		}
 		options := document.PaperJSONOptions{Name: jsOptionalString(request, "dataName"), Schema: jsOptionalString(request, "schema"), Locale: jsOptionalString(request, "locale")}
+		vectorOnly := jsOptionalBool(request, "vectorOnly")
 		go func() {
-			result, err := compilePlaygroundRequest(source, data, scenario, page, options)
+			result, err := compilePlaygroundRequest(source, data, scenario, page, options, vectorOnly)
 			encoded, encodeErr := json.Marshal(result)
 			if encodeErr != nil {
 				reject.Invoke(jsError(encodeErr))
@@ -230,12 +231,12 @@ func compilePaper(_ js.Value, arguments []js.Value) any {
 	return result
 }
 
-func compilePlaygroundRequest(source, data, scenario string, page uint32, options document.PaperJSONOptions) (playgroundCompileResult, error) {
+func compilePlaygroundRequest(source, data, scenario string, page uint32, options document.PaperJSONOptions, vectorOnly bool) (playgroundCompileResult, error) {
 	result, plan, err := planPlaygroundRequest(source, data, scenario, options)
 	if err != nil {
 		return result, err
 	}
-	return renderPlaygroundPlanPage(result, plan, page)
+	return renderPlaygroundPlanPage(result, plan, page, !vectorOnly)
 }
 
 func planPlaygroundRequest(source, data, scenario string, options document.PaperJSONOptions) (playgroundCompileResult, document.PaperPlan, error) {
@@ -276,7 +277,7 @@ func planPlaygroundRequest(source, data, scenario string, options document.Paper
 	return result, plan, nil
 }
 
-func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.PaperPlan, page uint32) (playgroundCompileResult, error) {
+func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.PaperPlan, page uint32, raster bool) (playgroundCompileResult, error) {
 	if page == 0 || int(page) > plan.PageCount() {
 		return playgroundCompileFailure(result, errors.New("paper-studio-wasm: requested page is outside the compiled plan"))
 	}
@@ -284,16 +285,6 @@ func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.Pape
 	if err != nil {
 		return playgroundCompileFailure(result, err)
 	}
-	request := document.DefaultPaperPlanWebRenderRequest(page)
-	payload, err := plan.WebDisplayRenderPayload(context.Background(), request)
-	if err != nil {
-		return playgroundCompileFailure(result, err)
-	}
-	artifact, err := layoutengine.RenderWebDisplayPayloadCached(context.Background(), payload, &renderCache)
-	if err != nil {
-		return playgroundCompileFailure(result, err)
-	}
-	manifest := artifact.Manifest()
 	overflow, err := plan.PageOverflow(page)
 	if err != nil {
 		return playgroundCompileFailure(result, err)
@@ -303,9 +294,21 @@ func renderPlaygroundPlanPage(result playgroundCompileResult, plan document.Pape
 	result.PageXFixed, result.PageYFixed = capture.PageX, capture.PageY
 	result.PageWidthFixed, result.PageHeightFixed = capture.PageWidth, capture.PageHeight
 	result.FixedScale = capture.FixedScale
-	result.PNG = base64.StdEncoding.EncodeToString(artifact.PNG())
-	result.PixelWidth, result.PixelHeight = manifest.PixelWidth, manifest.PixelHeight
-	result.DPI, result.Renderer = manifest.Profile.DPI, manifest.Identity.RendererVersion
+	if raster {
+		request := document.DefaultPaperPlanWebRenderRequest(page)
+		payload, renderErr := plan.WebDisplayRenderPayload(context.Background(), request)
+		if renderErr != nil {
+			return playgroundCompileFailure(result, renderErr)
+		}
+		artifact, renderErr := layoutengine.RenderWebDisplayPayloadCached(context.Background(), payload, &renderCache)
+		if renderErr != nil {
+			return playgroundCompileFailure(result, renderErr)
+		}
+		manifest := artifact.Manifest()
+		result.PNG = base64.StdEncoding.EncodeToString(artifact.PNG())
+		result.PixelWidth, result.PixelHeight = manifest.PixelWidth, manifest.PixelHeight
+		result.DPI, result.Renderer = manifest.Profile.DPI, manifest.Identity.RendererVersion
+	}
 	if overflow.Records > 0 {
 		result.Overflow = &overflow
 	}
@@ -459,6 +462,7 @@ func renderWorkspacePage(_ js.Value, arguments []js.Value) any {
 			return nil
 		}
 		request := arguments[0]
+		vectorOnly := jsOptionalBool(request, "vectorOnly")
 		hash, err := jsRequiredString(request, "hash")
 		if err != nil || !playgroundDigest(hash) {
 			reject.Invoke(jsError(errors.New("paper-studio-wasm: workspacePage hash must be a lowercase SHA-256 digest")))
@@ -477,7 +481,7 @@ func renderWorkspacePage(_ js.Value, arguments []js.Value) any {
 			}
 			result, renderErr := renderPlaygroundPlanPage(playgroundCompileResult{
 				OK: true, Pages: workspace.plan.PageCount(), Hash: hash,
-			}, workspace.plan, page)
+			}, workspace.plan, page, !vectorOnly)
 			if renderErr != nil {
 				reject.Invoke(jsError(renderErr))
 				return
@@ -919,6 +923,11 @@ func jsOptionalString(object js.Value, name string) string {
 		return value.String()
 	}
 	return ""
+}
+
+func jsOptionalBool(object js.Value, name string) bool {
+	value := object.Get(name)
+	return value.Type() == js.TypeBoolean && value.Bool()
 }
 
 func renderPage(_ js.Value, arguments []js.Value) any {

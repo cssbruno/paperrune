@@ -36,7 +36,6 @@ const state = ref('loading');
 const status = ref('Loading compiler…');
 const failure = ref('');
 const diagnostics = ref([]);
-const png = ref('');
 const svg = ref('');
 const ast = ref(null);
 const pages = ref(0);
@@ -72,7 +71,6 @@ let compileSequence = 0;
 let inlineEditSequence = 0;
 let compileSlowTimer;
 const sourceLines = computed(() => source.value.split('\n').length);
-const documentImage = computed(() => png.value ? `data:image/png;base64,${png.value}` : '');
 const loadProgress = computed(() => {
   const snapshot = runtimeSnapshot.value;
   if (Number.isFinite(snapshot.progress) && snapshot.progress > 0) return Math.min(1, snapshot.progress);
@@ -121,7 +119,7 @@ onBeforeUnmount(() => {
 async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
   clearTimeout(compileSlowTimer);
   const sequence = ++compileSequence;
-  previewStale.value = Boolean(png.value);
+  previewStale.value = Boolean(svg.value);
   compileSlow.value = false;
   state.value = runtimeSnapshot.value.state === 'ready' ? 'compiling' : 'loading';
   status.value = state.value === 'loading' ? 'Loading compiler…' : 'Compiling exact document plan…';
@@ -149,13 +147,14 @@ async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
       data: data.value,
       page: targetPage,
       dataName: 'playground',
+      vectorOnly: true,
     });
     if (sequence !== compileSequence) return;
     diagnostics.value = result.diagnostics || [];
     pages.value = result.pages || 0;
     planHash.value = result.hash || '';
     sourceRevision.value = result.source_revision || '';
-    if (!result.ok || !result.png) {
+    if (!result.ok || !result.svg) {
       failure.value = diagnostics.value.length
         ? ''
         : normalizeFailure(result.error, result.ok ? 'The compiler returned no document.' : 'Compilation failed.');
@@ -166,8 +165,7 @@ async function compile(targetPage = page.value, {retryRuntime = false} = {}) {
       return;
     }
     page.value = result.page;
-    png.value = result.png;
-    svg.value = result.svg || '';
+    svg.value = result.svg;
     ast.value = result.ast || null;
     pageX.value = Number(result.page_x_fixed || 0);
     pageY.value = Number(result.page_y_fixed || 0);
@@ -199,7 +197,7 @@ function handleFileEditing() {
   inlineEditSequence += 1;
   clearTimeout(compileSlowTimer);
   compileSequence += 1;
-  previewStale.value = Boolean(png.value);
+  previewStale.value = Boolean(svg.value);
   selected.value = null;
   inlineEditor.value = null;
   state.value = 'editing';
@@ -213,7 +211,6 @@ function chooseSample(event) {
   source.value = samples[index].source;
   data.value = samples[index].data;
   page.value = 1;
-  png.value = '';
   svg.value = '';
   overflow.value = null;
   ast.value = null;
@@ -347,7 +344,7 @@ function acceptEditedWorkspace(edited, rendered) {
   if (!edited?.ok || !edited.applied) {
     throw new Error(edited?.error || 'WASM did not apply the document edit.');
   }
-  if (!rendered?.ok || !rendered.png || rendered.hash !== edited.hash) {
+  if (!rendered?.ok || !rendered.svg || rendered.hash !== edited.hash) {
     throw new Error(rendered?.error || 'WASM did not render the edited workspace.');
   }
   source.value = edited.source;
@@ -357,8 +354,7 @@ function acceptEditedWorkspace(edited, rendered) {
   page.value = rendered.page;
   planHash.value = edited.hash || '';
   sourceRevision.value = edited.source_revision || '';
-  png.value = rendered.png;
-  svg.value = rendered.svg || '';
+  svg.value = rendered.svg;
   ast.value = edited.ast || null;
   pageX.value = Number(rendered.page_x_fixed || 0);
   pageY.value = Number(rendered.page_y_fixed || 0);
@@ -377,7 +373,7 @@ function acceptFileSnapshot(result) {
   source.value = result.source;
   data.value = result.data;
   diagnostics.value = result.diagnostics || [];
-  if (!result.ok || !result.png) {
+  if (!result.ok || !result.svg) {
     failure.value = diagnostics.value.length ? '' : normalizeFailure(result.error, 'WASM could not compile this draft.');
     state.value = diagnostics.value.length ? 'warning' : 'error';
     status.value = diagnostics.value.length
@@ -389,8 +385,7 @@ function acceptFileSnapshot(result) {
   page.value = result.page;
   planHash.value = result.hash || '';
   sourceRevision.value = result.source_revision || '';
-  png.value = result.png;
-  svg.value = result.svg || '';
+  svg.value = result.svg;
   ast.value = result.ast || null;
   pageX.value = Number(result.page_x_fixed || 0);
   pageY.value = Number(result.page_y_fixed || 0);
@@ -505,7 +500,6 @@ function handleOnline() {
 
       <StudioCanvas
         :wasm-engine="wasmEngine"
-        :image="documentImage"
         :svg="svg"
         :page-x="pageX"
         :page-y="pageY"
