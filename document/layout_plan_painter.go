@@ -73,13 +73,14 @@ func (f *pdfDocument) paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared prepa
 			Wd: f.PointConvert(plannedPage.Size.Width.Points()),
 			Ht: f.PointConvert(plannedPage.Size.Height.Points()),
 		}
+		pageCapacity := plannedDisplayPageContentCapacity(prepared.projection, plannedPage, false, compactNativeRuns)
 		if !reuseCurrent || index != 0 {
-			f.AddPageFormat("P", size)
+			f.addPlannedPageFormat("P", size, pageCapacity)
 			if f.err != nil {
 				return f.err
 			}
 		}
-		_ = f.pageContentCommandBuffer(plannedDisplayPageContentCapacity(prepared.projection, plannedPage, false))
+		_ = f.pageContentCommandBuffer(pageCapacity)
 		var previousRun layoutengine.CoreGlyphRun
 		previousRunSet := false
 		commandEnd := int(plannedPage.Commands.Start + plannedPage.Commands.Count)
@@ -87,7 +88,11 @@ func (f *pdfDocument) paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared prepa
 			command := prepared.projection.Commands[commandIndex]
 			run := prepared.projection.GlyphRuns[command.Payload]
 			font := prepared.fonts[run.Font]
-			content := f.pageContentCommandBuffer(plannedGlyphRunCapacity(run))
+			commandCapacity := plannedGlyphRunCapacity(run)
+			if compactNativeRuns {
+				commandCapacity = plannedCompactCoreGlyphRunCapacity(run)
+			}
+			content := f.pageContentCommandBuffer(commandCapacity)
 			if compactNativeRuns {
 				if !run.LeadingSpace && previousRunSet {
 					run.LeadingSpace = previousRun.TrailingSpace

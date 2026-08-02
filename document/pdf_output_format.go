@@ -100,14 +100,24 @@ func appendPDFTJAdjustment(dst []byte, fontWidth int, fontSize, advance layouten
 	if negative {
 		dst = append(dst, '-')
 	}
-	dst = strconv.AppendInt(dst, scaled/scale, 10)
-	dst = append(dst, '.')
-	fraction := scaled % scale
-	for divisor := int64(1_000_000_000); divisor != 0; divisor /= 10 {
-		dst = append(dst, byte('0'+fraction/divisor)) // #nosec G115 -- fraction/divisor is a decimal digit in [0, 9].
-		fraction %= divisor
+	integer := scaled / scale
+	if integer == 0 {
+		dst = append(dst, '0')
+	} else {
+		dst = strconv.AppendInt(dst, integer, 10)
 	}
-	return dst
+	dst = append(dst, '.')
+	return appendPDFTenDecimalFraction(dst, uint64(scaled%scale)) // #nosec G115 -- scaled is non-negative.
+}
+
+func appendPDFTenDecimalFraction(dst []byte, fraction uint64) []byte {
+	high := fraction / 100_000_000
+	remainder := fraction - high*100_000_000
+	middle := remainder / 10_000
+	low := remainder - middle*10_000
+	dst = append(dst, pdfFourDecimalDigits[high][2:]...)
+	dst = append(dst, pdfFourDecimalDigits[middle][:]...)
+	return append(dst, pdfFourDecimalDigits[low][:]...)
 }
 
 // appendPDFFixed emits the exact ten-decimal representation previously
@@ -149,6 +159,18 @@ var pdfFixedFractionDigits = func() [layoutengine.FixedScale][10]byte {
 	return fractions
 }()
 
+var pdfFourDecimalDigits = func() [10_000][4]byte {
+	var values [10_000][4]byte
+	for value := range values {
+		remaining := value
+		for digit, divisor := 0, 1000; divisor > 0; digit, divisor = digit+1, divisor/10 {
+			values[value][digit] = byte('0' + remaining/divisor)
+			remaining %= divisor
+		}
+	}
+	return values
+}()
+
 var pdfColorComponents = func() [256]string {
 	var components [256]string
 	for value := range components {
@@ -165,6 +187,15 @@ func appendPDFColorComponentSpace(dst []byte, value uint8) []byte {
 func plannedGlyphRunCapacity(run layoutengine.CoreGlyphRun) int {
 	const base = 96
 	const perCode = 48
+	if len(run.Codes) > (maxContentScratchCapacity-base)/perCode {
+		return maxContentScratchCapacity
+	}
+	return base + len(run.Codes)*perCode
+}
+
+func plannedCompactCoreGlyphRunCapacity(run layoutengine.CoreGlyphRun) int {
+	const base = 160
+	const perCode = 24
 	if len(run.Codes) > (maxContentScratchCapacity-base)/perCode {
 		return maxContentScratchCapacity
 	}

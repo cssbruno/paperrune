@@ -266,7 +266,7 @@ func preparedDisplaySemanticPath(nodes []layoutengine.SemanticNode, leafID layou
 	return destination
 }
 
-func plannedDisplayPageContentCapacity(projection layoutengine.LayoutPlanProjection, page layoutengine.PlannedPage, tagged bool) int {
+func plannedDisplayPageContentCapacity(projection layoutengine.LayoutPlanProjection, page layoutengine.PlannedPage, tagged, compactCoreText bool) int {
 	const maximum = 8 << 20
 	total := 128
 	add := func(amount int) {
@@ -304,7 +304,12 @@ func plannedDisplayPageContentCapacity(projection layoutengine.LayoutPlanProject
 			stroke := projection.Strokes[command.Payload]
 			add(pathCost(projection.Paths[stroke.Path]) + 128 + len(stroke.Dash)*24)
 		case layoutengine.CommandGlyphRun:
-			add(plannedGlyphRunCapacity(projection.GlyphRuns[command.Payload]))
+			run := projection.GlyphRuns[command.Payload]
+			if compactCoreText && projection.Fonts[run.Font-1].EmbeddedUTF8 == nil {
+				add(plannedCompactCoreGlyphRunCapacity(run))
+			} else {
+				add(plannedGlyphRunCapacity(run))
+			}
 		case layoutengine.CommandImage:
 			add(256)
 		case layoutengine.CommandLink:
@@ -340,13 +345,14 @@ func (f *pdfDocument) paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared pr
 	}
 	for pageIndex, page := range projection.Pages {
 		size := Size{Wd: f.PointConvert(page.Size.Width.Points()), Ht: f.PointConvert(page.Size.Height.Points())}
+		pageCapacity := plannedDisplayPageContentCapacity(projection, page, f.tagged.enabled, preserveAuthoredText)
 		if !reuseCurrent || pageIndex != 0 {
-			f.AddPageFormat("P", size)
+			f.addPlannedPageFormat("P", size, pageCapacity)
 			if f.err != nil {
 				return f.err
 			}
 		}
-		_ = f.pageContentCommandBuffer(plannedDisplayPageContentCapacity(projection, page, f.tagged.enabled))
+		_ = f.pageContentCommandBuffer(pageCapacity)
 		var previousRun layoutengine.CoreGlyphRun
 		previousRunSet := false
 		for commandOffset := uint32(0); commandOffset < page.Commands.Count; commandOffset++ {
@@ -382,7 +388,11 @@ func (f *pdfDocument) paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared pr
 				if f.tagged.enabled {
 					closeSemantic = f.beginPreparedSemantic(prepared.semanticPaths[command.Fragment], semanticElements)
 				}
-				content := f.pageContentCommandBuffer(plannedGlyphRunCapacity(run))
+				commandCapacity := plannedGlyphRunCapacity(run)
+				if preserveAuthoredText && font.resource.EmbeddedUTF8 == nil {
+					commandCapacity = plannedCompactCoreGlyphRunCapacity(run)
+				}
+				content := f.pageContentCommandBuffer(commandCapacity)
 				if font.resource.EmbeddedUTF8 != nil {
 					if preserveAuthoredText {
 						content = appendPlannedUTF8GlyphRunActualText(content, font.font, page.Size.Height, run)

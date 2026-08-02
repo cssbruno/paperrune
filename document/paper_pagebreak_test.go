@@ -116,9 +116,9 @@ func TestWritePaperPaintsExplicitBreakFromTheCompletedPlan(t *testing.T) {
 	if err != nil || !result.OK() || result.Pages != 2 || target.PageCount() != 2 {
 		t.Fatalf("WritePaper() = %#v, %v; pages=%d", result, err, target.PageCount())
 	}
-	if !bytes.Contains(target.pages[1].Bytes(), []byte("(A) Tj")) ||
-		bytes.Contains(target.pages[1].Bytes(), []byte("(B) Tj")) ||
-		!bytes.Contains(target.pages[2].Bytes(), []byte("(B) Tj")) {
+	if !bytes.Contains(target.pages[1].Bytes(), []byte("/ActualText (A)")) ||
+		bytes.Contains(target.pages[1].Bytes(), []byte("/ActualText (B)")) ||
+		!bytes.Contains(target.pages[2].Bytes(), []byte("/ActualText (B)")) {
 		t.Fatalf("explicit break did not preserve source allocation:\npage 1 %s\npage 2 %s", target.pages[1].Bytes(), target.pages[2].Bytes())
 	}
 }

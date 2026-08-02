@@ -105,8 +105,8 @@ func TestDisplayPlanPreflightPreparesSemanticsOnlyForTaggedOutput(t *testing.T) 
 	}
 
 	page := taggedPrepared.projection.Pages[0]
-	plainCapacity := plannedDisplayPageContentCapacity(taggedPrepared.projection, page, false)
-	taggedCapacity := plannedDisplayPageContentCapacity(taggedPrepared.projection, page, true)
+	plainCapacity := plannedDisplayPageContentCapacity(taggedPrepared.projection, page, false, false)
+	taggedCapacity := plannedDisplayPageContentCapacity(taggedPrepared.projection, page, true, false)
 	if plainCapacity >= taggedCapacity {
 		t.Fatalf("content capacity plain/tagged = %d/%d, want tagging allowance only for tagged output",
 			plainCapacity, taggedCapacity)

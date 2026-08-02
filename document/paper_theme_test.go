@@ -56,7 +56,7 @@ func TestPaperThemeControlsExactPlanAndPaintTextStyle(t *testing.T) {
 	for _, want := range [][]byte{
 		[]byte("13.0000000000 Tf"),
 		[]byte("0.2000000000 0.4000000000 0.6000000000 rg"),
-		[]byte("(V) Tj"),
+		[]byte("/ActualText (Visible)"),
 	} {
 		if !bytes.Contains(content, want) {
 			t.Fatalf("painted page lacks %q:\n%s", want, content)

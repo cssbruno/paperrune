@@ -111,7 +111,7 @@ func TestPlanAndWritePaperScenarioBoundedLoopEndToEnd(t *testing.T) {
 	if err != nil || !rendered.OK() || rendered.Pages != 1 {
 		t.Fatalf("render = %#v / %v", rendered, err)
 	}
-	if count := bytes.Count(document.pages[1].Bytes(), []byte("(L) Tj")); count != 2 {
+	if count := bytes.Count(document.pages[1].Bytes(), []byte("/ActualText (Loop)")); count != 2 {
 		t.Fatalf("loop glyph count = %d\n%s", count, document.pages[1].Bytes())
 	}
 }

@@ -9,6 +9,8 @@ tool (
 	golang.org/x/vuln/cmd/govulncheck
 )
 
+require golang.org/x/tools v0.47.0
+
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
 	4d63.com/gochecknoglobals v0.2.2 // indirect
@@ -248,7 +250,6 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260625142307-59b4966ccb57 // indirect
 	golang.org/x/text v0.40.0 // indirect
-	golang.org/x/tools v0.47.0 // indirect
 	golang.org/x/vuln v1.3.0 // indirect
 	google.golang.org/api v0.274.0 // indirect
 	google.golang.org/genai v1.58.0 // indirect

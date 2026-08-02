@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/paperrune/internal/layoutengine"
@@ -46,8 +47,8 @@ func TestWritePaperRunsParseCompilePlanAndCorePaintWithoutHTML(t *testing.T) {
 			t.Fatalf("page %d height = %gpt, want 50pt", page, got)
 		}
 		content := target.pages[page].Bytes()
-		if !bytes.Contains(content, []byte(" Tm (")) || !bytes.Contains(content, []byte(") Tj")) {
-			t.Fatalf("page %d lacks direct planned text operators:\n%s", page, content)
+		if !bytes.Contains(content, []byte("/ActualText (")) || !bytes.Contains(content, []byte("] TJ ET EMC")) {
+			t.Fatalf("page %d lacks compact planned text operators:\n%s", page, content)
 		}
 		if bytes.Contains(content, []byte(" Tw")) || bytes.Contains(content, []byte(" Td")) {
 			t.Fatalf("page %d used a live text layout operator:\n%s", page, content)
@@ -102,7 +103,7 @@ func TestWritePaperFlowsMultipleStyledBlocksInSourceOrderThroughOnePlan(t *testi
 	second := target.pages[2].Bytes()
 	assertPaperCodesInOrder(t, first, 'H', 'A', 'B')
 	assertPaperCodesInOrder(t, second, 'T', 'C', 'D')
-	if bytes.Contains(first, []byte("(T) Tj")) || bytes.Contains(second, []byte("(B) Tj")) {
+	if bytes.Contains(first, []byte("/ActualText (T)")) || bytes.Contains(second, []byte("/ActualText (B)")) {
 		t.Fatalf("blocks were allocated to the wrong page:\npage 1 %s\npage 2 %s", first, second)
 	}
 	for _, key := range []string{"helveticaB", "courier", "timesI"} {
@@ -165,8 +166,8 @@ func TestWritePaperPlansStyledListsWithMarkersInSourceOrderAcrossPages(t *testin
 	assertPaperCodesInOrder(t, target.pages[1].Bytes(), '1', 'A', '2', 'B')
 	assertPaperCodesInOrder(t, target.pages[2].Bytes(), '3', 'G', '*', 'D')
 	assertPaperCodesInOrder(t, target.pages[3].Bytes(), '*', 'E')
-	if bytes.Contains(target.pages[1].Bytes(), []byte("(3) Tj")) ||
-		bytes.Contains(target.pages[2].Bytes(), []byte("(E) Tj")) {
+	if bytes.Contains(target.pages[1].Bytes(), []byte("/ActualText (3. Gamma)")) ||
+		bytes.Contains(target.pages[2].Bytes(), []byte("/ActualText (* Echo)")) {
 		t.Fatalf("list items crossed their planned page boundary:\npage1 %s\npage2 %s", target.pages[1].Bytes(), target.pages[2].Bytes())
 	}
 	for _, key := range []string{"courierB", "helveticaI"} {
@@ -234,14 +235,14 @@ func TestPaperPlannerRecordsCausalPageBreaks(t *testing.T) {
 
 func assertPaperCodesInOrder(t *testing.T, content []byte, codes ...byte) {
 	t.Helper()
+	extracted := extractedDocumentText(t, content)
 	previous := -1
 	for _, code := range codes {
-		needle := []byte{'(', code, ')', ' ', 'T', 'j'}
-		index := bytes.Index(content, needle)
-		if index < 0 || index <= previous {
-			t.Fatalf("codes %q are absent or out of order in:\n%s", codes, content)
+		index := strings.IndexByte(extracted[previous+1:], code)
+		if index < 0 {
+			t.Fatalf("codes %q are absent or out of order in extracted text %q:\n%s", codes, extracted, content)
 		}
-		previous = index
+		previous += index + 1
 	}
 }
 

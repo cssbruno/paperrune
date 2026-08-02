@@ -213,6 +213,14 @@ func (f *pdfDocument) AddPageFormat(orientationStr string, size Size) {
 	f.addPageFormatRotation(orientationStr, size, 0)
 }
 
+func (f *pdfDocument) addPlannedPageFormat(orientationStr string, size Size, contentCapacity int) {
+	if contentCapacity > 0 {
+		f.pageCapacityHint = contentCapacity + 128
+	}
+	f.addPageFormatRotation(orientationStr, size, 0)
+	f.pageCapacityHint = 0
+}
+
 // AddPageFormatRotation adds a new page with non-default orientation, size, or
 // page dictionary rotation. The rotation must be a multiple of 90 degrees.
 func (f *pdfDocument) AddPageFormatRotation(orientationStr string, size Size, rotation int) {
@@ -513,7 +521,9 @@ func (f *pdfDocument) beginpage(orientationStr string, size Size, rotation int) 
 	f.pageBoxes[f.page] = make(map[string]PageBox)
 	maps.Copy(f.pageBoxes[f.page], f.defPageBoxes)
 	pageBuffer := bytes.NewBuffer(nil)
-	if previousPage := f.pages[len(f.pages)-1]; previousPage != nil {
+	if f.pageCapacityHint >= 1024 {
+		pageBuffer.Grow(f.pageCapacityHint)
+	} else if previousPage := f.pages[len(f.pages)-1]; previousPage != nil {
 		growthHint := min(previousPage.Cap(), maxPageBufferGrowthHint)
 		if growthHint >= 1024 {
 			pageBuffer.Grow(growthHint)

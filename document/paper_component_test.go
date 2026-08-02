@@ -48,8 +48,8 @@ func TestPlanAndWritePaperExpandsComponentsWithInstanceProvenance(t *testing.T) 
 		t.Fatal(err)
 	}
 	content := target.pages[1].Bytes()
-	providedGlyph := bytes.Index(content, []byte("(P) Tj"))
-	fallbackGlyph := bytes.Index(content, []byte("(F) Tj"))
+	providedGlyph := bytes.Index(content, []byte("/ActualText (Provided)"))
+	fallbackGlyph := bytes.Index(content, []byte("/ActualText (Fallback)"))
 	if providedGlyph < 0 || fallbackGlyph <= providedGlyph || !bytes.HasPrefix(output.Bytes(), []byte("%PDF-")) {
 		t.Fatalf("expanded component glyph order is absent from PDF page:\n%s", content)
 	}
@@ -70,7 +70,7 @@ func TestPlanPaperScenarioRendersTypedPropsAndQualifiedLayoutSlot(t *testing.T) 
 		t.Fatal(err)
 	}
 	content := target.pages[1].Bytes()
-	if !bytes.Contains(content, []byte("(T) Tj")) || !bytes.Contains(content, []byte("(C) Tj")) {
+	if !bytes.Contains(content, []byte("/ActualText (Typed card)")) || !bytes.Contains(content, []byte("/ActualText (Compact body)")) {
 		t.Fatalf("typed scenario glyphs missing:\n%s", content)
 	}
 }

@@ -683,7 +683,7 @@ func (f *pdfDocument) WritePaperPlan(plan PaperPlan) (PaperRenderResult, error) 
 				"render into a fresh document with compatible image limits", plan.root)
 		}
 		pageStart := f.PageCount()
-		if err := f.paintPreparedDisplayLayoutPlanPDF(prepared); err != nil {
+		if err := f.paintPreparedDisplayLayoutPlanPDFAtCurrentPage(prepared, false, 0, true); err != nil {
 			return paperStageFailureWithSpan(result, PaperStagePaint, "PAPER_PAINT_FAILED", err, "", plan.root)
 		}
 		if plan.title != "" {
@@ -707,7 +707,7 @@ func (f *pdfDocument) WritePaperPlan(plan PaperPlan) (PaperRenderResult, error) 
 	}
 
 	pageStart := f.PageCount()
-	if err := f.paintPreparedCoreLayoutPlanPDF(prepared); err != nil {
+	if err := f.paintPreparedCoreLayoutPlanPDFAtCurrentPage(prepared, false, true); err != nil {
 		return paperStageFailureWithSpan(result, PaperStagePaint, "PAPER_PAINT_FAILED", err, "", plan.root)
 	}
 	if plan.title != "" {

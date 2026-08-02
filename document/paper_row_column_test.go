@@ -64,12 +64,12 @@ func TestPlanAndWritePaperRowUsesFixedPointContainerGeometry(t *testing.T) {
 		t.Fatalf("WritePaperPlan() = %#v, %v", painted, err)
 	}
 	content := target.pages[1].Bytes()
-	firstL := bytes.Index(content, []byte("(L) Tj"))
+	firstL := bytes.Index(content, []byte("/ActualText (L)"))
 	secondRelative := -1
 	if firstL >= 0 {
-		secondRelative = bytes.Index(content[firstL+1:], []byte("(L) Tj"))
+		secondRelative = bytes.Index(content[firstL+1:], []byte("/ActualText (L)"))
 	}
-	value := bytes.Index(content, []byte("(V) Tj"))
+	value := bytes.Index(content, []byte("/ActualText (VALUE)"))
 	if firstL < 0 || secondRelative < 0 || value <= firstL+1+secondRelative {
 		t.Fatalf("planned row text is absent or out of order:\n%s", content)
 	}
