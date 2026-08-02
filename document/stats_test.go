@@ -73,11 +73,6 @@ func TestResourceStoreReceivesRegisteredResourceWrites(t *testing.T) {
 		t.Fatal("registered image was not stored in resourceStore")
 	}
 
-	tpl := statsTestTemplateView{id: "template", size: Size{Wd: 10, Ht: 10}, data: []byte("q\nQ")}
-	pdf.registerTemplate(tpl)
-	if pdf.resources.templates["template"] == nil {
-		t.Fatal("registered template was not stored in resourceStore")
-	}
 }
 
 func TestResourceStoreReceivesAttachmentCacheWrites(t *testing.T) {
@@ -168,10 +163,6 @@ func TestResourceStoreDeterministicIterationHelpers(t *testing.T) {
 		images[3].n != 30 {
 		t.Fatalf("imagesByResourceID() = %#v, want resource-id then key order", images)
 	}
-	if got := store.templateOutputImage("missing", "missing", &ImageInfo{i: "same"}); got == nil || got.n != 31 {
-		t.Fatalf("templateOutputImage() = %#v, want deterministic same-a image", got)
-	}
-
 }
 
 func TestResourceLoaderRegistersImages(t *testing.T) {
@@ -400,24 +391,10 @@ func TestStatsInitializesResourceStoreForBareDocument(t *testing.T) {
 	if pdf.resources == nil {
 		t.Fatal("Stats() did not initialize resource store for bare document")
 	}
-	if pdf.resources.images == nil || pdf.resources.fonts == nil || pdf.resources.templates == nil {
+	if pdf.resources.images == nil || pdf.resources.fonts == nil {
 		t.Fatal("Stats() did not initialize resource maps for bare document")
 	}
 }
-
-type statsTestTemplateView struct {
-	id   string
-	size Size
-	data []byte
-}
-
-func (t statsTestTemplateView) ID() string { return t.id }
-
-func (t statsTestTemplateView) Size() (Point, Size) { return Point{}, t.size }
-
-func (t statsTestTemplateView) Bytes() []byte { return append([]byte(nil), t.data...) }
-
-func (t statsTestTemplateView) Images() map[string]*ImageInfo { return nil }
 
 func TestExplicitCacheStatsAndClear(t *testing.T) {
 	cache := NewImageCache()
@@ -456,7 +433,7 @@ func TestImageCacheStatsDeduplicateFileAliases(t *testing.T) {
 
 func TestClearSharedCaches(t *testing.T) {
 	ClearSharedCaches()
-	if stats := SharedCacheStats(); stats.Images.Entries != 0 || stats.Fonts.Entries != 0 || stats.htmlRenderer.Entries != 0 {
+	if stats := SharedCacheStats(); stats.Images.Entries != 0 || stats.Fonts.Entries != 0 {
 		t.Fatalf("SharedCacheStats() = %#v, want empty shared caches", stats)
 	}
 }

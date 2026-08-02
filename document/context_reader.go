@@ -9,7 +9,7 @@ import (
 )
 
 // contextReader makes cancellation consistent for bounded reads performed by
-// image, attachment, SVG, and import helpers.
+// image, attachment, and import helpers.
 type contextReader struct {
 	ctx context.Context
 	r   io.Reader

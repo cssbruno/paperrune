@@ -207,10 +207,6 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 	if provenanceModel.StatusCode != http.StatusOK || !bytes.Contains(provenanceModel.Body, []byte("forFragments")) || !bytes.Contains(provenanceModel.Body, []byte("tokenLabel")) {
 		t.Fatalf("provenance model = %d / %s", provenanceModel.StatusCode, provenanceModel.Body)
 	}
-	typedModel := studioRequest(t, handler, http.MethodGet, "/typed-experiment-model.js", nil, "")
-	if typedModel.StatusCode != http.StatusOK || !bytes.Contains(typedModel.Body, []byte("function normalize")) || !bytes.Contains(typedModel.Body, []byte("breakLabel")) {
-		t.Fatalf("typed experiment model = %d / %s", typedModel.StatusCode, typedModel.Body)
-	}
 	syntaxModel := studioRequest(t, handler, http.MethodGet, "/syntax-model.js", nil, "")
 	if syntaxModel.StatusCode != http.StatusOK || !bytes.Contains(syntaxModel.Body, []byte("function highlight")) ||
 		!bytes.Contains(syntaxModel.Body, []byte("kind = 'keyword'")) || !bytes.Contains(syntaxModel.Body, []byte("escapeHTML")) {
@@ -357,14 +353,6 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		!strings.Contains(inspection.Body, `"border_box"`) || !strings.Contains(inspection.Body, `"content_box"`) ||
 		!strings.Contains(inspection.Body, `"reading_order"`) || !strings.Contains(inspection.Body, `"semantics"`) || !strings.Contains(inspection.Body, `"provenance":`) || !strings.Contains(inspection.Body, `"computed_styles"`) {
 		t.Fatalf("inspection = %d %s", inspection.StatusCode, inspection.Body)
-	}
-	typed := studioRequest(t, handler, http.MethodGet, "/api/typed-experiments?revision="+workspace.Revision, nil, "")
-	if typed.StatusCode != http.StatusOK || !bytes.Contains(typed.Body, []byte(`"projection"`)) || !bytes.Contains(typed.Body, []byte(`"fixtures"`)) || !bytes.Contains(typed.Body, []byte(`"break_ledger"`)) {
-		t.Fatalf("typed experiments = %d %s", typed.StatusCode, typed.Body)
-	}
-	staleTyped := studioRequest(t, handler, http.MethodGet, "/api/typed-experiments?revision=wrong", nil, "")
-	if staleTyped.StatusCode != http.StatusConflict {
-		t.Fatalf("stale typed experiment status = %d", staleTyped.StatusCode)
 	}
 	delivery := studioRequest(t, handler, http.MethodGet, "/api/delivery?revision="+workspace.Revision, nil, "")
 	if delivery.StatusCode != http.StatusOK || !bytes.Contains(delivery.Body, []byte(`"preflight":{"status":"ready"`)) || !bytes.Contains(delivery.Body, []byte(`"export":{"status":"ready"`)) || !bytes.Contains(delivery.Body, []byte(`"publish":{"status":"separate_authorized_capability"`)) {

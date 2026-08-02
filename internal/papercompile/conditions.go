@@ -408,14 +408,6 @@ func (e *scenarioConditionEvaluator) bindingContext(path string) ([]FieldDescrip
 	return fields, paperscenario.Value{Kind: paperscenario.Object, Object: fixtureFields}, ""
 }
 
-func conditionBindings(paths []string, root paperscenario.Value) ([]paperexpr.Binding, error) {
-	return conditionBindingsOptional(paths, nil, root)
-}
-
-func scopedConditionBindings(paths []string, root paperscenario.Value, scope string) ([]paperexpr.Binding, error) {
-	return scopedConditionBindingsOptional(paths, nil, root, scope)
-}
-
 func conditionBindingsOptional(paths, optional []string, root paperscenario.Value) ([]paperexpr.Binding, error) {
 	return scopedConditionBindingsOptional(paths, optional, root, "")
 }

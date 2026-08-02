@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// LayoutDocument is the shared model that document assembly helpers and HTML
-// parsers can produce before PDF layout and drawing.
+// LayoutDocument is the renderer-independent model produced by Paper before
+// layout and drawing.
 type LayoutDocument struct {
 	Title        string            // Human-readable document title.
 	Language     string            // Optional BCP 47 language tag.

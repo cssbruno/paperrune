@@ -11,30 +11,6 @@ import (
 	"testing"
 )
 
-type architectureNilStringer struct{}
-
-func (*architectureNilStringer) String() string {
-	panic("typed nil Stringer must not be invoked")
-}
-
-func TestNilSafeHTMLAndParserBoundaries(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	html := pdf.htmlNew()
-	html.WriteCompiled(6, nil)
-	if err := pdf.Error(); err == nil || err.Error() != "compiled HTML is nil" {
-		t.Fatalf("WriteCompiled(nil) error = %v, want compiled HTML is nil", err)
-	}
-
-	length, ok := parseHTMLBoxLength("2mm", nil, 0)
-	if !ok || math.Abs(length-2*72/25.4) > 1e-9 {
-		t.Fatalf("parseHTMLBoxLength(2mm, nil) = (%v, %v)", length, ok)
-	}
-	rendered, err := renderCompiledHTMLTemplateValue((*architectureNilStringer)(nil))
-	if err != nil || rendered != "" {
-		t.Fatalf("typed nil Stringer rendered as %q with error %v, want empty string", rendered, err)
-	}
-}
-
 func TestInternalSliceBoundariesRejectInvalidInputWithoutPanicking(t *testing.T) {
 	font := &utf8FontFile{fileReader: &fileReader{}}
 	if got := font.patchBytes(nil, 0, nil); got != nil || font.fileReader.err != nil {
@@ -45,13 +21,6 @@ func TestInternalSliceBoundariesRejectInvalidInputWithoutPanicking(t *testing.T)
 		t.Fatal("non-empty nil font patch did not report an error")
 	}
 
-	normalizer := &svgPathNormalizer{}
-	if err := normalizer.append('M', nil); err == nil {
-		t.Fatal("SVG move command with no arguments was accepted")
-	}
-	if err := normalizer.append('Z', nil); err != nil {
-		t.Fatalf("valid SVG close-path command failed: %v", err)
-	}
 }
 
 func TestSymbolUsesItsOwnCoreFontAndMetrics(t *testing.T) {

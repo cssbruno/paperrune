@@ -198,38 +198,37 @@ type mutationAuthorityRecord struct {
 // rendering are performed without holding its state mutex; candidate commits
 // use a compare-and-swap check when they publish a new immutable revision.
 type Workspace struct {
-	mu                       sync.RWMutex
-	scope                    uint64
-	limits                   Limits
-	nextRevision             uint64
-	nextCandidate            uint64
-	nextPlan                 uint64
-	nextOpen                 uint64
-	nextMutationAuthority    uint64
-	revisions                map[uint64]*revisionRecord
-	candidates               map[uint64]*candidateRecord
-	plans                    map[uint64]*planRecord
-	opens                    map[uint64]*openRecord
-	mutationAuthorities      map[uint64]*mutationAuthorityRecord
-	planTTL                  time.Duration
-	handleTTL                time.Duration
-	now                      func() time.Time
-	disclosureDomain         DisclosureDomain
-	disclosureTag            uint64
-	revocations              map[scopedHandle]revocationRecord
-	revocationOrder          []scopedHandle
-	projectID                string
-	policyRevision           string
-	partition                cachePartition
-	disclosureAuditSink      func(DisclosureAuditEntry)
-	disclosureAudit          []DisclosureAuditEntry
-	nextDisclosureAudit      uint64
-	requireMutationAuthority bool
-	protectedNodeIDs         map[string]struct{}
-	authorizationAudit       []AuthorizationAuditEntry
-	nextAuthorizationAudit   uint64
-	assetCatalog             papercompile.AssetCatalog
-	importResolver           papercompile.ImportResolver
+	mu                     sync.RWMutex
+	scope                  uint64
+	limits                 Limits
+	nextRevision           uint64
+	nextCandidate          uint64
+	nextPlan               uint64
+	nextOpen               uint64
+	nextMutationAuthority  uint64
+	revisions              map[uint64]*revisionRecord
+	candidates             map[uint64]*candidateRecord
+	plans                  map[uint64]*planRecord
+	opens                  map[uint64]*openRecord
+	mutationAuthorities    map[uint64]*mutationAuthorityRecord
+	planTTL                time.Duration
+	handleTTL              time.Duration
+	now                    func() time.Time
+	disclosureDomain       DisclosureDomain
+	disclosureTag          uint64
+	revocations            map[scopedHandle]revocationRecord
+	revocationOrder        []scopedHandle
+	projectID              string
+	policyRevision         string
+	partition              cachePartition
+	disclosureAuditSink    func(DisclosureAuditEntry)
+	disclosureAudit        []DisclosureAuditEntry
+	nextDisclosureAudit    uint64
+	protectedNodeIDs       map[string]struct{}
+	authorizationAudit     []AuthorizationAuditEntry
+	nextAuthorizationAudit uint64
+	assetCatalog           papercompile.AssetCatalog
+	importResolver         papercompile.ImportResolver
 }
 
 func NewWorkspace(limits Limits) (*Workspace, error) {
@@ -250,9 +249,8 @@ type WorkspaceOptions struct {
 	// DisclosureAuditSink receives detached hash-only denial records. The
 	// callback is best-effort and panic-isolated; raw disclosure labels,
 	// capabilities, source, and payloads are never supplied to it.
-	DisclosureAuditSink      func(DisclosureAuditEntry)
-	RequireMutationAuthority bool
-	ProtectedNodeIDs         []string
+	DisclosureAuditSink func(DisclosureAuditEntry)
+	ProtectedNodeIDs    []string
 	// AssetResources is an explicit immutable catalog used only for semantic
 	// compilation; the workspace never searches paths or the network.
 	AssetResources []papercompile.AssetResource
@@ -307,17 +305,16 @@ func NewWorkspaceWithOptions(options WorkspaceOptions) (*Workspace, error) {
 		scope: scope, limits: normalized, planTTL: planTTL, handleTTL: handleTTL, now: now,
 		disclosureDomain: disclosureDomain, disclosureTag: disclosureTag,
 		projectID: projectID, policyRevision: policyRevision, partition: partition,
-		disclosureAuditSink:      options.DisclosureAuditSink,
-		revisions:                make(map[uint64]*revisionRecord),
-		candidates:               make(map[uint64]*candidateRecord),
-		plans:                    make(map[uint64]*planRecord),
-		opens:                    make(map[uint64]*openRecord),
-		mutationAuthorities:      make(map[uint64]*mutationAuthorityRecord),
-		revocations:              make(map[scopedHandle]revocationRecord),
-		requireMutationAuthority: options.RequireMutationAuthority || len(protectedNodeIDs) != 0,
-		protectedNodeIDs:         protectedNodeIDs,
-		assetCatalog:             assetCatalog,
-		importResolver:           options.ImportResolver,
+		disclosureAuditSink: options.DisclosureAuditSink,
+		revisions:           make(map[uint64]*revisionRecord),
+		candidates:          make(map[uint64]*candidateRecord),
+		plans:               make(map[uint64]*planRecord),
+		opens:               make(map[uint64]*openRecord),
+		mutationAuthorities: make(map[uint64]*mutationAuthorityRecord),
+		revocations:         make(map[scopedHandle]revocationRecord),
+		protectedNodeIDs:    protectedNodeIDs,
+		assetCatalog:        assetCatalog,
+		importResolver:      options.ImportResolver,
 	}, nil
 }
 

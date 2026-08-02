@@ -40,30 +40,9 @@ func FitImage(naturalWidth, naturalHeight, boxWidth, boxHeight float64, mode Ima
 }
 
 // ExceedsAvailableHeight reports whether content needs more vertical space
-// than remains on the current page. Equality fits, matching PDF pagination
-// semantics across typed-layout and HTML renderers.
+// than remains on the current page. Equality fits the page.
 func ExceedsAvailableHeight(contentHeight, availableHeight float64) bool {
 	return contentHeight > availableHeight
-}
-
-// TrackOffsets returns cumulative offsets for row or column sizes. The result
-// always has len(sizes)+1 entries and starts at zero.
-func TrackOffsets(sizes []float64) []float64 {
-	offsets := make([]float64, len(sizes)+1)
-	for index, size := range sizes {
-		offsets[index+1] = offsets[index] + size
-	}
-	return offsets
-}
-
-// SpanSize returns the extent of span tracks starting at start. Invalid starts
-// and non-positive spans return zero; spans extending past the end are clipped.
-func SpanSize(offsets []float64, start, span int) float64 {
-	if span <= 0 || start < 0 || start >= len(offsets)-1 {
-		return 0
-	}
-	end := min(start+span, len(offsets)-1)
-	return offsets[end] - offsets[start]
 }
 
 // SumSpan returns the sum of span values starting at start. It is useful when

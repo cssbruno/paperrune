@@ -76,30 +76,6 @@ func BenchmarkPaperEngineEndToEndTyped(b *testing.B) {
 	})
 }
 
-// BenchmarkPaperEngineEndToEndCompiledHTML includes whole-fragment HTML
-// adaptation, unified planning, painting, and deterministic serialization. HTML
-// tokenization is excluded because the fixture is a reusable CompiledHTML.
-func BenchmarkPaperEngineEndToEndCompiledHTML(b *testing.B) {
-	compiled, err := compileHTML(paperEngineBenchmarkHTMLFixture())
-	if err != nil {
-		b.Fatal(err)
-	}
-	benchmarkPaperEngineEndToEnd(b, func() ([]byte, int, error) {
-		planner := paperEngineBenchmarkDocument()
-		plan, err := planner.planCompiledHTML(12, compiled)
-		if err != nil {
-			return nil, 0, err
-		}
-		target := paperEngineBenchmarkDocument()
-		pages, err := target.WriteLayoutDocumentPlan(plan)
-		if err != nil {
-			return nil, 0, err
-		}
-		output, err := paperEngineBenchmarkOutput(target)
-		return output, pages, err
-	})
-}
-
 // BenchmarkPaperEngineEndToEndPaper includes parsing, semantic compilation,
 // unified planning, painting, and deterministic serialization.
 func BenchmarkPaperEngineEndToEndPaper(b *testing.B) {
@@ -333,15 +309,6 @@ func paperEngineBenchmarkParagraph(index int) layout.ParagraphBlock {
 	}
 }
 
-func paperEngineBenchmarkHTMLFixture() string {
-	var source strings.Builder
-	source.WriteString("<h1>Quarterly operating report</h1>")
-	for index := 0; index < paperEngineBenchmarkParagraphs; index++ {
-		fmt.Fprintf(&source, "<p>Section %02d has deterministic operational text that wraps across the shared content width.</p>", index)
-	}
-	return source.String()
-}
-
 func paperEngineBenchmarkPaperFixture() string {
 	var source strings.Builder
 	source.WriteString("document @benchmark:\n")
@@ -382,25 +349,6 @@ func TestPaperEngineBenchmarkFixturesAreDeterministic(t *testing.T) {
 		t.Fatalf("typed plans differ: (%s, %d) != (%s, %d)", typedPlan.Hash(), typedPlan.PageCount(), secondTypedPlan.Hash(), secondTypedPlan.PageCount())
 	}
 
-	compiled, err := compileHTML(paperEngineBenchmarkHTMLFixture())
-	if err != nil {
-		t.Fatal(err)
-	}
-	htmlPlan, err := paperEngineBenchmarkDocument().planCompiledHTML(12, compiled)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if htmlPlan.PageCount() == 0 || htmlPlan.Hash() == "" {
-		t.Fatalf("HTML plan is empty: hash %q pages %d", htmlPlan.Hash(), htmlPlan.PageCount())
-	}
-	secondHTMLPlan, err := paperEngineBenchmarkDocument().planCompiledHTML(12, compiled)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if htmlPlan.Hash() != secondHTMLPlan.Hash() || htmlPlan.PageCount() != secondHTMLPlan.PageCount() {
-		t.Fatalf("HTML plans differ: (%s, %d) != (%s, %d)", htmlPlan.Hash(), htmlPlan.PageCount(), secondHTMLPlan.Hash(), secondHTMLPlan.PageCount())
-	}
-
 	paperPlan, result, err := PlanPaper("benchmark.paper", paperEngineBenchmarkPaperFixture())
 	if err != nil {
 		t.Fatalf("PlanPaper() = %v (%v)", err, result.Diagnostics)
@@ -417,7 +365,6 @@ func TestPaperEngineBenchmarkFixturesAreDeterministic(t *testing.T) {
 	}
 
 	assertPaperEngineLayoutPlanOutputsEqual(t, "typed", typedPlan, secondTypedPlan)
-	assertPaperEngineLayoutPlanOutputsEqual(t, "HTML", htmlPlan, secondHTMLPlan)
 	firstPaper := paperEngineBenchmarkRenderPaperPlan(t, paperPlan)
 	secondPaper := paperEngineBenchmarkRenderPaperPlan(t, secondPaperPlan)
 	if !bytes.Equal(firstPaper, secondPaper) {

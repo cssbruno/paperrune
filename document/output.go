@@ -242,7 +242,7 @@ func (f *pdfDocument) coordinateFileOutput(ctx context.Context, fileStr string, 
 func writeFileAtomically(fileStr string, syncOutput bool, write func(io.Writer) error) error {
 	dir := filepath.Dir(fileStr)
 	base := filepath.Base(fileStr)
-	mode := outputFileMode(fileStr)
+	mode, preserveMode := outputFileMode(fileStr)
 	pdfFile, err := os.CreateTemp(dir, "."+base+".tmp-*")
 	if err != nil {
 		return err
@@ -259,9 +259,11 @@ func writeFileAtomically(fileStr string, syncOutput bool, write func(io.Writer) 
 		_ = pdfFile.Close()
 		return err
 	}
-	if err := pdfFile.Chmod(mode); err != nil {
-		_ = pdfFile.Close()
-		return err
+	if preserveMode {
+		if err := pdfFile.Chmod(mode); err != nil {
+			_ = pdfFile.Close()
+			return err
+		}
 	}
 	if syncOutput {
 		if err := pdfFile.Sync(); err != nil {
@@ -284,11 +286,13 @@ func writeFileAtomically(fileStr string, syncOutput bool, write func(io.Writer) 
 	return nil
 }
 
-func outputFileMode(fileStr string) os.FileMode {
+func outputFileMode(fileStr string) (os.FileMode, bool) {
 	if info, err := os.Stat(fileStr); err == nil {
-		return info.Mode().Perm()
+		return info.Mode().Perm(), true
 	}
-	return 0o644
+	// os.CreateTemp creates a private 0600 file. Keep that safe default for a
+	// new PDF instead of overriding the process umask with a forced 0644 mode.
+	return 0, false
 }
 
 // Output sends the PDF document to the writer specified by w. No output will

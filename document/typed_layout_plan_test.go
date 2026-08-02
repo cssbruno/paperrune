@@ -110,35 +110,6 @@ func TestLayoutDocumentPlanBindsDeterministicInputManifest(t *testing.T) {
 	}
 }
 
-func TestUnifiedHTMLSVGPlansBindDeterministicInputManifest(t *testing.T) {
-	compiled, err := compileHTML(`<p>before</p><svg width="18" height="12" aria-label="Vector mark"><rect width="18" height="12" fill="#408020" stroke="none"/></svg><p>after</p>`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 220, Ht: 180}), WithNoCompression(), WithDeterministicOutput())
-	plan, err := planner.planCompiledHTML(12, compiled)
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifest, ok := plan.plan.DeterministicInputs()
-	if !ok || manifest.PlanID == "" || manifest.PageProfile.ID == "" || manifest.ResourceCatalog.ID == "" || manifest.Timezone != "UTC" {
-		t.Fatalf("mixed HTML/SVG deterministic manifest = %#v, bound=%t", manifest, ok)
-	}
-
-	sole, err := compileHTML(`<svg width="18" height="12" aria-label="Sole vector"><rect width="18" height="12" fill="#408020" stroke="none"/></svg>`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	solePlan, err := planner.planCompiledHTML(12, sole)
-	if err != nil {
-		t.Fatal(err)
-	}
-	soleManifest, ok := solePlan.plan.DeterministicInputs()
-	if !ok || soleManifest.PlanID == "" || soleManifest.PageProfile.ID == "" {
-		t.Fatalf("sole HTML/SVG deterministic manifest = %#v, bound=%t", soleManifest, ok)
-	}
-}
-
 func TestTypedPlanPDFReusesSemanticStructureAcrossGlyphRuns(t *testing.T) {
 	source := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 150, Ht: 220}), WithNoCompression())
 	source.SetMargins(12, 12, 12)

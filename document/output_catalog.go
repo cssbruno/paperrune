@@ -109,7 +109,6 @@ func (f *pdfDocument) putresources() {
 		return
 	}
 	f.putimages()
-	f.putTemplates()
 	f.beginPDFObject(2)
 	f.beginPDFDict()
 	f.putresourcedict()
@@ -477,7 +476,6 @@ func (f *pdfDocument) estimateFinalBufferSize() int {
 	size += len(f.pages) * 1024
 	size += len(resources.images) * 2048
 	size += len(resources.fonts) * 1024
-	size += len(resources.templates) * 1024
 	size += len(f.attachments) * 1024
 	size += len(f.xmp)
 	if size < 0 {

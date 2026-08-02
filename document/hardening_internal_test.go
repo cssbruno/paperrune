@@ -89,21 +89,6 @@ func TestAddPageFormatRejectsInvalidOrientationAndSize(t *testing.T) {
 	}
 }
 
-func TestGridRestoresAutoPageBreak(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	pdf.SetAutoPageBreak(true, 17)
-
-	grid := NewGrid(10, 10, 40, 40)
-	grid.Grid(pdf)
-
-	auto, margin := pdf.GetAutoPageBreak()
-	if !auto || margin != 17 {
-		t.Fatalf("auto page break = %v, %.2f; want true, 17", auto, margin)
-	}
-}
-
 func TestClipPolygonRejectsInvalidPointCountWithoutEnteringClipState(t *testing.T) {
 	pdf := mustNewPDFDocument()
 	pdf.AddPage()
@@ -169,31 +154,6 @@ func TestTextMeasurementToleratesShortFontWidthTables(t *testing.T) {
 	pdf.MultiCell(20, 6, text, "", "", false)
 	if err := pdf.Error(); err != nil {
 		t.Fatalf("text APIs with short width table returned error: %v", err)
-	}
-}
-
-func TestHTMLWriteWithoutExplicitFontUsesHelvetica(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.SetCompression(true)
-	pdf.SetMargins(36, 36, 36)
-	pdf.SetAutoPageBreak(true, 36)
-	pdf.AddPage()
-
-	html := pdf.htmlNew()
-	html.Write(12, `<h1>Comparable HTML</h1><p>This fragment uses headings, paragraphs, lists, and a simple table.</p><ul><li>Item 01</li></ul><table border="1"><tr><th>Code</th><th>Status</th></tr><tr><td>HTML-01</td><td>Ready</td></tr></table>`)
-
-	if err := pdf.Error(); err != nil {
-		t.Fatalf("HTML Write() error = %v", err)
-	}
-	if pdf.fontFamily != "helvetica" {
-		t.Fatalf("HTML default font = %q, want helvetica", pdf.fontFamily)
-	}
-	var output bytes.Buffer
-	if err := pdf.Output(&output); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	if !bytes.HasPrefix(output.Bytes(), []byte("%PDF-")) {
-		t.Fatalf("Output() did not produce a PDF: %q", output.Bytes()[:min(output.Len(), 8)])
 	}
 }
 
@@ -431,19 +391,10 @@ func TestAttachmentCompressionCanSpoolToTempFile(t *testing.T) {
 	}
 }
 
-func TestParserContextAPIsCancel(t *testing.T) {
+func TestImageParserContextAPICancels(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if _, err := htmlTokenizeContext(ctx, "<p>hello</p>"); !errors.Is(err, context.Canceled) {
-		t.Fatalf("HTMLTokenizeContext() error = %v, want context.Canceled", err)
-	}
-	if _, err := compileHTMLContext(ctx, "<p>hello</p>"); !errors.Is(err, context.Canceled) {
-		t.Fatalf("CompileHTMLContext() error = %v, want context.Canceled", err)
-	}
-	if _, err := SVGParseContext(ctx, []byte(`<svg width="1" height="1"/>`)); !errors.Is(err, context.Canceled) {
-		t.Fatalf("SVGParseContext() error = %v, want context.Canceled", err)
-	}
 	pdf := mustNewPDFDocument()
 	if _, err := pdf.RegisterImageOptionsReaderContext(ctx, "img", ImageOptions{ImageType: "png"}, strings.NewReader("")); !errors.Is(err, context.Canceled) {
 		t.Fatalf("RegisterImageOptionsReaderContext() error = %v, want context.Canceled", err)
@@ -669,52 +620,6 @@ func deterministicSpotColorOutput(t *testing.T, reverse bool) []byte {
 	return out.Bytes()
 }
 
-func TestDeterministicOutputSortsTemplateImageResourceNames(t *testing.T) {
-	first := deterministicTemplateImageOutput(t, false)
-	second := deterministicTemplateImageOutput(t, true)
-	if !bytes.Equal(first, second) {
-		t.Fatal("deterministic template image output changed with map insertion order")
-	}
-}
-
-func deterministicTemplateImageOutput(t *testing.T, reverse bool) []byte {
-	t.Helper()
-	pdf, err := newPDFDocument(WithDeterministicOutput())
-	if err != nil {
-		t.Fatalf("NewDocument() error = %v", err)
-	}
-	pdf.SetCompression(false)
-	alpha, err := pdf.RegisterImageOptionsReaderError("alpha", ImageOptions{ImageType: "png"}, bytes.NewReader(decodeTinyPNG(t)))
-	if err != nil {
-		t.Fatalf("RegisterImageOptionsReaderError(alpha) error = %v", err)
-	}
-	zeta, err := pdf.RegisterImageOptionsReaderError("zeta", ImageOptions{ImageType: "png"}, bytes.NewReader(encodeAlphaPNG(t)))
-	if err != nil {
-		t.Fatalf("RegisterImageOptionsReaderError(zeta) error = %v", err)
-	}
-	images := make(map[string]*ImageInfo)
-	if reverse {
-		images["zeta"] = zeta
-		images["alpha"] = alpha
-	} else {
-		images["alpha"] = alpha
-		images["zeta"] = zeta
-	}
-	pdf.AddPage()
-	pdf.UseTemplateView(renderOnlyTemplateView{
-		id:     "images",
-		size:   Size{Wd: 10, Ht: 10},
-		data:   []byte("q\nQ"),
-		images: images,
-	})
-
-	var out bytes.Buffer
-	if err := pdf.Output(&out); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	return out.Bytes()
-}
-
 func assertOutputOrder(t *testing.T, output []byte, ordered ...string) {
 	t.Helper()
 	previous := -1
@@ -737,11 +642,6 @@ func TestDeterministicOutputSortsMapBackedResourceKeys(t *testing.T) {
 	pdf.AddSpotColor("Alpha", 5, 6, 7, 8)
 	assertStringSlice(t, pdf.spotColorOutputNames(), []string{"Alpha", "Zeta"})
 
-	assertStringSlice(t, templateImageKeys(map[string]*ImageInfo{
-		"zeta":  nil,
-		"alpha": nil,
-	}, true), []string{"alpha", "zeta"})
-
 	pdf.aliasMap = map[string]string{
 		"zeta":  "Z",
 		"alpha": "A",
@@ -759,18 +659,6 @@ func assertStringSlice(t *testing.T, got, want []string) {
 	for i := range got {
 		if got[i] != want[i] {
 			t.Fatalf("slice[%d] = %q, want %q in %v", i, got[i], want[i], got)
-		}
-	}
-}
-
-func assertIntSlice(t *testing.T, got, want []int) {
-	t.Helper()
-	if len(got) != len(want) {
-		t.Fatalf("len(%v) = %d, want %d", got, len(got), len(want))
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			t.Fatalf("slice[%d] = %d, want %d in %v", i, got[i], want[i], got)
 		}
 	}
 }
@@ -916,12 +804,6 @@ func TestPDFResourceNameHelpersWriteExpectedReferences(t *testing.T) {
 	if got := imagePDFResourceRef(&ImageInfo{i: "img", n: 4}); got.name != "/Iimg" || got.objectNumber != 4 {
 		t.Fatalf("imagePDFResourceRef() = %#v, want /Iimg 4", got)
 	}
-	if got := templatePDFResourceName("tpl").String(); got != "/TPLtpl" {
-		t.Fatalf("templatePDFResourceName() = %q, want /TPLtpl", got)
-	}
-	if got := templatePDFResourceRef("tpl", 5); got.name != "/TPLtpl" || got.objectNumber != 5 {
-		t.Fatalf("templatePDFResourceRef() = %#v, want /TPLtpl 5", got)
-	}
 	if got := graphicsStatePDFResourceName(2).String(); got != "/GS2" {
 		t.Fatalf("graphicsStatePDFResourceName() = %q, want /GS2", got)
 	}
@@ -945,9 +827,6 @@ func TestPDFResourceNameHelpersWriteExpectedReferences(t *testing.T) {
 	}
 	if got := optionalContentPDFResourceRef(5, 13); got.name != "/OC5" || got.objectNumber != 13 {
 		t.Fatalf("optionalContentPDFResourceRef() = %#v, want /OC5 13", got)
-	}
-	if got := string(appendPDFResourceNameRef(nil, templatePDFResourceName("tpl"), 7)); got != "/TPLtpl 7 0 R" {
-		t.Fatalf("appendPDFResourceNameRef() = %q, want /TPLtpl 7 0 R", got)
 	}
 	if got := string(appendPDFResourceRefValue(nil, pdfResourceRef{name: pdfResourceName("/TplA"), objectNumber: 9})); got != "/TplA 9 0 R" {
 		t.Fatalf("appendPDFResourceRefValue() = %q, want /TplA 9 0 R", got)
@@ -1144,24 +1023,6 @@ func TestSetDpiRejectsInvalidValues(t *testing.T) {
 	}
 }
 
-func TestHTMLFragmentLinksAreRejected(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.htmlNew()
-
-	html.Write(5, `<a href="#section">section</a>`)
-	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "HTML unified plan unsupported") {
-		t.Fatalf("HTML fragment link error = %v", pdf.Error())
-	}
-}
-
-func TestHTMLImageTypeFromMimeSupportsWebP(t *testing.T) {
-	if got := htmlImageTypeFromMime("image/webp"); got != "webp" {
-		t.Fatalf("htmlImageTypeFromMime(image/webp) = %q, want webp", got)
-	}
-}
-
 func TestRemoveReturnsUnchangedWhenKeyMissing(t *testing.T) {
 	in := []int{1, 2, 3}
 	got := remove(in, 4)
@@ -1178,125 +1039,6 @@ func TestSetPageBoxRejectsInvalidExtent(t *testing.T) {
 	}
 }
 
-func TestTemplateGeometryValidation(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	if tpl := pdf.CreateTemplateCustom(Point{}, Size{Wd: -1, Ht: 10}, nil); tpl != nil {
-		t.Fatal("CreateTemplateCustom returned template for invalid size")
-	}
-	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "invalid template geometry") {
-		t.Fatalf("CreateTemplateCustom error = %v", pdf.Error())
-	}
-
-	if tpl := CreateTpl(Point{}, Size{Wd: 10, Ht: math.NaN()}, "P", "mm", "", nil); tpl != nil {
-		t.Fatal("CreateTpl returned template for invalid size")
-	}
-}
-
-func TestUseTemplateScaledRejectsInvalidPlacement(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	tpl := CreateTpl(Point{}, Size{Wd: 10, Ht: 10}, "P", "mm", "", nil)
-	pdf.AddPage()
-
-	pdf.UseTemplateScaled(tpl, Point{}, Size{Wd: 0, Ht: 10})
-	if pdf.Error() == nil || !strings.Contains(pdf.Error().Error(), "invalid template geometry") {
-		t.Fatalf("UseTemplateScaled error = %v", pdf.Error())
-	}
-}
-
-func TestTemplateViewChildDependenciesDoNotRequireSerializableTemplate(t *testing.T) {
-	child := renderOnlyTemplateView{
-		id:   "child",
-		size: Size{Wd: 8, Ht: 8},
-		data: []byte("0 0 m"),
-	}
-	pdf := mustNewPDFDocument()
-	parent := pdf.CreateTemplateCustom(Point{}, Size{Wd: 20, Ht: 20}, func(tpl *Tpl) {
-		tpl.UseTemplateView(child)
-	})
-	if parent == nil {
-		t.Fatalf("CreateTemplateCustom() returned nil: %v", pdf.Error())
-	}
-	parentDoc, ok := parent.(*DocumentTpl)
-	if !ok {
-		t.Fatalf("template type = %T, want *DocumentTpl", parent)
-	}
-	if got := parentDoc.TemplateViews(); len(got) != 1 || got[0].ID() != "child" {
-		t.Fatalf("TemplateViews() = %#v, want child dependency", got)
-	}
-	if got := parentDoc.Templates(); len(got) != 0 {
-		t.Fatalf("Templates() = %#v, want no serializable children", got)
-	}
-	if _, err := parent.Serialize(); err == nil || !strings.Contains(err.Error(), "non-serializable child") {
-		t.Fatalf("Serialize() error = %v, want non-serializable child error", err)
-	}
-
-	pdf.AddPage()
-	pdf.UseTemplate(parent)
-	var out bytes.Buffer
-	if err := pdf.Output(&out); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	if count := bytes.Count(out.Bytes(), []byte("/TPLchild")); count < 2 {
-		t.Fatalf("output contains /TPLchild %d times, want child object and resource dependency", count)
-	}
-}
-
-func TestNestedTemplateViewDependenciesDoNotRequireSerializableTemplate(t *testing.T) {
-	grandchild := renderOnlyTemplateView{
-		id:   "grandchild",
-		size: Size{Wd: 4, Ht: 4},
-		data: []byte("0 0 m"),
-	}
-	child := renderOnlyTemplateView{
-		id:       "child",
-		size:     Size{Wd: 8, Ht: 8},
-		data:     []byte("0 0 m"),
-		children: []TemplateView{grandchild},
-	}
-
-	templates := collectTemplates(child)
-	if len(templates) != 2 {
-		t.Fatalf("collectTemplates() length = %d, want child and grandchild", len(templates))
-	}
-	if templates[0].ID() != "child" || templates[1].ID() != "grandchild" {
-		t.Fatalf("collectTemplates() = [%s, %s], want [child, grandchild]", templates[0].ID(), templates[1].ID())
-	}
-
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.UseTemplateView(child)
-	var out bytes.Buffer
-	if err := pdf.Output(&out); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	if !bytes.Contains(out.Bytes(), []byte("/TPLchild")) {
-		t.Fatal("output is missing child template resource")
-	}
-	if !bytes.Contains(out.Bytes(), []byte("/TPLgrandchild")) {
-		t.Fatal("output is missing nested render-only template resource")
-	}
-}
-
-type renderOnlyTemplateView struct {
-	id       string
-	size     Size
-	data     []byte
-	images   map[string]*ImageInfo
-	children []TemplateView
-}
-
-func (t renderOnlyTemplateView) ID() string { return t.id }
-
-func (t renderOnlyTemplateView) Size() (Point, Size) { return Point{}, t.size }
-
-func (t renderOnlyTemplateView) Bytes() []byte { return append([]byte(nil), t.data...) }
-
-func (t renderOnlyTemplateView) Images() map[string]*ImageInfo { return t.images }
-
-func (t renderOnlyTemplateView) TemplateViews() []TemplateView {
-	return append([]TemplateView(nil), t.children...)
-}
-
 func TestSetMinimumPDFVersionUsesNumericOrdering(t *testing.T) {
 	pdf := mustNewPDFDocument()
 	pdf.pdfVersion = "1.10"
@@ -1307,89 +1049,5 @@ func TestSetMinimumPDFVersionUsesNumericOrdering(t *testing.T) {
 	pdf.setMinimumPDFVersion("2.0")
 	if got := pdf.pdfVersion; got != "2.0" {
 		t.Fatalf("pdf version = %q, want 2.0", got)
-	}
-}
-
-func TestTemplateIdentityIncludesGeometryAndImages(t *testing.T) {
-	base := &DocumentTpl{
-		corner: Point{},
-		size:   Size{Wd: 10, Ht: 10},
-		bytes:  [][]byte{nil, []byte("q Q")},
-		page:   1,
-	}
-	differentGeometry := &DocumentTpl{
-		corner: Point{},
-		size:   Size{Wd: 20, Ht: 10},
-		bytes:  [][]byte{nil, []byte("q Q")},
-		page:   1,
-	}
-	differentImage := &DocumentTpl{
-		corner: Point{},
-		size:   Size{Wd: 10, Ht: 10},
-		bytes:  [][]byte{nil, []byte("q Q")},
-		images: map[string]*ImageInfo{"img": {data: []byte("image"), w: 1, h: 1}},
-		page:   1,
-	}
-
-	if base.ID() == differentGeometry.ID() {
-		t.Fatal("template IDs should differ when geometry differs")
-	}
-	if base.ID() == differentImage.ID() {
-		t.Fatal("template IDs should differ when images differ")
-	}
-	if len(base.ID()) != 64 {
-		t.Fatalf("template ID length = %d, want SHA-256 hex length", len(base.ID()))
-	}
-}
-
-func TestTemplateAccessorsReturnCopies(t *testing.T) {
-	child := &DocumentTpl{size: Size{Wd: 1, Ht: 1}, bytes: [][]byte{nil, []byte("child")}, page: 1}
-	tpl := &DocumentTpl{
-		corner:    Point{},
-		size:      Size{Wd: 10, Ht: 10},
-		bytes:     [][]byte{nil, []byte("original")},
-		images:    map[string]*ImageInfo{"img": {data: []byte("image"), w: 1, h: 1}},
-		templates: []Template{child},
-		page:      1,
-	}
-
-	pageBytes := tpl.Bytes()
-	pageBytes[0] = 'X'
-	if got := string(tpl.bytes[1]); got != "original" {
-		t.Fatalf("template page bytes = %q, want original", got)
-	}
-
-	images := tpl.Images()
-	images["img"].data[0] = 'X'
-	images["new"] = &ImageInfo{}
-	if got := string(tpl.images["img"].data); got != "image" {
-		t.Fatalf("template image data = %q, want image", got)
-	}
-	if _, ok := tpl.images["new"]; ok {
-		t.Fatal("mutating Images() map changed template images")
-	}
-
-	templates := tpl.Templates()
-	templates[0] = nil
-	if tpl.templates[0] == nil {
-		t.Fatal("mutating Templates() slice changed template children")
-	}
-}
-
-func TestCompiledHTMLTokensReturnsCopy(t *testing.T) {
-	compiled, err := compileHTML(`<p class="a">Hello</p>`)
-	if err != nil {
-		t.Fatalf("CompileHTML() error = %v", err)
-	}
-	tokens := compiled.Tokens()
-	tokens[0].Str = "div"
-	tokens[0].Attr["class"] = "changed"
-
-	tokens = compiled.Tokens()
-	if got := tokens[0].Str; got != "p" {
-		t.Fatalf("compiled token tag = %q, want p", got)
-	}
-	if got := tokens[0].Attr["class"]; got != "a" {
-		t.Fatalf("compiled token class = %q, want a", got)
 	}
 }

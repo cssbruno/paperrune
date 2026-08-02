@@ -13,7 +13,7 @@ import (
 )
 
 func TestSetXmpMetadataReferencedFromCatalog(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetXmpMetadata([]byte(`<x:xmpmeta xmlns:x="adobe:ns:meta/">custom</x:xmpmeta>`))
 	pdf.AddPage()
@@ -37,7 +37,7 @@ func TestSetXmpMetadataReferencedFromCatalog(t *testing.T) {
 }
 
 func TestComplianceMetadataGeneratesPDFA4AndPDFUA2Identifiers(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetTitle("Compliance metadata", false)
 	pdf.SetSubject("Generated standards metadata", false)
@@ -86,7 +86,7 @@ func TestComplianceMetadataGeneratesPDFA4AndPDFUA2Identifiers(t *testing.T) {
 }
 
 func TestPDFUA2TaggedPDFStructureTreeAndMarkedContent(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
+	pdf := document.MustNewTestPDFDocument()
 	pdf.SetCompression(false)
 	pdf.SetComplianceMetadata(document.ComplianceMetadata{
 		PDFUA2: true,
@@ -142,223 +142,6 @@ func TestPDFUA2TaggedPDFStructureTreeAndMarkedContent(t *testing.T) {
 	}
 }
 
-func TestPDFUA2HTMLUsesSemanticRolesAndImageAlt(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
-	pdf.SetCompression(false)
-	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged HTML"})
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNewForTest()
-	html.AllowLocalImages = true
-	html.Write(6, `<h2>HTML heading</h2><p>HTML paragraph</p><img src="`+example.ImageFile("logo.png")+`" alt="HTML logo" width="12">`)
-
-	var output bytes.Buffer
-	if err := pdf.Output(&output); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	text := output.String()
-	for _, want := range []string{
-		"/H2 <</MCID 0>> BDC",
-		"/P <</MCID 1>> BDC",
-		"/Figure <</MCID 2>> BDC",
-		"/S /H2",
-		"/S /P",
-		"/S /Figure",
-		"/Alt (",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("generated tagged HTML PDF does not contain %q", want)
-		}
-	}
-}
-
-func TestPDFUA2HTMLListsAndTablesUseStructureRoles(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
-	pdf.SetCompression(false)
-	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged HTML table"})
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNewForTest()
-	html.Write(6, `<ul><li>One</li><li>Two</li></ul><table><caption>Totals</caption><tr><th>Name</th></tr><tr><td>Alpha</td></tr></table>`)
-
-	var output bytes.Buffer
-	if err := pdf.Output(&output); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	text := output.String()
-	for _, want := range []string{
-		"/S /L",
-		"/S /LI",
-		"/S /Lbl",
-		"/S /LBody",
-		"/S /Table",
-		"/S /Caption",
-		"/S /TR",
-		"/S /TH",
-		"/S /TD",
-		"/Caption <</MCID ",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("generated tagged HTML list/table PDF does not contain %q", want)
-		}
-	}
-	if got := strings.Count(text, "/S /TH"); got != 1 {
-		t.Fatalf("generated tagged HTML table has %d TH structure elements, want 1", got)
-	}
-	if got := strings.Count(text, "/S /TD"); got != 1 {
-		t.Fatalf("generated tagged HTML table has %d TD structure elements, want 1", got)
-	}
-}
-
-func TestPDFUA2HTMLTableCellsUseStructureAttributes(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
-	pdf.SetCompression(false)
-	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged HTML table attributes"})
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNewForTest()
-	html.Write(6, `<table><tr><th rowspan="2">Group</th><td colspan="2">Alpha</td></tr><tr><td>Beta</td><td>Gamma</td></tr></table>`)
-
-	var output bytes.Buffer
-	if err := pdf.Output(&output); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	text := output.String()
-	for _, want := range []string{
-		"/A << /O /Table /Scope /Column /RowSpan 2 >>",
-		"/A << /O /Table /ColSpan 2 >>",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("generated tagged HTML table PDF does not contain %q", want)
-		}
-	}
-}
-
-func TestPDFUA2HTMLTableCellNestedListsUseListStructure(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
-	pdf.SetCompression(false)
-	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged nested table list"})
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNewForTest()
-	html.Write(6, `<table><tr><td><ul><li>Outer<ul><li>Inner</li></ul></li></ul></td></tr></table>`)
-
-	var output bytes.Buffer
-	if err := pdf.Output(&output); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	text := output.String()
-	for _, want := range []string{
-		"/S /Table",
-		"/S /TD",
-		"/S /L",
-		"/S /LI",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("generated tagged HTML table nested list PDF does not contain %q", want)
-		}
-	}
-	if got := strings.Count(text, "/S /L"); got < 2 {
-		t.Fatalf("generated tagged HTML table nested list has %d list structures, want at least 2", got)
-	}
-	if got := strings.Count(text, "/S /LI"); got < 2 {
-		t.Fatalf("generated tagged HTML table nested list has %d list item structures, want at least 2", got)
-	}
-}
-
-func TestPDFUA2HTMLTableCellNestedTableUsesTableStructure(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
-	pdf.SetCompression(false)
-	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged nested table"})
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNewForTest()
-	html.Write(6, `<table><tr><td>Outer<table><tr><td>Inner</td></tr></table></td><td>Sibling</td></tr></table>`)
-
-	var output bytes.Buffer
-	if err := pdf.Output(&output); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	text := output.String()
-	for _, want := range []string{
-		"/S /Table",
-		"/S /TR",
-		"/S /TD",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("generated tagged HTML nested table PDF does not contain %q", want)
-		}
-	}
-	if got := strings.Count(text, "/S /Table"); got < 2 {
-		t.Fatalf("generated tagged HTML nested table has %d table structures, want at least 2", got)
-	}
-	if got := strings.Count(text, "/S /TR"); got < 2 {
-		t.Fatalf("generated tagged HTML nested table has %d row structures, want at least 2", got)
-	}
-	if got := strings.Count(text, "/S /TD"); got < 3 {
-		t.Fatalf("generated tagged HTML nested table has %d cell structures, want at least 3", got)
-	}
-}
-
-func TestPDFUA2HTMLTableCellMixedBlocksUseParagraphStructure(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument(document.WithSecurityPolicy(document.SecurityPolicy{AllowLocalHTMLImages: true}))
-	pdf.SetCompression(false)
-	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged mixed table cell blocks"})
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNewForTest()
-	html.Write(6, `<table><tr><td><p>First paragraph</p><div>Second block</div></td></tr></table>`)
-
-	var output bytes.Buffer
-	if err := pdf.Output(&output); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	text := output.String()
-	for _, want := range []string{
-		"/S /Table",
-		"/S /TD",
-		"/S /P",
-		"/P <</MCID ",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("generated tagged HTML mixed table cell PDF does not contain %q", want)
-		}
-	}
-	if got := strings.Count(text, "/S /P"); got < 2 {
-		t.Fatalf("generated tagged HTML mixed table cell has %d paragraph structures, want at least 2", got)
-	}
-}
-
-func TestPDFUA2LinkedInlineSVGTextSharesLinkStructureWithAnnotation(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument()
-	pdf.SetCompression(false)
-	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Lang: "en-US", Title: "Tagged SVG link"})
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.HTMLNewForTest()
-	html.Write(6, `<a href="https://example.test/svg"><svg role="presentation" width="48" height="24" viewBox="0 0 48 24"><rect x="1" y="1" width="46" height="22" fill="#00ff00" stroke="#000" stroke-width="1"/><text x="24" y="16" text-anchor="middle" font-size="10" fill="#000000">Inline SVG</text></svg></a>`)
-
-	var output bytes.Buffer
-	if err := pdf.Output(&output); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	text := output.String()
-	for _, want := range []string{
-		"/Link <</MCID 0>> BDC",
-		"/S /Link",
-		"/Type /OBJR /Obj",
-		"/Type /Annot /Subtype /Link",
-		"/K [<< /Type /MCR",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("generated tagged SVG link PDF does not contain %q", want)
-		}
-	}
-	if got := strings.Count(text, "/S /Link"); got != 1 {
-		t.Fatalf("generated tagged SVG link has %d Link structure elements, want 1", got)
-	}
-}
-
 func TestPDFUA2ImageRequiresAltTextOrArtifact(t *testing.T) {
 	render := func(options document.ImageOptions) error {
 		pdf := document.MustNewTestPDFDocument()
@@ -410,35 +193,6 @@ func TestPDFUA2DirectDrawingAndRawContentCanBeArtifacts(t *testing.T) {
 	}
 	if !strings.Contains(text, "/P <</MCID 0>> BDC") {
 		t.Fatal("generated PDF does not contain tagged text MCID")
-	}
-}
-
-func TestPDFUA2TemplatesAreArtifacts(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument()
-	pdf.SetCompression(false)
-	pdf.SetComplianceMetadata(document.ComplianceMetadata{PDFUA2: true, Title: "Artifacts"})
-	pdf.AddUTF8Font("DejaVu", "", example.FontFile("DejaVuSansCondensed.ttf"))
-	pdf.AddPage()
-	pdf.SetFont("DejaVu", "", 12)
-	pdf.Cell(0, 8, "Tagged text")
-	tpl := pdf.CreateTemplate(func(t *document.Tpl) {
-		t.Rect(0, 0, 20, 8, "D")
-	})
-	pdf.UseTemplate(tpl)
-
-	var output bytes.Buffer
-	if err := pdf.Output(&output); err != nil {
-		t.Fatalf("Output() error = %v", err)
-	}
-	text := output.String()
-	for _, want := range []string{
-		"/P <</MCID 0>> BDC",
-		"/Artifact BMC",
-		"/TPL",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("generated tagged artifact PDF does not contain %q", want)
-		}
 	}
 }
 

@@ -32,6 +32,11 @@ type paperMeasuredBox struct {
 	visual     bool
 }
 
+func paperVisualBox(box layout.BoxStyle) bool {
+	box.KeepTogether, box.KeepWithNext, box.Orphans, box.Widows = false, false, 0, 0
+	return box != (layout.BoxStyle{})
+}
+
 func paperParagraphBoxPolicy(box layout.BoxStyle, ref *layout.BoxStyle, path string) (paperPaginationPolicy, layout.BoxStyle, error) {
 	_ = ref // EffectiveBox has already snapshotted the referenced value.
 	policy := paperPaginationPolicy{keepTogether: box.KeepTogether, keepWithNext: box.KeepWithNext,
@@ -64,7 +69,7 @@ func paperContainerBoxPolicy(box layout.BoxStyle) (paperPaginationPolicy, layout
 }
 
 func paperApplyContainerBox(parts *[]paperPlanningBlock, start int, box layout.BoxStyle, path string) error {
-	if !htmlUnifiedVisualBox(box) {
+	if !paperVisualBox(box) {
 		return nil
 	}
 	indices := make([]int, 0, len(*parts)-start)
@@ -80,7 +85,7 @@ func paperApplyContainerBox(parts *[]paperPlanningBlock, start int, box layout.B
 		return fmt.Errorf("%s: rounded or shadowed containers require one plannable child", path)
 	}
 	for position, index := range indices {
-		if htmlUnifiedVisualBox((*parts)[index].box) {
+		if paperVisualBox((*parts)[index].box) {
 			return fmt.Errorf("%s: nested visual child boxes are outside the exact container cohort", path)
 		}
 		part := box

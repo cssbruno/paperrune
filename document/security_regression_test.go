@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
-	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -150,20 +149,6 @@ func TestSecurityMaskImageFileSizeLimit(t *testing.T) {
 	}
 }
 
-func TestSecuritySVGSourceSizeLimit(t *testing.T) {
-	_, err := SVGParse([]byte(strings.Repeat(" ", maxSVGSourceBytes+1)))
-	if err == nil || !strings.Contains(err.Error(), "SVG source exceeds maximum size") {
-		t.Fatalf("SVGParse() error = %v, want SVG source size limit", err)
-	}
-}
-
-func TestSecurityThumbnailHugeDimensionsRejected(t *testing.T) {
-	_, _, err := GenerateThumbnail(bytes.NewReader(securityGIF(65535, 65535)), ThumbnailOptions{MaxWidth: 16, MaxHeight: 16})
-	if err == nil || !strings.Contains(err.Error(), "thumbnail dimensions exceed maximum image size") {
-		t.Fatalf("GenerateThumbnail() error = %v, want thumbnail dimension limit", err)
-	}
-}
-
 func TestSecurityFontCacheFileSizeLimit(t *testing.T) {
 	fontPath := filepath.Join(t.TempDir(), "oversized.ttf")
 	file, err := os.Create(fontPath)
@@ -181,18 +166,6 @@ func TestSecurityFontCacheFileSizeLimit(t *testing.T) {
 	err = NewFontCache().AddUTF8Font("bad", "", fontPath)
 	if err == nil || !strings.Contains(err.Error(), "font data exceeds maximum size") {
 		t.Fatalf("AddUTF8Font() error = %v, want font data size limit", err)
-	}
-}
-
-func TestSecurityHTMLHugeColspanDoesNotAllocateUnbounded(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-
-	html := pdf.htmlNew()
-	html.Write(5, `<table><tr><td colspan="1000000000">x</td></tr></table>`)
-	if err := pdf.Error(); err == nil {
-		t.Fatal("oversized HTML colspan was accepted")
 	}
 }
 
@@ -223,221 +196,6 @@ func TestSecurityInvalidLinkDestinationPageReturnsError(t *testing.T) {
 	pdf.SetLink(link, 10, 99)
 	if pdf.Error() == nil {
 		t.Fatal("expected invalid link destination page error")
-	}
-}
-
-func TestSecurityInvalidTemplateDecodeRejected(t *testing.T) {
-	tpl := &DocumentTpl{
-		bytes: [][]byte{nil, []byte("q")},
-		page:  3,
-	}
-	encoded, err := tpl.Serialize()
-	if err != nil {
-		t.Fatalf("Serialize() error = %v", err)
-	}
-
-	_, err = DeserializeTemplate(encoded)
-	if err == nil || !strings.Contains(err.Error(), "invalid template page index") {
-		t.Fatalf("DeserializeTemplate() error = %v, want invalid page index", err)
-	}
-}
-
-func TestSecuritySerializedTemplateSizeLimit(t *testing.T) {
-	_, err := DeserializeTemplate(bytes.Repeat([]byte{'x'}, maxTemplateSerializedBytes+1))
-	if err == nil || !strings.Contains(err.Error(), "serialized template exceeds maximum size") {
-		t.Fatalf("DeserializeTemplate() error = %v, want serialized template size limit", err)
-	}
-}
-
-func TestSecurityTemplatePageContentSizeLimit(t *testing.T) {
-	tpl := &DocumentTpl{
-		bytes: [][]byte{nil, bytes.Repeat([]byte{'q'}, maxTemplatePageBytes+1)},
-		page:  1,
-	}
-	if err := tpl.validate(); err == nil || !strings.Contains(err.Error(), "template page content exceeds maximum size") {
-		t.Fatalf("template validate error = %v, want page content size limit", err)
-	}
-}
-
-func TestSecurityInvalidTemplateImageRejected(t *testing.T) {
-	tpl := &DocumentTpl{
-		bytes: [][]byte{nil, []byte("q")},
-		page:  1,
-		images: map[string]*ImageInfo{
-			"bad": {
-				data: []byte("x"),
-				w:    1,
-				h:    1,
-				cs:   "DeviceRGB",
-				bpc:  8,
-				f:    "FlateDecode",
-				dp:   "/Predictor 15 >> /AA <<",
-			},
-		},
-	}
-	encoded, err := tpl.Serialize()
-	if err != nil {
-		t.Fatalf("Serialize() error = %v", err)
-	}
-
-	_, err = DeserializeTemplate(encoded)
-	if err == nil || !strings.Contains(err.Error(), "invalid image decode parameters") {
-		t.Fatalf("DeserializeTemplate() error = %v, want invalid image decode params", err)
-	}
-}
-
-func TestSecuritySVGRejectsNonFiniteNumbers(t *testing.T) {
-	for _, svg := range []string{
-		`<svg width="10" height="10"><path d="M NaN 0 L 1 1"/></svg>`,
-		`<svg width="NaN" height="10"><path d="M0 0 L1 1"/></svg>`,
-		`<svg width="10" height="10" viewBox="0 0 Inf 10"><path d="M0 0 L1 1"/></svg>`,
-		`<svg width="10" height="10"><polyline points="0,0 NaN,1"/></svg>`,
-		`<svg width="10" height="10"><g transform="translate(NaN,1)"><path d="M0 0 L1 1"/></g></svg>`,
-	} {
-		if _, err := SVGParse([]byte(svg)); err == nil {
-			t.Fatalf("SVGParse(%q) accepted non-finite numeric value", svg)
-		}
-	}
-}
-
-func TestSecuritySVGRejectsExcessiveNesting(t *testing.T) {
-	var svg strings.Builder
-	svg.WriteString(`<svg width="1" height="1">`)
-	for range svgMaxNestingDepth + 2 {
-		svg.WriteString(`<g>`)
-	}
-	svg.WriteString(`<path d="M0 0 L1 1"/>`)
-	for range svgMaxNestingDepth + 2 {
-		svg.WriteString(`</g>`)
-	}
-	svg.WriteString(`</svg>`)
-	if _, err := SVGParse([]byte(svg.String())); err == nil || !strings.Contains(err.Error(), "nesting depth") {
-		t.Fatalf("SVGParse excessive-nesting error = %v", err)
-	}
-}
-
-func TestSecuritySVGRejectsExcessiveNodeCount(t *testing.T) {
-	var svg strings.Builder
-	svg.Grow(svgMaxNodeCount*4 + 64)
-	svg.WriteString(`<svg width="1" height="1">`)
-	for range svgMaxNodeCount {
-		svg.WriteString(`<g/>`)
-	}
-	svg.WriteString(`</svg>`)
-	if _, err := SVGParse([]byte(svg.String())); err == nil || !strings.Contains(err.Error(), "node count") {
-		t.Fatalf("SVGParse excessive-node error = %v", err)
-	}
-}
-
-func TestSecurityHTMLDataImageSizeLimit(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.htmlNew()
-	html.MaxDataImageBytes = 8
-	html.Write(5, `<img src="data:image/png;base64,`+strings.Repeat("A", 64)+`"/>`)
-	if pdf.Error() == nil {
-		t.Fatal("expected HTML data image size error")
-	}
-}
-
-func TestSecurityHTMLInputSizeLimit(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.htmlNew()
-	html.MaxHTMLBytes = 8
-	html.Write(5, "<p>too large</p>")
-	if pdf.Error() == nil {
-		t.Fatal("expected HTML input size error")
-	}
-	if !strings.Contains(pdf.Error().Error(), "HTML input exceeds maximum size") {
-		t.Fatalf("HTML input size error = %v", pdf.Error())
-	}
-
-	validatorPDF := mustNewPDFDocument()
-	validator := validatorPDF.htmlNew()
-	validator.MaxHTMLBytes = 8
-	messages := validator.validateHTML("<p>too large</p>")
-	if len(messages) != 1 || messages[0] != "HTML input exceeds maximum size" {
-		t.Fatalf("ValidateHTML messages = %#v, want input size diagnostic", messages)
-	}
-}
-
-func TestSecurityHTMLTableRowLimit(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.htmlNew()
-	html.MaxTableRows = 1
-	html.Write(5, `<table><tr><td>one</td></tr><tr><td>two</td></tr></table>`)
-	if pdf.Error() == nil {
-		t.Fatal("expected HTML table row limit error")
-	}
-	if !strings.Contains(pdf.Error().Error(), "HTML table row count exceeds maximum size") {
-		t.Fatalf("HTML table row limit error = %v", pdf.Error())
-	}
-}
-
-func TestSecurityHTMLElementDepthLimit(t *testing.T) {
-	fragment := `<div><section><p>too deep</p></section></div>`
-
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.htmlNew()
-	html.MaxElementDepth = 2
-	html.Write(5, fragment)
-	if pdf.Error() == nil {
-		t.Fatal("expected HTML element depth error")
-	}
-	if !strings.Contains(pdf.Error().Error(), "HTML element depth exceeds maximum size") {
-		t.Fatalf("HTML element depth error = %v", pdf.Error())
-	}
-
-	validatorPDF := mustNewPDFDocument()
-	validator := validatorPDF.htmlNew()
-	validator.MaxElementDepth = 2
-	messages := validator.validateHTML(fragment)
-	if len(messages) != 1 || messages[0] != "HTML element depth exceeds maximum size" {
-		t.Fatalf("ValidateHTML messages = %#v, want element depth diagnostic", messages)
-	}
-}
-
-func TestSecurityHTMLGeneratedPageLimit(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.htmlNew()
-	html.MaxGeneratedPages = 1
-	html.Write(5, `<div style="break-before: page">one</div><div style="break-before: page">two</div>`)
-	if pdf.Error() == nil {
-		t.Fatal("expected HTML generated page limit error")
-	}
-	if !strings.Contains(pdf.Error().Error(), "HTML rendering exceeded maximum generated pages") {
-		t.Fatalf("HTML generated page limit error = %v", pdf.Error())
-	}
-}
-
-func TestSecurityHTMLLocalImageDisabledByDefault(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.htmlNew()
-	html.Write(5, `<img src="/tmp/local.png"/>`)
-	if pdf.Error() == nil {
-		t.Fatal("expected local HTML image error")
-	}
-}
-
-func TestSecurityHTMLRejectsUnsafeLinkSchemes(t *testing.T) {
-	pdf := mustNewPDFDocument()
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.htmlNew()
-	html.Write(5, `<a href="javascript:app.alert(1)">x</a>`)
-	if pdf.Error() == nil {
-		t.Fatal("expected unsafe HTML link scheme error")
 	}
 }
 
@@ -476,35 +234,6 @@ func TestSecurityDirectLinksRejectUnsafeSchemes(t *testing.T) {
 				t.Fatalf("%s error = %v, want unsupported link scheme", tt.name, pdf.Error())
 			}
 		})
-	}
-}
-
-func TestSecurityHTMLCSSParsingIsCapped(t *testing.T) {
-	var css strings.Builder
-	for i := range htmlMaxCSSRules + 128 {
-		fmt.Fprintf(&css, ".c%d{color:#000}", i)
-	}
-	rules := parseHTMLCSSRules(css.String())
-	if len(rules) != htmlMaxCSSRules {
-		t.Fatalf("len(rules) = %d, want cap %d", len(rules), htmlMaxCSSRules)
-	}
-}
-
-func TestSecurityTemplateTypedNilChildReturnsError(t *testing.T) {
-	tpl := &DocumentTpl{
-		bytes:     [][]byte{nil, []byte("q")},
-		page:      1,
-		templates: []Template{(*DocumentTpl)(nil)},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("template validation panicked: %v", r)
-		}
-	}()
-	_ = tpl.childrenImages()
-	_ = tpl.childrenTemplates()
-	if err := tpl.validate(); err == nil {
-		t.Fatal("validate accepted typed-nil child template")
 	}
 }
 

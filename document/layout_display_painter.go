@@ -471,10 +471,6 @@ func (f *pdfDocument) preflightDisplayLayoutPlanPDFContext(ctx context.Context, 
 	return f.preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx, plan, sources, nil, false, f.tagged.enabled)
 }
 
-func (f *pdfDocument) preflightDisplayLayoutPlanPDFContextForTarget(ctx context.Context, plan layoutengine.LayoutPlan, sources plannedImageSources, allowActivePage bool) (preparedDisplayPlanPDF, error) {
-	return f.preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx, plan, sources, nil, allowActivePage, f.tagged.enabled)
-}
-
 func (f *pdfDocument) preflightDisplayLayoutPlanPDFResourcesContextForTarget(ctx context.Context, plan layoutengine.LayoutPlan, sources plannedImageSources, fontSources plannedFontSources, allowActivePage, taggedOutput bool) (preparedDisplayPlanPDF, error) {
 	if ctx == nil {
 		ctx = context.Background()

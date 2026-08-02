@@ -179,7 +179,7 @@ func validateTypedPageTemplateContract(template layout.PageTemplate) error {
 			return newTypedShadowUnsupported(typedShadowPageTemplate, name+" manual height conflicts with actual planned subtree height")
 		}
 		box := header.EffectiveBox()
-		if htmlUnifiedVisualBox(box) {
+		if paperVisualBox(box) {
 			children := layout.NormalizeBlocks(header.Blocks)
 			if len(children) == 0 {
 				return newTypedShadowUnsupported(typedShadowPageTemplate, name+": a visual shell box requires content")
@@ -204,7 +204,7 @@ func validateTypedPageTemplateContract(template layout.PageTemplate) error {
 			return newTypedShadowUnsupported(typedShadowPageTemplate, name+" manual height conflicts with actual planned subtree height")
 		}
 		box := footer.EffectiveBox()
-		if htmlUnifiedVisualBox(box) {
+		if paperVisualBox(box) {
 			children := layout.NormalizeBlocks(footer.Blocks)
 			if len(children) == 0 {
 				return newTypedShadowUnsupported(typedShadowPageTemplate, name+": a visual shell box requires content")

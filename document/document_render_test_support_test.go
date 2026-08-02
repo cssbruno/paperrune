@@ -140,51 +140,6 @@ func (f *pdfDocument) installTypedWriteDocumentCompatibilityAliases(doc *layout.
 	}
 }
 
-func textAlign(align string) string {
-	switch strings.ToUpper(align) {
-	case "C", "CENTER":
-		return "C"
-	case "R", "RIGHT":
-		return "R"
-	default:
-		return "L"
-	}
-}
-
-func signatureColumnText(col layout.SignatureColumn) string {
-	lines := make([]string, 0, 3+len(col.Metadata))
-	if col.Label != "" {
-		lines = append(lines, col.Label)
-	}
-	if col.Name != "" && col.Name != col.Label {
-		lines = append(lines, col.Name)
-	}
-	if col.Role != "" && col.Role != col.Label {
-		lines = append(lines, col.Role)
-	}
-	for _, field := range col.Metadata {
-		if field.Label == "" && field.Value == "" {
-			continue
-		}
-		switch {
-		case field.Label == "":
-			lines = append(lines, field.Value)
-		case field.Value == "":
-			lines = append(lines, field.Label)
-		default:
-			lines = append(lines, field.Label+": "+field.Value)
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
-func metadataFieldText(field layout.MetadataField) string {
-	if field.Value == "" {
-		return field.Label
-	}
-	return field.Label + ": " + field.Value
-}
-
 func (f *pdfDocument) applyPageTemplateMargins(template layout.PageTemplate) {
 	margins := template.Margins
 	if margins.Top <= 0 && margins.Right <= 0 && margins.Bottom <= 0 && margins.Left <= 0 {

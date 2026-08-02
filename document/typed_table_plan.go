@@ -70,7 +70,7 @@ type typedTableExpandedBlock struct {
 
 type typedTableNestedSemantics struct {
 	projection layoutengine.LayoutPlanProjection
-	fragments  map[layoutengine.FragmentID]layoutengine.FragmentID
+	fragments  []layoutengine.FragmentID
 	prefix     string
 }
 
@@ -433,8 +433,8 @@ func typedTablePlacements(rows []layout.TableRow, columnCount int, headerRows ui
 			column += columnSpan
 		}
 	}
-	// HTML and authored document tables commonly omit trailing cells. Preserve
-	// a rectangular geometry by materializing those slots as empty cells rather
+	// Authored tables may omit trailing cells. Preserve rectangular geometry by
+	// materializing those slots as empty cells rather
 	// than rejecting an otherwise unambiguous grid. Rowspan-covered slots are
 	// already marked occupied and are never synthesized.
 	for row := range rows {
@@ -653,7 +653,7 @@ func (f *pdfDocument) measureTypedTableCellIntrinsic(ctx context.Context, doc *l
 			minimum, preferred = max(minimum, minimumWidth), max(preferred, preferredWidth)
 			continue
 		}
-		if nested, ok := block.(layout.SectionBlock); ok && htmlUnifiedVisualBox(nested.EffectiveBox()) {
+		if nested, ok := block.(layout.SectionBlock); ok && paperVisualBox(nested.EffectiveBox()) {
 			minimumWidth, preferredWidth, widthErr := typedNestedDecoratedBlockIntrinsicWidth(nested.EffectiveBox(), base)
 			if widthErr != nil {
 				return 0, 0, typedTableUnsupported(fmt.Sprintf("%s.blocks[%d]", placement.path, blockIndex), widthErr.Error())
@@ -679,21 +679,25 @@ func (f *pdfDocument) measureTypedTableCellIntrinsic(ctx context.Context, doc *l
 		}
 		text := normalizeCoreMultiCellText(layout.TextSegmentsPlainText(paragraph.Segments))
 		for _, line := range strings.Split(text, "\n") {
-			lineWidth, widthErr := typedTableIntrinsicTextWidth(metrics, line, f.ws)
-			if widthErr != nil {
-				return 0, 0, typedTableUnsupported(fmt.Sprintf("%s.blocks[%d]", placement.path, blockIndex), widthErr.Error())
-			}
-			if width := lineWidth + base; width > preferred {
-				preferred = width
-			}
+			lineWidth := 0.0
 			for _, character := range line {
 				glyphWidth, widthOK := metrics.runeWidth(character)
 				if !widthOK || !finiteNumbers(glyphWidth) || glyphWidth < 0 {
 					return 0, 0, typedTableUnsupported(fmt.Sprintf("%s.blocks[%d]", placement.path, blockIndex), "glyph width is not representable for intrinsic sizing")
 				}
+				lineWidth += glyphWidth
+				if character == ' ' {
+					lineWidth += f.ws
+				}
+				if !finiteNumbers(lineWidth) {
+					return 0, 0, typedTableUnsupported(fmt.Sprintf("%s.blocks[%d]", placement.path, blockIndex), "text width is not representable for intrinsic sizing")
+				}
 				if width := glyphWidth + base; width > minimum {
 					minimum = width
 				}
+			}
+			if width := lineWidth + base; width > preferred {
+				preferred = width
 			}
 		}
 	}
@@ -706,24 +710,6 @@ func (f *pdfDocument) measureTypedTableCellIntrinsic(ctx context.Context, doc *l
 		return 0, 0, typedTableUnsupported(placement.path, "preferred intrinsic width is not representable")
 	}
 	return minimumFixed, preferredFixed, nil
-}
-
-func typedTableIntrinsicTextWidth(metrics *mixedTextFontMetrics, text string, wordSpacing float64) (float64, error) {
-	width := 0.0
-	for _, character := range text {
-		advance, ok := metrics.runeWidth(character)
-		if !ok || !finiteNumbers(advance) || advance < 0 {
-			return 0, errors.New("glyph width is not representable for intrinsic sizing")
-		}
-		width += advance
-		if character == ' ' {
-			width += wordSpacing
-		}
-		if !finiteNumbers(width) {
-			return 0, errors.New("text width is not representable for intrinsic sizing")
-		}
-	}
-	return width, nil
 }
 
 func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.LayoutDocument, placement typedTablePlacement, width layoutengine.Fixed, tableBackground layout.DocumentColor) (typedTableCellMeasurement, error) {
@@ -924,7 +910,7 @@ func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.Lay
 			}
 			continue
 		}
-		if nested, ok := block.(layout.SectionBlock); ok && htmlUnifiedVisualBox(nested.EffectiveBox()) {
+		if nested, ok := block.(layout.SectionBlock); ok && paperVisualBox(nested.EffectiveBox()) {
 			path := fmt.Sprintf("%s.blocks[%d]", placement.path, blockIndex)
 			measurement, measureErr := f.measureTypedNestedDecoratedBlock(ctx, doc, nested, path, innerWidth)
 			if measureErr != nil {
@@ -1248,7 +1234,7 @@ func typedTableExpandedCellBlocks(blocks []layout.Block, inherited layout.TextSt
 				}
 				result = append(result, children...)
 			case layout.SectionBlock:
-				if htmlUnifiedVisualBox(value.EffectiveBox()) {
+				if paperVisualBox(value.EffectiveBox()) {
 					if depth >= maxDepth {
 						return nil, typedTableUnsupported(getBlockPath(), "nested decorated block depth exceeds 64 levels")
 					}
@@ -1414,8 +1400,8 @@ func (f *pdfDocument) measureTypedNestedTable(ctx context.Context, doc *layout.L
 	scratch.h = max(f.h, f.PointConvert(100000))
 	scratch.lMargin, scratch.tMargin, scratch.rMargin, scratch.bMargin = 0, 0, 0, 0
 	scratch.limits.MaxPages = 1
-	// HTML fixed column hints describe the authored table width, but a nested
-	// table is laid out inside the outer cell's content box. Scale only the
+	// Fixed column hints describe the authored table width, but a nested table is
+	// laid out inside the outer cell's content box. Scale only the
 	// nested copy when padding makes that content box fractionally narrower;
 	// the public model and authored proportions remain unchanged.
 	available := f.PointConvert(width.Points())
@@ -1812,7 +1798,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 					}
 					contentIdentity := typedTableContentSourceIdentity(fragment, content, contentIndex)
 					prefix := string(contentIdentity.key) + "/"
-					fragmentMap := make(map[layoutengine.FragmentID]layoutengine.FragmentID, len(nested.Fragments))
+					fragmentMap := make([]layoutengine.FragmentID, len(nested.Fragments)+1)
 					nodeMap := make(map[layoutengine.NodeID]layoutengine.NodeID)
 					for _, childFragment := range nested.Fragments {
 						oldID, oldNode := childFragment.ID, childFragment.Node
@@ -1841,7 +1827,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 						fragmentMap[oldID] = childFragment.ID
 						fragments = append(fragments, childFragment)
 					}
-					localFonts := make(map[layoutengine.FontResourceID]layoutengine.FontResourceID, len(nested.Fonts))
+					localFonts := make([]layoutengine.FontResourceID, len(nested.Fonts)+1)
 					for _, font := range nested.Fonts {
 						localID := font.ID
 						identity := paperFontIdentity(font)
@@ -1854,7 +1840,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 						}
 						localFonts[localID] = globalID
 					}
-					localImages := make(map[layoutengine.ImageResourceID]layoutengine.ImageResourceID, len(nested.ImageResources))
+					localImages := make([]layoutengine.ImageResourceID, len(nested.ImageResources)+1)
 					for _, resource := range nested.ImageResources {
 						localID := resource.ID
 						globalID, exists := imageIndex[resource.Digest]
@@ -1866,8 +1852,8 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 						}
 						localImages[localID] = globalID
 					}
-					lineMap := make(map[uint32]uint32, len(nested.Lines))
-					for oldIndex, line := range nested.Lines {
+					lineBase := uint32(len(lines)) // #nosec G115 -- collection length is bounded by the surrounding plan limit
+					for _, line := range nested.Lines {
 						line.Fragment = fragmentMap[line.Fragment]
 						line.Bounds, nestedErr = translateTypedRect(line.Bounds, dx, dy)
 						if nestedErr == nil {
@@ -1876,7 +1862,6 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 						if nestedErr != nil {
 							return layoutengine.LayoutPlan{}, nestedErr
 						}
-						lineMap[uint32(oldIndex)] = uint32(len(lines)) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 						lines = append(lines, line)
 					}
 					pathBase := uint32(len(paths)) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
@@ -1887,7 +1872,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 						}
 						paths = append(paths, path)
 					}
-					destinationMap := make(map[layoutengine.DestinationID]layoutengine.DestinationID, len(nested.Destinations))
+					destinationMap := make([]layoutengine.DestinationID, len(nested.Destinations)+1)
 					for _, destination := range nested.Destinations {
 						oldID := destination.ID
 						destination.ID = layoutengine.DestinationID(len(destinations) + 1) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
@@ -1904,7 +1889,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 						switch command.Kind {
 						case layoutengine.CommandGlyphRun:
 							run := nested.GlyphRuns[command.Payload]
-							run.Line, run.Font = lineMap[run.Line], localFonts[run.Font]
+							run.Line, run.Font = lineBase+run.Line, localFonts[run.Font]
 							run.Origin, nestedErr = translateTypedPoint(run.Origin, dx, dy)
 							if nestedErr != nil {
 								return layoutengine.LayoutPlan{}, nestedErr
@@ -2066,7 +2051,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 				contentFragment := typedTableContentFragment(fragment, contentIdentity, contentNodeID, contentBounds)
 				contentFragment.ID = layoutengine.FragmentID(len(fragments) + 1) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 				fragments = append(fragments, contentFragment)
-				localFonts := make(map[layoutengine.FontResourceID]layoutengine.FontResourceID, len(block.plan.Fonts))
+				localFonts := make([]layoutengine.FontResourceID, len(block.plan.Fonts)+1)
 				for _, font := range block.plan.Fonts {
 					localID := font.ID
 					identity := paperFontIdentity(font)
@@ -2079,7 +2064,7 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 					}
 					localFonts[localID] = globalID
 				}
-				lineMap := make(map[uint32]uint32, len(block.plan.Lines))
+				lineBase := uint32(len(lines)) // #nosec G115 -- collection length is bounded by the surrounding plan limit
 				for localIndex, line := range block.plan.Lines {
 					xOffset, err := line.Bounds.X.Sub(block.body.X)
 					if err != nil {
@@ -2117,13 +2102,11 @@ func composeTypedTablePlan(ctx context.Context, base layoutengine.LayoutPlan, me
 					if err != nil {
 						return layoutengine.LayoutPlan{}, err
 					}
-					globalLine := uint32(len(lines)) // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 					lines = append(lines, layoutengine.PlannedLine{Fragment: contentFragment.ID, Index: uint32(localIndex), Bounds: bounds, Baseline: baseline})
-					lineMap[uint32(localIndex)] = globalLine
 				}
 				for _, run := range block.plan.GlyphRuns {
 					localLine := run.Line
-					globalLine := lineMap[localLine]
+					globalLine := lineBase + localLine
 					line := lines[globalLine]
 					runOffset, err := run.Origin.X.Sub(block.plan.Lines[localLine].Bounds.X)
 					if err != nil {

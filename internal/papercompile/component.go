@@ -97,10 +97,6 @@ type componentContract struct {
 	slots map[string]componentSlotContract
 }
 
-func expandComponents(ast paperlang.AST, limits ExpansionLimits, scenario string) componentExpansionResult {
-	return expandComponentsWithProvenance(ast, limits, scenario, nil, true, scenario != "")
-}
-
 func expandComponentsWithProvenance(ast paperlang.AST, limits ExpansionLimits, scenario string, prior map[*paperlang.Node]expansionProvenance, reportDefinitions, deferExpressions bool) componentExpansionResult {
 	expander := componentExpander{
 		limits: limits, definitions: make(map[string]*paperlang.Node),

@@ -80,8 +80,6 @@ type studioSnapshot struct {
 	pageSummary    []document.PaperPlanPageSummary
 	baseline       *studioDetachedPlan
 	captures       map[string]document.PaperPlanPageSVG
-	typedMu        sync.Mutex
-	typed          *document.TypedCharacterizationProjection
 }
 
 // studioDetachedPlan is the sole cross-source baseline. PaperPlan owns no
@@ -397,7 +395,6 @@ func (s *studioServer) routes() http.Handler {
 	mux.HandleFunc("/api/resources", s.handleResources)
 	mux.HandleFunc("/api/authoring", s.handleAuthoring)
 	mux.HandleFunc("/api/component-preview.svg", s.handleComponentPreview)
-	mux.HandleFunc("/api/typed-experiments", s.handleTypedExperiments)
 	mux.HandleFunc("/api/review", s.handleReview)
 	mux.HandleFunc("/api/review/reference", s.handleReviewReference)
 	mux.Handle("/", s.static)

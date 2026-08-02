@@ -1306,7 +1306,7 @@ func (p LayoutPlan) CanonicalJSON() ([]byte, error) {
 
 // Hash returns the deterministic digest of CanonicalJSON.
 func (p LayoutPlan) Hash() (PlanHash, error) {
-	digest, err := canonicalJSONHash(p.ReadOnlyProjection())
+	digest, err := layoutPlanProjectionHash(p.ReadOnlyProjection())
 	if err != nil {
 		return PlanHash{}, err
 	}

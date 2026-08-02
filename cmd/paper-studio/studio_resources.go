@@ -63,20 +63,6 @@ func (s *studioServer) handleResources(w http.ResponseWriter, r *http.Request) {
 
 const studioMaxAssetUsages = 4096
 
-func (s *studioServer) setAssetResources(resources []document.PaperAssetResource) error {
-	project := make([]paperassets.ProjectResource, len(resources))
-	for i, r := range resources {
-		project[i] = paperassets.ProjectResource{Name: r.Name, MediaType: r.MediaType, Digest: r.Digest, Data: r.Data}
-	}
-	if err := s.setProjectResources(project); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	s.resourceManifest, s.resourceRoot = "", ""
-	s.mu.Unlock()
-	return nil
-}
-
 func (s *studioServer) setProjectManifest(manifestPath, assetRoot string, project []paperassets.ProjectResource) error {
 	manifestPath, err := filepath.Abs(manifestPath)
 	if err != nil {
@@ -197,14 +183,6 @@ type studioAssetInventory struct {
 	Scenario        string                     `json:"scenario"`
 	CatalogEditable bool                       `json:"catalog_editable"`
 	Items           []studioAssetInventoryItem `json:"items"`
-}
-
-func buildStudioAssetInventory(revision, planHash, scenario string, ast paperlang.AST, resources []document.PaperAssetResource) (studioAssetInventory, error) {
-	project := make([]paperassets.ProjectResource, len(resources))
-	for i, r := range resources {
-		project[i] = paperassets.ProjectResource{Name: r.Name, MediaType: r.MediaType, Digest: r.Digest, Data: r.Data}
-	}
-	return buildStudioResourceInventory(revision, planHash, scenario, ast, project)
 }
 
 func buildStudioResourceInventory(revision, planHash, scenario string, ast paperlang.AST, resources []paperassets.ProjectResource) (studioAssetInventory, error) {

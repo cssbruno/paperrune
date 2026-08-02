@@ -330,10 +330,9 @@ func (s *studioServer) applyStudioEdit(ctx context.Context, request studioEditRe
 	}
 	s.mu.Unlock()
 	workspace, err := paperd.NewWorkspaceWithOptions(paperd.WorkspaceOptions{
-		DisclosureDomain:         paperd.DisclosureRestricted,
-		RequireMutationAuthority: true,
-		AssetResources:           assetResources,
-		ImportResolver:           papercompile.ImportResolver(studioFileImportResolver(snapshot.file)),
+		DisclosureDomain: paperd.DisclosureRestricted,
+		AssetResources:   assetResources,
+		ImportResolver:   papercompile.ImportResolver(studioFileImportResolver(snapshot.file)),
 	})
 	if err != nil {
 		return studioEditResponse{}, err

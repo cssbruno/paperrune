@@ -4,14 +4,12 @@
 package document
 
 import (
-	stdhtml "html"
 	"strings"
 
 	"github.com/cssbruno/paperrune/internal/layout"
 )
 
-// formDocument describes a test form that can be rendered as supported HTML or
-// converted into the private layout model.
+// formDocument describes a test form converted into the private layout model.
 type formDocument struct {
 	Title    string        // Form title.
 	Sections []formSection // Form sections in display order.
@@ -38,27 +36,6 @@ type formAnswer struct {
 	Text  string     // Plain text answer.
 	Items []string   // List answer items.
 	Table [][]string // Table answer rows.
-}
-
-// FormDocumentHTML returns the canonical supported-HTML representation of a
-// form document.
-func formDocumentHTML(form formDocument) string {
-	out := newFormHTMLWriter(estimateFormHTMLSize(form))
-	if strings.TrimSpace(form.Title) != "" {
-		out.elementText("h1", form.Title)
-	}
-	for _, section := range form.Sections {
-		writeFormSectionHTML(out, section)
-	}
-	return out.string()
-}
-
-// ValidateFormDocumentHTML validates the canonical form HTML against the
-// supported HTML subset.
-func validateFormDocumentHTML(form formDocument) []string {
-	pdf := mustNewPDFDocument()
-	html := pdf.htmlNew()
-	return html.validateHTML(formDocumentHTML(form))
 }
 
 // formDocumentBlocks converts a form into private layout blocks.
@@ -93,113 +70,6 @@ func formDocumentModel(form formDocument) *layout.LayoutDocument {
 	doc.Title = form.Title
 	doc.Body = formDocumentBlocks(form)
 	return doc
-}
-
-type formHTMLWriter struct {
-	out strings.Builder
-}
-
-func newFormHTMLWriter(capacity int) *formHTMLWriter {
-	w := &formHTMLWriter{}
-	if capacity > 0 {
-		w.out.Grow(capacity)
-	}
-	return w
-}
-
-func (w *formHTMLWriter) string() string {
-	return w.out.String()
-}
-
-func (w *formHTMLWriter) raw(value string) {
-	w.out.WriteString(value)
-}
-
-func (w *formHTMLWriter) byte(value byte) {
-	w.out.WriteByte(value)
-}
-
-func (w *formHTMLWriter) text(value string) {
-	w.out.WriteString(escapeFormHTML(value))
-}
-
-func (w *formHTMLWriter) elementText(tag, value string) {
-	w.byte('<')
-	w.raw(tag)
-	w.byte('>')
-	w.text(value)
-	w.raw("</")
-	w.raw(tag)
-	w.byte('>')
-}
-
-func writeFormSectionHTML(out *formHTMLWriter, section formSection) {
-	style := formSectionStyle(section)
-	out.raw(`<section class="form-section"`)
-	if style != "" {
-		out.raw(` style="`)
-		out.raw(style)
-		out.byte('"')
-	}
-	out.byte('>')
-	if strings.TrimSpace(section.Title) != "" {
-		out.elementText("h2", section.Title)
-	}
-	out.raw(`<dl class="form-qa">`)
-	for _, question := range section.Questions {
-		out.raw("<dt>")
-		out.text(question.Label)
-		if question.Required {
-			out.raw(" *")
-		}
-		out.raw("</dt><dd>")
-		writeFormAnswerHTML(out, question.Answer)
-		out.raw("</dd>")
-	}
-	out.raw("</dl></section>")
-}
-
-func writeFormAnswerHTML(out *formHTMLWriter, answer formAnswer) {
-	switch {
-	case len(answer.Table) > 0:
-		out.raw(`<table class="form-answer-table"><tbody>`)
-		for _, row := range answer.Table {
-			out.raw("<tr>")
-			for _, cell := range row {
-				out.elementText("td", cell)
-			}
-			out.raw("</tr>")
-		}
-		out.raw("</tbody></table>")
-	case len(answer.Items) > 0:
-		out.raw(`<ul class="form-answer-list">`)
-		for _, item := range answer.Items {
-			out.elementText("li", item)
-		}
-		out.raw("</ul>")
-	default:
-		out.elementText("p", answer.Text)
-	}
-}
-
-func estimateFormHTMLSize(form formDocument) int {
-	size := len(form.Title) + 16
-	for _, section := range form.Sections {
-		size += len(section.Title) + 80
-		for _, question := range section.Questions {
-			size += len(question.Label) + len(question.Answer.Text) + 32
-			for _, item := range question.Answer.Items {
-				size += len(item) + 16
-			}
-			for _, row := range question.Answer.Table {
-				size += 16
-				for _, cell := range row {
-					size += len(cell) + 16
-				}
-			}
-		}
-	}
-	return size
 }
 
 func formQuestionBlocks(question formQuestion) []layout.Block {
@@ -241,22 +111,4 @@ func formAnswerBlocks(answer formAnswer) []layout.Block {
 	default:
 		return []layout.Block{layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: answer.Text}}}}
 	}
-}
-
-func formSectionStyle(section formSection) string {
-	styles := make([]string, 0, 3)
-	if section.BreakBefore {
-		styles = append(styles, "break-before: page")
-	}
-	if section.BreakAfter {
-		styles = append(styles, "break-after: page")
-	}
-	if section.KeepTogether {
-		styles = append(styles, "break-inside: avoid")
-	}
-	return strings.Join(styles, "; ")
-}
-
-func escapeFormHTML(value string) string {
-	return stdhtml.EscapeString(strings.TrimSpace(value))
 }

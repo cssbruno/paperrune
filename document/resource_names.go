@@ -38,14 +38,6 @@ func imagePDFResourceRef(image *ImageInfo) pdfResourceRef {
 	return pdfResourceRef{name: imagePDFResourceName(image), objectNumber: image.n}
 }
 
-func templatePDFResourceName(id string) pdfResourceName {
-	return pdfResourceName("/TPL" + id)
-}
-
-func templatePDFResourceRef(id string, objectNumber int) pdfResourceRef {
-	return pdfResourceRef{name: templatePDFResourceName(id), objectNumber: objectNumber}
-}
-
 func graphicsStatePDFResourceName(id int) pdfResourceName {
 	return pdfResourceName("/GS" + strconv.Itoa(id))
 }

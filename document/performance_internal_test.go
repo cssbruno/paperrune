@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 )
 
@@ -110,7 +109,6 @@ func BenchmarkPerfUTF8ToUTF16(b *testing.B) {
 
 var (
 	benchmarkTaggedKidsSink []byte
-	benchmarkSVGPathSink    []SVGSegment
 )
 
 func BenchmarkPerfTaggedElementKidsLarge(b *testing.B) {
@@ -138,44 +136,6 @@ func BenchmarkPerfTaggedElementKidsLarge(b *testing.B) {
 		out = append(out, ']')
 		benchmarkTaggedKidsSink = out
 	}
-}
-
-func BenchmarkPerfSVGPathParseHeavy(b *testing.B) {
-	path := benchmarkSVGHeavyPath(4000)
-
-	b.SetBytes(int64(len(path)))
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		segs, err := pathParse(path)
-		if err != nil {
-			b.Fatal(err)
-		}
-		benchmarkSVGPathSink = segs
-	}
-}
-
-func benchmarkSVGHeavyPath(segments int) string {
-	var out strings.Builder
-	out.Grow(segments * 28)
-	out.WriteString("M0 0")
-	for i := 0; i < segments; i++ {
-		switch i % 6 {
-		case 0:
-			fmt.Fprintf(&out, " l%d.%d-%d.%d", i%97+1, i%10, i%53+1, (i+3)%10)
-		case 1:
-			fmt.Fprintf(&out, " h%d v-%d", i%101+1, i%79+1)
-		case 2:
-			fmt.Fprintf(&out, " c1e-3-2e-3 3E+0-4E+0 %d-%d", i%89+1, i%67+1)
-		case 3:
-			fmt.Fprintf(&out, " s%d %d %d %d", i%47+1, i%43+1, i%41+1, i%37+1)
-		case 4:
-			fmt.Fprintf(&out, " q%d %d %d %d t%d-%d", i%31+1, i%29+1, i%23+1, i%19+1, i%17+1, i%13+1)
-		case 5:
-			fmt.Fprintf(&out, " a10 8 0 0 1 %d %d", i%11+1, i%7+1)
-		}
-	}
-	out.WriteByte('z')
-	return out.String()
 }
 
 func BenchmarkPerfReplaceAliasesManyPages(b *testing.B) {
@@ -255,64 +215,6 @@ func BenchmarkPerfRegisterImageOptionsReaderPNGAlpha(b *testing.B) {
 			b.Fatalf("RegisterImageOptionsReader() error = %v", pdf.Error())
 		}
 	}
-}
-
-func TestHTMLTablePrefixSpanWidthMatchesScan(t *testing.T) {
-	widths := []float64{1.25, 2.5, 3.75, 4, 5.5}
-	offsets := layout.TrackOffsets(widths)
-	for start := 0; start <= len(widths)+1; start++ {
-		for span := 0; span <= len(widths)+2; span++ {
-			want := layout.SumSpan(widths, start, span)
-			got := layout.SpanSize(offsets, start, span)
-			if got != want {
-				t.Fatalf("span width start=%d span=%d got %v, want %v", start, span, got, want)
-			}
-		}
-	}
-}
-
-func BenchmarkHTMLTableSpanWidthWideRows(b *testing.B) {
-	const (
-		cols = 1024
-		rows = 100
-	)
-	widths := make([]float64, cols)
-	for i := range widths {
-		widths[i] = 1 + float64(i%7)*0.25
-	}
-	offsets := layout.TrackOffsets(widths)
-
-	b.Run("Scan", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			total := 0.0
-			for row := 0; row < rows; row++ {
-				for col := 0; col < cols; col++ {
-					total += layout.SumSpan(widths, 0, col)
-					total += layout.SumSpan(widths, col, 1)
-				}
-			}
-			if total == 0 {
-				b.Fatal("empty total")
-			}
-		}
-	})
-
-	b.Run("Prefix", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			total := 0.0
-			for row := 0; row < rows; row++ {
-				for col := 0; col < cols; col++ {
-					total += layout.SpanSize(offsets, 0, col)
-					total += layout.SpanSize(offsets, col, 1)
-				}
-			}
-			if total == 0 {
-				b.Fatal("empty total")
-			}
-		}
-	})
 }
 
 func benchmarkAlphaPNG(tb testing.TB, width, height int) []byte {

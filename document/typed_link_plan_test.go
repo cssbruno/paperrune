@@ -200,28 +200,3 @@ func TestTypedRowColumnRejectsUnrepresentedDestinationSegmentsAtomically(t *test
 		t.Fatalf("row/column destination rejection = plan %#v pages %d, %v", plan, planner.PageCount(), err)
 	}
 }
-
-func TestTypedCharacterizationIncludesInternalLinkPDFEvidence(t *testing.T) {
-	for _, fixture := range typedCharacterizationFixtures() {
-		if fixture.inventory.Name != "internal-links-hierarchy" {
-			continue
-		}
-		if _, err := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 200, Ht: fixture.pageHeight}), WithNoCompression()).PlanLayoutDocument(fixture.doc); err != nil {
-			t.Fatalf("plan internal-link characterization fixture: %v", err)
-		}
-	}
-	projection, err := RunTypedCharacterization(t.Context(), DefaultTypedCharacterizationLimits())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, fixture := range projection.Fixtures {
-		if fixture.Name != "internal-links-hierarchy" {
-			continue
-		}
-		if fixture.Outcome != "planned" || len(fixture.ReadingRoles) == 0 {
-			t.Fatalf("internal-link characterization = %#v", fixture)
-		}
-		return
-	}
-	t.Fatal("internal-links-hierarchy characterization fixture is missing")
-}

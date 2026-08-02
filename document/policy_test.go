@@ -56,24 +56,19 @@ func TestWithServerSafeDefaultsAppliesServerPolicy(t *testing.T) {
 	}
 }
 
-func TestWithServerSafeDefaultsDoesNotPopulateSharedHTMLCache(t *testing.T) {
-	ClearSharedCaches()
-	t.Cleanup(ClearSharedCaches)
-
-	pdf := mustNewPDFDocument(WithServerSafeDefaults())
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 12)
-	html := pdf.htmlNew()
-	html.Write(5, `<p>server-safe cache isolation</p>`)
-	if err := pdf.Error(); err != nil {
-		t.Fatalf("HTML.Write() error = %v", err)
+func TestBatchPolicyUsesTrustedOfflineLimits(t *testing.T) {
+	limits := BatchLimits()
+	server := ServerSafeLimits()
+	policy := BatchPolicy()
+	if limits.MaxPages <= server.MaxPages || limits.MaxAttachmentBytes <= server.MaxAttachmentBytes {
+		t.Fatalf("batch limits are not larger than server limits: %+v", limits)
 	}
-	if stats := SharedCacheStats(); stats.htmlRenderer.Entries != 0 || stats.htmlRenderer.Bytes != 0 {
-		t.Fatalf("SharedCacheStats().HTML = %#v, want empty cache", stats.htmlRenderer)
+	if policy.Limits != limits || policy.Cache != ResourceCacheShared || !policy.CacheSet || !policy.Security.AllowFileAttachments {
+		t.Fatalf("batch policy = %+v", policy)
 	}
 }
 
-func TestSetProductionPolicyAppliesToLegacyDocument(t *testing.T) {
+func TestSetProductionPolicyAppliesToExistingDocument(t *testing.T) {
 	pdf := mustNewPDFDocument()
 	policy := ServerSafePolicy()
 	policy.Limits.MaxPages = 1
@@ -171,19 +166,6 @@ func TestLimitsApplyPageLimit(t *testing.T) {
 	pdf.AddPage()
 	if !errors.Is(pdf.Error(), ErrPageLimitExceeded) {
 		t.Fatalf("AddPage() error = %v, want ErrPageLimitExceeded", pdf.Error())
-	}
-}
-
-func TestLimitsApplyHTMLLimits(t *testing.T) {
-	pdf, err := newPDFDocument(WithLimits(Limits{MaxHTMLBytes: 3}))
-	if err != nil {
-		t.Fatalf("NewDocument() error = %v", err)
-	}
-	pdf.AddPage()
-	html := pdf.htmlNew()
-	err = html.WriteContext(context.Background(), 6, "<p>too large</p>")
-	if !errors.Is(err, errHTMLLimitExceeded) {
-		t.Fatalf("HTML.WriteContext() error = %v, want ErrHTMLLimitExceeded", err)
 	}
 }
 
@@ -349,13 +331,6 @@ func (fn validationFunc) ValidatePDF(data []byte) (ComplianceValidationReport, e
 }
 
 func TestPublicProductionContracts(t *testing.T) {
-	if got := TemplateSerializationVersion(); got != "GPKTPL1" {
-		t.Fatalf("TemplateSerializationVersion() = %q, want GPKTPL1", got)
-	}
-	if got := TemplateFingerprintVersion(); got != "GPKTPL2" {
-		t.Fatalf("TemplateFingerprintVersion() = %q, want GPKTPL2", got)
-	}
-
 	var validator Validator = validationFunc(func([]byte) (ComplianceValidationReport, error) {
 		return ComplianceValidationReport{}, nil
 	})
@@ -365,44 +340,5 @@ func TestPublicProductionContracts(t *testing.T) {
 	}
 	if report.Failed() {
 		t.Fatal("empty validation report should not fail")
-	}
-}
-
-func TestTemplateDecodeOptionsApplySerializedLimit(t *testing.T) {
-	tpl := CreateTpl(Point{}, Size{Wd: 10, Ht: 10}, "P", "pt", "", func(t *Tpl) {
-		t.RawWriteStr("0 0 m")
-	})
-	encoded, err := tpl.Serialize()
-	if err != nil {
-		t.Fatalf("Serialize() error = %v", err)
-	}
-	_, err = DeserializeTemplateWithOptions(encoded, TemplateDecodeOptions{MaxSerializedBytes: len(encoded) - 1})
-	if err == nil {
-		t.Fatal("DeserializeTemplateWithOptions() error = nil, want size limit")
-	}
-	if _, err = DeserializeTemplateWithOptions(encoded, TemplateDecodeOptions{MaxSerializedBytes: len(encoded)}); err != nil {
-		t.Fatalf("DeserializeTemplateWithOptions() error = %v", err)
-	}
-}
-
-func TestTemplateDecodeRejectsTrailingDataAndAggregateNodes(t *testing.T) {
-	child := CreateTpl(Point{}, Size{Wd: 5, Ht: 5}, "P", "pt", "", func(t *Tpl) {
-		t.RawWriteStr("0 0 m")
-	})
-	parent := CreateTpl(Point{}, Size{Wd: 10, Ht: 10}, "P", "pt", "", func(t *Tpl) {
-		t.UseTemplate(child)
-	})
-	encoded, err := parent.Serialize()
-	if err != nil {
-		t.Fatalf("Serialize() error = %v", err)
-	}
-	if _, err := DeserializeTemplate(append(append([]byte(nil), encoded...), 0)); err == nil || !strings.Contains(err.Error(), "trailing data") {
-		t.Fatalf("DeserializeTemplate() trailing-data error = %v", err)
-	}
-	if _, err := DeserializeTemplateWithOptions(encoded, TemplateDecodeOptions{MaxNodes: 1}); err == nil || !strings.Contains(err.Error(), "node count") {
-		t.Fatalf("DeserializeTemplateWithOptions() node-limit error = %v", err)
-	}
-	if _, err := DeserializeTemplateWithOptions(encoded, TemplateDecodeOptions{MaxTotalPages: 2}); err == nil || !strings.Contains(err.Error(), "total template pages") {
-		t.Fatalf("DeserializeTemplateWithOptions() page-limit error = %v", err)
 	}
 }

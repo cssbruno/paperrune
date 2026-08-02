@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cssbruno/paperrune/document"
 	"github.com/cssbruno/paperrune/internal/paperassets"
 	"github.com/cssbruno/paperrune/internal/paperlang"
 )
@@ -24,17 +23,17 @@ func TestStudioAssetInventoryIsBoundedDeterministicRevisionBoundAndBytePrivate(t
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(data)
-	resources := []document.PaperAssetResource{{Name: "hero", MediaType: "image/png", Digest: hex.EncodeToString(digest[:]), Data: data}}
+	resources := []paperassets.ProjectResource{{Name: "hero", MediaType: "image/png", Digest: hex.EncodeToString(digest[:]), Data: data}}
 	source := "document @report:\n  page @sheet:\n    body @body:\n      image @hero-node:\n        source: \"asset:hero\"\n        alt: \"Evidence\"\n        focus-x: 0.25\n        focus-y: 0.75\n"
 	parsed := paperlang.Parse("asset.paper", source)
 	if !parsed.OK() {
 		t.Fatal(parsed.Diagnostics)
 	}
-	first, err := buildStudioAssetInventory("plan-1", "plan-1", "stress", parsed.AST, resources)
+	first, err := buildStudioResourceInventory("plan-1", "plan-1", "stress", parsed.AST, resources)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := buildStudioAssetInventory("plan-1", "plan-1", "stress", parsed.AST, resources)
+	second, err := buildStudioResourceInventory("plan-1", "plan-1", "stress", parsed.AST, resources)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +136,7 @@ func containsJSONKey(value any, key string) bool {
 }
 
 func TestStudioAssetInventoryRejectsStaleAndMissingInputs(t *testing.T) {
-	if _, err := buildStudioAssetInventory("", "plan", "", paperlang.AST{}, nil); err == nil {
+	if _, err := buildStudioResourceInventory("", "plan", "", paperlang.AST{}, nil); err == nil {
 		t.Fatal("missing binding accepted")
 	}
 }
@@ -145,7 +144,7 @@ func TestStudioAssetInventoryRejectsStaleAndMissingInputs(t *testing.T) {
 func TestStudioResourcesEndpointBindsExactPlanWithoutReturningBytes(t *testing.T) {
 	data, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
 	digest := sha256.Sum256(data)
-	resource := document.PaperAssetResource{Name: "hero", MediaType: "image/png", Digest: hex.EncodeToString(digest[:]), Data: data}
+	resource := paperassets.ProjectResource{Name: "hero", MediaType: "image/png", Digest: hex.EncodeToString(digest[:]), Data: data}
 	dir := t.TempDir()
 	file := filepath.Join(dir, "asset.paper")
 	source := "document @report:\n  page @sheet:\n    width: 100pt\n    height: 80pt\n    margin: 8pt\n    body @body:\n      image @hero-node:\n        source: \"asset:hero\"\n        width: 20pt\n        height: 20pt\n        alt: \"Evidence\"\n"
@@ -156,7 +155,7 @@ func TestStudioResourcesEndpointBindsExactPlanWithoutReturningBytes(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := studio.setAssetResources([]document.PaperAssetResource{resource}); err != nil {
+	if err := studio.setProjectResources([]paperassets.ProjectResource{resource}); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := studio.current(context.Background(), "")

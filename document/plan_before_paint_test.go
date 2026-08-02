@@ -5,7 +5,6 @@ package document
 
 import (
 	"bytes"
-	"context"
 	"testing"
 
 	"github.com/cssbruno/paperrune/internal/layout"
@@ -54,7 +53,6 @@ func assertPlanBeforePaintUnchanged(t *testing.T, pdf *pdfDocument, before planB
 }
 
 func TestResourcePlanningDoesNotMutateOutputDocument(t *testing.T) {
-	const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 	cases := []struct {
 		name string
 		plan func(*pdfDocument) error
@@ -69,28 +67,6 @@ func TestResourcePlanningDoesNotMutateOutputDocument(t *testing.T) {
 						Style:    layout.TextStyle{FontFamily: "Helvetica", FontSize: 11, LineHeight: 13},
 					}},
 				})
-				return err
-			},
-		},
-		{
-			name: "html-image-measurement",
-			plan: func(pdf *pdfDocument) error {
-				compiled, err := compileHTML(`<img src="data:image/png;base64,` + pixel + `" width="18" height="12" alt="Raster mark">`)
-				if err != nil {
-					return err
-				}
-				_, err = pdf.planCompiledHTMLContext(context.Background(), 12, compiled)
-				return err
-			},
-		},
-		{
-			name: "html-svg-measurement",
-			plan: func(pdf *pdfDocument) error {
-				compiled, err := compileHTML(`<svg width="18" height="12" aria-label="Vector mark"><rect width="18" height="12" fill="#408020" stroke="none"/></svg>`)
-				if err != nil {
-					return err
-				}
-				_, err = pdf.planCompiledHTMLContext(context.Background(), 12, compiled)
 				return err
 			},
 		},

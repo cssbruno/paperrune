@@ -27,10 +27,7 @@ jobs:
 
       - name: Fuzz
         run: |
-          go test ./document -run '^$' -fuzz '^FuzzDeserializeTemplate$' -fuzztime=10s
-          go test ./document -run '^$' -fuzz '^FuzzSVGParse$' -fuzztime=10s
           go test ./internal/paperlang -run '^$' -fuzz '^FuzzIncrementalCSTMatchesCleanParse$' -fuzztime=10s
-          go test ./internal/paperpkg -run '^$' -fuzz '^FuzzMigrateLockfile$' -fuzztime=10s
 
       - name: Upload fuzz crashers
         if: failure()

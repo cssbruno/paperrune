@@ -12,7 +12,6 @@ type DocumentStats struct {
 	Pages                int
 	Images               int
 	Fonts                int
-	Templates            int
 	Attachments          int
 	EstimatedMemoryBytes int64
 }
@@ -29,9 +28,8 @@ type CacheStats struct {
 
 // SharedCachesStats summarizes package-level resource caches.
 type SharedCachesStats struct {
-	Images       CacheStats
-	Fonts        CacheStats
-	htmlRenderer CacheStats
+	Images CacheStats
+	Fonts  CacheStats
 }
 
 // Stats returns a best-effort snapshot of the document's current resource
@@ -49,7 +47,6 @@ func (f *pdfDocument) Stats() DocumentStats {
 		Pages:                pageCount,
 		Images:               len(resources.images),
 		Fonts:                len(resources.fonts),
-		Templates:            len(resources.templates),
 		Attachments:          len(f.attachments) + countAnnotationAttachments(f.pageAttachments),
 		EstimatedMemoryBytes: f.estimatedMemoryBytes(),
 	}
@@ -83,13 +80,6 @@ func (f *pdfDocument) estimatedMemoryBytes() int64 {
 		size += int64(len(font.Cw) * 4)
 		if font.utf8File != nil && font.utf8File.fileReader != nil {
 			size += int64(len(font.utf8File.fileReader.array))
-		}
-	}
-	for _, template := range resources.templates {
-		if concrete, ok := template.(*DocumentTpl); ok {
-			for _, page := range concrete.bytes {
-				size += int64(len(page))
-			}
 		}
 	}
 	for _, attachment := range f.attachments {
@@ -184,13 +174,11 @@ func (c *FontCache) Clear() {
 	c.mu.Unlock()
 }
 
-// SharedCacheStats returns a snapshot of package-level image, UTF-8 font, and
-// compiled HTML caches.
+// SharedCacheStats returns a snapshot of package-level image and UTF-8 font caches.
 func SharedCacheStats() SharedCachesStats {
 	return SharedCachesStats{
-		Images:       sharedImageCacheStats(),
-		Fonts:        sharedFontCacheStats(),
-		htmlRenderer: sharedCompiledHTMLCacheStats(),
+		Images: sharedImageCacheStats(),
+		Fonts:  sharedFontCacheStats(),
 	}
 }
 
@@ -199,7 +187,6 @@ func ClearSharedCaches() {
 	if sharedImageFileCache != nil {
 		sharedImageFileCache.Clear()
 	}
-	clearSharedCompiledHTMLCache()
 	sharedUTF8FontFileCache.Lock()
 	sharedUTF8FontFileCache.fonts = make(map[sharedUTF8FontFileCacheKey]cachedUTF8Font)
 	sharedUTF8FontFileCache.order = nil

@@ -103,35 +103,6 @@ func Parse(source string, limits LanguageLimits) (Expression, error) {
 	}, nil
 }
 
-// ComponentReferences returns the closed @component literals mentioned by an
-// expression, including literals in lazy branches. Quoted strings that happen
-// to begin with @ are deliberately not references.
-func ComponentReferences(source string, limits LanguageLimits) ([]string, error) {
-	normalized, err := normalizeLanguageLimits(limits)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := Parse(source, normalized); err != nil {
-		return nil, err
-	}
-	tokens, err := lexExpression(source, normalized)
-	if err != nil {
-		return nil, err
-	}
-	set := make(map[string]bool)
-	for _, token := range tokens {
-		if token.kind == tokenComponentReference {
-			set[token.value.String] = true
-		}
-	}
-	result := make([]string, 0, len(set))
-	for reference := range set {
-		result = append(result, reference)
-	}
-	sort.Strings(result)
-	return result, nil
-}
-
 // ValidateComponentSelection proves that every possible result is a closed
 // unquoted @component literal or null. Conditions may use the ordinary typed
 // expression language, but schema strings cannot become component names.

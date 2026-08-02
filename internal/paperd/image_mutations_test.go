@@ -20,7 +20,7 @@ func TestPaperSetImageSourceUsesExplicitWorkspaceCatalog(t *testing.T) {
 	digest := sha256.Sum256(data)
 	hash := hex.EncodeToString(digest[:])
 	assets := []papercompile.AssetResource{{Name: "old", MediaType: "image/png", Digest: hash, Data: data}, {Name: "new", MediaType: "image/png", Digest: hash, Data: data}}
-	workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true, AssetResources: assets})
+	workspace := authorizationWorkspace(t, WorkspaceOptions{AssetResources: assets})
 	source := "document @report:\n  page @sheet:\n    body @body:\n      image @hero:\n        source: \"asset:old\"\n        width: 20pt\n        height: 20pt\n        alt: \"Evidence\"\n"
 	guard, _, opened := mutationGuard(t, workspace, source, "@hero", "replace-image", CapabilityEdit)
 	guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:resource", []MutationOperation{MutationSetImageProperty}, []string{"@hero"}, nil)
@@ -28,7 +28,7 @@ func TestPaperSetImageSourceUsesExplicitWorkspaceCatalog(t *testing.T) {
 	if err != nil || !strings.Contains(result.Revision.Source, `source: "asset:new"`) || len(result.Edit.Diff.Patches) != 1 {
 		t.Fatalf("replacement=%#v err=%v", result, err)
 	}
-	missing := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true, AssetResources: assets[:1]})
+	missing := authorizationWorkspace(t, WorkspaceOptions{AssetResources: assets[:1]})
 	badGuard, _, badOpen := mutationGuard(t, missing, source, "@hero", "missing-image", CapabilityEdit)
 	badGuard.Authority = grantMutationAuthority(t, missing, badOpen, "agent:resource", []MutationOperation{MutationSetImageProperty}, []string{"@hero"}, nil)
 	if _, err := missing.PaperSetImageProperty(PaperSetImagePropertyRequest{Guard: badGuard, Property: PaperImageSource, Text: "asset:new"}); err == nil {
@@ -59,7 +59,7 @@ func TestPaperSetImagePropertyWritesTypedMinimalPatches(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+			workspace := authorizationWorkspace(t, WorkspaceOptions{})
 			guard, _, opened := mutationGuard(t, workspace, imageMutationFixture, "@hero", "image-"+test.name, CapabilityEdit)
 			guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:image", []MutationOperation{MutationSetImageProperty}, []string{"@hero"}, nil)
 			test.request.Guard = guard

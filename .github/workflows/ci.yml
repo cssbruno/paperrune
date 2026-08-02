@@ -64,8 +64,6 @@ jobs:
           git diff --exit-code
 
       - name: Run the canonical contributor gate
-        env:
-          PAPERRUNE_SKIP_BROWSER_ORACLE: "1"
         run: make ci docs-check
 
       - name: Vulnerability check

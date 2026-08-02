@@ -169,18 +169,6 @@ func (w *Workspace) revoke(value scopedHandle, kind handleKind, capability handl
 	return nil
 }
 
-func (w *Workspace) RevokeRevision(handle RevisionHandle) error {
-	return w.revoke(handle.value, handleRevision, capabilityRead, func() { delete(w.revisions, handle.value.serial) })
-}
-
-func (w *Workspace) RevokeCandidate(handle CandidateHandle) error {
-	return w.revoke(handle.value, handleCandidate, capabilityEdit, func() { delete(w.candidates, handle.value.serial) })
-}
-
 func (w *Workspace) RevokeMutationAuthority(handle MutationAuthorityHandle) error {
 	return w.revoke(handle.value, handleMutationAuthority, capabilityAuthorize, func() { delete(w.mutationAuthorities, handle.value.serial) })
-}
-
-func (w *Workspace) RevokeOpen(handle OpenHandle) error {
-	return w.revoke(handle.value, handleOpen, handle.value.capability, func() { delete(w.opens, handle.value.serial) })
 }

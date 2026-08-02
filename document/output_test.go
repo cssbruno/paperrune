@@ -208,7 +208,7 @@ func TestOutputFileAndCloseDoesNotTruncateOnCloseValidationError(t *testing.T) {
 	}
 }
 
-func TestOutputFileAndCloseNewFileIsReadableByGroupAndOthers(t *testing.T) {
+func TestOutputFileAndCloseNewFileIsPrivate(t *testing.T) {
 	fileStr := filepath.Join(t.TempDir(), "out.pdf")
 
 	pdf := document.MustNewTestPDFDocument()
@@ -223,7 +223,7 @@ func TestOutputFileAndCloseNewFileIsReadableByGroupAndOthers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := info.Mode().Perm(), os.FileMode(0o644); got != want {
+	if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
 		t.Fatalf("output file mode = %v, want %v", got, want)
 	}
 }

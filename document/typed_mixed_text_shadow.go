@@ -165,8 +165,7 @@ func (f *pdfDocument) planTypedParagraphMixedCoreShadowContext(ctx context.Conte
 	}
 	if fullText.String() != text {
 		// normalizeCoreMultiCellText only removes carriage returns and one final
-		// newline. The HTML adapter normally has already normalized these, but
-		// keep the range contract explicit for direct typed callers.
+		// newline. Keep the range contract explicit for typed callers.
 		if !strings.HasPrefix(fullText.String(), text) || len(fullText.String())-len(text) > 1 {
 			return typedLineShadowResult{}, newTypedShadowUnsupported(typedShadowParagraphContract, "mixed text normalization changed authored byte ranges")
 		}

@@ -48,7 +48,7 @@ const listMutationFixture = "document @report:\n  page @sheet:\n    body @body:\
 const headingMutationFixture = "document @report:\n  page @sheet:\n    body @body:\n      heading @title:\n        level: 1\n        text: \"Report\"\n"
 
 func TestPaperSetCanvasItemIsReadableTransitiveAndAuthorized(t *testing.T) {
-	workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+	workspace := authorizationWorkspace(t, WorkspaceOptions{})
 	guard, _, opened := mutationGuard(t, workspace, canvasMutationFixture, "@badge", "canvas-anchor", CapabilityEdit)
 	fingerprint, err := paperedit.FingerprintNode("test.paper", canvasMutationFixture, "@diagram")
 	if err != nil {
@@ -68,7 +68,7 @@ func TestPaperSetCanvasItemIsReadableTransitiveAndAuthorized(t *testing.T) {
 }
 
 func TestPaperSetPageMarginIsReadableMinimalAndAuthorized(t *testing.T) {
-	workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+	workspace := authorizationWorkspace(t, WorkspaceOptions{})
 	guard, _, opened := mutationGuard(t, workspace, pageMarginMutationFixture, "@sheet", "page-margin", CapabilityEdit)
 	guard.Authority = grantMutationAuthority(t, workspace, opened, "studio:page-master", []MutationOperation{MutationSetPageMargin}, []string{"@sheet"}, nil)
 	result, err := workspace.PaperSetPageMargin(PaperSetPageMarginRequest{Guard: guard, Property: PaperPageMarginLeft, Points: 16})
@@ -94,7 +94,7 @@ func TestPaperSetTextPropertyEditsOnlyHeadingLevelWithinBounds(t *testing.T) {
 }
 
 func TestPaperSetPageSizeWritesTwoExactDimensions(t *testing.T) {
-	workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+	workspace := authorizationWorkspace(t, WorkspaceOptions{})
 	guard, _, opened := mutationGuard(t, workspace, pageMarginMutationFixture, "@sheet", "page-size", CapabilityEdit)
 	guard.Authority = grantMutationAuthority(t, workspace, opened, "studio:page-size", []MutationOperation{MutationSetPageSize}, []string{"@sheet"}, nil)
 	result, err := workspace.PaperSetPageSize(PaperSetPageSizeRequest{Guard: guard, WidthPoints: 595.275590551, HeightPoints: 841.88976378})
@@ -106,7 +106,7 @@ func TestPaperSetPageSizeWritesTwoExactDimensions(t *testing.T) {
 
 func TestPaperSetPageRegionGuardsGoverningPage(t *testing.T) {
 	source := "document @report:\n  page @sheet:\n    header @head:\n      paragraph @copy:\n        text: \"Header\"\n    body @body:\n      paragraph @main:\n        text: \"Body\"\n"
-	workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+	workspace := authorizationWorkspace(t, WorkspaceOptions{})
 	guard, _, opened := mutationGuard(t, workspace, source, "@head", "page-region", CapabilityEdit)
 	fingerprint, _ := paperedit.FingerprintNode("test.paper", source, "@sheet")
 	instance, _ := paperedit.SourceInstance("test.paper", source, "@sheet")
@@ -164,7 +164,7 @@ func TestPaperSetBoxPropertyIsTypedMinimalAndAuthorized(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+			workspace := authorizationWorkspace(t, WorkspaceOptions{})
 			guard, _, opened := mutationGuard(t, workspace, boxMutationFixture, "@box", "box-"+test.name, CapabilityEdit)
 			guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:box", []MutationOperation{MutationSetBoxProperty}, []string{"@box"}, nil)
 			result, err := workspace.PaperSetBoxProperty(PaperSetBoxPropertyRequest{Guard: guard, Property: test.property, Points: test.points, Color: test.color})
@@ -196,7 +196,7 @@ func TestPaperSetTextPropertyAuthorsCompleteTypography(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+			workspace := authorizationWorkspace(t, WorkspaceOptions{})
 			guard, _, opened := mutationGuard(t, workspace, boxMutationFixture, "@box", "text-"+test.name, CapabilityEdit)
 			guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:text", []MutationOperation{MutationSetTextProperty}, []string{"@box"}, nil)
 			test.request.Guard = guard
@@ -209,7 +209,7 @@ func TestPaperSetTextPropertyAuthorsCompleteTypography(t *testing.T) {
 }
 
 func TestPaperSetTextPropertyExplicitlyRepairsUnavailableFont(t *testing.T) {
-	workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+	workspace := authorizationWorkspace(t, WorkspaceOptions{})
 	guard, created, opened := mutationGuard(t, workspace, invalidFontMutationFixture, "@copy", "font-replacement", CapabilityEdit)
 	if created.Revision.CompileOK {
 		t.Fatal("unavailable font unexpectedly compiled")
@@ -282,7 +282,7 @@ func TestPaperSetLayoutContainerAuthorsEveryReadableControl(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+			workspace := authorizationWorkspace(t, WorkspaceOptions{})
 			guard, _, opened := mutationGuard(t, workspace, layoutMutationFixture, "@grid", "layout-container-"+test.name, CapabilityEdit)
 			guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:layout", []MutationOperation{MutationSetLayoutContainer}, []string{"@grid"}, nil)
 			result, err := workspace.PaperSetLayoutContainer(PaperSetLayoutContainerRequest{
@@ -315,7 +315,7 @@ func TestPaperSetLayoutContainerRejectsWrongAxisAndNonPhysicalDimensions(t *test
 }
 
 func TestPaperSetLayoutItemRequiresExactTransitiveGuardAndCompilesBeforeCommit(t *testing.T) {
-	workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+	workspace := authorizationWorkspace(t, WorkspaceOptions{})
 	request, created, opened := layoutItemRequest(t, workspace, "layout-normal")
 	request.Guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:layout", []MutationOperation{MutationSetLayoutItem}, []string{"@grid"}, nil)
 	result, err := workspace.PaperSetLayoutItem(request)
@@ -368,7 +368,7 @@ func TestPaperSetLayoutItemAcceptsResponsiveAndAutomaticSizes(t *testing.T) {
 		want   string
 	}{{"percentage", "50%", "width: 50%"}, {"automatic", "auto", `width: "auto"`}, {"fraction", "2fr", "width: 2fr"}} {
 		t.Run(test.name, func(t *testing.T) {
-			workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+			workspace := authorizationWorkspace(t, WorkspaceOptions{})
 			request, _, opened := layoutItemRequest(t, workspace, "layout-responsive-"+test.name)
 			request.Points, request.Length = 0, test.length
 			request.Guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:layout", []MutationOperation{MutationSetLayoutItem}, []string{"@grid"}, nil)
@@ -398,7 +398,7 @@ func TestPaperSetLayoutItemAuthorsFlexFactorsAndCrossAxisConstraints(t *testing.
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+			workspace := authorizationWorkspace(t, WorkspaceOptions{})
 			request, _, opened := layoutItemRequest(t, workspace, "layout-flex-"+test.name)
 			request.Property, request.Points, request.Length, request.Kind, request.Factor = test.property, 0, test.length, test.kind, test.factor
 			request.Guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:layout", []MutationOperation{MutationSetLayoutItem}, []string{"@grid"}, nil)

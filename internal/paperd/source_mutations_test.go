@@ -62,10 +62,22 @@ func mutationGuard(t *testing.T, workspace *Workspace, source, target, key strin
 	if err != nil {
 		t.Fatalf("SourceInstance() error = %v", err)
 	}
-	return PaperMutationGuard{
+	guard := PaperMutationGuard{
 		Open: opened.Handle, Candidate: created.Candidate.Handle, ExpectedHead: created.Revision.Handle,
 		ExpectedDigest: created.Revision.Revision, Target: target, ExpectedFingerprint: fingerprint, ExpectedInstance: instance, IdempotencyKey: key,
-	}, created, opened
+	}
+	if mode == CapabilityEdit {
+		guard.Authority = grantMutationAuthority(t, workspace, opened, "test-suite", []MutationOperation{
+			MutationSetLiteral, MutationSetRichText, MutationSetBinding, MutationFillSlot, MutationApplyFix,
+			MutationSetBoxProperty, MutationSetTextProperty, MutationSetListProperty, MutationSetDocumentProperty,
+			MutationSetPageNumbering, MutationSetCanvasProperty, MutationSetAppearance, MutationSetCondition,
+			MutationSetLayoutItem, MutationSetLayoutContainer, MutationSetImageProperty, MutationSetTableProperty,
+			MutationSetPageMargin, MutationSetPageSize, MutationSetCanvasItem, MutationSetPageRegion, MutationMoveNode,
+			MutationInsertTemplate, MutationCreateScenario, MutationCreateScenarioMatrix, MutationSetScenarioValue,
+			MutationAddSchemaField, MutationManageScenario, MutationManageNode, MutationResetProperty,
+		}, nil, nil)
+	}
+	return guard, created, opened
 }
 
 func exactTargetPrecondition(t *testing.T, file, source, target string) paperedit.TargetPrecondition {

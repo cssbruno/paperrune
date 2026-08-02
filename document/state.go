@@ -126,8 +126,8 @@ type documentPolicyState struct {
 //
 // A Document is not safe for concurrent use. Serialize calls that mutate or
 // render it, and create a separate Document for each independently generated
-// PDF. Reusable inputs such as CompiledHTML, ImageCache, and FontCache may be
-// shared across documents according to their own concurrency contracts.
+// PDF. Reusable inputs such as ImageCache and FontCache may be shared across
+// documents according to their own concurrency contracts.
 type pdfDocument struct {
 	pdfSerializationState
 	resourceOwnershipState

@@ -1511,7 +1511,7 @@ func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context
 				return layoutengine.LayoutPlan{}, fmt.Errorf("body[%d] box outer height: %w", blockIndex, heightErr)
 			}
 			if outerHeight > body.Height {
-				return layoutengine.LayoutPlan{}, newTypedShadowUnsupported(typedShadowGeometry, fmt.Sprintf("body[%d] decorated box is taller than an empty body page", blockIndex))
+				return layoutengine.LayoutPlan{}, newTypedShadowUnsupported(typedShadowGeometry, fmt.Sprintf("body[%d] decorated box is taller than an empty body page (%.3fpt > %.3fpt)", blockIndex, outerHeight.Points(), body.Height.Points()))
 			}
 			if outerHeight > available && !regionEmpty {
 				pendingBreak = &pendingPaperBreak{
@@ -1933,7 +1933,7 @@ func (m *paperBlockMeasurer) measureGridRow(block paperPlanningBlock, measuredLi
 
 func (m *paperBlockMeasurer) measureImage(block paperPlanningBlock, imageBlock layout.ImageBlock, identity paperSourceIdentity, measuredLines uint64) (paperMeasuredBlock, uint64, error) {
 	*m.nextNode = *m.nextNode + 1
-	if htmlUnifiedVisualBox(block.box) {
+	if paperVisualBox(block.box) {
 		merged, err := paperMergeOuterBox(imageBlock.EffectiveBox(), block.box, block.path)
 		if err != nil {
 			return paperMeasuredBlock{}, measuredLines, err
@@ -2760,7 +2760,7 @@ func paperExpandPlanningBlock(ctx context.Context, expanded *[]paperPlanningBloc
 		last.keepTogether, last.keepWithNext = policy.keepTogether, policy.keepWithNext
 		last.orphans, last.widows = policy.orphans, policy.widows
 		last.box = visualBox
-		if htmlUnifiedVisualBox(visualBox) {
+		if paperVisualBox(visualBox) {
 			last.keepTogether = true
 		}
 		return nil
@@ -2893,30 +2893,6 @@ func paperListMarker(block layout.ListBlock, itemIndex int) (string, error) {
 			return "", errors.New("decimal marker requires an ordered list")
 		}
 		return fmt.Sprintf("%d.", paperListCounterValue(block, itemIndex)), nil
-	case "lower-alpha", "upper-alpha":
-		if !block.Ordered {
-			return "", errors.New("alphabetic marker requires an ordered list")
-		}
-		value, err := paperAlphabeticCounter(paperListCounterValue(block, itemIndex))
-		if err != nil {
-			return "", err
-		}
-		if marker == "upper-alpha" {
-			value = strings.ToUpper(value)
-		}
-		return value + ".", nil
-	case "lower-roman", "upper-roman":
-		if !block.Ordered {
-			return "", errors.New("roman marker requires an ordered list")
-		}
-		value, err := paperRomanCounter(paperListCounterValue(block, itemIndex))
-		if err != nil {
-			return "", err
-		}
-		if marker == "lower-roman" {
-			value = strings.ToLower(value)
-		}
-		return value + ".", nil
 	case "dash":
 		if block.Ordered {
 			return "", errors.New("dash marker requires an unordered list")
@@ -2930,7 +2906,7 @@ func paperListMarker(block layout.ListBlock, itemIndex int) (string, error) {
 	case "none":
 		return "", nil
 	default:
-		return "", fmt.Errorf("%q is unsupported; use decimal, lower/upper-alpha, lower/upper-roman, dash, asterisk, or none", block.MarkerStyle)
+		return "", fmt.Errorf("%q is unsupported; use decimal, dash, asterisk, or none", block.MarkerStyle)
 	}
 }
 
@@ -2949,42 +2925,6 @@ func paperListCounterValue(block layout.ListBlock, itemIndex int) int {
 		counter++
 	}
 	return counter
-}
-
-func paperAlphabeticCounter(value int) (string, error) {
-	if value < 1 || value > 18278 {
-		return "", errors.New("alphabetic list counter must be from 1 through 18278")
-	}
-	var reversed [3]byte
-	length := 0
-	for value > 0 {
-		value--
-		reversed[length] = byte('a' + value%26)
-		length++
-		value /= 26
-	}
-	result := make([]byte, length)
-	for index := range result {
-		result[index] = reversed[length-index-1]
-	}
-	return string(result), nil
-}
-
-func paperRomanCounter(value int) (string, error) {
-	if value < 1 || value > 3999 {
-		return "", errors.New("roman list counter must be from 1 through 3999")
-	}
-	var out strings.Builder
-	for _, part := range []struct {
-		value int
-		text  string
-	}{{1000, "M"}, {900, "CM"}, {500, "D"}, {400, "CD"}, {100, "C"}, {90, "XC"}, {50, "L"}, {40, "XL"}, {10, "X"}, {9, "IX"}, {5, "V"}, {4, "IV"}, {1, "I"}} {
-		for value >= part.value {
-			out.WriteString(part.text)
-			value -= part.value
-		}
-	}
-	return out.String(), nil
 }
 
 func newPaperPlanner(page papercompile.PageSpec) (*pdfDocument, error) {

@@ -292,21 +292,11 @@ func (f *pdfDocument) planTypedParagraphLineShadowContext(ctx context.Context, d
 		if err != nil {
 			return typedLineShadowResult{}, newTypedShadowUnsupported(typedShadowGeometry, fmt.Sprintf("line %d: %v", index, err))
 		}
-		leadingSpace, trailingSpace := false, false
-		if preservesHTMLAuthoredWhitespace(ctx) {
-			if index > 0 {
-				previousLine := wrapped.Lines[index-1]
-				gap := wrapped.Text[previousLine.EndByte:previousLine.NextByte]
-				leadingSpace = gap != "" && strings.TrimSpace(gap) == ""
-			}
-			trailingGap := wrapped.Text[wrappedLine.EndByte:wrappedLine.NextByte]
-			trailingSpace = trailingGap != "" && strings.TrimSpace(trailingGap) == ""
-		}
 		glyphRuns = append(glyphRuns, layoutengine.CoreGlyphRun{
 			Line: uint32(index), Font: fontResource.ID, FontSize: fontSize,
 			Color:  coreGlyphColor(style.Color),
 			Origin: layoutengine.Point{X: plannedLine.Bounds.X, Y: plannedLine.Baseline},
-			Codes:  codes, LeadingSpace: leadingSpace, TrailingSpace: trailingSpace, Advances: advances, Source: plannedLine.Source,
+			Codes:  codes, Advances: advances, Source: plannedLine.Source,
 		})
 	}
 	var fontResources []layoutengine.CoreFontResource

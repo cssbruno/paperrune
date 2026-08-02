@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -30,42 +29,6 @@ type closeErrorWriter struct {
 
 func (w *closeErrorWriter) Close() error {
 	return errors.New("close failed")
-}
-
-// TestPagedTemplate ensures new paged templates work
-func TestPagedTemplate(t *testing.T) {
-	pdf := document.MustNewTestPDFDocument()
-	tpl := pdf.CreateTemplate(func(t *document.Tpl) {
-		// this will be the second page, as a page is already
-		// created by default
-		t.AddPage()
-		t.AddPage()
-		t.AddPage()
-	})
-
-	if tpl.NumPages() != 4 {
-		t.Fatalf("The template does not have the correct number of pages %d", tpl.NumPages())
-	}
-
-	tplPages := tpl.FromPages()
-	for x := range tplPages {
-		pdf.AddPage()
-		pdf.UseTemplate(tplPages[x])
-	}
-
-	// get the last template
-	tpl2, err := tpl.FromPage(tpl.NumPages())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// the objects should be the exact same, as the
-	// template will represent the last page by default
-	// therefore no new id should be set, and the object
-	// should be the same object
-	if fmt.Sprintf("%p", tpl2) != fmt.Sprintf("%p", tpl) {
-		t.Fatal("Template no longer respecting initial template object")
-	}
 }
 
 // TestIssue0116 addresses issue 116 in which library silently fails after
@@ -199,253 +162,6 @@ func testPNGChunk(chunkType string, data []byte) []byte {
 	out.Write(data)
 	_ = binary.Write(&out, binary.BigEndian, uint32(0))
 	return out.Bytes()
-}
-
-func TestSVGParseCompactSignedPathValues(t *testing.T) {
-	sig, err := document.SVGParse([]byte(
-		`<svg width="50" height="50"><path d="M10-20+30+40h-5v+6c1e-3-2e-3 3E+0-4E+0 5-6z"/></svg>`))
-	if err != nil {
-		t.Fatalf("unexpected compact signed path parse error: %s", err)
-	}
-	if sig.Wd != 50 || sig.Ht != 50 {
-		t.Fatalf("unexpected SVG extent %.2f x %.2f", sig.Wd, sig.Ht)
-	}
-	if len(sig.Segments) != 1 {
-		t.Fatalf("expected 1 path segment list, got %d", len(sig.Segments))
-	}
-	segs := sig.Segments[0]
-	if len(segs) != 6 {
-		t.Fatalf("expected 6 path commands, got %d", len(segs))
-	}
-	assertSegment := func(index int, cmd byte, args ...float64) {
-		if segs[index].Cmd != cmd {
-			t.Fatalf("segment %d command = %c, want %c", index, segs[index].Cmd, cmd)
-		}
-		for j, want := range args {
-			if got := segs[index].Arg[j]; math.Abs(got-want) > 1e-9 {
-				t.Fatalf("segment %d arg %d = %.12f, want %.12f", index, j, got, want)
-			}
-		}
-	}
-
-	assertSegment(0, 'M', 10, -20)
-	assertSegment(1, 'L', 30, 40)
-	assertSegment(2, 'H', 25)
-	assertSegment(3, 'V', 46)
-	assertSegment(4, 'C', 25.001, 45.998, 28, 42, 30, 40)
-	assertSegment(5, 'Z')
-}
-
-func TestSVGParseSmoothAndArcPathCommands(t *testing.T) {
-	sig, err := document.SVGParse([]byte(`<svg width="160" height="40">
-		<path d="M10 10 C20 0 30 0 40 10 S60 20 70 10 Q80 0 90 10 T110 10 A10 10 0 0 1 130 10 a10 10 0 0 1 20 0" stroke="black" fill="none"/>
-	</svg>`))
-	if err != nil {
-		t.Fatalf("unexpected smooth/arc path parse error: %s", err)
-	}
-	if len(sig.Segments) != 1 {
-		t.Fatalf("expected 1 path segment list, got %d", len(sig.Segments))
-	}
-	segs := sig.Segments[0]
-	if len(segs) != 9 {
-		t.Fatalf("expected 9 normalized path commands, got %d: %#v", len(segs), segs)
-	}
-	assertSegment := func(index int, cmd byte, args ...float64) {
-		if segs[index].Cmd != cmd {
-			t.Fatalf("segment %d command = %c, want %c", index, segs[index].Cmd, cmd)
-		}
-		for j, want := range args {
-			if got := segs[index].Arg[j]; math.Abs(got-want) > 1e-9 {
-				t.Fatalf("segment %d arg %d = %.12f, want %.12f", index, j, got, want)
-			}
-		}
-	}
-
-	assertSegment(0, 'M', 10, 10)
-	assertSegment(1, 'C', 20, 0, 30, 0, 40, 10)
-	assertSegment(2, 'C', 50, 20, 60, 20, 70, 10)
-	assertSegment(3, 'Q', 80, 0, 90, 10)
-	assertSegment(4, 'Q', 100, 20, 110, 10)
-	for _, index := range []int{5, 6, 7, 8} {
-		if segs[index].Cmd != 'C' {
-			t.Fatalf("arc segment %d command = %c, want C", index, segs[index].Cmd)
-		}
-	}
-	assertSegment(6, 'C', segs[6].Arg[0], segs[6].Arg[1], segs[6].Arg[2], segs[6].Arg[3], 130, 10)
-	assertSegment(8, 'C', segs[8].Arg[0], segs[8].Arg[1], segs[8].Arg[2], segs[8].Arg[3], 150, 10)
-}
-
-func TestSVGParseRejectsInvalidArcFlags(t *testing.T) {
-	_, err := document.SVGParse([]byte(`<svg width="30" height="20">
-		<path d="M0 0 A10 10 0 2 0 20 0"/>
-	</svg>`))
-	if err == nil {
-		t.Fatal("SVGParse accepted an arc large-arc flag outside 0 or 1")
-	}
-}
-
-func TestSVGParseViewBoxFallback(t *testing.T) {
-	sig, err := document.SVGParse([]byte(
-		`<svg viewBox="0 0 24 32"><g><path d="M1 2 L3 4"/></g></svg>`))
-	if err != nil {
-		t.Fatalf("unexpected viewBox SVG parse error: %s", err)
-	}
-	if sig.Wd != 24 || sig.Ht != 32 {
-		t.Fatalf("unexpected SVG extent %.2f x %.2f", sig.Wd, sig.Ht)
-	}
-	if len(sig.Segments) != 1 {
-		t.Fatalf("expected 1 segment list, got %d", len(sig.Segments))
-	}
-	if got := sig.Segments[0][0].Cmd; got != 'M' {
-		t.Fatalf("first command = %c, want M", got)
-	}
-}
-
-func TestSVGParseConvertsCSSLengthUnits(t *testing.T) {
-	sig, err := document.SVGParse([]byte(
-		`<svg width="1in" height="25.4mm"><path d="M0 0 L1 1" stroke-width="72pt"/></svg>`))
-	if err != nil {
-		t.Fatalf("unexpected unit SVG parse error: %s", err)
-	}
-	if math.Abs(sig.Wd-96) > 1e-9 || math.Abs(sig.Ht-96) > 1e-9 {
-		t.Fatalf("extent = %.12f x %.12f, want 96 x 96", sig.Wd, sig.Ht)
-	}
-	if len(sig.Paths) != 1 || math.Abs(sig.Paths[0].Style.StrokeWidth-96) > 1e-9 {
-		t.Fatalf("stroke width = %#v, want 96px equivalent", sig.Paths)
-	}
-}
-
-func TestSVGParseNonZeroViewBoxOrigin(t *testing.T) {
-	sig, err := document.SVGParse([]byte(
-		`<svg width="24" height="24" viewBox="-1 0 24 24"><path d="M-1 0 L23 24"/></svg>`))
-	if err != nil {
-		t.Fatalf("unexpected non-zero viewBox origin parse error: %s", err)
-	}
-	if sig.Wd != 24 || sig.Ht != 24 {
-		t.Fatalf("unexpected SVG extent %.2f x %.2f", sig.Wd, sig.Ht)
-	}
-	if len(sig.Segments) != 1 || len(sig.Segments[0]) != 2 {
-		t.Fatalf("unexpected path segments: %#v", sig.Segments)
-	}
-	if math.Abs(sig.Segments[0][0].Arg[0]) > 1e-9 || math.Abs(sig.Segments[0][0].Arg[1]) > 1e-9 {
-		t.Fatalf("first point = %.12f %.12f, want 0 0", sig.Segments[0][0].Arg[0], sig.Segments[0][0].Arg[1])
-	}
-	if math.Abs(sig.Segments[0][1].Arg[0]-24) > 1e-9 || math.Abs(sig.Segments[0][1].Arg[1]-24) > 1e-9 {
-		t.Fatalf("second point = %.12f %.12f, want 24 24", sig.Segments[0][1].Arg[0], sig.Segments[0][1].Arg[1])
-	}
-}
-
-func TestSVGParsePreserveAspectRatio(t *testing.T) {
-	sig, err := document.SVGParse([]byte(
-		`<svg width="100" height="100" viewBox="0 0 50 100"><path d="M0 0 L50 100"/></svg>`))
-	if err != nil {
-		t.Fatalf("unexpected preserveAspectRatio SVG parse error: %s", err)
-	}
-	if len(sig.Segments) != 1 || len(sig.Segments[0]) != 2 {
-		t.Fatalf("unexpected path segments: %#v", sig.Segments)
-	}
-	if math.Abs(sig.Segments[0][0].Arg[0]-25) > 1e-9 || math.Abs(sig.Segments[0][0].Arg[1]) > 1e-9 {
-		t.Fatalf("first point = %.12f %.12f, want centered 25 0", sig.Segments[0][0].Arg[0], sig.Segments[0][0].Arg[1])
-	}
-	if math.Abs(sig.Segments[0][1].Arg[0]-75) > 1e-9 || math.Abs(sig.Segments[0][1].Arg[1]-100) > 1e-9 {
-		t.Fatalf("second point = %.12f %.12f, want centered 75 100", sig.Segments[0][1].Arg[0], sig.Segments[0][1].Arg[1])
-	}
-
-	sig, err = document.SVGParse([]byte(
-		`<svg width="100" height="100" viewBox="0 0 50 100" preserveAspectRatio="none"><path d="M0 0 L50 100"/></svg>`))
-	if err != nil {
-		t.Fatalf("unexpected preserveAspectRatio none SVG parse error: %s", err)
-	}
-	if math.Abs(sig.Segments[0][1].Arg[0]-100) > 1e-9 || math.Abs(sig.Segments[0][1].Arg[1]-100) > 1e-9 {
-		t.Fatalf("stretched point = %.12f %.12f, want 100 100", sig.Segments[0][1].Arg[0], sig.Segments[0][1].Arg[1])
-	}
-}
-
-func TestSVGParseShapes(t *testing.T) {
-	sig, err := document.SVGParse([]byte(`<svg width="100px" height="100px">
-		<line x1="1" y1="2" x2="3" y2="4"/>
-		<rect x="10" y="20" width="30" height="40"/>
-		<circle cx="50" cy="50" r="10"/>
-		<ellipse cx="70" cy="70" rx="8" ry="4"/>
-		<polyline points="0,0 10,0 10,10"/>
-		<polygon points="20,20 30,20 30,30"/>
-	</svg>`))
-	if err != nil {
-		t.Fatalf("unexpected shapes SVG parse error: %s", err)
-	}
-	if sig.Wd != 100 || sig.Ht != 100 {
-		t.Fatalf("unexpected SVG extent %.2f x %.2f", sig.Wd, sig.Ht)
-	}
-	if len(sig.Segments) != 6 {
-		t.Fatalf("expected 6 shape segment lists, got %d", len(sig.Segments))
-	}
-	assertShape := func(index int, first, last byte) {
-		segs := sig.Segments[index]
-		if len(segs) == 0 {
-			t.Fatalf("shape %d has no segments", index)
-		}
-		if got := segs[0].Cmd; got != first {
-			t.Fatalf("shape %d first command = %c, want %c", index, got, first)
-		}
-		if got := segs[len(segs)-1].Cmd; got != last {
-			t.Fatalf("shape %d last command = %c, want %c", index, got, last)
-		}
-	}
-	assertShape(0, 'M', 'L')
-	assertShape(1, 'M', 'Z')
-	assertShape(2, 'M', 'Z')
-	assertShape(3, 'M', 'Z')
-	assertShape(4, 'M', 'L')
-	assertShape(5, 'M', 'Z')
-}
-
-func TestSVGParseUseReferencesDefinitions(t *testing.T) {
-	sig, err := document.SVGParse([]byte(`<svg width="40" height="40">
-		<defs>
-			<path id="mark" d="M1 2 L3 4"/>
-			<rect id="unused" x="20" y="20" width="5" height="5"/>
-		</defs>
-		<use href="#mark" x="10" y="5" stroke="black" fill="none"/>
-		<symbol id="shape"><path d="M0 0 L5 0"/></symbol>
-		<use href="#shape" x="2" y="3" stroke="black" fill="none"/>
-	</svg>`))
-	if err != nil {
-		t.Fatalf("unexpected use/defs SVG parse error: %s", err)
-	}
-	if len(sig.Segments) != 2 {
-		t.Fatalf("expected 2 rendered references, got %d: %#v", len(sig.Segments), sig.Segments)
-	}
-	first := sig.Segments[0]
-	if len(first) != 2 || first[0].Cmd != 'M' || first[1].Cmd != 'L' {
-		t.Fatalf("first referenced path = %#v", first)
-	}
-	if first[0].Arg[0] != 11 || first[0].Arg[1] != 7 || first[1].Arg[0] != 13 || first[1].Arg[1] != 9 {
-		t.Fatalf("first referenced path points = %#v, want translated mark", first)
-	}
-	second := sig.Segments[1]
-	if len(second) != 2 || second[0].Arg[0] != 2 || second[0].Arg[1] != 3 ||
-		second[1].Arg[0] != 7 || second[1].Arg[1] != 3 {
-		t.Fatalf("symbol referenced path = %#v, want translated symbol", second)
-	}
-}
-
-func TestSVGParseUseSymbolViewBox(t *testing.T) {
-	sig, err := document.SVGParse([]byte(`<svg width="40" height="30">
-		<symbol id="icon" viewBox="10 20 5 5">
-			<path d="M10 20 L15 25"/>
-		</symbol>
-		<use href="#icon" x="2" y="3" width="20" height="10" stroke="black" fill="none"/>
-	</svg>`))
-	if err != nil {
-		t.Fatalf("unexpected symbol use SVG parse error: %s", err)
-	}
-	if len(sig.Segments) != 1 || len(sig.Segments[0]) != 2 {
-		t.Fatalf("unexpected path segments: %#v", sig.Segments)
-	}
-	if sig.Segments[0][0].Arg[0] != 2 || sig.Segments[0][0].Arg[1] != 3 ||
-		sig.Segments[0][1].Arg[0] != 22 || sig.Segments[0][1].Arg[1] != 13 {
-		t.Fatalf("symbol use points = %#v, want viewBox scaled to 2,3 -> 22,13", sig.Segments[0])
-	}
 }
 
 // TestIssue0209SplitLinesEqualMultiCell addresses issue 209
@@ -1243,35 +959,6 @@ func ExampleTestPDFDocument_CellFormat_tables() {
 	example.Summary(err, fileStr)
 	// Output:
 	// Successfully generated assets/generated/pdf/Document_CellFormat_tables.pdf
-}
-
-// ExampleTestPDFDocument_HTMLNew demonstrates internal and external links with HTML.
-func ExampleTestPDFDocument_HTMLNewForTest() {
-	pdf := document.MustNewTestPDFDocument()
-	// First page: manual local link
-	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 20)
-	_, lineHt := pdf.GetFontSize()
-	pdf.Write(lineHt, "To find out what's new in this tutorial, click ")
-	pdf.SetFont("", "U", 0)
-	link := pdf.AddLink()
-	pdf.WriteLinkID(lineHt, "here", link)
-	pdf.SetFont("", "", 0)
-	// Second page: image link and HTML with link
-	pdf.AddPage()
-	pdf.SetLink(link, 0, -1)
-	pdf.ImageOptions(example.ImageFile("logo.png"), 10, 12, 30, 0, false, document.ImageOptions{}, 0, "http://www.fpdf.org")
-	pdf.SetLeftMargin(45)
-	pdf.SetFontSize(14)
-	_, lineHt = pdf.GetFontSize()
-	htmlStr := `<p>HTML content is lowered through the unified immutable planning path.</p>`
-	html := pdf.HTMLNewForTest()
-	html.Write(lineHt, htmlStr)
-	fileStr := example.Filename("Document_HTMLNew")
-	err := pdf.OutputFileAndClose(fileStr)
-	example.Summary(err, fileStr)
-	// Output:
-	// Successfully generated assets/generated/pdf/Document_HTMLNew.pdf
 }
 
 // ExampleTestPDFDocument_WriteAligned demonstrates how to align text with the Write function.
@@ -2125,49 +1812,6 @@ func ExampleTestPDFDocument_SplitLines() {
 	// Successfully generated assets/generated/pdf/Document_Splitlines.pdf
 }
 
-// ExampleTestPDFDocument_SVGWrite demonstrates how to render a simple SVG image with
-// paths and shapes.
-func ExampleTestPDFDocument_SVGWrite() {
-	const (
-		fontPtSize = 16.0
-		wd         = 100.0
-	)
-	var (
-		sig document.SVG
-		err error
-	)
-	pdf := document.MustNewTestPDFDocument() // A4 210.0 x 297.0
-	pdf.SetFont("Times", "", fontPtSize)
-	lineHt := pdf.PointConvert(fontPtSize)
-	pdf.AddPage()
-	pdf.SetMargins(10, 10, 10)
-	htmlStr := `<p>This example renders a simple SVG image alongside unified HTML text.</p>`
-	html := pdf.HTMLNewForTest()
-	html.Write(lineHt, htmlStr)
-	sig, err = document.SVGParse([]byte(`<svg width="240" height="80" viewBox="0 0 240 80">
-		<path d="M8 50 C34 18 51 18 61 45 S89 72 112 40 C128 18 143 21 153 44 C162 64 176 62 189 42 C201 23 215 22 232 36" fill="none"/>
-	</svg>`))
-	if err == nil {
-		scale := 100 / sig.Wd
-		scaleY := 30 / sig.Ht
-		if scale > scaleY {
-			scale = scaleY
-		}
-		pdf.SetLineCapStyle("round")
-		pdf.SetLineWidth(0.25)
-		pdf.SetDrawColor(0, 0, 128)
-		pdf.SetXY((210.0-scale*sig.Wd)/2.0, pdf.GetY()+10)
-		pdf.SVGWrite(&sig, scale)
-	} else {
-		pdf.SetError(err)
-	}
-	fileStr := example.Filename("Document_SVGWrite")
-	err = pdf.OutputFileAndClose(fileStr)
-	example.Summary(err, fileStr)
-	// Output:
-	// Successfully generated assets/generated/pdf/Document_SVGWrite.pdf
-}
-
 // ExampleTestPDFDocument_CellFormat_align demonstrates Stefan Schroeder's code to control vertical
 // alignment.
 func ExampleTestPDFDocument_CellFormat_align() {
@@ -2235,10 +1879,8 @@ func ExampleTestPDFDocument_CellFormat_codepageescape() {
 		pdf.Ln(ht)
 	}
 	pdf.AddPage()
-	htmlStr := `<p>HTML source text in this example stays within the selected core-font repertoire.</p>`
-	html := pdf.HTMLNewForTest()
-	html.Write(ht, htmlStr)
-	pdf.Ln(2 * ht)
+	pdf.CellFormat(190, ht, "Core-font text stays within the selected repertoire.", "", 1, "C", false, 0, "")
+	pdf.Ln(ht)
 	write("Core-font ASCII sample")
 	write("Another deterministic sample")
 	write("Generated text remains bounded")
@@ -2623,63 +2265,6 @@ func ExampleTestPDFDocument_DrawPath() {
 	// Successfully generated assets/generated/pdf/Document_DrawPath_fill.pdf
 }
 
-// ExampleTestPDFDocument_CreateTemplate demonstrates creating and using templates
-func ExampleTestPDFDocument_CreateTemplate() {
-	pdf := document.MustNewTestPDFDocument()
-	pdf.SetCompression(false)
-	// pdf.SetFont("Times", "", 12)
-	template := pdf.CreateTemplate(func(tpl *document.Tpl) {
-		tpl.ImageOptions(example.ImageFile("logo.png"), 6, 6, 30, 0, false, document.ImageOptions{}, 0, "")
-		tpl.SetFont("Arial", "B", 16)
-		tpl.Text(40, 20, "Template says hello")
-		tpl.SetDrawColor(0, 100, 200)
-		tpl.SetLineWidth(2.5)
-		tpl.Line(95, 12, 105, 22)
-	})
-	_, tplSize := template.Size()
-	// fmt.Println("Size:", tplSize)
-	// fmt.Println("Scaled:", tplSize.ScaleBy(1.5))
-
-	template2 := pdf.CreateTemplate(func(tpl *document.Tpl) {
-		tpl.UseTemplate(template)
-		subtemplate := tpl.CreateTemplate(func(tpl2 *document.Tpl) {
-			tpl2.ImageOptions(example.ImageFile("logo.png"), 6, 86, 30, 0, false, document.ImageOptions{}, 0, "")
-			tpl2.SetFont("Arial", "B", 16)
-			tpl2.Text(40, 100, "Subtemplate says hello")
-			tpl2.SetDrawColor(0, 200, 100)
-			tpl2.SetLineWidth(2.5)
-			tpl2.Line(102, 92, 112, 102)
-		})
-		tpl.UseTemplate(subtemplate)
-	})
-
-	pdf.SetDrawColor(200, 100, 0)
-	pdf.SetLineWidth(2.5)
-	pdf.SetFont("Arial", "B", 16)
-
-	// serialize and deserialize template
-	b, _ := template2.Serialize()
-	template3, _ := document.DeserializeTemplate(b)
-
-	pdf.AddPage()
-	pdf.UseTemplate(template3)
-	pdf.UseTemplateScaled(template3, document.Point{X: 0, Y: 30}, tplSize)
-	pdf.Line(40, 210, 60, 210)
-	pdf.Text(40, 200, "Template example page 1")
-
-	pdf.AddPage()
-	pdf.UseTemplate(template2)
-	pdf.UseTemplateScaled(template3, document.Point{X: 0, Y: 30}, tplSize.ScaleBy(1.4))
-	pdf.Line(60, 210, 80, 210)
-	pdf.Text(40, 200, "Template example page 2")
-
-	fileStr := example.Filename("Document_CreateTemplate")
-	err := pdf.OutputFileAndClose(fileStr)
-	example.Summary(err, fileStr)
-	// Output:
-	// Successfully generated assets/generated/pdf/Document_CreateTemplate.pdf
-}
-
 // ExampleTestPDFDocument_AddUTF8FontFromBytes demonstrates how to use an embedded font byte array.
 func ExampleTestPDFDocument_AddUTF8FontFromBytes() {
 	pdf := document.MustNewTestPDFDocument()
@@ -2883,60 +2468,6 @@ func ExampleTestPDFDocument_RegisterAlias_utf8() {
 	// Successfully generated assets/generated/pdf/Document_RegisterAliasUTF8.pdf
 }
 
-// ExampleNewGrid demonstrates the generation of graph grids.
-func ExampleNewGrid() {
-	pdf := document.MustNewTestPDFDocument()
-	pdf.SetFont("Arial", "", 12)
-	pdf.AddPage()
-
-	gr := document.NewGrid(13, 10, 187, 130)
-	gr.TickmarksExtentX(0, 10, 4)
-	gr.TickmarksExtentY(0, 10, 3)
-	gr.Grid(pdf)
-
-	gr = document.NewGrid(13, 154, 187, 128)
-	gr.XLabelRotate = true
-	gr.TickmarksExtentX(0, 1, 12)
-	gr.XDiv = 5
-	gr.TickmarksContainY(0, 1.1)
-	gr.YDiv = 20
-	// Replace X label formatter with month abbreviation
-	gr.XTickStr = func(val float64, precision int) string {
-		return time.Month(math.Mod(val, 12) + 1).String()[0:3]
-	}
-	gr.Grid(pdf)
-	dot := func(x, y float64) {
-		pdf.Circle(gr.X(x), gr.Y(y), 0.5, "F")
-	}
-	pts := []float64{0.39, 0.457, 0.612, 0.84, 0.998, 1.037, 1.015, 0.918, 0.772, 0.659, 0.593, 0.164}
-	for month, val := range pts {
-		dot(float64(month)+0.5, val)
-	}
-	pdf.SetDrawColor(255, 64, 64)
-	pdf.SetAlpha(0.5, "Normal")
-	pdf.SetLineWidth(1.2)
-	gr.Plot(pdf, 0.5, 11.5, 50, func(x float64) float64 {
-		// http://www.xuru.org/rt/PR.asp
-		return 0.227 * math.Exp(-0.0373*x*x+0.471*x)
-	})
-	pdf.SetAlpha(1.0, "Normal")
-	pdf.SetXY(gr.X(0.5), gr.Y(1.35))
-	pdf.SetFontSize(14)
-	pdf.Write(0, "Solar energy (MWh) per month, 2016")
-	pdf.AddPage()
-
-	gr = document.NewGrid(13, 10, 187, 274)
-	gr.TickmarksContainX(2.3, 3.4)
-	gr.TickmarksContainY(10.4, 56.8)
-	gr.Grid(pdf)
-
-	fileStr := example.Filename("Document_Grid")
-	err := pdf.OutputFileAndClose(fileStr)
-	example.Summary(err, fileStr)
-	// Output:
-	// Successfully generated assets/generated/pdf/Document_Grid.pdf
-}
-
 // ExampleTestPDFDocument_SetPageBox demonstrates the use of a page box
 func ExampleTestPDFDocument_SetPageBox() {
 	// pdfinfo (from http://www.xpdfreader.com) reports the following for this example:
@@ -3025,64 +2556,6 @@ func ExampleTestPDFDocument_SubWrite() {
 	example.Summary(err, fileStr)
 	// Output:
 	// Successfully generated assets/generated/pdf/Document_SubWrite.pdf
-}
-
-// ExampleTestPDFDocument_SetPage demomstrates the SetPage() method, allowing content
-// generation to be deferred until all pages have been added.
-func ExampleTestPDFDocument_SetPage() {
-	rnd := rand.New(rand.NewSource(0)) // Make reproducible documents
-	pdf := document.MustNewTestPDFDocument(document.WithOrientation(document.OrientationLandscape), document.WithUnit(document.UnitCentimeter))
-	pdf.SetFont("Times", "", 12)
-
-	time := []float64{}
-	temperaturesFromSensors := make([][]float64, 5)
-	maxs := []float64{25, 41, 89, 62, 11}
-	for i := range temperaturesFromSensors {
-		temperaturesFromSensors[i] = make([]float64, 0)
-	}
-
-	for i := 0.0; i < 100; i += 0.5 {
-		time = append(time, i)
-		for j, sensor := range temperaturesFromSensors {
-			dataValue := rnd.Float64() * maxs[j]
-			sensor = append(sensor, dataValue)
-			temperaturesFromSensors[j] = sensor
-		}
-	}
-	graphs := []document.GridType{}
-	pageNums := []int{}
-	xMax := time[len(time)-1]
-	for i := range temperaturesFromSensors {
-		// Create a new page and graph for each sensor we want to graph.
-		pdf.AddPage()
-		pdf.Ln(1)
-		// Custom label per sensor
-		pdf.WriteAligned(0, 0, "Temperature Sensor "+strconv.Itoa(i+1)+" (C) vs Time (min)", "C")
-		pdf.Ln(0.5)
-		graph := document.NewGrid(pdf.GetX(), pdf.GetY(), 20, 10)
-		graph.TickmarksContainX(0, xMax)
-		// Custom Y axis
-		graph.TickmarksContainY(0, maxs[i])
-		graph.Grid(pdf)
-		// Save references and locations.
-		graphs = append(graphs, graph)
-		pageNums = append(pageNums, pdf.PageNo())
-	}
-	// For each X, graph the Y in each sensor.
-	for i, currTime := range time {
-		for j, sensor := range temperaturesFromSensors {
-			pdf.SetPage(pageNums[j])
-			graph := graphs[j]
-			temperature := sensor[i]
-			pdf.Circle(graph.X(currTime), graph.Y(temperature), 0.04, "D")
-		}
-	}
-
-	fileStr := example.Filename("Document_SetPage")
-	err := pdf.OutputFileAndClose(fileStr)
-	example.Summary(err, fileStr)
-	// Output:
-	// Successfully generated assets/generated/pdf/Document_SetPage.pdf
 }
 
 // ExampleTestPDFDocument_SetFillColor demonstrates how graphic attributes are properly
@@ -3426,11 +2899,11 @@ func ExampleTestPDFDocument_SetAttachments() {
 	pdf := document.MustNewTestPDFDocument()
 
 	// Global attachments
-	file, err := os.ReadFile(example.RepoFile("document", "grid.go"))
+	file, err := os.ReadFile(example.RepoFile("document", "paper.go"))
 	if err != nil {
 		pdf.SetError(err)
 	}
-	a1 := document.Attachment{Content: file, Filename: "grid.go"}
+	a1 := document.Attachment{Content: file, Filename: "paper.go"}
 	file, err = os.ReadFile(example.RepoFile("LICENSE"))
 	if err != nil {
 		pdf.SetError(err)
@@ -3474,11 +2947,11 @@ func ExampleTestPDFDocument_AddAttachmentAnnotation() {
 	pdf.AddPage()
 
 	// Per page attachment
-	file, err := os.ReadFile(example.RepoFile("document", "grid.go"))
+	file, err := os.ReadFile(example.RepoFile("document", "paper.go"))
 	if err != nil {
 		pdf.SetError(err)
 	}
-	a := document.Attachment{Content: file, Filename: "grid.go", Description: "Some amazing code !"}
+	a := document.Attachment{Content: file, Filename: "paper.go", Description: "Paper source"}
 
 	pdf.SetXY(5, 10)
 	pdf.Rect(2, 10, 50, 15, "D")

@@ -35,29 +35,6 @@ func testFormDocument() formDocument {
 	}
 }
 
-func TestFormDocumentHTMLCanonicalOutput(t *testing.T) {
-	html := formDocumentHTML(testFormDocument())
-	for _, want := range []string{
-		"<h1>Form Title</h1>",
-		`<section class="form-section" style="break-inside: avoid">`,
-		`<dl class="form-qa">`,
-		"<dt>Name *</dt>",
-		`<ul class="form-answer-list">`,
-		`<table class="form-answer-table"><tbody>`,
-		`style="break-before: page"`,
-	} {
-		if !strings.Contains(html, want) {
-			t.Fatalf("form HTML missing %q in %s", want, html)
-		}
-	}
-}
-
-func TestFormDocumentHTMLValidation(t *testing.T) {
-	if messages := validateFormDocumentHTML(testFormDocument()); len(messages) != 0 {
-		t.Fatalf("ValidateFormDocumentHTML messages = %#v, want none", messages)
-	}
-}
-
 func TestFormDocumentBlocks(t *testing.T) {
 	blocks := formDocumentBlocks(testFormDocument())
 	if len(blocks) != 3 {

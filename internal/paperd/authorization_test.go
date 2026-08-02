@@ -45,8 +45,9 @@ func grantMutationAuthority(t *testing.T, workspace *Workspace, opened PaperOpen
 }
 
 func TestSlotValidityIsEvaluatedBeforeActorAuthority(t *testing.T) {
-	workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+	workspace := authorizationWorkspace(t, WorkspaceOptions{})
 	guard, created, opened := mutationGuard(t, workspace, slotMutationFixture, "@instance", "slot-authority", CapabilityEdit)
+	guard.Authority = MutationAuthorityHandle{}
 	wrongType := PaperFillSlotRequest{
 		Guard: guard, Slot: "@content",
 		Content: []paperedit.NodeSpec{{Kind: paperlang.NodeList, Children: []paperedit.NodeSpec{{Kind: paperlang.NodeItem}}}},
@@ -114,7 +115,7 @@ func TestMutationAuthorityEnforcesOperationProtectedAndTransitiveScopes(t *testi
 }
 
 func TestDiagnosticFixRequiresApplyFixAuthority(t *testing.T) {
-	workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+	workspace := authorizationWorkspace(t, WorkspaceOptions{})
 	request, _, opened := diagnosticFixRequest(t, workspace, invalidBindingFixFixture, "@amount", "authorized-fix", "PAPER_BIND_PATH", RemedySetBindingPath, PaperDiagnosticFixPayload{Path: "total"}, CapabilityEdit)
 	request.Guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:fix", []MutationOperation{MutationSetBinding}, []string{"@amount"}, nil)
 	if _, err := workspace.PaperApplyDiagnosticFix(request); errorCode(err) != "AUTHORITY_OPERATION_DENIED" {
@@ -129,7 +130,7 @@ func TestDiagnosticFixRequiresApplyFixAuthority(t *testing.T) {
 
 func TestMutationAuthorityRevocationExpiryReplayAndConcurrency(t *testing.T) {
 	t.Run("revocation blocks idempotent replay", func(t *testing.T) {
-		workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+		workspace := authorizationWorkspace(t, WorkspaceOptions{})
 		guard, created, opened := mutationGuard(t, workspace, workspaceFixture, "@intro", "revoked-replay", CapabilityEdit)
 		guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:revoked", []MutationOperation{MutationSetLiteral}, nil, nil)
 		if err := workspace.RevokeMutationAuthority(guard.Authority); err != nil {
@@ -146,7 +147,7 @@ func TestMutationAuthorityRevocationExpiryReplayAndConcurrency(t *testing.T) {
 
 	t.Run("expiry uses injected clock", func(t *testing.T) {
 		now := time.Unix(1_900_000_000, 0).UTC()
-		workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true, HandleTTL: time.Minute, Now: func() time.Time { return now }})
+		workspace := authorizationWorkspace(t, WorkspaceOptions{HandleTTL: time.Minute, Now: func() time.Time { return now }})
 		_, _, opened := mutationGuard(t, workspace, workspaceFixture, "@intro", "expiry", CapabilityEdit)
 		handle := grantMutationAuthority(t, workspace, opened, "agent:expiry", []MutationOperation{MutationSetLiteral}, nil, nil)
 		now = now.Add(time.Minute)
@@ -157,7 +158,7 @@ func TestMutationAuthorityRevocationExpiryReplayAndConcurrency(t *testing.T) {
 	})
 
 	t.Run("idempotent concurrent requests", func(t *testing.T) {
-		workspace := authorizationWorkspace(t, WorkspaceOptions{RequireMutationAuthority: true})
+		workspace := authorizationWorkspace(t, WorkspaceOptions{})
 		guard, _, opened := mutationGuard(t, workspace, workspaceFixture, "@intro", "concurrent-authorized", CapabilityEdit)
 		guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:race", []MutationOperation{MutationSetLiteral}, nil, nil)
 		request := PaperSetLiteralRequest{Guard: guard, Text: "concurrent"}

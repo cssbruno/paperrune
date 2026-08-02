@@ -7,15 +7,9 @@ import "sort"
 
 type resourceStore struct {
 	fonts        map[string]fontDefinition
-	templates    map[string]TemplateView
 	images       map[string]*ImageInfo
 	imageAliases map[string]string
-	objects      resourceObjectNumbers
 	attachments  attachmentResourceStore
-}
-
-type resourceObjectNumbers struct {
-	templates map[string]int
 }
 
 type attachmentResourceStore struct {
@@ -27,10 +21,8 @@ type attachmentResourceStore struct {
 func newResourceStore() *resourceStore {
 	return &resourceStore{
 		fonts:        make(map[string]fontDefinition),
-		templates:    make(map[string]TemplateView),
 		images:       make(map[string]*ImageInfo),
 		imageAliases: make(map[string]string),
-		objects:      resourceObjectNumbers{templates: make(map[string]int)},
 		attachments: attachmentResourceStore{
 			streams:    make(map[attachmentStreamKey]int),
 			files:      make(map[attachmentFileKey]int),
@@ -183,53 +175,6 @@ func (s *resourceStore) imagesByResourceID(sorted bool) []*ImageInfo {
 		images = append(images, s.images[key])
 	}
 	return images
-}
-
-func (s *resourceStore) addTemplate(tpl TemplateView) {
-	s.templates[tpl.ID()] = tpl
-}
-
-func (s *resourceStore) templatesForOutput(sorted bool) []TemplateView {
-	return sortTemplates(s.templates, sorted)
-}
-
-func (s *resourceStore) templateCatalogKeys(sorted bool) []string {
-	return templateKeyList(s.templates, sorted)
-}
-
-func (s *resourceStore) template(id string) (TemplateView, bool) {
-	tpl, ok := s.templates[id]
-	return tpl, ok
-}
-
-func (s *resourceStore) templateObject(id string) (int, bool) {
-	objID, ok := s.objects.templates[id]
-	return objID, ok
-}
-
-func (s *resourceStore) setTemplateObject(id string, objID int) {
-	s.objects.templates[id] = objID
-}
-
-func (s *resourceStore) templateOutputImage(tplID, name string, image *ImageInfo) *ImageInfo {
-	if image == nil {
-		return nil
-	}
-	if stored := s.images[sprintf("t%s-%s", tplID, name)]; stored != nil {
-		return stored
-	}
-	keys := make([]string, 0, len(s.images))
-	for key := range s.images {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		stored := s.images[key]
-		if stored != nil && stored.i == image.i {
-			return stored
-		}
-	}
-	return image
 }
 
 func (s *resourceStore) compressedAttachment(key attachmentStreamKey) (attachmentStream, bool) {

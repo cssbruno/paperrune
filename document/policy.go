@@ -19,7 +19,6 @@ var (
 	ErrAttachmentTooLarge    = errors.New("attachment too large")
 	ErrUnsupportedImageType  = errors.New("unsupported image type")
 	ErrImageTooLarge         = errors.New("image too large")
-	errHTMLLimitExceeded     = errors.New("HTML input exceeds maximum size")
 	ErrPageLimitExceeded     = errors.New("page limit exceeded")
 	ErrOutputCanceled        = errors.New("output canceled")
 	ErrSecurityPolicyDenied  = errors.New("security policy denied feature")
@@ -32,8 +31,6 @@ type Limits struct {
 	MaxImageSourceBytes        int64
 	MaxImageDecodedBytes       int64
 	MaxAttachmentBytes         int64
-	MaxHTMLBytes               int
-	MaxHTMLGeneratedPages      int
 	MaxTemplateSerializedBytes int
 	MaxPages                   int
 }
@@ -53,7 +50,6 @@ type OutputPolicy struct {
 // WithProductionPolicy. When enforced, false booleans deny the corresponding
 // feature.
 type SecurityPolicy struct {
-	AllowLocalHTMLImages bool
 	AllowFileAttachments bool
 	AllowRawWrites       bool
 	MaxEmbeddedFileBytes int64
@@ -97,8 +93,6 @@ func ServerSafeLimits() Limits {
 		MaxImageSourceBytes:        32 * 1024 * 1024,
 		MaxImageDecodedBytes:       256 * 1024 * 1024,
 		MaxAttachmentBytes:         MaxAttachmentBytes,
-		MaxHTMLBytes:               4 * 1024 * 1024,
-		MaxHTMLGeneratedPages:      500,
 		MaxTemplateSerializedBytes: 16 * 1024 * 1024,
 		MaxPages:                   10_000,
 	}
@@ -110,8 +104,6 @@ func BatchLimits() Limits {
 		MaxImageSourceBytes:        256 * 1024 * 1024,
 		MaxImageDecodedBytes:       1024 * 1024 * 1024,
 		MaxAttachmentBytes:         512 * 1024 * 1024,
-		MaxHTMLBytes:               32 * 1024 * 1024,
-		MaxHTMLGeneratedPages:      10_000,
 		MaxTemplateSerializedBytes: 128 * 1024 * 1024,
 		MaxPages:                   100_000,
 	}
@@ -156,7 +148,6 @@ func BatchPolicy() ProductionPolicy {
 		Cache:    ResourceCacheShared,
 		CacheSet: true,
 		Security: SecurityPolicy{
-			AllowLocalHTMLImages: true,
 			AllowFileAttachments: true,
 			AllowRawWrites:       true,
 			MaxEmbeddedFileBytes: 512 * 1024 * 1024,
@@ -194,12 +185,6 @@ func validateLimits(limits Limits) error {
 	}
 	if limits.MaxAttachmentBytes < 0 {
 		return fmt.Errorf("invalid max attachment bytes: %d", limits.MaxAttachmentBytes)
-	}
-	if limits.MaxHTMLBytes < 0 {
-		return fmt.Errorf("invalid max HTML bytes: %d", limits.MaxHTMLBytes)
-	}
-	if limits.MaxHTMLGeneratedPages < 0 {
-		return fmt.Errorf("invalid max HTML generated pages: %d", limits.MaxHTMLGeneratedPages)
 	}
 	if limits.MaxTemplateSerializedBytes < 0 {
 		return fmt.Errorf("invalid max template serialized bytes: %d", limits.MaxTemplateSerializedBytes)

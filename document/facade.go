@@ -9,8 +9,7 @@ import (
 )
 
 // Document is a PDF build session whose only supported authoring surface is
-// Paper. The low-level direct-placement and HTML engines are private;
-// callers cannot add pages, text, cells, or drawing commands directly.
+// Paper. Callers cannot add pages, text, cells, or drawing commands directly.
 type Document struct {
 	core *pdfDocument
 }

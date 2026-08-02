@@ -211,17 +211,4 @@ func (f *pdfDocument) putxobjectdict() {
 			f.outbytes(appendPDFResourceRefValue(nil, imagePDFResourceRef(image)))
 		}
 	}
-	{
-		resources := f.ensureResourceStore()
-		for _, key := range resources.templateCatalogKeys(f.catalogSort) {
-			tpl, _ := resources.template(key)
-			if tpl == nil || invalidTemplate(tpl) {
-				continue
-			}
-			id := tpl.ID()
-			if objID, ok := resources.templateObject(id); ok {
-				f.outbytes(appendPDFResourceRefValue(nil, templatePDFResourceRef(id, objID)))
-			}
-		}
-	}
 }

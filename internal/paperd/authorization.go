@@ -255,11 +255,6 @@ func (w *Workspace) authorizeMutation(guard PaperMutationGuard, operation Mutati
 	}
 	protected := protectedEffects(revision.parsed.AST.Root, effects, w.protectedNodeIDs)
 	evidence := MutationAuthorizationEvidence{Operation: operation, DirectTargets: canonicalStrings(direct), Effects: effects, ProtectedEffects: protected}
-	if guard.Authority.value.serial == 0 && !w.requireMutationAuthority {
-		evidence.Actor, evidence.Allowed, evidence.Reason = "compatibility-open", true, "legacy workspace policy permits edit-open authority"
-		w.recordAuthorizationAudit(evidence, guard.Candidate, string(revision.revision))
-		return evidence, nil
-	}
 	w.mu.RLock()
 	record, lookupErr := w.mutationAuthorityLocked(guard.Authority)
 	if lookupErr != nil || record == nil {

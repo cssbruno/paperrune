@@ -460,7 +460,7 @@ func (t CanonicalTree) CanonicalJSON() ([]byte, error) {
 	return json.Marshal(t.Projection())
 }
 func (t CanonicalTree) Hash() (string, error) {
-	digest, err := canonicalJSONHash(t.readOnlyProjection())
+	digest, err := canonicalTreeProjectionHash(t.readOnlyProjection())
 	if err != nil {
 		return "", err
 	}

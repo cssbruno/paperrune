@@ -151,13 +151,35 @@ func (f *pdfDocument) planTypedMixedBodiesMappedMode(ctx context.Context, doc *l
 		// frontend's body index for that child so source identity remains tied to
 		// the authored node instead of silently falling back to a synthetic ID.
 		childMapping := paperMappingForMixedBody(mapping, index)
-		var planned layoutengine.LayoutPlan
-		if decorated, ok := block.(typedMixedDecoratedBlock); ok {
-			planned, err = f.planTypedMixedDecoratedBlock(ctx, &child, decorated, selector)
-		} else if table, ok := block.(layout.TableBlock); ok {
-			planned, err = f.planTypedTableBodiesMapped(ctx, &child, table, fmt.Sprintf("body[%d]", index), childMapping, 0, selector)
-		} else {
-			planned, err = f.planPaperTextBlocksMappedBodiesContext(ctx, &child, childMapping, selector)
+		planChild := func() (layoutengine.LayoutPlan, error) {
+			if decorated, ok := block.(typedMixedDecoratedBlock); ok {
+				return f.planTypedMixedDecoratedBlock(ctx, &child, decorated, selector)
+			}
+			if table, ok := block.(layout.TableBlock); ok {
+				return f.planTypedTableBodiesMapped(ctx, &child, table, fmt.Sprintf("body[%d]", index), childMapping, 0, selector)
+			}
+			return f.planPaperTextBlocksMappedBodiesContext(ctx, &child, childMapping, selector)
+		}
+		planned, err := planChild()
+		var unsupported *typedShadowUnsupportedError
+		if err != nil && startCursor > body.Y && errors.As(err, &unsupported) && unsupported.Reason == typedShadowGeometry {
+			// Atomic content such as a paragraph with margins, padding, or a
+			// border can be too tall for the shortened remainder while still
+			// fitting a fresh page. Retry it at that fresh page before treating
+			// the geometry as intrinsically oversized.
+			startPage++
+			if f.limits.MaxPages > 0 && int(startPage) > f.limits.MaxPages {
+				return layoutengine.LayoutPlan{}, fmt.Errorf("%w: mixed typed flow requires page %d", layoutengine.ErrTablePageLimit, startPage)
+			}
+			body, err = globalBody(startPage)
+			if err != nil {
+				return layoutengine.LayoutPlan{}, err
+			}
+			startCursor = body.Y
+			planned, err = planChild()
+			if err == nil {
+				pendingReason = layoutengine.BreakInsufficientRemainingBodySpace
+			}
 		}
 		if err != nil {
 			return layoutengine.LayoutPlan{}, err
@@ -388,11 +410,11 @@ func typedBlocksNeedMixedBoxContainers(blocks []layout.Block) bool {
 	for _, candidate := range layout.NormalizeBlocks(blocks) {
 		switch block := candidate.(type) {
 		case layout.SectionBlock:
-			if htmlUnifiedVisualBox(block.EffectiveBox()) || typedBlocksNeedMixedBoxContainers(block.Blocks) {
+			if paperVisualBox(block.EffectiveBox()) || typedBlocksNeedMixedBoxContainers(block.Blocks) {
 				return true
 			}
 		case layout.ClauseBlock:
-			if htmlUnifiedVisualBox(block.EffectiveBox()) || typedBlocksNeedMixedBoxContainers(block.Blocks) {
+			if paperVisualBox(block.EffectiveBox()) || typedBlocksNeedMixedBoxContainers(block.Blocks) {
 				return true
 			}
 		case layout.NoteBoxBlock:
@@ -416,7 +438,7 @@ func typedMixedExpandContainers(blocks []layout.Block, path string) ([]layout.Bl
 		blockPath := fmt.Sprintf("%s[%d]", path, index)
 		switch block := candidate.(type) {
 		case layout.SectionBlock:
-			if htmlUnifiedVisualBox(block.EffectiveBox()) {
+			if paperVisualBox(block.EffectiveBox()) {
 				policy, visual := paperContainerBoxPolicy(block.EffectiveBox())
 				block.Box, block.BoxRef = layout.BoxStyle{KeepTogether: policy.keepTogether, KeepWithNext: policy.keepWithNext,
 					Orphans: policy.orphans, Widows: policy.widows}, nil
@@ -437,7 +459,7 @@ func typedMixedExpandContainers(blocks []layout.Block, path string) ([]layout.Bl
 			}
 			expanded = append(expanded, children...)
 		case layout.ClauseBlock:
-			if htmlUnifiedVisualBox(block.EffectiveBox()) {
+			if paperVisualBox(block.EffectiveBox()) {
 				policy, visual := paperContainerBoxPolicy(block.EffectiveBox())
 				block.Box, block.BoxRef = layout.BoxStyle{KeepTogether: policy.keepTogether, KeepWithNext: policy.keepWithNext,
 					Orphans: policy.orphans, Widows: policy.widows}, nil
@@ -464,7 +486,7 @@ func typedMixedExpandContainers(blocks []layout.Block, path string) ([]layout.Bl
 				expanded = append(expanded, layout.PageBreakBlock{After: true})
 			}
 		case layout.NoteBoxBlock:
-			if htmlUnifiedVisualBox(block.EffectiveBox()) {
+			if paperVisualBox(block.EffectiveBox()) {
 				if strings.TrimSpace(block.Title) == "" && len(layout.NormalizeBlocks(block.Body)) == 0 {
 					return nil, fmt.Errorf("%s: visual box styling is unsupported for an empty container", blockPath)
 				}

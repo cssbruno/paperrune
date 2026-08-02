@@ -143,58 +143,6 @@ func TestTypedTableFixedColumnsRetainAuthoredWidthOnWiderPage(t *testing.T) {
 	}
 }
 
-func TestTypedAndHTMLTablesSharePaginationBoundary(t *testing.T) {
-	const rowCount = 24
-	typedPDF := mustNewPDFDocument(WithCustomPageSize(Size{Wd: 90, Ht: 90}))
-	typedDoc := layout.NewLayoutDocument()
-	typedDoc.PageTemplate.Margins = layout.Spacing{Top: 8, Right: 8, Bottom: 8, Left: 8}
-	typedRows := make([]layout.TableRow, rowCount)
-	for i := range typedRows {
-		typedRows[i] = layout.TableRow{Cells: []layout.TableCell{{Blocks: []layout.Block{
-			layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: fmt.Sprintf("row-%02d", i)}}, Style: layout.TextStyle{FontSize: 8, LineHeight: 5}},
-		}}}}
-	}
-	typedDoc.Body = []layout.Block{layout.TableBlock{Body: typedRows, Style: layout.TableStyle{BorderCollapse: true}}}
-	typedPDF.WriteDocument(typedDoc)
-
-	htmlPDF := mustNewPDFDocument(WithCustomPageSize(Size{Wd: 90, Ht: 90}))
-	htmlPDF.SetMargins(8, 8, 8)
-	htmlPDF.SetAutoPageBreak(true, 8)
-	htmlPDF.AddPage()
-	htmlPDF.SetFont("Helvetica", "", 8)
-	var tableHTML strings.Builder
-	tableHTML.WriteString(`<table style="border-collapse:collapse;font-size:8pt">`)
-	for i := range rowCount {
-		fmt.Fprintf(&tableHTML, "<tr><td>row-%02d</td></tr>", i)
-	}
-	tableHTML.WriteString(`</table>`)
-	html := htmlPDF.htmlNew()
-	if err := html.WriteContext(t.Context(), 5, tableHTML.String()); err != nil {
-		t.Fatalf("HTML.WriteContext() error = %v", err)
-	}
-	if typedPDF.PageCount() < 2 || htmlPDF.PageCount() < 2 {
-		t.Fatalf("table pagination did not cross a page boundary: typed pages = %d, HTML pages = %d", typedPDF.PageCount(), htmlPDF.PageCount())
-	}
-	renderedPDF := func(pdf *pdfDocument) []byte {
-		var output bytes.Buffer
-		if err := pdf.Output(&output); err != nil {
-			t.Fatalf("Output() error = %v", err)
-		}
-		return output.Bytes()
-	}
-	for _, output := range []struct {
-		name string
-		data []byte
-	}{
-		{name: "typed", data: renderedPDF(typedPDF)},
-		{name: "html", data: renderedPDF(htmlPDF)},
-	} {
-		if !bytes.HasPrefix(output.data, []byte("%PDF-")) || !bytes.Contains(output.data, []byte("%%EOF")) {
-			t.Fatalf("%s table output is incomplete", output.name)
-		}
-	}
-}
-
 func TestTypedBoxBackgroundUsesMeasuredContentHeight(t *testing.T) {
 	pdf := mustNewPDFDocument()
 	pdf.SetCompression(false)

@@ -883,6 +883,58 @@ func TestTypedTableIntrinsicMeasurementSupportsEmbeddedUTF8Font(t *testing.T) {
 	}
 }
 
+func TestTypedTablePlansNestedTableRowAndDecoratedSectionContent(t *testing.T) {
+	paragraph := func(text string) layout.ParagraphBlock {
+		return layout.ParagraphBlock{
+			Segments: []layout.TextSegment{{Text: text}},
+			Style:    layout.TextStyle{FontFamily: "Helvetica", FontSize: 9, LineHeight: 11},
+		}
+	}
+	nestedTable := layout.TableBlock{
+		Columns: []layout.TableColumn{{Width: 70}, {Width: 70}},
+		Body: []layout.TableRow{{Cells: []layout.TableCell{
+			{Blocks: []layout.Block{paragraph("nested table left")}},
+			{Blocks: []layout.Block{paragraph("nested table right")}},
+		}}},
+	}
+	nestedRow := layout.RowColumnBlock{
+		Direction: layout.RowDirection,
+		Gap:       4,
+		Items: []layout.RowColumnItem{
+			{Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFixed, Size: 68}, Block: paragraph("nested row left")},
+			{Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFixed, Size: 68}, Block: paragraph("nested row right")},
+		},
+	}
+	decorated := layout.SectionBlock{
+		Blocks: []layout.Block{paragraph("decorated section")},
+		Box: layout.BoxStyle{
+			Padding:         layout.Spacing{Top: 2, Right: 3, Bottom: 2, Left: 3},
+			BackgroundColor: layout.DocumentColor{R: 238, G: 242, B: 255, Set: true},
+		},
+	}
+	outer := layout.TableBlock{
+		Columns: []layout.TableColumn{{Width: 160}},
+		Body: []layout.TableRow{{Cells: []layout.TableCell{{Blocks: []layout.Block{
+			nestedTable, nestedRow, decorated,
+		}}}}},
+	}
+	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 180, Ht: 240}), WithNoCompression(), WithDeterministicOutput())
+	planner.SetMargins(10, 10, 10)
+	planner.SetAutoPageBreak(true, 10)
+	plan, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Language: "en-US", Body: []layout.Block{outer}})
+	if err != nil || plan.PageCount() != 1 {
+		t.Fatalf("nested cell plan = pages %d, %v", plan.PageCount(), err)
+	}
+	projection := plan.plan.Projection()
+	if len(projection.GlyphRuns) < 5 || len(projection.Fragments) < 8 || len(projection.Fills) == 0 {
+		t.Fatalf("nested cell projection = runs %d fragments %d fills %d", len(projection.GlyphRuns), len(projection.Fragments), len(projection.Fills))
+	}
+	target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+	if pages, err := target.WriteLayoutDocumentPlan(plan); err != nil || pages != 1 {
+		t.Fatalf("nested cell PDF replay = pages %d, %v", pages, err)
+	}
+}
+
 func typedTableTestBlock(repeat bool) layout.TableBlock {
 	cell := func(text string) layout.TableCell {
 		return layout.TableCell{Blocks: []layout.Block{layout.ParagraphBlock{

@@ -13,24 +13,46 @@ import (
 )
 
 func (f *pdfDocument) replaceAliases() {
+	_ = f.replaceAliasesContext(context.Background())
+}
+
+func (f *pdfDocument) replaceAliasesContext(ctx context.Context) error {
 	if len(f.aliasMap) == 0 {
-		return
+		return nil
+	}
+	hasCandidate := false
+	for page := 1; page <= f.page; page++ {
+		if page >= len(f.aliasPages) || f.aliasPages[page] {
+			hasCandidate = true
+			break
+		}
+	}
+	if !hasCandidate {
+		return nil
 	}
 	pairs := f.compiledAliasPairs()
 	if len(pairs) == 0 {
-		return
+		return nil
 	}
+	matcher := newAliasMatcher(pairs)
 	for n := 1; n <= f.page; n++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if n < len(f.aliasPages) && !f.aliasPages[n] {
 			continue
 		}
 		pageBytes := f.pages[n].Bytes()
-		replaced := replaceAliasBytes(pageBytes, pairs)
+		replaced, err := replaceAliasBytesContext(ctx, pageBytes, pairs, matcher)
+		if err != nil {
+			return err
+		}
 		if replaced != nil {
 			f.pages[n].Truncate(0)
 			_, _ = f.pages[n].Write(replaced)
 		}
 	}
+	return nil
 }
 
 func (f *pdfDocument) compiledAliasPairs() []aliasReplacementBytes {
@@ -176,6 +198,74 @@ type aliasReplacementBytes struct {
 	new []byte
 }
 
+type aliasMatcherEdge struct {
+	value  byte
+	target int
+}
+
+type aliasMatcherNode struct {
+	edges       []aliasMatcherEdge
+	replacement int
+}
+
+type aliasMatcher struct {
+	nodes []aliasMatcherNode
+}
+
+func newAliasMatcher(pairs []aliasReplacementBytes) aliasMatcher {
+	matcher := aliasMatcher{nodes: []aliasMatcherNode{{replacement: -1}}}
+	for pairIndex, pair := range pairs {
+		if len(pair.old) == 0 {
+			continue
+		}
+		nodeIndex := 0
+		for _, value := range pair.old {
+			next := -1
+			for _, edge := range matcher.nodes[nodeIndex].edges {
+				if edge.value == value {
+					next = edge.target
+					break
+				}
+			}
+			if next < 0 {
+				next = len(matcher.nodes)
+				matcher.nodes = append(matcher.nodes, aliasMatcherNode{replacement: -1})
+				matcher.nodes[nodeIndex].edges = append(matcher.nodes[nodeIndex].edges, aliasMatcherEdge{value: value, target: next})
+			}
+			nodeIndex = next
+		}
+		if matcher.nodes[nodeIndex].replacement < 0 {
+			matcher.nodes[nodeIndex].replacement = pairIndex
+		}
+	}
+	return matcher
+}
+
+func (matcher aliasMatcher) match(data []byte, start int) (int, int) {
+	if len(matcher.nodes) == 0 {
+		return -1, start
+	}
+	nodeIndex := 0
+	pairIndex, end := -1, start
+	for index := start; index < len(data); index++ {
+		next := -1
+		for _, edge := range matcher.nodes[nodeIndex].edges {
+			if edge.value == data[index] {
+				next = edge.target
+				break
+			}
+		}
+		if next < 0 {
+			break
+		}
+		nodeIndex = next
+		if replacement := matcher.nodes[nodeIndex].replacement; replacement >= 0 {
+			pairIndex, end = replacement, index+1
+		}
+	}
+	return pairIndex, end
+}
+
 type pageStreamData struct {
 	page       int
 	data       []byte
@@ -194,18 +284,34 @@ type pageStreamCompressor struct {
 }
 
 func replaceAliasBytes(data []byte, pairs []aliasReplacementBytes) []byte {
-	var out []byte
-	for _, pair := range pairs {
-		if len(pair.old) == 0 || !bytes.Contains(data, pair.old) {
+	replaced, _ := replaceAliasBytesContext(context.Background(), data, pairs, newAliasMatcher(pairs))
+	return replaced
+}
+
+func replaceAliasBytesContext(ctx context.Context, data []byte, pairs []aliasReplacementBytes, matcher aliasMatcher) ([]byte, error) {
+	var output []byte
+	for index := 0; index < len(data); {
+		if index&0x3fff == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		pairIndex, end := matcher.match(data, index)
+		if pairIndex < 0 {
+			if output != nil {
+				output = append(output, data[index])
+			}
+			index++
 			continue
 		}
-		if out == nil {
-			out = append([]byte(nil), data...)
+		if output == nil {
+			output = make([]byte, 0, len(data))
+			output = append(output, data[:index]...)
 		}
-		out = bytes.ReplaceAll(out, pair.old, pair.new)
-		data = out
+		output = append(output, pairs[pairIndex].new...)
+		index = end
 	}
-	return out
+	return output, nil
 }
 
 func (f *pdfDocument) pageObjectNumber(page int) int {
@@ -237,7 +343,10 @@ func (f *pdfDocument) putpagesContext(ctx context.Context) {
 	if len(f.aliasNbPagesStr) > 0 {
 		f.RegisterAlias(f.aliasNbPagesStr, sprintf("%d", nb))
 	}
-	f.replaceAliases()
+	if err := f.replaceAliasesContext(ctx); err != nil {
+		f.SetError(err)
+		return
+	}
 	if f.defOrientation == "P" {
 		wPt = f.defPageSize.Wd * f.k
 		hPt = f.defPageSize.Ht * f.k
