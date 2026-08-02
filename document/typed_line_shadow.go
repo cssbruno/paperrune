@@ -303,7 +303,7 @@ func (f *pdfDocument) planTypedParagraphLineShadowContext(ctx context.Context, d
 	if len(glyphRuns) != 0 {
 		fontResources = []layoutengine.CoreFontResource{fontResource}
 	}
-	plan, err = layoutengine.AttachOwnedCoreGlyphRuns(plan, fontResources, glyphRuns)
+	plan, err = layoutengine.AttachOwnedTrustedCoreGlyphRuns(plan, fontResources, glyphRuns)
 	if err != nil {
 		return typedLineShadowResult{}, fmt.Errorf("document: attach typed paragraph glyph runs: %w", err)
 	}

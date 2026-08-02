@@ -34,7 +34,6 @@ type typedTableCellMeasurement struct {
 	height     layoutengine.Fixed
 	blocks     []paperRowColumnMeasurement
 	content    []typedTableCellContent
-	segments   []layout.TextSegment
 	margins    [4]layoutengine.Fixed // top, right, bottom, left
 	padding    [4]layoutengine.Fixed // top, right, bottom, left
 	background layoutengine.CoreRGBColor
@@ -732,10 +731,8 @@ func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.Lay
 	default:
 		return typedTableCellMeasurement{}, typedTableUnsupported(placement.path+".vertical_align", fmt.Sprintf("%q is unsupported", cell.VerticalAlign))
 	}
-	identity := paperSourceIdentity{
-		key:      typedTableCellIdentity(placement.row, placement.column),
-		instance: layoutengine.InstanceID(typedTableCellIdentity(placement.row, placement.column)),
-	}
+	fallbackKey := typedTableCellIdentity(placement.row, placement.column)
+	identity := paperSourceIdentity{key: fallbackKey, instance: layoutengine.InstanceID(fallbackKey)}
 	if placement.identity.key != "" {
 		identity = placement.identity
 	}
@@ -855,6 +852,8 @@ func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.Lay
 		result.height, _ = result.height.Add(result.margins[2])
 		return result, nil
 	}
+	result.blocks = make([]paperRowColumnMeasurement, 0, len(blocks))
+	result.content = make([]typedTableCellContent, 0, len(blocks))
 	texts := make([]string, 0, len(blocks))
 	for blockIndex, expanded := range blocks {
 		block := expanded.block
@@ -932,12 +931,21 @@ func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.Lay
 		if align != "" {
 			paragraph.Style.Align = textAlign(align)
 		}
-		authoredSegments := append([]layout.TextSegment(nil), paragraph.Segments...)
+		authoredSegments := paragraph.Segments
 		mixedCoreShadow := typedParagraphNeedsMixedCoreShadow(paragraph, f)
+		needsRestyle := false
 		if !mixedCoreShadow {
-			paragraph.Segments = make([]layout.TextSegment, len(authoredSegments))
-			for index, segment := range authoredSegments {
-				paragraph.Segments[index] = layout.TextSegment{Text: segment.Text, Link: segment.Link, Destination: segment.Destination}
+			for _, segment := range authoredSegments {
+				if segment.StyleRef != nil || segment.Style != (layout.TextStyle{}) {
+					needsRestyle = true
+					break
+				}
+			}
+			if needsRestyle {
+				paragraph.Segments = make([]layout.TextSegment, len(authoredSegments))
+				for index, segment := range authoredSegments {
+					paragraph.Segments[index] = layout.TextSegment{Text: segment.Text, Link: segment.Link, Destination: segment.Destination}
+				}
 			}
 		}
 		margins := typedShadowMarginsForCell(f, doc)
@@ -945,7 +953,7 @@ func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.Lay
 		if err != nil {
 			return typedTableCellMeasurement{}, fmt.Errorf("%s.blocks[%d]: %w", placement.path, blockIndex, err)
 		}
-		if !mixedCoreShadow {
+		if needsRestyle {
 			measurement, err = f.restylePaperMeasurement(measurement, paragraph.Style, authoredSegments)
 			if err != nil {
 				return typedTableCellMeasurement{}, fmt.Errorf("%s.blocks[%d]: %w", placement.path, blockIndex, err)
@@ -963,7 +971,6 @@ func (f *pdfDocument) measureTypedTableCell(ctx context.Context, doc *layout.Lay
 			}
 		}
 		result.content = append(result.content, typedTableCellContent{text: &result.blocks[len(result.blocks)-1], identity: contentIdentity, role: role, heading: heading, actualText: typedTableCanonicalActualText(layout.TextSegmentsPlainText(authoredSegments)), segments: authoredSegments, ancestors: append([]typedTableContentAncestor(nil), expanded.ancestors...)})
-		result.segments = append(result.segments, authoredSegments...)
 		result.height, err = result.height.Add(measurement.height)
 		if err != nil {
 			return typedTableCellMeasurement{}, err

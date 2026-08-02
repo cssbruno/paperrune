@@ -292,17 +292,25 @@ func validEmbeddedFontName(name string) bool {
 // font plan without invoking layout. Runs must be ordered by their global line
 // index. Empty planned lines are represented by the absence of a run.
 func AttachCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreGlyphRun) (LayoutPlan, error) {
-	return attachCoreGlyphRuns(plan, fonts, runs, false)
+	return attachCoreGlyphRuns(plan, fonts, runs, true, false)
 }
 
 // AttachOwnedCoreGlyphRuns is AttachCoreGlyphRuns with explicit ownership
 // transfer. The caller must not mutate fonts, runs, or nested run advances
 // after the call.
 func AttachOwnedCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreGlyphRun) (LayoutPlan, error) {
-	return attachCoreGlyphRuns(plan, fonts, runs, true)
+	return attachCoreGlyphRuns(plan, fonts, runs, true, true)
 }
 
-func attachCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreGlyphRun, takeOwnership bool) (LayoutPlan, error) {
+// AttachOwnedTrustedCoreGlyphRuns composes planner-owned font and glyph
+// payloads without revalidating the unchanged geometry graph. The caller must
+// have produced valid canonical resources, runs, and advances and must not
+// mutate them after this ownership transfer.
+func AttachOwnedTrustedCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreGlyphRun) (LayoutPlan, error) {
+	return attachCoreGlyphRuns(plan, fonts, runs, false, true)
+}
+
+func attachCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreGlyphRun, validateResult, takeOwnership bool) (LayoutPlan, error) {
 	if len(plan.pages) == 0 {
 		return LayoutPlan{}, errors.New("layoutengine: core glyph runs require a non-empty plan")
 	}
@@ -358,8 +366,10 @@ func attachCoreGlyphRuns(plan LayoutPlan, fonts []CoreFontResource, runs []CoreG
 		result.deterministicInputs = DeterministicInputManifest{}
 		result.hasDeterministicInputs = false
 	}
-	if err := result.Validate(); err != nil {
-		return LayoutPlan{}, err
+	if validateResult {
+		if err := result.Validate(); err != nil {
+			return LayoutPlan{}, err
+		}
 	}
 	if !plan.hasDeterministicInputs {
 		return result, nil

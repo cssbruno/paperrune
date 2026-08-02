@@ -220,6 +220,48 @@ func TestAttachOwnedCoreGlyphRunsMatchesCopyingAPI(t *testing.T) {
 	}
 }
 
+func TestAttachOwnedTrustedCoreGlyphRunsMatchesValidatedAPI(t *testing.T) {
+	input := coreGlyphPlanInput()
+	input.Pages[0].Commands = IndexRange{}
+	geometry, err := NewTrustedGeometryPlan(LayoutPlanInput{
+		Pages: input.Pages, Fragments: input.Fragments, Lines: input.Lines,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trusted, err := AttachOwnedTrustedCoreGlyphRuns(geometry, input.Fonts, input.GlyphRuns)
+	if err != nil {
+		t.Fatalf("AttachOwnedTrustedCoreGlyphRuns() = %v", err)
+	}
+	if err := trusted.Validate(); err != nil {
+		t.Fatalf("trusted plan validation = %v", err)
+	}
+
+	wantInput := coreGlyphPlanInput()
+	wantInput.Pages[0].Commands = IndexRange{}
+	wantGeometry, err := NewLayoutPlan(LayoutPlanInput{
+		Pages: wantInput.Pages, Fragments: wantInput.Fragments, Lines: wantInput.Lines,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := AttachCoreGlyphRuns(wantGeometry, wantInput.Fonts, wantInput.GlyphRuns)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustedHash, err := trusted.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantHash, err := want.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if trustedHash != wantHash {
+		t.Fatalf("trusted hash = %s, want %s", trustedHash, wantHash)
+	}
+}
+
 func TestAttachCoreGlyphRunsAcceptsExactAdjacentMixedRunsOnOneLine(t *testing.T) {
 	input := coreGlyphPlanInput()
 	input.Pages[0].Commands = IndexRange{}

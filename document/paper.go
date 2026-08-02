@@ -723,7 +723,9 @@ func (f *pdfDocument) WritePaperPlan(plan PaperPlan) (PaperRenderResult, error) 
 type paperMeasuredBlock struct {
 	explicitBreak     bool
 	lines             []layoutengine.ParagraphLineInput
-	runs              map[uint32][]layoutengine.CoreGlyphRun
+	runs              []layoutengine.CoreGlyphRun
+	runRanges         []layoutengine.IndexRange
+	runLineX          []layoutengine.Fixed
 	decorations       map[uint32][]paperMeasuredDecoration
 	fontIDs           map[layoutengine.FontResourceID]layoutengine.FontResourceID
 	node              layoutengine.NodeID
@@ -744,6 +746,18 @@ type paperMeasuredBlock struct {
 	canvas            *paperMeasuredCanvas
 	semanticAncestors []typedSemanticAncestor
 	box               paperMeasuredBox
+}
+
+func (b paperMeasuredBlock) glyphRuns(line uint32) []layoutengine.CoreGlyphRun {
+	if uint64(line) >= uint64(len(b.runRanges)) {
+		return nil
+	}
+	runRange := b.runRanges[line]
+	end := uint64(runRange.Start) + uint64(runRange.Count)
+	if end > uint64(len(b.runs)) {
+		return nil
+	}
+	return b.runs[runRange.Start:end]
 }
 
 type paperMeasuredDecoration struct {
@@ -927,6 +941,7 @@ func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context
 	fonts := make([]layoutengine.CoreFontResource, 0)
 	measured := make([]paperMeasuredBlock, 0, len(planningBlocks))
 	var measuredLines uint64
+	measuredRuns := 0
 	var nextNode layoutengine.NodeID
 	fallbackIdentity := len(planningBlocks)
 	blockMeasurer := paperBlockMeasurer{
@@ -942,19 +957,22 @@ func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context
 			return layoutengine.LayoutPlan{}, measureErr
 		}
 		measuredLines = lineCount
+		measuredRuns += len(blockPlan.runs)
 		measured = append(measured, blockPlan)
 	}
 
-	geometry := layoutengine.LayoutPlanInput{}
+	geometry := layoutengine.LayoutPlanInput{
+		Lines: make([]layoutengine.PlannedLine, 0, int(measuredLines)),
+	}
 	var gridGroup uint32
-	runs := make([]layoutengine.CoreGlyphRun, 0)
+	runs := make([]layoutengine.CoreGlyphRun, 0, measuredRuns)
 	imageResources := make([]layoutengine.ImageResource, 0)
 	images := make([]layoutengine.PlannedImage, 0)
 	imageResourceIDs := make(map[layoutengine.ImageContentDigest]layoutengine.ImageResourceID)
 	paths := make([]layoutengine.PlannedPath, 0)
 	fills := make([]layoutengine.PlannedFill, 0)
 	strokes := make([]layoutengine.PlannedStroke, 0)
-	displayItems := make([]layoutengine.DisplayItem, 0)
+	displayItems := make([]layoutengine.DisplayItem, 0, measuredRuns)
 	appendMeasuredDecorations := func(block paperMeasuredBlock, sourceLine uint32, line layoutengine.PlannedLine, fragmentID layoutengine.FragmentID) error {
 		for _, decoration := range block.decorations[sourceLine] {
 			dx, dxErr := line.Bounds.X.Sub(decoration.sourceLine.Bounds.X)
@@ -1606,10 +1624,13 @@ func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context
 					Fragment: fragmentID, Index: uint32(sourceLine), Bounds: bounds, Baseline: baseline, Source: lineInput.Source,
 				})
 				page.Lines.Count++
-				for _, localRun := range block.runs[uint32(sourceLine)] {
+				for _, localRun := range block.glyphRuns(uint32(sourceLine)) {
 					localRun.Line = globalLine
 					localRun.Font = block.fontIDs[localRun.Font]
-					localRun.Origin.X, err = bounds.X.Add(localRun.Origin.X)
+					localRun.Origin.X, err = localRun.Origin.X.Sub(block.runLineX[sourceLine])
+					if err == nil {
+						localRun.Origin.X, err = bounds.X.Add(localRun.Origin.X)
+					}
 					if err != nil {
 						return layoutengine.LayoutPlan{}, fmt.Errorf("body[%d] box glyph run x: %w", blockIndex, err)
 					}
@@ -1748,10 +1769,13 @@ func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context
 					Fragment: fragmentID, Index: sourceLine, Bounds: bounds, Baseline: baseline, Source: lineInput.Source,
 				})
 				page.Lines.Count++
-				for _, localRun := range block.runs[sourceLine] {
+				for _, localRun := range block.glyphRuns(sourceLine) {
 					localRun.Line = globalLine
 					localRun.Font = block.fontIDs[localRun.Font]
-					localRun.Origin.X, err = bounds.X.Add(localRun.Origin.X)
+					localRun.Origin.X, err = localRun.Origin.X.Sub(block.runLineX[sourceLine])
+					if err == nil {
+						localRun.Origin.X, err = bounds.X.Add(localRun.Origin.X)
+					}
 					if err != nil {
 						return layoutengine.LayoutPlan{}, fmt.Errorf("body[%d] glyph run x: %w", blockIndex, err)
 					}
@@ -1998,12 +2022,21 @@ func (m *paperBlockMeasurer) measureParagraph(block paperPlanningBlock, identity
 	}
 	single := *m.source
 	paragraph := block.paragraph
-	authoredSegments := append([]layout.TextSegment(nil), paragraph.Segments...)
+	authoredSegments := paragraph.Segments
 	mixedCoreShadow := typedParagraphNeedsMixedCoreShadow(paragraph, m.pdf)
+	needsRestyle := false
 	if !mixedCoreShadow {
-		paragraph.Segments = make([]layout.TextSegment, len(authoredSegments))
-		for index, segment := range authoredSegments {
-			paragraph.Segments[index] = layout.TextSegment{Text: segment.Text, Link: segment.Link, Destination: segment.Destination}
+		for _, segment := range authoredSegments {
+			if segment.StyleRef != nil || segment.Style != (layout.TextStyle{}) {
+				needsRestyle = true
+				break
+			}
+		}
+		if needsRestyle {
+			paragraph.Segments = make([]layout.TextSegment, len(authoredSegments))
+			for index, segment := range authoredSegments {
+				paragraph.Segments[index] = layout.TextSegment{Text: segment.Text, Link: segment.Link, Destination: segment.Destination}
+			}
 		}
 	}
 	paragraph.Box, paragraph.BoxRef = layout.BoxStyle{}, nil
@@ -2035,7 +2068,7 @@ func (m *paperBlockMeasurer) measureParagraph(block paperPlanningBlock, identity
 		return paperMeasuredBlock{}, measuredLines, fmt.Errorf("%s: %w", path, err)
 	}
 	measurement := paperRowColumnMeasurement{plan: shadow.Plan.ReadOnlyProjection()}
-	if !mixedCoreShadow {
+	if needsRestyle {
 		measurement, err = m.pdf.restylePaperMeasurement(measurement, paragraph.Style, authoredSegments)
 		if err != nil {
 			return paperMeasuredBlock{}, measuredLines, fmt.Errorf("%s: %w", block.path, err)
@@ -2045,7 +2078,9 @@ func (m *paperBlockMeasurer) measureParagraph(block paperPlanningBlock, identity
 	*m.nextNode = *m.nextNode + 1
 	blockPlan := paperMeasuredBlock{
 		lines:        make([]layoutengine.ParagraphLineInput, len(projection.Lines)),
-		runs:         make(map[uint32][]layoutengine.CoreGlyphRun),
+		runs:         projection.GlyphRuns,
+		runRanges:    make([]layoutengine.IndexRange, len(projection.Lines)),
+		runLineX:     make([]layoutengine.Fixed, len(projection.Lines)),
 		fontIDs:      make(map[layoutengine.FontResourceID]layoutengine.FontResourceID),
 		node:         *m.nextNode,
 		key:          identity.key,
@@ -2053,7 +2088,7 @@ func (m *paperBlockMeasurer) measureParagraph(block paperPlanningBlock, identity
 		source:       identity.source,
 		semanticRole: block.semanticRole, semanticText: block.semanticText,
 		headingLevel: block.headingLevel,
-		segments:     append([]layout.TextSegment(nil), block.paragraph.Segments...),
+		segments:     authoredSegments,
 		keepTogether: block.keepTogether, keepWithNext: block.keepWithNext,
 		orphans: block.orphans, widows: block.widows,
 		keepGroups:        append([]uint32(nil), block.keepGroups...),
@@ -2081,6 +2116,7 @@ func (m *paperBlockMeasurer) measureParagraph(block paperPlanningBlock, identity
 		blockPlan.fontIDs[localID] = globalID
 	}
 	for lineIndex, line := range projection.Lines {
+		blockPlan.runLineX[lineIndex] = line.Bounds.X
 		offset, lineErr := line.Bounds.X.Sub(m.body.X)
 		if lineErr != nil {
 			return paperMeasuredBlock{}, measuredLines, fmt.Errorf("body[%d] line %d x offset: %w", block.bodyIndex, lineIndex, lineErr)
@@ -2094,13 +2130,12 @@ func (m *paperBlockMeasurer) measureParagraph(block paperPlanningBlock, identity
 			Baseline: baseline, Source: identity.source,
 		}
 	}
-	for _, run := range projection.GlyphRuns {
-		run.Origin.X, err = run.Origin.X.Sub(projection.Lines[run.Line].Bounds.X)
-		if err != nil {
-			return paperMeasuredBlock{}, measuredLines, fmt.Errorf("body[%d] glyph run offset: %w", block.bodyIndex, err)
+	for runIndex, run := range projection.GlyphRuns {
+		runRange := &blockPlan.runRanges[run.Line]
+		if runRange.Count == 0 {
+			runRange.Start = uint32(runIndex) // #nosec G115 -- projection sizes are validated before measurement.
 		}
-		run.Origin.Y = 0
-		blockPlan.runs[run.Line] = append(blockPlan.runs[run.Line], run)
+		runRange.Count++
 	}
 	if len(projection.Strokes) != 0 {
 		blockPlan.decorations = make(map[uint32][]paperMeasuredDecoration)
