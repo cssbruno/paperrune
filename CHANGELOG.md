@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reused immutable font definitions and document-scoped embedded resources
+  during Paper planning, while preserving deterministic output and giving each
+  document owned mutable font bytes. Updated the required Go patch release and
+  `golang.org/x/image` to releases containing current security fixes.
 - Added statically typed declarative expressions for calculated property
   values, visibility, lazy ternaries, readable switches, null guards, exact
   decimal/unit arithmetic, and data-dependent component selection.
