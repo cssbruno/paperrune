@@ -1778,14 +1778,14 @@ func (c *compiler) compileTextStyle(node *paperlang.Node, properties map[string]
 		if value, valid := c.stringProperty(property); valid {
 			canonical, supported := canonicalCoreFont(value)
 			if !supported {
-				resource, custom := c.assets.ResolveFont(value)
+				resourceName, custom := c.assets.resolveFontName(value)
 				if !custom {
 					c.add("PAPER_COMPILE_FONT", fmt.Sprintf("font %q is not an admitted core or project font", value), "use a declared core font or an explicit manifest font family/name", property.Value.Span)
 				} else {
 					// The portable manifest name is the PDF resource key. Human
 					// family metadata remains lookup-only so spaces cannot create
 					// unstable PDF name fragments.
-					style.FontFamily = resource.Name
+					style.FontFamily = resourceName
 				}
 			} else {
 				style.FontFamily = canonical

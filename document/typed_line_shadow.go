@@ -121,7 +121,7 @@ func (f *pdfDocument) planTypedParagraphLineShadowContext(ctx context.Context, d
 	}
 	var fontResource layoutengine.CoreFontResource
 	if scratch.isCurrentUTF8 {
-		fontResource, _, err = typedEmbeddedUTF8FontResource(scratch.currentFont)
+		fontResource, _, err = f.typedCachedEmbeddedUTF8FontResource(scratch.currentFont)
 	} else {
 		fontResource, err = typedScratchCoreFontResource(scratch)
 	}
@@ -134,7 +134,7 @@ func (f *pdfDocument) planTypedParagraphLineShadowContext(ctx context.Context, d
 				var liveResource layoutengine.CoreFontResource
 				var liveErr error
 				if scratch.isCurrentUTF8 {
-					liveResource, _, liveErr = typedEmbeddedUTF8FontResource(liveFont)
+					liveResource, _, liveErr = f.typedCachedEmbeddedUTF8FontResource(liveFont)
 				} else {
 					liveResource, liveErr = f.typedCachedCoreFontResource(liveFont)
 				}

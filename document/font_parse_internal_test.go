@@ -74,6 +74,13 @@ func TestNewCachedUTF8FontAttachesReusableStaticTables(t *testing.T) {
 	if font.sourceID != sha256.Sum256(data) {
 		t.Fatal("cached.newUTF8Font() source ID does not match the font bytes")
 	}
+	second := cached.newUTF8Font()
+	if second == nil {
+		t.Fatal("second cached.newUTF8Font() = nil")
+	}
+	if &font.fileReader.array[0] == &cached.data[0] || &font.fileReader.array[0] == &second.fileReader.array[0] {
+		t.Fatal("cached.newUTF8Font() shared mutable font bytes across document instances")
+	}
 }
 
 func readUTF8FontFixture(t *testing.T) []byte {

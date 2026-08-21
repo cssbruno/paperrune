@@ -189,7 +189,7 @@ func (f *pdfDocument) preflightPlanFontContext(ctx context.Context, resource lay
 		if err != nil {
 			return preparedCorePlanFont{}, fmt.Errorf("%w: parse embedded UTF-8 font: %w", errCoreLayoutPlanPaintUnsupported, err)
 		}
-		canonical, _, err := typedEmbeddedUTF8FontResource(font)
+		canonical, _, err := f.typedCachedEmbeddedUTF8FontResource(font)
 		if err != nil || canonical.MetricsDigest != resource.MetricsDigest || canonical.EmbeddedUTF8.Digest != resource.EmbeddedUTF8.Digest {
 			return preparedCorePlanFont{}, fmt.Errorf("%w: embedded UTF-8 font metrics do not match the plan", errCoreLayoutPlanPaintUnsupported)
 		}

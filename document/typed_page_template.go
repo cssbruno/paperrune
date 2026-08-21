@@ -33,6 +33,12 @@ type typedPageShellKey struct {
 	total uint32
 }
 
+type paperPageTemplateMappings struct {
+	body   papercompile.CompileMapping
+	header papercompile.CompileMapping
+	footer papercompile.CompileMapping
+}
+
 func paperMappingForRegion(mapping papercompile.CompileMapping, region layoutengine.RegionID) papercompile.CompileMapping {
 	filtered := papercompile.CompileMapping{SourceRevision: mapping.SourceRevision, ThemeProperties: append([]papercompile.ThemePropertyMapping(nil), mapping.ThemeProperties...)}
 	filterNodes := func(nodes []papercompile.NodeMapping) []papercompile.NodeMapping {
@@ -55,6 +61,14 @@ func paperMappingForRegion(mapping papercompile.CompileMapping, region layouteng
 	return filtered
 }
 
+func paperMappingsForPageTemplate(mapping papercompile.CompileMapping) paperPageTemplateMappings {
+	return paperPageTemplateMappings{
+		body:   paperMappingForRegion(mapping, layoutengine.RegionBody),
+		header: paperMappingForRegion(mapping, layoutengine.RegionHeader),
+		footer: paperMappingForRegion(mapping, layoutengine.RegionFooter),
+	}
+}
+
 func (f *pdfDocument) planTypedPageTemplate(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping) (layoutengine.LayoutPlan, error) {
 	if err := validateTypedPageTemplateContract(doc.PageTemplate); err != nil {
 		return layoutengine.LayoutPlan{}, err
@@ -69,6 +83,7 @@ func (f *pdfDocument) planTypedPageTemplate(ctx context.Context, doc *layout.Lay
 			soleTable = &copy
 		}
 	}
+	regionMappings := paperMappingsForPageTemplate(mapping)
 
 	cache := make(map[typedPageShellKey]typedPageShell)
 	load := func(page, total uint32) (typedPageShell, error) {
@@ -79,7 +94,7 @@ func (f *pdfDocument) planTypedPageTemplate(ctx context.Context, doc *layout.Lay
 		if err := layoutengine.ChargePlanningWork(ctx, "typed page shell planning", 1); err != nil {
 			return typedPageShell{}, err
 		}
-		shell, err := f.planTypedPageShell(ctx, doc, mapping, page, total)
+		shell, err := f.planTypedPageShell(ctx, doc, regionMappings, page, total)
 		if err != nil {
 			return typedPageShell{}, err
 		}
@@ -115,9 +130,9 @@ func (f *pdfDocument) planTypedPageTemplate(ctx context.Context, doc *layout.Lay
 		if soleTable != nil {
 			bodyPlan, err = f.planTypedTableBodies(ctx, doc, *soleTable, "body[0]", selector, nil, -1)
 		} else if hasMixedTable || hasMixedRowColumn {
-			bodyPlan, err = f.planTypedMixedBodiesMapped(ctx, doc, paperMappingForRegion(mapping, layoutengine.RegionBody), selector)
+			bodyPlan, err = f.planTypedMixedBodiesMapped(ctx, doc, regionMappings.body, selector)
 		} else {
-			bodyPlan, err = f.planPaperTextBlocksMappedBodiesContext(ctx, doc, paperMappingForRegion(mapping, layoutengine.RegionBody), selector)
+			bodyPlan, err = f.planPaperTextBlocksMappedBodiesContext(ctx, doc, regionMappings.body, selector)
 		}
 		if err != nil {
 			return layoutengine.LayoutPlan{}, err
@@ -277,7 +292,7 @@ func typedBlocksContainText(blocks []layout.Block, text string) bool {
 	return false
 }
 
-func (f *pdfDocument) planTypedPageShell(ctx context.Context, doc *layout.LayoutDocument, mapping papercompile.CompileMapping, page, total uint32) (typedPageShell, error) {
+func (f *pdfDocument) planTypedPageShell(ctx context.Context, doc *layout.LayoutDocument, mappings paperPageTemplateMappings, page, total uint32) (typedPageShell, error) {
 	template := doc.PageTemplate
 	header := template.HeaderForPage(int(page))
 	footer := template.FooterForPage(int(page))
@@ -306,11 +321,11 @@ func (f *pdfDocument) planTypedPageShell(ctx context.Context, doc *layout.Layout
 			footerBlocks = append(footerBlocks, counter)
 		}
 	}
-	headerPlan, headerHeight, headerOrigin, err := f.planTypedPageRegion(ctx, doc, headerBlocks, headerBox, "header", layoutengine.RegionHeader, paperMappingForRegion(mapping, layoutengine.RegionHeader), page)
+	headerPlan, headerHeight, headerOrigin, err := f.planTypedPageRegion(ctx, doc, headerBlocks, headerBox, "header", layoutengine.RegionHeader, mappings.header, page)
 	if err != nil {
 		return typedPageShell{}, err
 	}
-	footerPlan, footerHeight, footerOrigin, err := f.planTypedPageRegion(ctx, doc, footerBlocks, footerBox, "footer", layoutengine.RegionFooter, paperMappingForRegion(mapping, layoutengine.RegionFooter), page)
+	footerPlan, footerHeight, footerOrigin, err := f.planTypedPageRegion(ctx, doc, footerBlocks, footerBox, "footer", layoutengine.RegionFooter, mappings.footer, page)
 	if err != nil {
 		return typedPageShell{}, err
 	}
@@ -406,6 +421,11 @@ func (f *pdfDocument) planTypedPageRegion(ctx context.Context, doc *layout.Layou
 			plan, err = f.planPaperTextBlocksMappedBodiesContext(ctx, &regionDoc, mapping, selector)
 		}
 	} else if containsTable || (len(normalized) > 1 && typedBlocksContainRowColumn(normalized)) {
+		// Preserve the established mixed-shell source identity: shell mappings
+		// were historically projected a second time after their Region fields had
+		// been localized. That intentionally leaves mixed header/footer children
+		// on their revision-scoped fallback identities. Body mappings are planned
+		// outside this shell-only path and remain projected just once.
 		plan, err = f.planTypedMixedBodiesMapped(ctx, &regionDoc, paperMappingForRegion(mapping, region), selector)
 	} else {
 		plan, err = f.planPaperTextBlocksMappedBodiesContext(ctx, &regionDoc, mapping, selector)

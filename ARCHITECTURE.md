@@ -61,11 +61,25 @@ Plan font resources are immutable identities, not live `Document` lookups.
 Standard 14 resources pin canonical metrics. Embedded UTF-8 resources pin the
 font-program digest, byte length, and exact planning metrics in the canonical
 plan while keeping the verified bytes in a private content-addressed sidecar.
+During planning, each mutable single-owner `Document` memoizes that exact
+font-program-plus-definition identity; repeated paragraph measurement reuses
+the immutable descriptor and owned source bytes instead of rebuilding them.
+Compiler font-name resolution reads catalog metadata without copying the font
+program, while public catalog resolution continues to return detached bytes.
+Reusable `FontCache` values share only immutable parsed tables; each receiving
+`Document` owns the mutable font-program bytes patched during subset assembly.
 The painter parses and verifies every embedded program during bounded
 preflight, before opening the target, then reuses the established TrueType
 subset and ToUnicode serializer. This preserves core-font compatibility and
 allows one plan to be replayed concurrently without ambient filesystem or font
 catalog access.
+
+Page-template source mappings are projected once per planning operation into
+body, header, and footer views. Repeated page-master planning reuses those
+immutable per-render views; it must not retain source mappings globally or key
+a cache by caller-owned slice addresses. Mixed header/footer compositors retain
+their established second-projection fallback identities so this allocation
+optimization does not change source provenance or canonical plan hashes.
 
 ## Plan preview and Studio boundary
 

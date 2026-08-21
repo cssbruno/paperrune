@@ -6,6 +6,7 @@ package document_test
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,5 +91,77 @@ func TestAddUTF8FontUsesSharedCacheWithoutChangingOutput(t *testing.T) {
 	}
 	if !bytes.Equal(firstPathLoad, secondPathLoad) {
 		t.Fatal("shared cached AddUTF8Font output differs from first AddUTF8Font output")
+	}
+}
+
+func TestFontCacheConcurrentDocumentsOwnDeterministicSubsetBytes(t *testing.T) {
+	fontBytes, err := os.ReadFile(example.FontFile("DejaVuSansCondensed.ttf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := document.NewFontCache()
+	if err := cache.AddUTF8FontFromBytes("DejaVu", "", fontBytes); err != nil {
+		t.Fatal(err)
+	}
+	texts := []string{
+		strings.Repeat("Latin Greek Ελληνικά Cyrillic Кириллица ", 64),
+		strings.Repeat("Português médico: coração, pressão, ação. ", 64),
+	}
+	prepare := func(text string, cached bool) *document.TestPDFDocument {
+		t.Helper()
+		pdf := document.MustNewTestPDFDocument()
+		pdf.SetCompression(false)
+		pdf.SetCatalogSort(true)
+		pdf.SetCreationDate(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+		pdf.SetModificationDate(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+		if cached {
+			pdf.AddUTF8FontFromCache("DejaVu", "", cache)
+		} else {
+			pdf.AddUTF8FontFromBytes("DejaVu", "", fontBytes)
+		}
+		pdf.AddPage()
+		pdf.SetFont("DejaVu", "", 10)
+		pdf.MultiCell(0, 5, text, "", "L", false)
+		return pdf
+	}
+	render := func(pdf *document.TestPDFDocument) ([]byte, error) {
+		var output bytes.Buffer
+		if err := pdf.Output(&output); err != nil {
+			return nil, err
+		}
+		return output.Bytes(), nil
+	}
+	expected := make([][]byte, len(texts))
+	for index, text := range texts {
+		expected[index], err = render(prepare(text, false))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	documents := []*document.TestPDFDocument{prepare(texts[0], true), prepare(texts[1], true)}
+	type result struct {
+		index int
+		data  []byte
+		err   error
+	}
+	start := make(chan struct{})
+	results := make(chan result, len(documents))
+	for index, pdf := range documents {
+		go func() {
+			<-start
+			data, outputErr := render(pdf)
+			results <- result{index: index, data: data, err: outputErr}
+		}()
+	}
+	close(start)
+	for range documents {
+		result := <-results
+		if result.err != nil {
+			t.Fatalf("concurrent output %d: %v", result.index, result.err)
+		}
+		if !bytes.Equal(result.data, expected[result.index]) {
+			t.Fatalf("concurrent cached output %d differs from owned-font output", result.index)
+		}
 	}
 }

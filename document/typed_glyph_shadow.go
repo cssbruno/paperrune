@@ -43,6 +43,16 @@ type embeddedFontMetricsDigestInput struct {
 	Widths             []int       `json:"widths"`
 }
 
+type typedEmbeddedFontResourceCacheKey struct {
+	sourceID     [sha256.Size]byte
+	definitionID string
+}
+
+type typedEmbeddedFontResourceCacheValue struct {
+	resource layoutengine.CoreFontResource
+	data     []byte
+}
+
 func typedEmbeddedUTF8FontResource(font fontDefinition) (layoutengine.CoreFontResource, []byte, error) {
 	if font.Tp != "UTF8" || font.utf8File == nil || font.utf8File.fileReader == nil || len(font.utf8File.fileReader.array) == 0 {
 		return layoutengine.CoreFontResource{}, nil, errors.New("resolved font is not an embedded UTF-8 TrueType font")
@@ -69,6 +79,45 @@ func typedEmbeddedUTF8FontResource(font fontDefinition) (layoutengine.CoreFontRe
 	}, data, nil
 }
 
+// typedCachedEmbeddedUTF8FontResource retains the immutable planning identity
+// and one owned copy of the font program for the lifetime of its Document.
+// A source digest alone is insufficient because one program may be installed
+// under definitions with different names or planning metrics.
+func (f *pdfDocument) typedCachedEmbeddedUTF8FontResource(font fontDefinition) (layoutengine.CoreFontResource, []byte, error) {
+	if f == nil {
+		return layoutengine.CoreFontResource{}, nil, errors.New("font metric scratch is nil")
+	}
+	if font.Tp != "UTF8" || font.utf8File == nil || font.utf8File.fileReader == nil || len(font.utf8File.fileReader.array) == 0 {
+		return typedEmbeddedUTF8FontResource(font)
+	}
+	definitionID := font.i
+	if definitionID == "" {
+		var err error
+		definitionID, err = generateFontID(font)
+		if err != nil {
+			return layoutengine.CoreFontResource{}, nil, fmt.Errorf("identify embedded UTF-8 font definition: %w", err)
+		}
+	}
+	sourceID := font.utf8File.sourceID
+	if sourceID == ([sha256.Size]byte{}) {
+		sourceID = sha256.Sum256(font.utf8File.fileReader.array)
+	}
+	key := typedEmbeddedFontResourceCacheKey{sourceID: sourceID, definitionID: definitionID}
+	cache := f.planningCache()
+	if cached, ok := cache.typedEmbeddedFontResources.Load(key); ok {
+		value := cached.(typedEmbeddedFontResourceCacheValue)
+		return value.resource, value.data, nil
+	}
+	resource, data, err := typedEmbeddedUTF8FontResource(font)
+	if err != nil {
+		return layoutengine.CoreFontResource{}, nil, err
+	}
+	value := typedEmbeddedFontResourceCacheValue{resource: resource, data: data}
+	actual, _ := cache.typedEmbeddedFontResources.LoadOrStore(key, value)
+	stored := actual.(typedEmbeddedFontResourceCacheValue)
+	return stored.resource, stored.data, nil
+}
+
 func (f *pdfDocument) typedLayoutFontSourcesContext(ctx context.Context, plan layoutengine.LayoutPlan) (plannedFontSources, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -93,7 +142,7 @@ func (f *pdfDocument) typedLayoutFontSourcesContext(ctx context.Context, plan la
 				return nil, err
 			}
 		}
-		resource, data, err := typedEmbeddedUTF8FontResource(font)
+		resource, data, err := f.typedCachedEmbeddedUTF8FontResource(font)
 		if err != nil {
 			continue
 		}

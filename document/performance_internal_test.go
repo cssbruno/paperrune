@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/paperrune/internal/layoutengine"
+	"github.com/cssbruno/paperrune/internal/papercompile"
 )
 
 func TestStringWidthCacheUsesBoundedRing(t *testing.T) {
@@ -108,7 +109,10 @@ func BenchmarkPerfUTF8ToUTF16(b *testing.B) {
 }
 
 var (
-	benchmarkTaggedKidsSink []byte
+	benchmarkTaggedKidsSink           []byte
+	benchmarkEmbeddedFontResourceSink layoutengine.CoreFontResource
+	benchmarkEmbeddedFontDataSink     []byte
+	benchmarkPageTemplateMappingsSink paperPageTemplateMappings
 )
 
 func BenchmarkPerfTaggedElementKidsLarge(b *testing.B) {
@@ -257,4 +261,76 @@ func BenchmarkPerfAddUTF8FontFromCache(b *testing.B) {
 			b.Fatalf("AddUTF8FontFromCache() error = %v", pdf.Error())
 		}
 	}
+}
+
+func BenchmarkPerfTypedEmbeddedFontResource(b *testing.B) {
+	fontBytes, err := os.ReadFile("../assets/static/font/DejaVuSansCondensed.ttf")
+	if err != nil {
+		b.Fatal(err)
+	}
+	pdf := mustNewPDFDocument()
+	if err := pdf.AddUTF8FontFromBytesError("PlanSans", "", fontBytes); err != nil {
+		b.Fatal(err)
+	}
+	font, ok := pdf.resources.font("plansans")
+	if !ok {
+		b.Fatal("installed font is unavailable")
+	}
+	b.Run("rebuild", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			resource, data, err := typedEmbeddedUTF8FontResource(font)
+			if err != nil {
+				b.Fatal(err)
+			}
+			benchmarkEmbeddedFontResourceSink = resource
+			benchmarkEmbeddedFontDataSink = data
+		}
+	})
+	b.Run("document-cache", func(b *testing.B) {
+		if _, _, err := pdf.typedCachedEmbeddedUTF8FontResource(font); err != nil {
+			b.Fatal(err)
+		}
+		b.ReportAllocs()
+		b.ResetTimer()
+		for range b.N {
+			resource, data, err := pdf.typedCachedEmbeddedUTF8FontResource(font)
+			if err != nil {
+				b.Fatal(err)
+			}
+			benchmarkEmbeddedFontResourceSink = resource
+			benchmarkEmbeddedFontDataSink = data
+		}
+	})
+}
+
+func BenchmarkPerfPaperPageTemplateMappingProjection(b *testing.B) {
+	const pages = 27
+	mapping := papercompile.CompileMapping{SourceRevision: "benchmark-source"}
+	for index := range 4096 {
+		mapping.Nodes = append(mapping.Nodes, papercompile.NodeMapping{ID: fmt.Sprintf("body-%04d", index), Region: layoutengine.RegionBody})
+	}
+	for index := range 8 {
+		mapping.Nodes = append(mapping.Nodes,
+			papercompile.NodeMapping{ID: fmt.Sprintf("header-%02d", index), Region: layoutengine.RegionHeader},
+			papercompile.NodeMapping{ID: fmt.Sprintf("footer-%02d", index), Region: layoutengine.RegionFooter})
+	}
+	b.Run("legacy-per-page", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			for range pages {
+				benchmarkPageTemplateMappingsSink = paperPageTemplateMappings{
+					body:   paperMappingForRegion(mapping, layoutengine.RegionBody),
+					header: paperMappingForRegion(mapping, layoutengine.RegionHeader),
+					footer: paperMappingForRegion(mapping, layoutengine.RegionFooter),
+				}
+			}
+		}
+	})
+	b.Run("prepared-once", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			benchmarkPageTemplateMappingsSink = paperMappingsForPageTemplate(mapping)
+		}
+	})
 }

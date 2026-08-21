@@ -10,8 +10,9 @@ type documentPlanningCacheState struct {
 }
 
 type documentPlanningCaches struct {
-	measurementScratch     sync.Pool // reusable concurrent-safe planner metric state
-	typedCoreFontResources sync.Map  // immutable exact core metrics by backing table
+	measurementScratch         sync.Pool // reusable concurrent-safe planner metric state
+	typedCoreFontResources     sync.Map  // immutable exact core metrics by backing table
+	typedEmbeddedFontResources sync.Map  // immutable embedded metrics and source bytes by exact font identity
 }
 
 func (f *pdfDocument) planningCache() *documentPlanningCaches {

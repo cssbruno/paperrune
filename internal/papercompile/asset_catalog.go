@@ -122,32 +122,48 @@ func (catalog AssetCatalog) Resolve(name string) (AssetResource, bool) {
 // ResolveFont finds one explicit TrueType/OpenType resource by manifest name
 // or family. Family lookup is deterministic and rejects ambiguous families.
 func (catalog AssetCatalog) ResolveFont(name string) (AssetResource, bool) {
-	var exact, family AssetResource
-	for _, resource := range catalog.assets {
+	index, ok := catalog.resolveFontIndex(name)
+	if !ok {
+		return AssetResource{}, false
+	}
+	match := catalog.assets[index]
+	match.Data = append([]byte(nil), match.Data...)
+	return match, true
+}
+
+func (catalog AssetCatalog) resolveFontName(name string) (string, bool) {
+	index, ok := catalog.resolveFontIndex(name)
+	if !ok {
+		return "", false
+	}
+	return catalog.assets[index].Name, true
+}
+
+func (catalog AssetCatalog) resolveFontIndex(name string) (int, bool) {
+	exact, family := -1, -1
+	for index, resource := range catalog.assets {
 		if resource.MediaType != "font/ttf" && resource.MediaType != "font/otf" {
 			continue
 		}
 		if resource.Name == name {
-			if exact.Name != "" {
-				return AssetResource{}, false
+			if exact >= 0 {
+				return -1, false
 			}
-			exact = resource
+			exact = index
 			continue
 		}
-		if resource.Family != name || family.Name != "" && fontResourceRank(resource) >= fontResourceRank(family) {
+		if resource.Family != name || family >= 0 && fontResourceRank(resource) >= fontResourceRank(catalog.assets[family]) {
 			continue
 		}
-		family = resource
+		family = index
 	}
-	match := exact
-	if match.Name == "" {
-		match = family
+	if exact >= 0 {
+		return exact, true
 	}
-	if match.Name == "" {
-		return AssetResource{}, false
+	if family >= 0 {
+		return family, true
 	}
-	match.Data = append([]byte(nil), match.Data...)
-	return match, true
+	return -1, false
 }
 
 func fontResourceRank(resource AssetResource) int {

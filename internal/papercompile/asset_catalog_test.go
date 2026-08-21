@@ -37,6 +37,43 @@ func TestAssetCatalogIsCanonicalContentAddressedAndDetached(t *testing.T) {
 	}
 }
 
+func TestAssetCatalogFontMetadataLookupAvoidsExposingOrCopyingFontBytes(t *testing.T) {
+	regularData := []byte{0, 1, 0, 0, 1}
+	boldData := []byte{0, 1, 0, 0, 2}
+	regularDigest := sha256.Sum256(regularData)
+	boldDigest := sha256.Sum256(boldData)
+	catalog, err := NewAssetCatalog([]AssetResource{
+		{Name: "body-regular", MediaType: "font/ttf", Digest: hex.EncodeToString(regularDigest[:]), Data: regularData, Family: "Specimen Sans", Style: "normal", Weight: 400},
+		{Name: "body-bold", MediaType: "font/ttf", Digest: hex.EncodeToString(boldDigest[:]), Data: boldData, Family: "Specimen Sans", Style: "normal", Weight: 700},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name, ok := catalog.resolveFontName("Specimen Sans"); !ok || name != "body-regular" {
+		t.Fatalf("family metadata lookup = %q, %v", name, ok)
+	}
+	if name, ok := catalog.resolveFontName("body-bold"); !ok || name != "body-bold" {
+		t.Fatalf("exact metadata lookup = %q, %v", name, ok)
+	}
+	if allocations := testing.AllocsPerRun(1000, func() {
+		if _, ok := catalog.resolveFontName("Specimen Sans"); !ok {
+			t.Fatal("font disappeared during metadata lookup")
+		}
+	}); allocations != 0 {
+		t.Fatalf("metadata-only font lookup allocations = %v, want 0", allocations)
+	}
+
+	resolved, ok := catalog.ResolveFont("Specimen Sans")
+	if !ok {
+		t.Fatal("public font lookup failed")
+	}
+	resolved.Data[0] ^= 0xff
+	again, _ := catalog.ResolveFont("Specimen Sans")
+	if again.Data[0] != regularData[0] {
+		t.Fatal("public ResolveFont exposed catalog storage")
+	}
+}
+
 func TestAssetCatalogRejectsAmbiguousUnsafeAndUnverifiedResources(t *testing.T) {
 	png, _ := base64.StdEncoding.DecodeString(paperImagePNG)
 	digest := sha256.Sum256(png)

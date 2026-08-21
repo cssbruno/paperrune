@@ -71,7 +71,7 @@ func (f *pdfDocument) mixedTextFontMetrics(style layout.TextStyle) (*mixedTextFo
 	var resource layoutengine.CoreFontResource
 	var err error
 	if scratch.isCurrentUTF8 {
-		resource, _, err = typedEmbeddedUTF8FontResource(scratch.currentFont)
+		resource, _, err = f.typedCachedEmbeddedUTF8FontResource(scratch.currentFont)
 	} else {
 		resource, err = typedScratchCoreFontResource(scratch)
 	}
@@ -87,7 +87,7 @@ func (f *pdfDocument) mixedTextFontMetrics(style layout.TextStyle) (*mixedTextFo
 			var liveResource layoutengine.CoreFontResource
 			var liveErr error
 			if scratch.isCurrentUTF8 {
-				liveResource, _, liveErr = typedEmbeddedUTF8FontResource(liveFont)
+				liveResource, _, liveErr = f.typedCachedEmbeddedUTF8FontResource(liveFont)
 			} else {
 				liveResource, liveErr = f.typedCachedCoreFontResource(liveFont)
 			}

@@ -6,8 +6,12 @@ package document
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +19,67 @@ import (
 	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
 )
+
+func TestTypedEmbeddedFontResourceCacheUsesExactImmutableIdentity(t *testing.T) {
+	pdf := mustNewPDFDocument()
+	fontBytes := readUTF8FontFixture(t)
+	if err := pdf.AddUTF8FontFromBytesError("PlanSans", "", fontBytes); err != nil {
+		t.Fatal(err)
+	}
+	font, ok := pdf.resources.font("plansans")
+	if !ok {
+		t.Fatal("installed font is unavailable")
+	}
+	first, firstData, err := pdf.typedCachedEmbeddedUTF8FontResource(font)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, secondData, err := pdf.typedCachedEmbeddedUTF8FontResource(font)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second || len(firstData) == 0 || &firstData[0] != &secondData[0] {
+		t.Fatal("identical embedded font identity was not served from the document cache")
+	}
+
+	if err := pdf.AddUTF8FontFromBytesError("PlanSansAlias", "", fontBytes); err != nil {
+		t.Fatal(err)
+	}
+	alias, _ := pdf.resources.font("plansansalias")
+	aliasResource, aliasData, err := pdf.typedCachedEmbeddedUTF8FontResource(alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if aliasResource.MetricsDigest == first.MetricsDigest || aliasResource.EmbeddedUTF8.Digest != first.EmbeddedUTF8.Digest || &aliasData[0] == &firstData[0] {
+		t.Fatal("font definition name did not produce a distinct exact cache entry")
+	}
+
+	otherBytes, err := os.ReadFile(filepath.Join("..", "assets", "static", "font", "DejaVuSansCondensed-Oblique.ttf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := pdf.AddUTF8FontFromBytesError("PlanSansOther", "", otherBytes); err != nil {
+		t.Fatal(err)
+	}
+	other, _ := pdf.resources.font("plansansother")
+	otherResource, _, err := pdf.typedCachedEmbeddedUTF8FontResource(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherDigest := sha256.Sum256(otherBytes)
+	if otherResource.EmbeddedUTF8.Digest == first.EmbeddedUTF8.Digest || otherResource.EmbeddedUTF8.Digest != layoutengine.CoreFontMetricsDigest(hex.EncodeToString(otherDigest[:])) {
+		t.Fatal("different font program reused a cached content identity")
+	}
+
+	entries := 0
+	pdf.planningCache().typedEmbeddedFontResources.Range(func(_, _ any) bool {
+		entries++
+		return true
+	})
+	if entries != 3 {
+		t.Fatalf("embedded font cache entries = %d, want 3", entries)
+	}
+}
 
 func TestLayoutDocumentPlanEmbedsImmutableUTF8FontForPDFA(t *testing.T) {
 	fontBytes := readUTF8FontFixture(t)

@@ -219,7 +219,10 @@ func (c cachedUTF8Font) newUTF8Font() *utf8FontFile {
 	if len(c.data) == 0 {
 		return nil
 	}
-	reader := fileReader{array: c.data}
+	// GenerateCutFont patches a few output tables in place while assembling a
+	// subset. Keep the expensive parsed tables shared and immutable, but give
+	// every Document its own mutable font-program bytes.
+	reader := fileReader{array: append([]byte(nil), c.data...)}
 	utf := newUTF8Font(&reader)
 	utf.static = c.static
 	utf.sourceID = c.sourceID

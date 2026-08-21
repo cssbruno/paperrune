@@ -14,11 +14,127 @@ import (
 
 	"github.com/cssbruno/paperrune/internal/layout"
 	"github.com/cssbruno/paperrune/internal/layoutengine"
+	"github.com/cssbruno/paperrune/internal/papercompile"
+	"github.com/cssbruno/paperrune/internal/paperlang"
 )
 
 func pageShellParagraph(text string) layout.ParagraphBlock {
 	return layout.ParagraphBlock{Segments: []layout.TextSegment{{Text: text}},
 		Style: layout.TextStyle{FontFamily: "Helvetica", FontSize: 9, LineHeight: 10}}
+}
+
+func TestPaperPageTemplateMappingsArePreparedOnceAsExactRegionViews(t *testing.T) {
+	mapping := papercompile.CompileMapping{
+		SourceRevision: "source-revision",
+		Nodes: []papercompile.NodeMapping{
+			{ID: "implicit-body"},
+			{ID: "body", Region: layoutengine.RegionBody},
+			{ID: "header", Region: layoutengine.RegionHeader},
+			{ID: "footer", Region: layoutengine.RegionFooter},
+		},
+		AnonymousNodes: []papercompile.NodeMapping{
+			{Region: layoutengine.RegionBody},
+			{Region: layoutengine.RegionHeader},
+			{Region: layoutengine.RegionFooter},
+		},
+		ThemeProperties: []papercompile.ThemePropertyMapping{{Property: "color"}},
+	}
+	prepared := paperMappingsForPageTemplate(mapping)
+	for _, test := range []struct {
+		name      string
+		mapping   papercompile.CompileMapping
+		nodeIDs   []string
+		anonymous int
+	}{
+		{name: "body", mapping: prepared.body, nodeIDs: []string{"implicit-body", "body"}, anonymous: 1},
+		{name: "header", mapping: prepared.header, nodeIDs: []string{"header"}, anonymous: 1},
+		{name: "footer", mapping: prepared.footer, nodeIDs: []string{"footer"}, anonymous: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.mapping.SourceRevision != mapping.SourceRevision || len(test.mapping.ThemeProperties) != 1 || len(test.mapping.Nodes) != len(test.nodeIDs) || len(test.mapping.AnonymousNodes) != test.anonymous {
+				t.Fatalf("region mapping = %#v", test.mapping)
+			}
+			for index, node := range test.mapping.Nodes {
+				if node.ID != test.nodeIDs[index] || node.Region != "" {
+					t.Fatalf("region node[%d] = %#v", index, node)
+				}
+			}
+			for _, node := range test.mapping.AnonymousNodes {
+				if node.Region != "" {
+					t.Fatalf("anonymous region was not localized: %#v", node)
+				}
+			}
+		})
+	}
+	mapping.Nodes[0].ID = "mutated"
+	mapping.ThemeProperties[0].Property = "mutated"
+	if prepared.body.Nodes[0].ID != "implicit-body" || prepared.body.ThemeProperties[0].Property != "color" {
+		t.Fatal("prepared region mapping retained caller-owned slice storage")
+	}
+}
+
+func TestTypedPageTemplateMixedShellRetainsLegacySourceMappingAndHash(t *testing.T) {
+	headerRow := layout.RowColumnBlock{Direction: layout.RowDirection, Items: []layout.RowColumnItem{{
+		Track: layout.RowColumnTrack{Kind: layout.RowColumnTrackFraction, Weight: 1},
+		Block: pageShellParagraph("Header row"),
+	}}}
+	doc := &layout.LayoutDocument{PageTemplate: layout.PageTemplate{
+		Margins: layout.Spacing{Left: 10, Top: 10, Right: 10, Bottom: 10},
+		Header:  &layout.HeaderBlock{Blocks: []layout.Block{pageShellParagraph("Header lead"), headerRow}},
+	}, Body: []layout.Block{pageShellParagraph("Body")}}
+	headerSpan := paperlang.Span{File: "legacy-mixed-shell.paper",
+		Start: paperlang.Position{Offset: 10, Line: 2, Column: 3}, End: paperlang.Position{Offset: 30, Line: 2, Column: 23}}
+	authored := papercompile.CompileMapping{SourceRevision: "legacy-source-revision", Nodes: []papercompile.NodeMapping{
+		{ID: "@header-lead", Kind: paperlang.NodeParagraph, BodyIndex: 0, SegmentIndex: -1, NestedBlockIndex: -1, Region: layoutengine.RegionHeader, Span: headerSpan},
+		{ID: "@header-row", Kind: paperlang.NodeRow, BodyIndex: 1, SegmentIndex: -1, NestedBlockIndex: -1, Region: layoutengine.RegionHeader, Span: headerSpan},
+	}}
+	legacy := papercompile.CompileMapping{SourceRevision: authored.SourceRevision}
+
+	plan := func(mapping papercompile.CompileMapping) layoutengine.LayoutPlan {
+		t.Helper()
+		ctx, err := ensureDocumentPlanningBudget(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		planned, err := paginationTestDocument(t, 120, WithDeterministicOutput()).planTypedPageTemplate(ctx, doc, mapping)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return planned
+	}
+	authoredPlan, legacyPlan := plan(authored), plan(legacy)
+	authoredHash, err := authoredPlan.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyHash, err := legacyPlan.Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if authoredHash != legacyHash {
+		t.Fatalf("mixed shell plan hash changed from legacy source mapping: %s != %s", authoredHash, legacyHash)
+	}
+	for _, fragment := range authoredPlan.ReadOnlyProjection().Fragments {
+		if fragment.Region == layoutengine.RegionHeader && fragment.Source.File == headerSpan.File {
+			t.Fatalf("mixed shell fragment unexpectedly adopted authored provenance: %+v", fragment)
+		}
+	}
+
+	render := func(planned layoutengine.LayoutPlan) []byte {
+		t.Helper()
+		target := mustNewPDFDocument(WithUnit(UnitPoint), WithNoCompression(), WithDeterministicOutput())
+		if err := target.paintDisplayLayoutPlanPDF(planned, nil); err != nil {
+			t.Fatal(err)
+		}
+		var output bytes.Buffer
+		if err := target.OutputWithOptions(&output, OutputOptions{Deterministic: true}); err != nil {
+			t.Fatal(err)
+		}
+		return output.Bytes()
+	}
+	if withMapping, withoutMapping := render(authoredPlan), render(legacyPlan); !bytes.Equal(withMapping, withoutMapping) {
+		t.Fatal("mixed shell source mapping changed deterministic PDF output")
+	}
 }
 
 func TestTypedPageTemplateComposesContentAddressedImagesAndExternalLinks(t *testing.T) {
