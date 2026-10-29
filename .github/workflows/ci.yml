@@ -17,6 +17,9 @@ jobs:
   secret-scan:
     name: Secret history scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout full history
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -26,6 +29,11 @@ jobs:
 
       - name: Scan repository history
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        env:
+          # Pull request scans list the PR's commits through the API; findings
+          # fail the job instead of being posted as PR comments.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
 
   test:
     name: Test
