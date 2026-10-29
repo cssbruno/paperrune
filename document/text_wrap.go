@@ -121,7 +121,7 @@ func (f *pdfDocument) walkWrappedText(text string, options wrappedTextOptions, y
 		case wrappedTextBytes:
 			isSeparator = character == ' ' || character == '\t'
 		case wrappedTextUTF8:
-			isSeparator = unicode.IsSpace(character)
+			isSeparator = unicode.IsSpace(character) && !isNoBreakSpace(character)
 			if !isSeparator && isChinese(character) {
 				isSeparator = true
 				includeSeparator = true
@@ -130,18 +130,28 @@ func (f *pdfDocument) walkWrappedText(text string, options wrappedTextOptions, y
 		case wrappedTextCoreMultiCell:
 			isSeparator = character == ' '
 		}
-		if isSeparator {
+		// A space separator is recorded before the overflow check because it
+		// is dropped at the break. An ideograph stays on its line, so it only
+		// becomes a break-after point once it is known to fit.
+		if isSeparator && !includeSeparator {
 			separator = characterStart
 			separatorSize = size
-			separatorInclude = includeSeparator
+			separatorInclude = false
 			separatorBreak = separatorKind
-			if includeSeparator {
-				separatorWidth = width
-			} else {
-				separatorWidth = widthBeforeCharacter
-			}
+			separatorWidth = widthBeforeCharacter
 		}
 
+		if width > options.MaxWidth && includeSeparator && characterStart != lineStart {
+			if !emit(wrappedTextLine{
+				StartByte: lineStart, EndByte: characterStart, NextByte: characterStart,
+				Break: separatorKind, WidthFontUnits: widthBeforeCharacter,
+				JustifyGaps: maxInt(spaceCount-1, 0),
+			}) {
+				return count
+			}
+			reset(characterStart)
+			continue
+		}
 		if width > options.MaxWidth {
 			lineEnd, nextByte := separator, separator+separatorSize
 			lineWidth := separatorWidth
@@ -168,6 +178,13 @@ func (f *pdfDocument) walkWrappedText(text string, options wrappedTextOptions, y
 			}
 			reset(nextByte)
 			continue
+		}
+		if isSeparator && includeSeparator {
+			separator = characterStart
+			separatorSize = size
+			separatorInclude = true
+			separatorBreak = separatorKind
+			separatorWidth = width
 		}
 		i = next
 	}
@@ -237,4 +254,9 @@ func (f *pdfDocument) wrapCoreMultiCellText(text string, width float64, align st
 		return true
 	})
 	return result, nil
+}
+
+// isNoBreakSpace reports the Unicode spaces that forbid a line break.
+func isNoBreakSpace(character rune) bool {
+	return character == '\u00a0' || character == '\u2007' || character == '\u202f'
 }

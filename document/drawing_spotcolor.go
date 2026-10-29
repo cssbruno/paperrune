@@ -6,7 +6,6 @@ package document
 import (
 	"fmt"
 	"sort"
-	"strings"
 )
 
 func clampSpotColorPercent(percent byte) byte {
@@ -155,7 +154,7 @@ func (f *pdfDocument) putSpotColors() {
 	for _, name := range f.spotColorOutputNames() {
 		spotColor := f.spotColorMap[name]
 		f.newobj()
-		f.outf("[/Separation /%s", strings.ReplaceAll(name, " ", "#20"))
+		f.outf("[/Separation /%s", escapePDFName(name))
 		f.out("/DeviceCMYK <<")
 		f.out("/Range [0 1 0 1 0 1 0 1] /C0 [0 0 0 0] ")
 		f.outf("/C1 [%.3f %.3f %.3f %.3f] ", float64(spotColor.cmyk.c)/100, float64(spotColor.cmyk.m)/100,

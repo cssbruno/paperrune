@@ -6,10 +6,12 @@ package layoutengine
 //go:generate sh -c "cd ../../tools && go run ./canonical-json-gen -output ../internal/layoutengine/canonical_json_projection_gen.go"
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"hash"
+	"io"
 	"strconv"
 	"unicode/utf8"
 )
@@ -46,10 +48,29 @@ func layoutPlanProjectionHash(value LayoutPlanProjection) ([sha256.Size]byte, er
 	return encoder.sum(), nil
 }
 
+// canonicalTreeProjectionJSON and layoutPlanProjectionJSON emit the same
+// bytes that the projection hashes digest, independent of the toolchain's
+// encoding/json implementation.
+func canonicalTreeProjectionJSON(value CanonicalTreeProjection) []byte {
+	var output bytes.Buffer
+	encoder := canonicalHashEncoder{destination: &output}
+	encodeCanonicalCanonicalTreeProjection(&encoder, value)
+	encoder.flush()
+	return output.Bytes()
+}
+
+func layoutPlanProjectionJSON(value LayoutPlanProjection) []byte {
+	var output bytes.Buffer
+	encoder := canonicalHashEncoder{destination: &output}
+	encodeCanonicalLayoutPlanProjection(&encoder, value)
+	encoder.flush()
+	return output.Bytes()
+}
+
 const canonicalHashBufferSize = 16 << 10
 
 type canonicalHashEncoder struct {
-	destination hash.Hash
+	destination io.Writer
 	buffer      [canonicalHashBufferSize]byte
 	used        int
 }
@@ -65,7 +86,7 @@ func (encoder *canonicalHashEncoder) flush() {
 func (encoder *canonicalHashEncoder) sum() [sha256.Size]byte {
 	encoder.flush()
 	var result [sha256.Size]byte
-	encoder.destination.Sum(result[:0])
+	encoder.destination.(hash.Hash).Sum(result[:0])
 	return result
 }
 

@@ -169,9 +169,8 @@ func FormatCurrency(input, currency, locale string, limits Limits) (string, erro
 	for uint32(len(fraction)) < currencyPattern.fractionDigits { // #nosec G115 -- collection length is bounded by the surrounding limit or container invariant
 		fraction += "0"
 	}
-	numberText := localizeNumber(number.negative, number.integer, fraction, data)
 	symbol := currencyPattern.symbol(locale)
-	formatted := formatCurrencyPattern(numberText, symbol.text, symbol.rtl, data)
+	formatted := formatCurrencyPattern(number.negative, number.integer, fraction, symbol.text, symbol.rtl, data)
 	return finish(operation, input+currency, formatted, data, normalized)
 }
 
@@ -345,7 +344,20 @@ func translateDigits(value string, digits [10]string) string {
 	return result.String()
 }
 
-func formatCurrencyPattern(number, symbol string, symbolRTL bool, data localeData) string {
+// formatCurrencyPattern places the minus sign ahead of a leading currency
+// symbol (-$1.00), and beside the number when the symbol trails it.
+func formatCurrencyPattern(negative bool, integer, fraction, symbol string, symbolRTL bool, data localeData) string {
+	if data.rtl || data.currencyAfter {
+		return formatCurrencyAffixes(localizeNumber(negative, integer, fraction, data), symbol, symbolRTL, data)
+	}
+	formatted := formatCurrencyAffixes(localizeNumber(false, integer, fraction, data), symbol, symbolRTL, data)
+	if negative {
+		formatted = "-" + formatted
+	}
+	return formatted
+}
+
+func formatCurrencyAffixes(number, symbol string, symbolRTL bool, data localeData) string {
 	if data.rtl {
 		if !symbolRTL {
 			symbol = leftToRightIsolate + symbol + popIsolate

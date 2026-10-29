@@ -137,7 +137,7 @@ func TestPaperSearchReturnsASTAndCompilerDomainsDeterministically(t *testing.T) 
 func TestPaperDiscoveryRejectsStaleAndRevokedOpens(t *testing.T) {
 	workspace := mustWorkspace(t, Limits{MaxContextBytes: 32 << 10, MaxSearchResults: 32, MaxNodes: 512})
 	created, opened, scope := openDiscoveryFixture(t, workspace)
-	_, err := workspace.Apply(ApplyRequest{
+	_, err := workspace.applyUnauthorized(ApplyRequest{
 		Candidate: created.Candidate.Handle, ExpectedHead: created.Revision.Handle,
 		ExpectedRevision: created.Revision.Revision, IdempotencyKey: "advance-discovery",
 		TargetPreconditions: []paperedit.TargetPrecondition{exactTargetPrecondition(t, "discovery.paper", discoveryFixture, "@copy")},

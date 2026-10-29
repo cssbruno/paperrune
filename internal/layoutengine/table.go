@@ -173,6 +173,9 @@ type tableRowGroup struct {
 	end    uint32 // exclusive
 	height Fixed
 	policy string
+	// members holds the groups a pagination policy merged, so an oversized
+	// policy group can fall back to them instead of overflowing the page.
+	members []tableRowGroup
 }
 
 type tableUnitGeometry struct {
@@ -778,7 +781,8 @@ func deriveBodyGroups(headerRows, rows uint32, cells []TableCell, heights []Fixe
 				return err
 			}
 		}
-		combined := tableRowGroup{start: groups[first].start, end: groups[last].end, height: total, policy: policy}
+		members := append([]tableRowGroup(nil), groups[first:last+1]...)
+		combined := tableRowGroup{start: groups[first].start, end: groups[last].end, height: total, policy: policy, members: members}
 		groups = append(groups[:first], append([]tableRowGroup{combined}, groups[last+1:]...)...)
 		return nil
 	}
@@ -885,51 +889,73 @@ func (p *tablePaginator) plan() (LayoutPlan, error) {
 		return NewTrustedGeometryPlan(p.output)
 	}
 	for _, group := range p.groups {
-		if err := p.budget.charge(uint64(group.end - group.start)); err != nil {
-			return LayoutPlan{}, err
-		}
-		remaining, err := p.remaining()
-		if err != nil {
-			return LayoutPlan{}, err
-		}
-		if group.height > remaining && p.lastBodyFragment.Valid() {
-			from := p.page
-			preceding := p.lastBodyFragment
-			previousOverflow := p.lastBodyOverflow
-			available := remaining
-			p.finishPage()
-			if err := p.startPage(); err != nil {
-				return LayoutPlan{}, err
-			}
-			triggering, _, err := p.placeRows(group.start, group.end, false)
-			if err != nil {
-				return LayoutPlan{}, err
-			}
-			reason := BreakPaginationConstraint
-			if previousOverflow {
-				reason = BreakPreviousFragmentOverflow
-				available = 0
-			}
-			p.output.Breaks = append(p.output.Breaks, BreakDecision{
-				Reason: reason, FromPage: from, ToPage: p.page, Region: RegionBody,
-				Preceding: preceding, Triggering: triggering,
-				Required: group.height, Available: available,
-			})
-			if err := p.noteOversize(group, triggering); err != nil {
-				return LayoutPlan{}, err
-			}
-			continue
-		}
-		first, _, err := p.placeRows(group.start, group.end, false)
-		if err != nil {
-			return LayoutPlan{}, err
-		}
-		if err := p.noteOversize(group, first); err != nil {
+		if _, err := p.placeGroup(group); err != nil {
 			return LayoutPlan{}, err
 		}
 	}
 	p.finishPage()
 	return NewTrustedGeometryPlan(p.output)
+}
+
+// placeGroup paginates one body group and returns its first fragment. A policy
+// group that cannot fit an empty page body below repeated headers is relaxed
+// to the groups it merged, so only rowspan-closed units may overflow a page.
+func (p *tablePaginator) placeGroup(group tableRowGroup) (FragmentID, error) {
+	available, err := p.availableBelowHeader()
+	if err != nil {
+		return 0, err
+	}
+	if group.policy != "" && len(group.members) > 1 && group.height > available {
+		var first FragmentID
+		for _, member := range group.members {
+			placed, err := p.placeGroup(member)
+			if err != nil {
+				return 0, err
+			}
+			if !first.Valid() {
+				first = placed
+			}
+		}
+		p.noteKeepTooLarge(group, first, available, "table pagination preference exceeded the available page body and was relaxed to its row groups")
+		return first, nil
+	}
+	if err := p.budget.charge(uint64(group.end - group.start)); err != nil {
+		return 0, err
+	}
+	remaining, err := p.remaining()
+	if err != nil {
+		return 0, err
+	}
+	if group.height > remaining && p.lastBodyFragment.Valid() {
+		from := p.page
+		preceding := p.lastBodyFragment
+		previousOverflow := p.lastBodyOverflow
+		available := remaining
+		p.finishPage()
+		if err := p.startPage(); err != nil {
+			return 0, err
+		}
+		triggering, _, err := p.placeRows(group.start, group.end, false)
+		if err != nil {
+			return 0, err
+		}
+		reason := BreakPaginationConstraint
+		if previousOverflow {
+			reason = BreakPreviousFragmentOverflow
+			available = 0
+		}
+		p.output.Breaks = append(p.output.Breaks, BreakDecision{
+			Reason: reason, FromPage: from, ToPage: p.page, Region: RegionBody,
+			Preceding: preceding, Triggering: triggering,
+			Required: group.height, Available: available,
+		})
+		return triggering, p.noteOversize(group, triggering)
+	}
+	first, _, err := p.placeRows(group.start, group.end, false)
+	if err != nil {
+		return 0, err
+	}
+	return first, p.noteOversize(group, first)
 }
 
 func (p *tablePaginator) startPage() error {
@@ -1151,13 +1177,23 @@ func (p *tablePaginator) repeatedHeaderGeometry(start, end uint32) (tableUnitGeo
 	return geometry, nil
 }
 
-func (p *tablePaginator) noteOversize(group tableRowGroup, first FragmentID) error {
+// availableBelowHeader is the body height an empty page offers below the
+// repeated header rows.
+func (p *tablePaginator) availableBelowHeader() (Fixed, error) {
 	available, err := p.body.Height.Sub(p.headerHeight)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if available < 0 {
 		available = 0
+	}
+	return available, nil
+}
+
+func (p *tablePaginator) noteOversize(group tableRowGroup, first FragmentID) error {
+	available, err := p.availableBelowHeader()
+	if err != nil {
+		return err
 	}
 	if group.height <= available {
 		return nil
@@ -1180,18 +1216,22 @@ func (p *tablePaginator) noteOversize(group tableRowGroup, first FragmentID) err
 		},
 	})
 	if group.policy != "" {
-		p.output.Diagnostics = append(p.output.Diagnostics, Diagnostic{
-			Code: DiagnosticKeepTooLarge, Severity: SeverityWarning, Stage: StageLayout,
-			Message:  "table pagination preference exceeded the available page body and was relaxed after one deterministic placement",
-			Location: diagnosticLocationForFragment(fragment),
-			Evidence: []DiagnosticEvidence{
-				{Key: "policy", Value: group.policy},
-				{Key: "requested_rows", Value: strconv.FormatUint(uint64(group.end-group.start), 10)},
-				{Key: "available_below_header_fixed", Value: strconv.FormatInt(int64(available), 10)},
-			},
-		})
+		p.noteKeepTooLarge(group, first, available, "table pagination preference exceeded the available page body and was relaxed after one deterministic placement")
 	}
 	return nil
+}
+
+func (p *tablePaginator) noteKeepTooLarge(group tableRowGroup, first FragmentID, available Fixed, message string) {
+	p.output.Diagnostics = append(p.output.Diagnostics, Diagnostic{
+		Code: DiagnosticKeepTooLarge, Severity: SeverityWarning, Stage: StageLayout,
+		Message:  message,
+		Location: diagnosticLocationForFragment(p.fragment(first)),
+		Evidence: []DiagnosticEvidence{
+			{Key: "policy", Value: group.policy},
+			{Key: "requested_rows", Value: strconv.FormatUint(uint64(group.end-group.start), 10)},
+			{Key: "available_below_header_fixed", Value: strconv.FormatInt(int64(available), 10)},
+		},
+	})
 }
 
 func (p *tablePaginator) fragment(id FragmentID) Fragment {

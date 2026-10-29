@@ -539,10 +539,16 @@ func (e *componentExpander) expandUse(use *paperlang.Node, parent expansionOrigi
 			childOrigin := origin
 			if fill == nil {
 				childOrigin.definition = selectedNode.Span
-			} else {
-				childOrigin.invocation = selectedNode.Span
+				output = append(output, e.expandNode(selectedNode, childOrigin, depth+1)...)
+				continue
 			}
+			childOrigin.invocation = selectedNode.Span
+			// Fill content is authored by the caller, so it expands in the
+			// caller's cycle scope: nesting this component inside its own fill
+			// is finite and must not be reported as a cycle.
+			delete(e.stack, componentName)
 			output = append(output, e.expandNode(selectedNode, childOrigin, depth+1)...)
+			e.stack[componentName] = true
 		}
 	}
 	return output

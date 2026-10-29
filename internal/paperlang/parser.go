@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // ParseResult contains a best-effort AST and all lexer/parser diagnostics.
@@ -523,11 +524,15 @@ func (p *paperParser) parseScalar() Scalar {
 		if err != nil {
 			p.add("PAPER_INVALID_STRING", "string contains an invalid escape", `use escapes such as \n, \t, \" or \\`, token.Span)
 			decoded = token.Lexeme
+		} else if !validStringText(decoded) {
+			p.add("PAPER_INVALID_STRING", "string decodes to invalid UTF-8 or a control character", `keep text valid UTF-8 and use only \n or \t as control escapes`, token.Span)
 		}
 		value.StringValue = &decoded
 	case TokenExpression:
 		value.Kind = ScalarExpression
-		expression := strings.TrimSpace(token.Lexeme)
+		// Trim exactly what the lexer trims so formatting cannot change the
+		// value's lexical class.
+		expression := strings.Trim(token.Lexeme, " \t")
 		value.ExpressionValue = &expression
 	case TokenBool:
 		value.Kind = ScalarBool
@@ -838,4 +843,18 @@ func (p *paperParser) skipIndentedBlock() {
 
 func (p *paperParser) add(code, message, hint string, span Span) {
 	p.diagnostics = append(p.diagnostics, errorDiagnostic(code, message, hint, span))
+}
+
+// validStringText reports whether decoded string text is valid UTF-8 without
+// control characters other than newline and tab.
+func validStringText(value string) bool {
+	if !utf8.ValidString(value) {
+		return false
+	}
+	for _, character := range value {
+		if character < ' ' && character != '\n' && character != '\t' || character == 0x7f {
+			return false
+		}
+	}
+	return true
 }

@@ -117,3 +117,28 @@ func TestSharedSplitScannerCountAndCollectionStayEquivalent(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitTextKeepsIdeographsWithinWidth(t *testing.T) {
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint))
+	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetCellMargin(0)
+	lines := pdf.SplitText("中中中中中中", 12)
+	if !reflect.DeepEqual(lines, []string{"中中", "中中", "中中"}) {
+		t.Fatalf("SplitText(CJK) = %q", lines)
+	}
+}
+
+func TestSplitTextDoesNotBreakAtNoBreakSpaces(t *testing.T) {
+	pdf := mustNewPDFDocument(WithUnit(UnitPoint))
+	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetCellMargin(0)
+	width := pdf.GetStringWidth("aaaa ") + 0.1
+	for _, space := range []string{" ", " ", " "} {
+		if lines := pdf.SplitText("aaaa"+space+"bbbb", width); len(lines) == 2 && lines[0] == "aaaa" && lines[1] == "bbbb" {
+			t.Fatalf("SplitText broke at %U: %q", []rune(space)[0], lines)
+		}
+	}
+	if lines := pdf.SplitText("aaaa bbbb", width); !reflect.DeepEqual(lines, []string{"aaaa", "bbbb"}) {
+		t.Fatalf("SplitText(ordinary space) = %q", lines)
+	}
+}

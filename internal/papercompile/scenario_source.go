@@ -224,11 +224,7 @@ func (a *scenarioSourceAnalysis) value(node *paperlang.Node, depth uint32, pathB
 			}
 		case paperlang.ScalarNumber:
 			if scalar.NumberValue != nil && !math.IsNaN(*scalar.NumberValue) && !math.IsInf(*scalar.NumberValue, 0) {
-				number := strconv.FormatFloat(*scalar.NumberValue, 'f', -1, 64)
-				if *scalar.NumberValue == 0 {
-					number = "0"
-				}
-				return paperscenario.Value{Kind: paperscenario.Number, Number: number}, true
+				return paperscenario.Value{Kind: paperscenario.Number, Number: sourceNumberText(*scalar)}, true
 			}
 		case paperlang.ScalarUnit:
 			a.add("PAPER_SCENARIO_UNIT", "fixture values cannot contain layout units", "use a unitless number and format it at presentation time", scalar.Span)
@@ -346,4 +342,17 @@ func validScenarioSourceLimits(limits paperscenario.Limits) bool {
 		limits.MaxListItems > 0 && limits.MaxListItems <= hard.MaxListItems &&
 		limits.MaxPathBytes > 0 && limits.MaxPathBytes <= hard.MaxPathBytes &&
 		limits.MaxWork > 0 && limits.MaxWork <= hard.MaxWork
+}
+
+// sourceNumberText canonicalizes a finite number scalar from its authored
+// digits, so fixture and theme values keep the precision a float64 would lose.
+func sourceNumberText(scalar paperlang.Scalar) string {
+	if number, err := canonicalJSONDataNumber(strings.TrimPrefix(scalar.Raw, "+")); err == nil {
+		return number
+	}
+	number := strconv.FormatFloat(*scalar.NumberValue, 'f', -1, 64)
+	if *scalar.NumberValue == 0 {
+		number = "0"
+	}
+	return number
 }

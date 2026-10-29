@@ -83,3 +83,28 @@ func TestResolveRejectsNonCanonicalNumbers(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveMergesInheritedObjectsAndReplacesLists(t *testing.T) {
+	base := Scenario{Name: "base", Values: []Field{
+		{Name: "address", Value: Value{Kind: Object, Object: []Field{{Name: "city", Value: Value{Kind: String, String: "Paris"}}, {Name: "street", Value: Value{Kind: String, String: "1 Rue"}}}}},
+		{Name: "lines", Value: Value{Kind: List, List: []Item{{Key: "a", Value: Value{Kind: String, String: "A"}}, {Key: "b", Value: Value{Kind: String, String: "B"}}}}},
+	}}
+	child := Scenario{Name: "child", Parent: "base", Values: []Field{
+		{Name: "address", Value: Value{Kind: Object, Object: []Field{{Name: "city", Value: Value{Kind: String, String: "London"}}}}},
+		{Name: "lines", Value: Value{Kind: List, List: []Item{{Key: "c", Value: Value{Kind: String, String: "C"}}}}},
+	}}
+	fixtures, err := Resolve([]Scenario{child, base}, Limits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := fixtures[0].Values[0].Value.Object
+	if len(address) != 2 || address[0].Value.String != "London" || address[1].Value.String != "1 Rue" {
+		t.Fatalf("inherited object = %+v", address)
+	}
+	if lines := fixtures[0].Values[1].Value.List; len(lines) != 1 || lines[0].Key != "c" {
+		t.Fatalf("inherited list = %+v", lines)
+	}
+	if base := fixtures[1].Values[0].Value.Object; base[0].Value.String != "Paris" {
+		t.Fatalf("parent fixture was mutated: %+v", base)
+	}
+}

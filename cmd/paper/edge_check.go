@@ -125,7 +125,7 @@ func checkGeneratedEdgeCases(request edgeCheckRequest, stdout, stderr io.Writer)
 	if !parsed.OK() {
 		return languageDiagnostics(request.jsonMode, stdout, stderr, "check", parsed.Diagnostics)
 	}
-	extracted := papercompile.ExtractSchemasWithResolver(parsed.AST, papercompile.ImportResolver(paperFileImportResolver()))
+	extracted := papercompile.ExtractSchemasWithResolver(parsed.AST, papercompile.ImportResolver(paperFileImportResolver(request.file)))
 	if !extracted.OK() {
 		return languageDiagnostics(request.jsonMode, stdout, stderr, "check", extracted.Diagnostics)
 	}

@@ -91,6 +91,20 @@ func TestFormatCurrencyGoldenAndBidiIsolation(t *testing.T) {
 	}
 }
 
+func TestFormatCurrencyPlacesMinusBeforeLeadingSymbol(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct{ locale, currency, want string }{
+		{locale: "en-US", currency: "USD", want: "\u2066-$1,234.50\u2069"},
+		{locale: "pt-BR", currency: "BRL", want: "\u2066-R$\u00a01.234,50\u2069"},
+	} {
+		got, err := FormatCurrency("-1234.5", test.currency, test.locale, Limits{})
+		if err != nil || got != test.want {
+			t.Fatalf("%s/%s got %q, %v; want %q", test.locale, test.currency, got, err, test.want)
+		}
+	}
+}
+
 func TestFormatDateAndTimeGoldenWithExplicitZones(t *testing.T) {
 	t.Parallel()
 

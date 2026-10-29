@@ -136,21 +136,28 @@ func TestTypedTablePoliciesReachPlanBreaksRelaxationAndCancellation(t *testing.T
 	planner := mustNewPDFDocument(WithUnit(UnitPoint), WithCustomPageSize(Size{Wd: 100, Ht: 100}), WithNoCompression(), WithDeterministicOutput())
 	planner.SetMargins(10, 10, 10)
 	plan, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{table}})
-	if err != nil || plan.PageCount() != 3 {
+	// Each 30pt row fills the ~33pt body, so the orphan/widow groups are
+	// relaxed to one row per page instead of overflowing the page.
+	if err != nil || plan.PageCount() != 5 {
 		t.Fatalf("policy plan pages=%d, %v", plan.PageCount(), err)
 	}
 	projection := plan.plan.Projection()
-	if len(projection.Breaks) != 2 || projection.Pages[0].Fragments.Count != 4 || projection.Pages[1].Fragments.Count != 2 || projection.Pages[2].Fragments.Count != 4 {
-		t.Fatalf("policy projection pages=%+v breaks=%+v", projection.Pages, projection.Breaks)
+	for index, page := range projection.Pages {
+		if page.Fragments.Count != 2 {
+			t.Fatalf("policy projection page %d fragments=%d pages=%+v", index+1, page.Fragments.Count, projection.Pages)
+		}
+	}
+	if len(projection.Breaks) != 4 {
+		t.Fatalf("policy projection breaks=%+v", projection.Breaks)
 	}
 	keep := table
 	keep.Box = layout.BoxStyle{KeepTogether: true}
 	kept, err := planner.PlanLayoutDocument(&layout.LayoutDocument{Body: []layout.Block{keep}})
-	if err != nil || kept.PageCount() != 1 {
+	if err != nil || kept.PageCount() != 5 {
 		t.Fatalf("oversize keep pages=%d, %v", kept.PageCount(), err)
 	}
 	diagnostics := kept.plan.Projection().Diagnostics
-	if len(diagnostics) < 2 || diagnostics[len(diagnostics)-1].Code != layoutengine.DiagnosticKeepTooLarge {
+	if len(diagnostics) != 1 || diagnostics[0].Code != layoutengine.DiagnosticKeepTooLarge {
 		t.Fatalf("oversize keep diagnostics=%+v", diagnostics)
 	}
 	canceled, cancel := context.WithCancel(context.Background())

@@ -4,6 +4,7 @@
 package layoutengine
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -80,13 +81,16 @@ func TestCanonicalProjectionHashesMatchMarshal(t *testing.T) {
 		},
 	}
 	for index, projection := range planProjections {
-		encoded, err := json.Marshal(projection)
+		encoded, err := marshalLegacyCanonicalJSON(projection)
 		if err != nil {
 			t.Fatal(err)
 		}
 		got, err := layoutPlanProjectionHash(projection)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if emitted := layoutPlanProjectionJSON(projection); sha256.Sum256(emitted) != got {
+			t.Fatalf("plan projection[%d] canonical JSON does not match its hash", index)
 		}
 		if want := sha256.Sum256(encoded); got != want {
 			t.Fatalf("plan projection[%d] hash mismatch: got %x want %x\nJSON: %s", index, got, want, encoded)
@@ -106,7 +110,7 @@ func TestCanonicalProjectionHashesMatchMarshal(t *testing.T) {
 		},
 	}
 	for index, projection := range treeProjections {
-		encoded, err := json.Marshal(projection)
+		encoded, err := marshalLegacyCanonicalJSON(projection)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -114,10 +118,25 @@ func TestCanonicalProjectionHashesMatchMarshal(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if emitted := canonicalTreeProjectionJSON(projection); sha256.Sum256(emitted) != got {
+			t.Fatalf("tree projection[%d] canonical JSON does not match its hash", index)
+		}
 		if want := sha256.Sum256(encoded); got != want {
 			t.Fatalf("tree projection[%d] hash mismatch: got %x want %x\nJSON: %s", index, got, want, encoded)
 		}
 	}
+}
+
+// marshalLegacyCanonicalJSON is json.Marshal with the pre-jsonv2 spelling of
+// invalid UTF-8 (an escaped U+FFFD). The persisted hash contract fixed that
+// spelling, while newer encoding/json releases emit the literal character.
+// The fixtures contain no literal U+FFFD, so the rewrite is unambiguous.
+func marshalLegacyCanonicalJSON(value any) ([]byte, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.ReplaceAll(encoded, []byte("\uFFFD"), []byte(`\ufffd`)), nil
 }
 
 func populateCanonicalProjectionTestValue(value reflect.Value, depth int) {

@@ -137,3 +137,44 @@ func TestEvaluateMatchesRejectsTypesPatternsAndBoundedAdversarialWork(t *testing
 		t.Fatalf("adversarial match work error = %v", err)
 	}
 }
+
+func TestLazyTreeEvaluatorEnforcesBytecodeRuntimeKinds(t *testing.T) {
+	cases := []struct {
+		source string
+		kind   Kind
+		value  Value
+	}{
+		{`!x`, Bool, Value{Kind: Null}},
+		{`!x`, Bool, Value{Kind: String, String: "false"}},
+		{`x && true`, Bool, Value{Kind: Null}},
+		{`true && x`, Bool, Value{Kind: Null}},
+		{`false || x`, Bool, Value{Kind: Integer, Integer: 1}},
+		{`x ? 1 : 2`, Bool, Value{Kind: Null}},
+		{`x + "a"`, String, Value{Kind: Null}},
+		{`x matches "*"`, String, Value{Kind: Null}},
+		{`x + 1`, Integer, Value{Kind: String, String: "5"}},
+	}
+	for _, test := range cases {
+		program, _, err := Compile(test.source, []PathKind{{Path: "x", Kind: test.kind}}, LanguageLimits{})
+		if err != nil {
+			t.Fatalf("%s: %v", test.source, err)
+		}
+		bindings := []Binding{{Path: "x", Value: test.value}}
+		bytecode := program
+		bytecode.root = nil
+		if _, err := Evaluate(context.Background(), bytecode, bindings, Limits{}); !errors.Is(err, ErrType) {
+			t.Fatalf("%s with %+v: bytecode error = %v", test.source, test.value, err)
+		}
+		if value, err := Evaluate(context.Background(), program, bindings, Limits{}); !errors.Is(err, ErrType) {
+			t.Fatalf("%s with %+v: tree = %+v, error = %v", test.source, test.value, value, err)
+		}
+	}
+	// Short-circuiting still skips the unread operand.
+	program, _, err := Compile(`false && x`, []PathKind{{Path: "x", Kind: Bool}}, LanguageLimits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, err := Evaluate(context.Background(), program, []Binding{{Path: "x", Value: Value{Kind: Null}}}, Limits{}); err != nil || value != (Value{Kind: Bool}) {
+		t.Fatalf("short circuit = %+v, %v", value, err)
+	}
+}

@@ -457,7 +457,7 @@ func (t CanonicalTree) CanonicalJSON() ([]byte, error) {
 	if err := validateCanonicalTree(t); err != nil {
 		return nil, err
 	}
-	return json.Marshal(t.Projection())
+	return canonicalTreeProjectionJSON(t.readOnlyProjection()), nil
 }
 func (t CanonicalTree) Hash() (string, error) {
 	digest, err := canonicalTreeProjectionHash(t.readOnlyProjection())

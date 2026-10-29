@@ -304,3 +304,15 @@ func TestParsePredicateSwitchAndRejectDuplicateValueCases(t *testing.T) {
 		t.Fatalf("duplicate switch diagnostics = %#v", duplicate.Diagnostics)
 	}
 }
+
+func TestParseRejectsStringsDecodingToControlOrInvalidUTF8(t *testing.T) {
+	for _, literal := range []string{`"a\xffb"`, `"a\x00b"`, `"\101\007"`, `"\u007f"`} {
+		parsed := Parse("x.paper", "document @doc:\n  title: "+literal+"\n")
+		if parsed.OK() || parsed.Diagnostics[0].Code != "PAPER_INVALID_STRING" {
+			t.Fatalf("%s diagnostics = %#v", literal, parsed.Diagnostics)
+		}
+	}
+	if parsed := Parse("x.paper", "document @doc:\n  title: \"line\\nbreak\\ttab \\u00e9\"\n"); !parsed.OK() {
+		t.Fatalf("valid escapes rejected: %#v", parsed.Diagnostics)
+	}
+}

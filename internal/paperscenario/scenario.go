@@ -313,10 +313,17 @@ func (r *resolver) mutate(fields *[]Field, mutation Mutation) error {
 	return nil
 }
 
+// overlay applies a child scenario's values over its parent's. Objects merge
+// field by field so a child can override one nested value; every other kind,
+// keyed lists included, replaces the parent's value whole.
 func overlay(base, override []Field) []Field {
 	result := cloneFields(base)
 	for _, field := range override {
 		if index := fieldIndex(result, field.Name); index >= 0 {
+			if result[index].Value.Kind == Object && field.Value.Kind == Object {
+				result[index].Value.Object = overlay(result[index].Value.Object, field.Value.Object)
+				continue
+			}
 			result[index] = field
 		} else {
 			result = append(result, field)

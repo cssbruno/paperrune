@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -746,5 +747,38 @@ func TestRunHelpVersionAndTypoSuggestion(t *testing.T) {
 	code, stdout, stderr = invoke([]string{"version", "--json"}, "")
 	if code != exitOK || stderr != "" || !strings.Contains(stdout, `"version":"v9.8.7-test"`) {
 		t.Fatalf("version = %d, %q, %q", code, stdout, stderr)
+	}
+}
+
+func TestFileImportResolverKeepsSymlinkTargetsInsideRoot(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	if err := os.Mkdir(project, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	const style = "document @design:\n  style @base:\n    size: 10pt\n"
+	for file, contents := range map[string]string{
+		filepath.Join(project, "design.paper"): style,
+		filepath.Join(root, "secret.paper"):    style,
+	} {
+		if err := os.WriteFile(file, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink("design.paper", filepath.Join(project, "alias.paper")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(root, "secret.paper"), filepath.Join(project, "escape.paper")); err != nil {
+		t.Fatal(err)
+	}
+	resolve := paperFileImportResolver(filepath.Join(project, "main.paper"))
+	importer := filepath.Join(project, "main.paper")
+	for _, name := range []string{"design.paper", "alias.paper"} {
+		if _, source, err := resolve(context.Background(), importer, name); err != nil || source != style {
+			t.Fatalf("resolve %s = %q, %v", name, source, err)
+		}
+	}
+	if _, _, err := resolve(context.Background(), importer, "escape.paper"); err == nil || !strings.Contains(err.Error(), "escapes the root") {
+		t.Fatalf("symlink escaping the root document directory = %v", err)
 	}
 }

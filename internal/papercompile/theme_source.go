@@ -190,11 +190,7 @@ func (a *themeSourceAnalysis) themeValue(scalar paperlang.Scalar, declared paper
 		}
 	case paperlang.ScalarNumber:
 		if scalar.NumberValue != nil && !math.IsNaN(*scalar.NumberValue) && !math.IsInf(*scalar.NumberValue, 0) {
-			number := strconv.FormatFloat(*scalar.NumberValue, 'f', -1, 64)
-			if *scalar.NumberValue == 0 {
-				number = "0"
-			}
-			return papertheme.Value{Kind: papertheme.Number, Number: number}, true
+			return papertheme.Value{Kind: papertheme.Number, Number: sourceNumberText(scalar)}, true
 		}
 	case paperlang.ScalarUnit:
 		if scalar.UnitValue != nil && !math.IsNaN(scalar.UnitValue.Number) && !math.IsInf(scalar.UnitValue.Number, 0) {

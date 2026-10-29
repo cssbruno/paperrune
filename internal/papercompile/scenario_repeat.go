@@ -150,6 +150,9 @@ func expandSelectedScenario(ast paperlang.AST, schemas schemaAnalysis, component
 			result.diagnostics = append(result.diagnostics, repeatDiagnostic("PAPER_REPEAT_SCENARIO_UNKNOWN", fmt.Sprintf("scenario @%s is not declared", selected), "select one declared scenario", rootSpan(ast)))
 			return result
 		}
+		// Schema diagnostics cover every fixture field; expansion continues so
+		// bound paths also report their binding-located diagnostics.
+		result.diagnostics = append(result.diagnostics, validateScenarioFixture(ast, *fixture, schemas)...)
 	}
 	request.fixture = fixture
 	repeatLimits := request.limits.Repeats

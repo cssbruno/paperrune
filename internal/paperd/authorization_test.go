@@ -114,6 +114,50 @@ func TestMutationAuthorityEnforcesOperationProtectedAndTransitiveScopes(t *testi
 	}
 }
 
+const protectedDescendantFixture = "document @report:\n" +
+	"  page @sheet:\n" +
+	"    body @body:\n" +
+	"      row @grid:\n" +
+	"        column @wrap:\n" +
+	"          paragraph @sig:\n" +
+	"            text @sig-copy: \"Signed\"\n" +
+	"      paragraph @note:\n" +
+	"        text @note-copy: \"Note\"\n"
+
+func TestStructuralMutationOfContainerCoversProtectedDescendants(t *testing.T) {
+	protectedOptions := WorkspaceOptions{ProtectedNodeIDs: []string{"@sig"}}
+	workspace := authorizationWorkspace(t, protectedOptions)
+	guard, created, opened := mutationGuard(t, workspace, protectedDescendantFixture, "@grid", "protected-ancestor-delete", CapabilityEdit)
+	if _, err := workspace.PaperManageNode(PaperManageNodeRequest{Guard: guard, Action: "delete"}); errorCode(err) != "PROTECTED_NODE_DENIED" {
+		t.Fatalf("deleting an ancestor of a protected node = %v", err)
+	}
+	if candidate, _ := workspace.Candidate(created.Candidate.Handle); candidate.Head != created.Revision.Handle {
+		t.Fatal("denied container delete advanced candidate")
+	}
+	guard.Authority = grantMutationAuthority(t, workspace, opened, "agent:protected", []MutationOperation{MutationManageNode}, nil, []string{"@sig"})
+	result, err := workspace.PaperManageNode(PaperManageNodeRequest{Guard: guard, Action: "delete"})
+	if err != nil || !reflect.DeepEqual(result.Authorization.ProtectedEffects, []string{"@sig"}) {
+		t.Fatalf("granted container delete = %#v, %v", result.Authorization, err)
+	}
+
+	workspace = authorizationWorkspace(t, protectedOptions)
+	guard, _, _ = mutationGuard(t, workspace, protectedDescendantFixture, "@wrap", "protected-ancestor-move", CapabilityEdit)
+	guard.TargetPreconditions = []paperedit.TargetPrecondition{exactTargetPrecondition(t, "mutation.paper", protectedDescendantFixture, "@body")}
+	if _, err := workspace.PaperMoveNode(PaperMoveNodeRequest{Guard: guard, NewParent: "@body"}); errorCode(err) != "PROTECTED_NODE_DENIED" {
+		t.Fatalf("moving the container of a protected node = %v", err)
+	}
+
+	// Moving an unprotected node into a container that holds a protected
+	// node leaves the protected node untouched.
+	workspace = authorizationWorkspace(t, protectedOptions)
+	guard, _, _ = mutationGuard(t, workspace, protectedDescendantFixture, "@note", "protected-destination-move", CapabilityEdit)
+	guard.TargetPreconditions = []paperedit.TargetPrecondition{exactTargetPrecondition(t, "mutation.paper", protectedDescendantFixture, "@wrap")}
+	result, err = workspace.PaperMoveNode(PaperMoveNodeRequest{Guard: guard, NewParent: "@wrap"})
+	if err != nil || len(result.Authorization.ProtectedEffects) != 0 {
+		t.Fatalf("move beside a protected node = %#v, %v", result.Authorization, err)
+	}
+}
+
 func TestDiagnosticFixRequiresApplyFixAuthority(t *testing.T) {
 	workspace := authorizationWorkspace(t, WorkspaceOptions{})
 	request, _, opened := diagnosticFixRequest(t, workspace, invalidBindingFixFixture, "@amount", "authorized-fix", "PAPER_BIND_PATH", RemedySetBindingPath, PaperDiagnosticFixPayload{Path: "total"}, CapabilityEdit)

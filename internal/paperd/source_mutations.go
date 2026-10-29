@@ -357,7 +357,7 @@ func (w *Workspace) applyPaperMutation(kind string, guard PaperMutationGuard, op
 			return PaperMutationResult{Edit: cloneEditResult(preview)}, workspaceError(semanticErrorCode, "typed mutation does not compile against the current source contracts", ErrInvalidSource)
 		}
 	}
-	apply, err := w.Apply(ApplyRequest{
+	apply, err := w.applyUnauthorized(ApplyRequest{
 		Candidate: opened.candidate, ExpectedHead: guard.ExpectedHead, ExpectedRevision: guard.ExpectedDigest,
 		IdempotencyKey: guard.IdempotencyKey, TargetPreconditions: preconditions, Operations: operations,
 	})

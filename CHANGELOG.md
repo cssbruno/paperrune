@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- `.paper` scenario fixtures are now validated against the declared schema
+  with the same rules as JSON data (`PAPER_SCENARIO_SCHEMA`), and a child
+  scenario's objects merge field by field over its parent's instead of
+  replacing them whole. Fixtures that omit required fields, add undeclared
+  ones, or use the wrong kind now fail to compile.
+- Fixed security and correctness bugs found in review: protected nodes inside a
+  deleted or moved container, edits landing beside a removed block, exponent
+  number output, ambiguous duplicate IDs, CLI imports through escaping
+  symlinks, Studio component previews, spot-color name escaping, expression
+  runtime type checks, decimal overflow and cross-unit comparison, negative
+  currency signs, fixture number precision, control characters and invalid
+  UTF-8 in source, nested component fills, oversized table keep groups,
+  keep-with-next before tall paragraphs, CJK and no-break-space wrapping, and
+  toolchain-dependent canonical JSON.
 - Reused immutable font definitions and document-scoped embedded resources
   during Paper planning, while preserving deterministic output and giving each
   document owned mutable font bytes. Updated the required Go patch release and

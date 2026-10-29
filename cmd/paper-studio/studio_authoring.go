@@ -521,7 +521,7 @@ func studioScenarioScalar(value *paperlang.Scalar) (string, string, bool) {
 		}
 	case paperlang.ScalarNumber:
 		if value.NumberValue != nil {
-			return "number", strconv.FormatFloat(*value.NumberValue, 'g', -1, 64), true
+			return "number", strconv.FormatFloat(*value.NumberValue, 'f', -1, 64), true
 		}
 	}
 	return "", "", false

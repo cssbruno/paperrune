@@ -5,6 +5,7 @@ package papercompile
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/paperrune/internal/paperlang"
@@ -127,5 +128,141 @@ func TestCompileScenarioSourceDetectsParentCycles(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("cycle diagnostics = %#v", result.Diagnostics)
+	}
+}
+
+func TestCompileScenarioSourceKeepsAuthoredNumberPrecision(t *testing.T) {
+	source := "document @invoice:\n" +
+		"  scenario @exact:\n" +
+		"    value @total: 12345678901234567.89\n" +
+		"    value @tiny: -0.000000000000000001\n" +
+		"    value @zero: -0.00\n" +
+		"  page:\n" +
+		"    body:\n" +
+		"      text: \"preview\"\n"
+	compiled := CompileScenarioSource("invoice.paper", source)
+	if !compiled.OK() || len(compiled.Scenarios) != 1 {
+		t.Fatalf("scenario compile = %#v", compiled)
+	}
+	want := []paperscenario.Field{
+		{Name: "total", Value: paperscenario.Value{Kind: paperscenario.Number, Number: "12345678901234567.89"}},
+		{Name: "tiny", Value: paperscenario.Value{Kind: paperscenario.Number, Number: "-0.000000000000000001"}},
+		{Name: "zero", Value: paperscenario.Value{Kind: paperscenario.Number, Number: "0"}},
+	}
+	if !reflect.DeepEqual(compiled.Scenarios[0].Values, want) {
+		t.Fatalf("fixture values = %#v", compiled.Scenarios[0].Values)
+	}
+}
+
+func TestVisibleConditionRejectsWrongFixtureKinds(t *testing.T) {
+	for value, wantOK := range map[string]bool{"null": false, "\"yes\"": false, "true": true, "false": true} {
+		source := "document:\n" +
+			"  schema s:\n" +
+			"    bool hidden\n" +
+			"  scenario @demo:\n" +
+			"    value @hidden: " + value + "\n" +
+			"  page:\n" +
+			"    body:\n" +
+			"      paragraph @p:\n" +
+			"        visible: !hidden\n" +
+			"        text: \"shown\"\n" +
+			"      paragraph @q:\n" +
+			"        text: \"other\"\n"
+		compiled := CompileScenario(paperlang.Parse("visible.paper", source).AST, "demo")
+		if compiled.OK() != wantOK || !wantOK && !hasCompileDiagnostic(compiled.Diagnostics, "PAPER_VISIBLE_TYPE") {
+			t.Fatalf("hidden=%s diagnostics = %+v", value, compiled.Diagnostics)
+		}
+	}
+}
+
+func TestCompileScenarioValidatesFixtureAgainstSchema(t *testing.T) {
+	const page = "  page:\n    body:\n      paragraph:\n        text: \"preview\"\n"
+	const schema = "  schema invoice:\n" +
+		"    string number\n" +
+		"    optional string note\n" +
+		"    object address:\n" +
+		"      string city\n" +
+		"      string street\n" +
+		"    list string tags:\n" +
+		"      max-items: 2\n"
+	valid := "  scenario @ok:\n" +
+		"    value @number: \"INV-1\"\n" +
+		"    object @address:\n" +
+		"      value @city: \"London\"\n" +
+		"      value @street: \"1 Way\"\n" +
+		"    keyed-list @tags:\n" +
+		"      value @a: \"x\"\n"
+	for name, test := range map[string]struct {
+		scenario string
+		want     []string
+	}{
+		"valid":          {scenario: valid},
+		"optional null":  {scenario: valid + "    value @note: null\n"},
+		"undeclared":     {scenario: valid + "    value @extra: 1\n", want: []string{"extra: field is not declared"}},
+		"nested missing": {scenario: "  scenario @ok:\n    value @number: \"INV-1\"\n    object @address:\n      value @city: \"London\"\n    keyed-list @tags:\n      value @a: \"x\"\n", want: []string{"address.street: required field is missing"}},
+		"wrong kind":     {scenario: valid + "    value @note: true\n", want: []string{"note: expected string, got bool"}},
+		"too many items": {scenario: "  scenario @ok:\n    value @number: \"INV-1\"\n    object @address:\n      value @city: \"L\"\n      value @street: \"S\"\n    keyed-list @tags:\n      value @a: \"x\"\n      value @b: \"y\"\n      value @c: \"z\"\n", want: []string{"tags: list has 3 items; schema permits at most 2"}},
+		"list item kind": {scenario: "  scenario @ok:\n    value @number: \"INV-1\"\n    object @address:\n      value @city: \"L\"\n      value @street: \"S\"\n    keyed-list @tags:\n      value @a: 7\n", want: []string{"tags[a]: expected string, got number"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			parsed := paperlang.Parse("schema.paper", "document:\n"+schema+test.scenario+page)
+			if !parsed.OK() {
+				t.Fatalf("parse diagnostics = %+v", parsed.Diagnostics)
+			}
+			var got []string
+			for _, diagnostic := range CompileScenario(parsed.AST, "ok").Diagnostics {
+				if diagnostic.Code == "PAPER_SCENARIO_SCHEMA" {
+					got = append(got, diagnostic.Message)
+				}
+			}
+			if len(got) != len(test.want) {
+				t.Fatalf("schema diagnostics = %q, want %q", got, test.want)
+			}
+			for index, want := range test.want {
+				if !strings.Contains(got[index], want) {
+					t.Fatalf("schema diagnostics = %q, want %q", got, test.want)
+				}
+			}
+		})
+	}
+}
+
+func TestCompileScenarioSchemaRulesWithInheritanceAndSeveralSchemas(t *testing.T) {
+	const page = "  page:\n    body:\n      paragraph:\n        text: \"preview\"\n"
+	inherited := "document:\n" +
+		"  schema invoice:\n" +
+		"    object address:\n" +
+		"      string city\n" +
+		"      string street\n" +
+		"  scenario @base:\n" +
+		"    object @address:\n" +
+		"      value @city: \"Paris\"\n" +
+		"      value @street: \"1 Rue\"\n" +
+		"  scenario @child:\n" +
+		"    parent: \"@base\"\n" +
+		"    object @address:\n" +
+		"      value @city: \"London\"\n" + page
+	if compiled := CompileScenario(paperlang.Parse("inherit.paper", inherited).AST, "child"); !compiled.OK() {
+		t.Fatalf("child overriding one inherited field = %+v", compiled.Diagnostics)
+	}
+	several := "document:\n" +
+		"  schema invoice:\n" +
+		"    string number\n" +
+		"  schema patient:\n" +
+		"    string name\n" +
+		"    number number\n" +
+		"  scenario @mixed:\n" +
+		"    value @name: \"Ada\"\n" +
+		"    value @number: \"INV-1\"\n" +
+		"    value @other: true\n" + page
+	var messages []string
+	for _, diagnostic := range CompileScenario(paperlang.Parse("several.paper", several).AST, "mixed").Diagnostics {
+		if diagnostic.Code == "PAPER_SCENARIO_SCHEMA" {
+			messages = append(messages, diagnostic.Message)
+		}
+	}
+	want := []string{"scenario value number: expected number, got string", "scenario value other: field is not declared by any schema"}
+	if !reflect.DeepEqual(messages, want) {
+		t.Fatalf("several-schema diagnostics = %q, want %q", messages, want)
 	}
 }

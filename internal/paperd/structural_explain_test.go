@@ -101,7 +101,7 @@ func TestExplainLayoutIssueRejectsStaleCandidateWrongPlanAndInvalidBounds(t *tes
 	if _, err := workspace.ExplainLayoutIssue(canceled, request); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancel error = %v", err)
 	}
-	_, err = workspace.Apply(ApplyRequest{Candidate: created.Candidate.Handle, ExpectedHead: created.Revision.Handle,
+	_, err = workspace.applyUnauthorized(ApplyRequest{Candidate: created.Candidate.Handle, ExpectedHead: created.Revision.Handle,
 		ExpectedRevision: created.Revision.Revision, IdempotencyKey: "advance-explain",
 		TargetPreconditions: []paperedit.TargetPrecondition{exactTargetPrecondition(t, "explain.paper", workspaceFixture, "@copy")},
 		Operations:          []paperedit.Operation{paperedit.ReplaceText{Target: "@copy", Text: "advanced"}}})
