@@ -65,10 +65,10 @@ func main() {
 	}
 	formatted, err := format.Source(output.Bytes())
 	if err != nil {
-		_ = os.WriteFile(*outputPath+".broken", output.Bytes(), 0o644)
+		_ = os.WriteFile(*outputPath+".broken", output.Bytes(), 0o644) // #nosec G306 -- generated Go source is an ordinary repository file.
 		panic(err)
 	}
-	if err := os.WriteFile(*outputPath, formatted, 0o644); err != nil {
+	if err := os.WriteFile(*outputPath, formatted, 0o644); err != nil { // #nosec G306 -- generated Go source is an ordinary repository file.
 		panic(err)
 	}
 	fmt.Printf("generated %d struct encoders (bytes=%v floats=%v)\n", len(names), g.usedBytes, g.usedFloat)
