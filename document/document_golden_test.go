@@ -27,7 +27,9 @@ func TestWriteDocumentGoldenPDFs(t *testing.T) {
 		{name: "generic-free-text", doc: goldenGenericDocument(), want: "bd238196e0a5d749f3fd2c1b18ae1fc12753c162981a46e14e589279ea3d7595"},
 		{name: "long-form", doc: goldenLongFormDocument(), want: "bafe188c79f0141751034561b2158844e5fc133209e6cd82e99232c0cd8211df"},
 		{name: "form", doc: formDocumentModel(testFormDocument()), want: "1ef6d29cee511222f0d4d2893f762f6a22e2a109b96ab2382dc626ae35657b04"},
-		{name: "qr-signature", doc: goldenQRSignatureDocument(), want: "5453e5a26f0120d1f675a6da48a6176ae7b01dad50a1e0d9a19af5dcb1c38ee9"},
+		// The QR image stream is deflated by compress/flate, whose output is
+		// owned by the Go release; this pin tracks the go directive in go.mod.
+		{name: "qr-signature", doc: goldenQRSignatureDocument(), want: "b45a6837402df26f87d8a48a1cc0009708b49988a80db6cd1c59593957f491b6"},
 	}
 
 	for _, tc := range cases {

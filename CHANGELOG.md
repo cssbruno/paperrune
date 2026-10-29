@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Moved the required Go release to 1.27.3, clearing the standard-library
+  advisories reported for 1.26.6 (net/http, mime/multipart, crypto/tls, os),
+  and updated golangci-lint, gosec, govulncheck and x/tools to releases built
+  for Go 1.27. The QR golden PDF and the deterministic identity fixture were
+  re-pinned: Go 1.27 changes compress/flate output and ships Unicode 17.0.0,
+  which the plan identity records. Decoded image pixels are unchanged.
 - `.paper` scenario fixtures are now validated against the declared schema
   with the same rules as JSON data (`PAPER_SCENARIO_SCHEMA`), and a child
   scenario's objects merge field by field over its parent's instead of

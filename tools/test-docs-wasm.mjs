@@ -349,20 +349,23 @@ for (const sample of playgroundSamples) {
 if (!layoutSample) throw new Error('layout specimen sample is missing');
 if (!academicSample || !academicResults) throw new Error('academic article sample is missing');
 const academicPageHashes = [
-  '0636267885c0fb7c3fa0cde41dcc198953ef111d776681b83e2d3c487342d2b5',
-  '6d2adf863cafa775c83d09c63f2e298a6ec762eb9b3b4de956c380c93004fae5',
-  'e45c77a790a5fdc51d1e692ce008419270e68135927d4b00d06033551440ec15',
-  '1d2faad7a7399f019c5b332b7508acc1a5049e06661c6f64cc28db77ebaaeb61',
+  'd070548028b60bd23da8ac2212a2b47ffb914521cda685e252d37aab9a895a43',
+  'bf3e30002641a02bdfddffded0fee5e787a907f0ac12513240cb653e8bd53cf2',
+  'd463c6de66b2d6aaecbae479da614f42365276534a675c84359430c12406e74b',
+  'ae2262d93cd3995b54aa61d062b953b589fa54a84dab71171f4bdf2973f67ca0',
 ];
 if (academicResults.length !== academicPageHashes.length) {
   throw new Error(`academic article page count changed: expected=${academicPageHashes.length} actual=${academicResults.length}`);
 }
+// Pin the decoded pixel rows, not the PNG bytes: deflate output is owned by
+// the Go release's compress/flate and changes between toolchains.
 for (let page = 1; page <= academicPageHashes.length; page += 1) {
   const result = academicResults[page - 1];
-  const pngHash = createHash('sha256').update(Buffer.from(result.png || '', 'base64')).digest('hex');
+  const pixelHash = createHash('sha256').update(decodeRasterPNG(Buffer.from(result.png || '', 'base64')).raw).digest('hex');
+  if (process.env.PAPERRUNE_PRINT_PIXEL_HASHES) console.log(`academic article page ${page} pixels=${pixelHash}`);
   if (!result.ok || result.pages !== academicPageHashes.length || result.page !== page ||
-      result.pixel_width !== 1191 || result.pixel_height !== 1684 || pngHash !== academicPageHashes[page - 1]) {
-    throw new Error(`academic article page ${page} pixels changed: pages=${result.pages}, size=${result.pixel_width}x${result.pixel_height}, png=${pngHash}`);
+      result.pixel_width !== 1191 || result.pixel_height !== 1684 || pixelHash !== academicPageHashes[page - 1]) {
+    throw new Error(`academic article page ${page} pixels changed: pages=${result.pages}, size=${result.pixel_width}x${result.pixel_height}, pixels=${pixelHash}`);
   }
 }
 assertFractionBand(Buffer.from(layoutResult.png || '', 'base64'), 2, 32);
