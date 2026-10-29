@@ -66,7 +66,9 @@ func TestPlanPaperIdentityExcludesAmbientProcessEnvironment(t *testing.T) {
 		}
 	}
 	sum := sha256.Sum256(first)
-	const fixtureSHA256 = "a57c525397aae6fc7d3b593e8130d5a6b7166c2b320b2ee70b2944a292e09fa7"
+	// The identity records the toolchain's Unicode version (text_data.unicode),
+	// so this pin changes when the go directive moves to a new Unicode release.
+	const fixtureSHA256 = "ed7613d3d8c2a2c445222e74b7d22d244e8f73dcd5cc32997ff3b073d9388cd4"
 	if got := hex.EncodeToString(sum[:]); got != fixtureSHA256 {
 		t.Fatalf("deterministic paper identity fixture hash = %s", got)
 	}
