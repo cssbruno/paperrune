@@ -174,6 +174,8 @@ func TestPaperStudioServesRevisionBoundWorkspacePagesAndReadTools(t *testing.T) 
 		!bytes.Contains(javascript.Body, []byte("await showPage(fragment.page)")) ||
 		!bytes.Contains(javascript.Body, []byte("markOutlineKey(fragment.Key)")) ||
 		!bytes.Contains(javascript.Body, []byte("/api/component-preview.svg")) ||
+		!bytes.Contains(javascript.Body, []byte("loadComponentPreview(image,")) ||
+		bytes.Contains(javascript.Body, []byte("image.src=`/api/")) ||
 		!bytes.Contains(javascript.Body, []byte("exact current-theme preview")) {
 		t.Fatalf("studio synchronization script = %d / %s", javascript.StatusCode, javascript.Body)
 	}

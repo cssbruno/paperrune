@@ -135,7 +135,7 @@ func TestPaperContextRejectsCandidateDriftAndCrossWorkspaceHandles(t *testing.T)
 		Candidate: created.Candidate.Handle, Revision: created.Revision.Handle,
 		ExpectedDigest: created.Revision.Revision, Mode: CapabilityEdit,
 	})
-	result, err := workspace.Apply(ApplyRequest{
+	result, err := workspace.applyUnauthorized(ApplyRequest{
 		Candidate: created.Candidate.Handle, ExpectedHead: created.Revision.Handle,
 		ExpectedRevision: created.Revision.Revision, IdempotencyKey: "advance",
 		TargetPreconditions: []paperedit.TargetPrecondition{exactTargetPrecondition(t, "report.paper", workspaceFixture, "@copy")},

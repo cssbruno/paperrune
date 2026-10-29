@@ -102,8 +102,9 @@ scenario @overdue:
       value @quantity: 2
 ```
 
-`parent: "@base"` inherits a scenario; local values override it. Scenarios
-must satisfy the schema. Use `--data` for production JSON.
+`parent: "@base"` inherits a scenario; local values override it, and objects
+merge field by field. Scenarios must satisfy the schema exactly like JSON data
+(`PAPER_SCENARIO_SCHEMA`). Use `--data` for production JSON.
 
 ## Repeat collections
 

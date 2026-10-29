@@ -306,3 +306,27 @@ func hasCompileDiagnostic(diagnostics []paperlang.Diagnostic, code string) bool 
 	}
 	return false
 }
+
+func TestComponentNestedInsideItsOwnFillIsNotACycle(t *testing.T) {
+	const source = "document:\n" +
+		"  component @panel:\n" +
+		"    slot @main:\n" +
+		"      type: \"blocks\"\n" +
+		"  page:\n" +
+		"    body:\n" +
+		"      use @outer:\n" +
+		"        component: \"@panel\"\n" +
+		"        fill @main:\n" +
+		"          use @inner:\n" +
+		"            component: \"@panel\"\n" +
+		"            fill @main:\n" +
+		"              paragraph:\n" +
+		"                text: \"inner\"\n"
+	parsed := paperlang.Parse("nested-fill.paper", source)
+	if !parsed.OK() {
+		t.Fatalf("parse diagnostics = %+v", parsed.Diagnostics)
+	}
+	if compiled := Compile(parsed.AST); !compiled.OK() {
+		t.Fatalf("compile diagnostics = %+v", compiled.Diagnostics)
+	}
+}

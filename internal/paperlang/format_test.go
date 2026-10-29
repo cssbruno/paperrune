@@ -287,3 +287,31 @@ func sortSemanticProperties(properties []semanticPropertyProjection) {
 		}
 	}
 }
+
+func TestFormatPreservesExpressionLexicalClass(t *testing.T) {
+	property := func(value string) string {
+		return "document @doc:\n  page @p:\n    body:\n      paragraph @x:\n        size: " + value + "\n        text: \"a\"\n"
+	}
+	for _, value := range []string{"\r\"", "+0.2\v", "\"a\"b.paper\"\v", "1\x00"} {
+		parsed := Parse("x.paper", property(value))
+		if parsed.OK() || parsed.Diagnostics[0].Code != "PAPER_CONTROL_CHARACTER" {
+			t.Fatalf("%q diagnostics = %#v", value, parsed.Diagnostics)
+		}
+	}
+	parsed := Parse("x.paper", property("+0.2\u00a0"))
+	if !parsed.OK() {
+		t.Fatal(parsed.Diagnostics)
+	}
+	formatted, err := Format(parsed.AST)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again := Parse("x.paper", string(formatted))
+	if !again.OK() {
+		t.Fatal(again.Diagnostics)
+	}
+	twice, err := Format(again.AST)
+	if err != nil || !bytes.Equal(twice, formatted) {
+		t.Fatalf("format is not idempotent: %q then %q, %v", formatted, twice, err)
+	}
+}

@@ -91,7 +91,7 @@ func TestWorkspaceApplyPublishesOneImmutableCandidateHead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := workspace.Apply(ApplyRequest{
+	result, err := workspace.applyUnauthorized(ApplyRequest{
 		Candidate: candidate.Handle, ExpectedHead: base.Handle, ExpectedRevision: base.Revision,
 		IdempotencyKey:      "workspace-edit-1",
 		TargetPreconditions: []paperedit.TargetPrecondition{exactTargetPrecondition(t, "report.paper", workspaceFixture, "@copy")},
@@ -110,13 +110,13 @@ func TestWorkspaceApplyPublishesOneImmutableCandidateHead(t *testing.T) {
 	if openedBase.Source != workspaceFixture {
 		t.Fatal("base revision was mutated")
 	}
-	if _, err := workspace.Apply(ApplyRequest{
+	if _, err := workspace.applyUnauthorized(ApplyRequest{
 		Candidate: candidate.Handle, ExpectedHead: base.Handle, ExpectedRevision: base.Revision,
 		Operations: []paperedit.Operation{paperedit.ReplaceText{Target: "@copy", Text: "stale"}},
 	}); !errors.Is(err, ErrRevisionConflict) {
 		t.Fatalf("stale Apply() error = %v", err)
 	}
-	if _, err := workspace.Apply(ApplyRequest{
+	if _, err := workspace.applyUnauthorized(ApplyRequest{
 		Candidate: candidate.Handle, ExpectedHead: result.Revision.Handle, ExpectedRevision: base.Revision,
 		Operations: []paperedit.Operation{paperedit.ReplaceText{Target: "@copy", Text: "bad digest"}},
 	}); !errors.Is(err, ErrRevisionConflict) {
@@ -137,7 +137,7 @@ func TestWorkspaceConcurrentApplyUsesHeadCompareAndSwap(t *testing.T) {
 		go func() {
 			defer wait.Done()
 			<-start
-			_, err := workspace.Apply(ApplyRequest{
+			_, err := workspace.applyUnauthorized(ApplyRequest{
 				Candidate: candidate.Handle, ExpectedHead: base.Handle, ExpectedRevision: base.Revision,
 				TargetPreconditions: []paperedit.TargetPrecondition{precondition},
 				Operations:          []paperedit.Operation{paperedit.ReplaceText{Target: "@copy", Text: text}},

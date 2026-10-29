@@ -598,3 +598,81 @@ func editableFixture() string {
 		"        keep: true\n" +
 		"        text @spare-text: \"Delete me\"\n"
 }
+
+func TestApplyRejectsEditsInsideRemovedBlocks(t *testing.T) {
+	source := editableFixture()
+	for name, operations := range map[string][]Operation{
+		"property on deleted node":    {DeleteNode{Target: "@spare"}, SetProperty{Target: "@spare", Name: "align", Value: StringValue("center")}},
+		"property on deleted child":   {DeleteNode{Target: "@spare"}, SetProperty{Target: "@spare-text", Name: "bold", Value: BoolValue(true)}},
+		"insert into deleted node":    {DeleteNode{Target: "@spare"}, InsertNode{Parent: "@spare", Node: NodeSpec{Kind: paperlang.NodeText, ID: "@ghost", Value: &Value{Kind: ValueString, Text: "ghost"}}}},
+		"move into deleted node":      {DeleteNode{Target: "@spare"}, MoveNode{Target: "@copy", NewParent: "@spare"}},
+		"property inside moved block": {MoveNode{Target: "@spare-text", NewParent: "@intro"}, SetProperty{Target: "@spare-text", Name: "bold", Value: BoolValue(true)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := Apply(Transaction{File: "edit.paper", Source: source, ExpectedRevision: SourceRevision(source), Operations: operations})
+			if !errors.Is(err, ErrPatchConflict) || result.Applied || result.Source != source {
+				t.Fatalf("Apply() = applied %v, %v\n%s", result.Applied, err, result.Source)
+			}
+		})
+	}
+}
+
+func TestRenderValueKeepsLargeAndSmallNumbersDecimal(t *testing.T) {
+	for value, want := range map[float64]string{1_000_000: "1000000", 1_500_000: "1500000", 0.00001: "0.00001", -2.5: "-2.5"} {
+		if got, err := renderValue(NumberValue(value)); err != nil || got != want {
+			t.Fatalf("renderValue(%v) = %q, %v; want %q", value, got, err, want)
+		}
+	}
+	source := editableFixture()
+	result, err := Apply(Transaction{File: "edit.paper", Source: source, ExpectedRevision: SourceRevision(source), Operations: []Operation{
+		SetProperty{Target: "@intro", Name: "width", Value: UnitValue(2_000_000, "pt")},
+	}})
+	if err != nil || !strings.Contains(result.Source, "width: 2000000pt") {
+		t.Fatalf("large unit value = %v\n%s", err, result.Source)
+	}
+}
+
+func TestDuplicateScopedIDsAreAmbiguousTargets(t *testing.T) {
+	source := "document @doc:\n" +
+		"  component @one:\n" +
+		"    slot @body:\n" +
+		"      type: \"blocks\"\n" +
+		"  component @two:\n" +
+		"    slot @body:\n" +
+		"      type: \"blocks\"\n" +
+		"  page:\n" +
+		"    body:\n" +
+		"      paragraph @p:\n" +
+		"        text: \"x\"\n"
+	if _, err := FingerprintNode("edit.paper", source, "@body"); !errors.Is(err, ErrInvalidOperation) {
+		t.Fatalf("FingerprintNode(duplicate) = %v", err)
+	}
+	result, err := Apply(Transaction{File: "edit.paper", Source: source, ExpectedRevision: SourceRevision(source), Operations: []Operation{
+		SetProperty{Target: "@body", Name: "type", Value: StringValue("text")},
+	}})
+	if !errors.Is(err, ErrInvalidOperation) || result.Applied {
+		t.Fatalf("Apply(duplicate target) = applied %v, %v", result.Applied, err)
+	}
+}
+
+func TestSourceInstanceSkipsAnonymousAncestors(t *testing.T) {
+	source := "document @doc:\n" +
+		"  page @first:\n" +
+		"    body:\n" +
+		"      paragraph @x:\n" +
+		"        text: \"a\"\n"
+	instance, err := SourceInstance("edit.paper", source, "@x")
+	if err != nil || instance != "source/@doc/@first/@x" {
+		t.Fatalf("SourceInstance() = %q, %v", instance, err)
+	}
+}
+
+func TestSetNodeValueAcceptsCollectionPathSegments(t *testing.T) {
+	source := "document @doc:\n  scenario @s:\n    value @amount: 10\n"
+	result, err := Apply(Transaction{File: "edit.paper", Source: source, ExpectedRevision: SourceRevision(source), Operations: []Operation{
+		SetNodeValue{Root: "@s", Path: "amount[]", Value: NumberValue(1_500_000)},
+	}})
+	if err != nil || !strings.Contains(result.Source, "value @amount: 1500000") {
+		t.Fatalf("SetNodeValue(amount[]) = %v\n%s", err, result.Source)
+	}
+}

@@ -145,6 +145,75 @@ func TestDeterministicDecimalsAndUnits(t *testing.T) {
 	}
 }
 
+func TestExactDecimalsNearInt64BoundDoNotOverflow(t *testing.T) {
+	for source, want := range map[string]Value{
+		`10000000000 / 1`:                 {Kind: Integer, Integer: 10000000000},
+		`1000000000000 / 100`:             {Kind: Integer, Integer: 10000000000},
+		`9223372037 / 1`:                  {Kind: Integer, Integer: 9223372037},
+		`2.5 * 400000000000000000`:        {Kind: Integer, Integer: 1000000000000000000},
+		`10000000000pt / 4`:               {Kind: Unit, Integer: 2500000000, Unit: "pt"},
+		`10000000000in == 720000000000pt`: {Kind: Bool, Bool: true},
+		`9223372036854775807 / 1`:         {Kind: Integer, Integer: 9223372036854775807},
+		`0.000000001 * 1000000000`:        {Kind: Integer, Integer: 1},
+	} {
+		program, _, err := Compile(source, nil, LanguageLimits{})
+		if err != nil {
+			t.Fatalf("%s: %v", source, err)
+		}
+		if value, err := Evaluate(context.Background(), program, nil, Limits{}); err != nil || value != want {
+			t.Fatalf("%s = %#v, %v; want %#v", source, value, err, want)
+		}
+	}
+	for _, source := range []string{`9223372036854775807 * 10`, `9223372036854775807 / 0.1`} {
+		program, _, err := Compile(source, nil, LanguageLimits{})
+		if err != nil {
+			t.Fatalf("%s: %v", source, err)
+		}
+		if _, err := Evaluate(context.Background(), program, nil, Limits{}); !errors.Is(err, ErrType) || !strings.Contains(err.Error(), "decimal overflow") {
+			t.Fatalf("%s overflow error = %v", source, err)
+		}
+	}
+}
+
+func TestCrossUnitComparisonsAreExact(t *testing.T) {
+	for source, want := range map[string]bool{
+		`1pt < 1mm`:      true,
+		`10mm > 12pt`:    true,
+		`1px < 1pt`:      true,
+		`1mm == 1pt`:     false,
+		`1mm != 1pt`:     true,
+		`1cm < 1in`:      true,
+		`1in == 25.4mm`:  true,
+		`1cm == 10mm`:    true,
+		`72pt >= 1in`:    true,
+		`72pt <= 25.3mm`: false,
+		`0.5in == 36pt`:  true,
+		`-1mm < -1pt`:    true,
+	} {
+		program, _, err := Compile(source, nil, LanguageLimits{})
+		if err != nil {
+			t.Fatalf("%s: %v", source, err)
+		}
+		value, err := Evaluate(context.Background(), program, nil, Limits{})
+		if err != nil || value != (Value{Kind: Bool, Bool: want}) {
+			t.Fatalf("%s = %#v, %v; want %v", source, value, err, want)
+		}
+		bytecode := program
+		bytecode.root = nil
+		if value, err := Evaluate(context.Background(), bytecode, nil, Limits{}); err != nil || value != (Value{Kind: Bool, Bool: want}) {
+			t.Fatalf("bytecode %s = %#v, %v; want %v", source, value, err, want)
+		}
+	}
+	// Addition still refuses to round an inexact conversion.
+	program, _, err := Compile(`1pt + 1mm`, nil, LanguageLimits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Evaluate(context.Background(), program, nil, Limits{}); !errors.Is(err, ErrType) || !strings.Contains(err.Error(), "exact decimal precision") {
+		t.Fatalf("inexact unit addition error = %v", err)
+	}
+}
+
 func TestOptionalPathsRequireAndHonorFlowNarrowing(t *testing.T) {
 	environment := []PathKind{{Path: "name", Kind: String, Optional: true}}
 	program, kind, err := Compile(`name != null ? name : "fallback"`, environment, LanguageLimits{})

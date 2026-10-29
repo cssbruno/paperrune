@@ -6,6 +6,7 @@ package layoutengine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -169,17 +170,55 @@ func TestPlanTableKeepTogetherRelaxesOnceWhenLargerThanPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	projection := plan.Projection()
-	if len(projection.Pages) != 1 || projection.Pages[0].Fragments.Count != 3 || len(projection.Diagnostics) != 2 {
+	if len(projection.Pages) != 2 || projection.Pages[0].Fragments.Count != 2 || projection.Pages[1].Fragments.Count != 1 || len(projection.Diagnostics) != 1 {
 		t.Fatalf("relaxed keep projection = pages %+v diagnostics %+v", projection.Pages, projection.Diagnostics)
 	}
 	policy := ""
-	for _, evidence := range projection.Diagnostics[1].Evidence {
+	for _, evidence := range projection.Diagnostics[0].Evidence {
 		if evidence.Key == "policy" {
 			policy = evidence.Value
 		}
 	}
-	if projection.Diagnostics[0].Code != DiagnosticUnbreakableTooTall || projection.Diagnostics[1].Code != DiagnosticKeepTooLarge || policy != "table_keep_together" {
+	if projection.Diagnostics[0].Code != DiagnosticKeepTooLarge || projection.Diagnostics[0].Severity != SeverityWarning || policy != "table_keep_together" {
 		t.Fatalf("relaxed keep diagnostics = %+v", projection.Diagnostics)
+	}
+}
+
+func TestPlanTableOversizedKeepTogetherPaginatesWithinBody(t *testing.T) {
+	input := tableTestInput(30, 1, 40, 100)
+	input.KeepTogether = true
+	for row := uint32(0); row < input.Rows; row++ {
+		cell := tableTestCell(NodeID(row+1), row, 0, 1, 1, 1, 5, 5, 10)
+		cell.Key, cell.Instance = NodeKey(fmt.Sprintf("cell-%d", row)), InstanceID(fmt.Sprintf("table/cell-%d", row))
+		input.Cells = append(input.Cells, cell)
+	}
+	// A keep-with-next chain inside the relaxed table keep must still hold.
+	input.RowKeepWithNext = make([]bool, input.Rows)
+	input.RowKeepWithNext[8], input.RowKeepWithNext[9] = true, true
+	plan, err := PlanTable(context.Background(), input, TablePlanLimits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection := plan.Projection()
+	bodyBottom, err := input.Body.Bottom()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var placed uint32
+	for _, page := range projection.Pages {
+		placed += page.Fragments.Count
+	}
+	for _, fragment := range projection.Fragments {
+		bottom, err := fragment.BorderBox.Bottom()
+		if err != nil || bottom > bodyBottom {
+			t.Fatalf("fragment %d bottom = %d, body bottom = %d, %v", fragment.ID, bottom, bodyBottom, err)
+		}
+	}
+	if len(projection.Pages) != 4 || placed != 30 || projection.Pages[0].Fragments.Count != 8 || projection.Fragments[8].Page != 2 {
+		t.Fatalf("relaxed oversized keep pages = %+v", projection.Pages)
+	}
+	if len(projection.Diagnostics) != 1 || projection.Diagnostics[0].Code != DiagnosticKeepTooLarge || projection.Diagnostics[0].Severity != SeverityWarning {
+		t.Fatalf("relaxed oversized keep diagnostics = %+v", projection.Diagnostics)
 	}
 }
 

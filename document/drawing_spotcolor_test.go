@@ -3,7 +3,10 @@
 
 package document
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestAddSpotColorClampsComponents(t *testing.T) {
 	pdf := mustNewPDFDocument()
@@ -44,5 +47,20 @@ func TestSetTextSpotColorMarksColorStateDirty(t *testing.T) {
 	pdf.SetTextSpotColor("Text", 100)
 	if !pdf.colorFlag {
 		t.Fatal("text spot color should mark fill and text colors as different")
+	}
+}
+
+func TestSpotColorSeparationNameIsEscaped(t *testing.T) {
+	pdf := mustNewPDFDocument()
+	pdf.AddSpotColor("Brand Blue]>>\nendobj", 10, 20, 30, 40)
+	pdf.AddPage()
+	pdf.SetFillSpotColor("Brand Blue]>>\nendobj", 100)
+	pdf.Rect(10, 10, 20, 20, "F")
+	var out bytes.Buffer
+	if err := pdf.Output(&out); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(out.Bytes(), []byte("[/Separation /Brand#20Blue#5D#3E#3E#0Aendobj")) {
+		t.Fatalf("separation name was not escaped:\n%s", out.Bytes())
 	}
 }

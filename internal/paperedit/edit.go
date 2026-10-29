@@ -408,11 +408,12 @@ type sourcePatch struct {
 }
 
 type sourceIndex struct {
-	byID      map[string]*paperlang.Node
-	byOffset  map[uint64]*paperlang.Node
-	idSpans   map[string]paperlang.Span
-	parents   map[string]*paperlang.Node
-	instances map[string]string
+	byID       map[string]*paperlang.Node
+	byOffset   map[uint64]*paperlang.Node
+	idSpans    map[string]paperlang.Span
+	parents    map[string]*paperlang.Node
+	instances  map[string]string
+	duplicates map[string]struct{}
 }
 
 // Apply performs a failure-atomic source transaction. It never mutates the
@@ -454,6 +455,14 @@ func Apply(transaction Transaction) (Result, error) {
 		if result, err := requireExactOperationTargets(unchanged, transaction, index); err != nil {
 			return result, err
 		}
+	}
+	if removing, other, target, conflict := conflictingStructuralTargets(index, transaction.Operations); conflict {
+		unchanged.Diagnostics = []Diagnostic{{
+			Code: "PAPER_EDIT_PATCH_CONFLICT", Severity: paperlang.SeverityError,
+			Message:   fmt.Sprintf("operation %d targets %s inside the block that operation %d removes or rewrites", other+1, target, removing+1),
+			Operation: uint32(other + 1), Target: target, Span: paperlang.Span{File: transaction.File}, // #nosec G115 -- operation count is bounded by MaxOperations
+		}}
+		return unchanged, ErrPatchConflict
 	}
 	patches := make([]sourcePatch, 0, len(transaction.Operations)+1)
 	for operationIndex, operation := range transaction.Operations {
@@ -687,44 +696,76 @@ func parserDiagnostics(diagnostics []paperlang.Diagnostic) []Diagnostic {
 func indexSource(root *paperlang.Node, tokens []paperlang.Token) sourceIndex {
 	index := sourceIndex{
 		byID: make(map[string]*paperlang.Node), byOffset: make(map[uint64]*paperlang.Node), idSpans: make(map[string]paperlang.Span),
-		parents: make(map[string]*paperlang.Node), instances: make(map[string]string),
+		parents: make(map[string]*paperlang.Node), instances: make(map[string]string), duplicates: make(map[string]struct{}),
 	}
 	for _, token := range tokens {
 		if token.Kind == paperlang.TokenReadableID {
 			index.idSpans[token.Lexeme] = token.Span
 		}
 	}
-	var walk func(*paperlang.Node, *paperlang.Node)
-	walk = func(node, parent *paperlang.Node) {
+	// ancestry holds the readable IDs of every enclosing node, skipping
+	// anonymous ancestors without truncating the chain above them.
+	var walk func(node, parent *paperlang.Node, ancestry []string)
+	walk = func(node, parent *paperlang.Node, ancestry []string) {
 		if node == nil {
 			return
 		}
 		index.byOffset[node.HeaderSpan.Start.Offset] = node
 		if node.ID != "" {
+			if _, exists := index.byID[node.ID]; exists {
+				index.duplicates[node.ID] = struct{}{}
+			}
 			index.byID[node.ID] = node
 			index.parents[node.ID] = parent
-			parts := []string{node.ID}
-			for ancestor := parent; ancestor != nil; ancestor = func() *paperlang.Node {
-				if ancestor.ID == "" {
-					return nil
-				}
-				return index.parents[ancestor.ID]
-			}() {
-				if ancestor.ID != "" {
-					parts = append(parts, ancestor.ID)
-				}
-			}
-			for left, right := 0, len(parts)-1; left < right; left, right = left+1, right-1 {
-				parts[left], parts[right] = parts[right], parts[left]
-			}
-			index.instances[node.ID] = "source/" + strings.Join(parts, "/")
+			ancestry = append(ancestry[:len(ancestry):len(ancestry)], node.ID)
+			index.instances[node.ID] = "source/" + strings.Join(ancestry, "/")
 		}
 		for _, member := range node.Members {
-			walk(member.Node, node)
+			walk(member.Node, node, ancestry)
 		}
 	}
-	walk(root, nil)
+	walk(root, nil, nil)
 	return index
+}
+
+// conflictingStructuralTargets rejects an operation that addresses a node
+// whose source block another operation in the same transaction removes or
+// rewrites. Patches are resolved against the original source, so such an
+// edit would otherwise land beside the removed block.
+func conflictingStructuralTargets(index sourceIndex, operations []Operation) (int, int, string, bool) {
+	for removing, operation := range operations {
+		var removed string
+		switch edit := operation.(type) {
+		case DeleteNode:
+			removed = edit.Target
+		case ReplaceNode:
+			removed = edit.Target
+		case MoveNode:
+			removed = edit.Target
+		case WrapNode:
+			removed = edit.Target
+		case UnwrapNode:
+			removed = edit.Target
+		default:
+			continue
+		}
+		block := index.byID[removed]
+		if block == nil {
+			continue
+		}
+		for other, candidate := range operations {
+			if other == removing {
+				continue
+			}
+			for _, target := range operationTargetIDs(candidate) {
+				node := index.byID[target]
+				if node != nil && node.Span.Start.Offset >= block.Span.Start.Offset && node.Span.End.Offset <= block.Span.End.Offset {
+					return removing, other, target, true
+				}
+			}
+		}
+	}
+	return 0, 0, "", false
 }
 
 func resolveOperation(source string, index sourceIndex, operationIndex int, operation Operation) ([]sourcePatch, string, error) {
@@ -1274,6 +1315,9 @@ func targetNode(index sourceIndex, target string) (*paperlang.Node, error) {
 	if node == nil {
 		return nil, fmt.Errorf("target %s was not found in the source revision", target)
 	}
+	if _, duplicate := index.duplicates[target]; duplicate {
+		return nil, fmt.Errorf("target %s is ambiguous because the ID occurs more than once", target)
+	}
 	return node, nil
 }
 
@@ -1283,7 +1327,9 @@ func relativeNode(root *paperlang.Node, path string) (*paperlang.Node, error) {
 	}
 	current := root
 	for _, part := range strings.Split(path, ".") {
-		part = strings.TrimSpace(part)
+		// A trailing [] marks a collection segment, matching paperd's
+		// scenario path validation.
+		part = strings.TrimSuffix(strings.TrimSpace(part), "[]")
 		if part == "" {
 			return nil, fmt.Errorf("fixture path %q contains an empty segment", path)
 		}
@@ -1327,12 +1373,12 @@ func renderValue(value Value) (string, error) {
 		if math.IsNaN(value.Number) || math.IsInf(value.Number, 0) {
 			return "", errors.New("number value must be finite")
 		}
-		return strconv.FormatFloat(value.Number, 'g', -1, 64), nil
+		return strconv.FormatFloat(value.Number, 'f', -1, 64), nil
 	case ValueUnit:
 		if math.IsNaN(value.Number) || math.IsInf(value.Number, 0) || !validUnit(value.Text) {
 			return "", fmt.Errorf("unit value %g%s is invalid", value.Number, value.Text)
 		}
-		return strconv.FormatFloat(value.Number, 'g', -1, 64) + value.Text, nil
+		return strconv.FormatFloat(value.Number, 'f', -1, 64) + value.Text, nil
 	default:
 		return "", fmt.Errorf("value kind %q is invalid", value.Kind)
 	}

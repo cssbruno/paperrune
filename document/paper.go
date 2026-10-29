@@ -1036,6 +1036,34 @@ func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context
 		}
 		return block.box.outerHeight(height)
 	}
+	// keepLeadHeight reports the smallest leading part of a splittable plain
+	// paragraph that the paragraph planner may legally leave on the current
+	// page, so keep-with-next can hold to a follower taller than a page.
+	keepLeadHeight := func(block paperMeasuredBlock) (layoutengine.Fixed, bool, error) {
+		if block.canvas != nil || block.gridRow != nil || block.image != nil || block.box.visual ||
+			block.keepTogether || len(block.keepGroups) != 0 || len(block.lines) == 0 {
+			return 0, false, nil
+		}
+		orphans, widows := int(block.orphans), int(block.widows)
+		if orphans == 0 {
+			orphans = 1
+		}
+		if widows == 0 {
+			widows = 1
+		}
+		if orphans+widows > len(block.lines) {
+			return 0, false, nil
+		}
+		var height layoutengine.Fixed
+		for _, line := range block.lines[:orphans] {
+			var err error
+			height, err = height.Add(line.Height)
+			if err != nil {
+				return 0, false, err
+			}
+		}
+		return height, true, nil
+	}
 	advancePage := func() error {
 		if f.limits.MaxPages > 0 && int(pageNumber) >= f.limits.MaxPages {
 			return fmt.Errorf("%w: typed plan requires more than %d pages", ErrPageLimitExceeded, f.limits.MaxPages)
@@ -1208,11 +1236,14 @@ func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context
 			constraintEnd++
 		}
 		if constrained {
-			var required layoutengine.Fixed
+			var required, leading layoutengine.Fixed
 			for index := blockIndex; index <= constraintEnd; index++ {
 				height, err := blockHeight(measured[index])
 				if err != nil {
 					return layoutengine.LayoutPlan{}, fmt.Errorf("body[%d] keep height: %w", blockIndex, err)
+				}
+				if index == constraintEnd {
+					leading = required
 				}
 				required, err = required.Add(height)
 				if err != nil {
@@ -1222,6 +1253,20 @@ func (f *pdfDocument) planPaperTextBlocksMappedBodiesContext(ctx context.Context
 			keepCapacity := body.Height
 			if nextBody.Height > keepCapacity {
 				keepCapacity = nextBody.Height
+			}
+			if required > keepCapacity && constraintEnd > blockIndex {
+				// A splittable follower only needs its legal leading lines beside
+				// the chain; the rest may continue on later pages.
+				lead, splittable, err := keepLeadHeight(measured[constraintEnd])
+				if err != nil {
+					return layoutengine.LayoutPlan{}, fmt.Errorf("body[%d] keep lead height: %w", blockIndex, err)
+				}
+				if splittable {
+					required, err = leading.Add(lead)
+					if err != nil {
+						return layoutengine.LayoutPlan{}, fmt.Errorf("body[%d] keep lead height: %w", blockIndex, err)
+					}
+				}
 			}
 			if required > keepCapacity {
 				diagnostics = append(diagnostics, layoutengine.Diagnostic{

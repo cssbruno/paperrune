@@ -14,6 +14,7 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"os"
 	"reflect"
@@ -50,12 +51,16 @@ func TestCaptureDisplayPlanPNGDeterministicLosslessPageAndManifest(t *testing.T)
 	if manifest.PNGSHA256 != hex.EncodeToString(digest[:]) || manifest.PNGByteLength != uint64(len(first.PNG())) {
 		t.Fatalf("PNG evidence = %+v", manifest)
 	}
-	if manifest.PNGSHA256 != "1ae3aaa8f39b2195fe7287873a991aa5dcf65d50d995e58f3b1d0a56c3e73f4b" {
-		t.Fatalf("fixture raster hash = %s", manifest.PNGSHA256)
-	}
 	decoded, err := png.Decode(bytes.NewReader(first.PNG()))
 	if err != nil {
 		t.Fatalf("lossless PNG decode: %v", err)
+	}
+	// Pin the decoded pixels rather than the PNG bytes: deflate output is
+	// owned by compress/zlib and differs across Go releases and GOOS=js.
+	pixels := image.NewRGBA(decoded.Bounds())
+	draw.Draw(pixels, pixels.Bounds(), decoded, decoded.Bounds().Min, draw.Src)
+	if pixelDigest := sha256.Sum256(pixels.Pix); hex.EncodeToString(pixelDigest[:]) != "537b729f5db60be1e46bbf0a1e726bccde1a3518c8d05108ba39c5974a434d72" {
+		t.Fatalf("fixture raster pixel hash = %x", pixelDigest)
 	}
 	if decoded.Bounds() != image.Rect(0, 0, 144, 144) {
 		t.Fatalf("bounds = %v", decoded.Bounds())

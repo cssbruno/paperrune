@@ -466,7 +466,10 @@ type ApplyResult struct {
 	Edit      paperedit.Result
 }
 
-func (w *Workspace) Apply(request ApplyRequest) (ApplyResult, error) {
+// applyUnauthorized commits raw paperedit operations without consulting
+// mutation authority. Callers must authorize the complete effect set first;
+// the typed Paper* tools do so through applyPaperMutation.
+func (w *Workspace) applyUnauthorized(request ApplyRequest) (ApplyResult, error) {
 	if len(request.Operations) == 0 || len(request.Operations) > w.limits.MaxOperations {
 		return ApplyResult{}, workspaceError("OPERATION_LIMIT", "operation count is outside the configured bounds", ErrLimit)
 	}

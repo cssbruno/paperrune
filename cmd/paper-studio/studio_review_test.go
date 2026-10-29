@@ -171,3 +171,27 @@ func TestPaperStudioReviewReferenceImageDiffAndArtifacts(t *testing.T) {
 		t.Fatalf("stored reference diff = %d %q %d bytes", diff.StatusCode, diff.Header, len(diff.Body))
 	}
 }
+
+func TestPaperStudioReviewArtifactsRefuseSymlinkedDirectory(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "review.paper")
+	if err := os.WriteFile(file, []byte(studioFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	studio, err := newStudioServer(file, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, studio.reviewSidecarPath()+".assets"); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	data := []byte("artifact")
+	digest := sha256.Sum256(data)
+	if err := studio.writeReviewArtifact(hex.EncodeToString(digest[:]), data); err == nil || !strings.Contains(err.Error(), "real directory") {
+		t.Fatalf("symlinked artifact directory = %v", err)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("artifact escaped through symlink: %v", entries)
+	}
+}

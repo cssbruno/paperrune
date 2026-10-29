@@ -103,6 +103,17 @@ func (l *paperLexer) lexLine(line sourceLine) {
 	}
 
 indentationDone:
+	// Control characters other than tab are invisible and are trimmed
+	// inconsistently by later stages, so they are rejected outright.
+	for offset := indent; offset < len(line.text); offset++ {
+		if character := line.text[offset]; character < ' ' && character != '\t' || character == 0x7f {
+			start := line.startOffset + offset
+			l.diagnostics = append(l.diagnostics, errorDiagnostic(
+				"PAPER_CONTROL_CHARACTER", "control characters are not allowed in .paper source", "remove the character or use an escape inside a quoted string", l.span(start, start+1),
+			))
+			break
+		}
+	}
 	trimmed := strings.TrimSpace(line.text[indent:])
 	if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 		l.emitLineNewline(line)

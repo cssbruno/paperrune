@@ -115,11 +115,22 @@ func numberBig(value Value, scale uint8) *big.Int {
 }
 
 func checkedBig(kind Kind, coefficient *big.Int, scale uint8, unit string) (Value, error) {
-	value := normalizeNumber(Value{Kind: kind, Integer: coefficient.Int64(), Scale: scale, Unit: unit})
-	if !coefficient.IsInt64() || value.Scale > MaxDecimalScale {
+	// Strip trailing decimal zeros before the int64 bound so an exact result
+	// whose scaled coefficient is wide (for example 10000000000 / 1) still fits.
+	coefficient = new(big.Int).Set(coefficient)
+	ten, quotient, remainder := big.NewInt(10), new(big.Int), new(big.Int)
+	for scale > 0 {
+		quotient.QuoRem(coefficient, ten, remainder)
+		if remainder.Sign() != 0 {
+			break
+		}
+		coefficient.Set(quotient)
+		scale--
+	}
+	if !coefficient.IsInt64() || scale > MaxDecimalScale {
 		return Value{}, fmt.Errorf("%w: decimal overflow", ErrType)
 	}
-	return value, nil
+	return Value{Kind: kind, Integer: coefficient.Int64(), Scale: scale, Unit: unit}, nil
 }
 
 func exactQuotient(kind Kind, numerator, denominator *big.Int, unit string) (Value, error) {
@@ -144,6 +155,27 @@ func convertUnit(value Value, target string) (Value, error) {
 	numerator := new(big.Int).Mul(big.NewInt(value.Integer), big.NewInt(fromNumerator*toDenominator))
 	denominator := new(big.Int).Mul(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(value.Scale)), nil), big.NewInt(fromDenominator*toNumerator))
 	return exactQuotient(Unit, numerator, denominator, target)
+}
+
+// compareUnitValues orders two compatible unit values exactly. Absolute units
+// are compared by rational cross-multiplication instead of conversion, because
+// a conversion such as mm to pt has no finite decimal representation.
+func compareUnitValues(left, right Value) (int, error) {
+	if left.Kind != Unit || right.Kind != Unit || !unitsCompatible(left.Unit, right.Unit) {
+		return 0, fmt.Errorf("%w: incompatible units %q and %q", ErrType, right.Unit, left.Unit)
+	}
+	if left.Unit == right.Unit {
+		return compareNumber(left, right), nil
+	}
+	// value inches = Integer * numerator / (10^Scale * denominator); denominators
+	// are positive, so cross-multiplying preserves the ordering.
+	leftNumerator, leftDenominator, _ := absoluteUnitFactor(left.Unit)
+	rightNumerator, rightDenominator, _ := absoluteUnitFactor(right.Unit)
+	leftSide := new(big.Int).Mul(big.NewInt(left.Integer), big.NewInt(leftNumerator*rightDenominator))
+	leftSide.Mul(leftSide, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(right.Scale)), nil))
+	rightSide := new(big.Int).Mul(big.NewInt(right.Integer), big.NewInt(rightNumerator*leftDenominator))
+	rightSide.Mul(rightSide, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(left.Scale)), nil))
+	return leftSide.Cmp(rightSide), nil
 }
 
 func compareNumber(left, right Value) int {

@@ -850,7 +850,7 @@ function renderAuthoringControls() {
       const preview=document.createElement('div');preview.className='component-gallery-preview';
       const image=document.createElement('img');image.loading='lazy';image.alt=`${draft.component} exact current-theme preview`;
       const query=new URLSearchParams({preview_format:'2',revision:metadata.revision,source_revision:metadata.sourceRevision,component:draft.component});
-      if(state.scenario)query.set('scenario',state.scenario);image.src=`/api/component-preview.svg?${query}`;preview.append(image);
+      if(state.scenario)query.set('scenario',state.scenario);loadComponentPreview(image,`/api/component-preview.svg?${query}`);preview.append(image);
       const caption=document.createElement('figcaption');caption.textContent=`${draft.component} · exact planner geometry · current theme`;
       gallery.append(preview,caption);form.append(gallery);
     }
@@ -1335,6 +1335,20 @@ async function loadSVG(page, kind) {
   const result = {url, viewBox, text};
   state.pageMeta.set(key, result);
   return result;
+}
+
+// Image elements cannot send the session header, so the preview is fetched
+// through the authenticated API and shown from a revocable object URL.
+async function loadComponentPreview(image, path) {
+  try {
+    const response = await api(path);
+    const url = URL.createObjectURL(await response.blob());
+    state.objectURLs.add(url);
+    image.addEventListener('load', () => { URL.revokeObjectURL(url); state.objectURLs.delete(url); }, {once: true});
+    image.src = url;
+  } catch (error) {
+    image.alt = `${image.alt} unavailable: ${error.message}`;
+  }
 }
 
 async function loadSelectableText(page) {

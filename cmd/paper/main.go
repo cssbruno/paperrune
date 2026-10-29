@@ -617,7 +617,7 @@ func runScenario(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 func planPaper(file, source, scenario string, assets document.PaperAssetCatalog) (document.PaperPlan, document.PaperPlanResult, error) {
-	resolver := paperFileImportResolver()
+	resolver := paperFileImportResolver(file)
 	if scenario != "" {
 		return document.PlanPaperScenarioWithAssetsAndImports(file, source, scenario, assets, resolver)
 	}
@@ -627,23 +627,60 @@ func planPaper(file, source, scenario string, assets document.PaperAssetCatalog)
 func planPaperJSON(file, source string, data []byte, schema, locale, name string, assets document.PaperAssetCatalog) (document.PaperPlan, document.PaperPlanResult, error) {
 	return document.PlanPaperJSONWithAssetsAndImports(file, source, data, document.PaperJSONOptions{
 		Name: name, Schema: schema, Locale: locale,
-	}, assets, paperFileImportResolver())
+	}, assets, paperFileImportResolver(file))
 }
 
-func paperFileImportResolver() document.PaperImportResolver {
+// paperFileImportResolver reads imports relative to their importer and keeps
+// every import, including symlink targets, inside the root document's
+// directory.
+func paperFileImportResolver(rootFile string) document.PaperImportResolver {
+	rootDir := filepath.Dir(rootFile)
+	if rootFile == "" || rootFile == "stdin.paper" {
+		rootDir = "."
+	}
+	lexicalRoot, rootErr := filepath.Abs(rootDir)
+	resolvedRoot := lexicalRoot
+	if rootErr == nil {
+		resolvedRoot, rootErr = filepath.EvalSymlinks(lexicalRoot)
+	}
 	return func(ctx context.Context, importerFile, importPath string) (string, string, error) {
+		if rootErr != nil {
+			return "", "", fmt.Errorf("resolve import root: %w", rootErr)
+		}
 		base := filepath.Dir(importerFile)
 		if importerFile == "" || importerFile == "stdin.paper" {
 			base = "."
 		}
 		file := filepath.Clean(filepath.Join(base, filepath.FromSlash(importPath)))
+		absolute, err := filepath.Abs(file)
+		if err != nil {
+			return "", "", err
+		}
+		if err := requireImportWithinRoot(lexicalRoot, absolute); err != nil {
+			return "", "", err
+		}
+		resolved, err := filepath.EvalSymlinks(absolute)
+		if err != nil {
+			return "", "", err
+		}
+		if err := requireImportWithinRoot(resolvedRoot, resolved); err != nil {
+			return "", "", err
+		}
 		limit := document.PaperImportReadLimit(ctx, maxSourceBytes)
-		source, err := readBoundedRegularFileContext(ctx, file, limit, "imported source")
+		source, err := readBoundedRegularFileContext(ctx, resolved, limit, "imported source")
 		if err != nil {
 			return "", "", err
 		}
 		return file, string(source), nil
 	}
+}
+
+func requireImportWithinRoot(root, candidate string) error {
+	relative, err := filepath.Rel(root, candidate)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return errors.New("import path escapes the root document directory")
+	}
+	return nil
 }
 
 func readBoundedRegularFileContext(ctx context.Context, file string, limit int64, label string) ([]byte, error) {

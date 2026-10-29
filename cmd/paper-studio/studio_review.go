@@ -346,7 +346,7 @@ func (s *studioServer) writeReviewArtifact(digest string, data []byte) error {
 		return errors.New("paper-studio: review artifact digest does not match its bytes")
 	}
 	directory := filepath.Dir(s.reviewArtifactPath(digest))
-	if err := os.MkdirAll(directory, 0o700); err != nil {
+	if err := ensureReviewArtifactDirectory(directory); err != nil {
 		return err
 	}
 	temporary, err := os.CreateTemp(directory, ".review-artifact-*.tmp")
@@ -371,6 +371,26 @@ func (s *studioServer) writeReviewArtifact(digest string, data []byte) error {
 		return err
 	}
 	return os.Rename(temporaryName, s.reviewArtifactPath(digest))
+}
+
+// ensureReviewArtifactDirectory creates the artifact directory beside the
+// sidecar, refusing a pre-existing symlink that would redirect writes outside
+// the project.
+func ensureReviewArtifactDirectory(directory string) error {
+	info, err := os.Lstat(directory)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.Mkdir(directory, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		info, err = os.Lstat(directory)
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return errors.New("paper-studio: review artifact directory must be a real directory")
+	}
+	return nil
 }
 
 func (s *studioServer) readReviewArtifact(digest string) ([]byte, error) {

@@ -253,7 +253,11 @@ func (w *Workspace) authorizeMutation(guard PaperMutationGuard, operation Mutati
 	if err != nil {
 		return MutationAuthorizationEvidence{}, err
 	}
-	protected := protectedEffects(revision.parsed.AST.Root, effects, w.protectedNodeIDs)
+	var subtreeRoot string
+	if operation.affectsSubtree() {
+		subtreeRoot = guard.Target
+	}
+	protected := protectedEffects(revision.parsed.AST.Root, effects, w.protectedNodeIDs, subtreeRoot)
 	evidence := MutationAuthorizationEvidence{Operation: operation, DirectTargets: canonicalStrings(direct), Effects: effects, ProtectedEffects: protected}
 	w.mu.RLock()
 	record, lookupErr := w.mutationAuthorityLocked(guard.Authority)
@@ -471,31 +475,50 @@ func ancestorComponent(root *paperlang.Node, target string) string {
 	visit(root, "")
 	return result
 }
-func protectedEffects(root *paperlang.Node, effects []AuthorizationEffect, protected map[string]struct{}) []string {
+
+// affectsSubtree reports whether the operation removes, relocates, or hides
+// the guarded target's whole subtree, so its protected descendants are
+// affected too.
+func (operation MutationOperation) affectsSubtree() bool {
+	switch operation {
+	case MutationManageNode, MutationMoveNode, MutationSetCondition:
+		return true
+	default:
+		return false
+	}
+}
+
+func protectedEffects(root *paperlang.Node, effects []AuthorizationEffect, protected map[string]struct{}, subtreeRoot string) []string {
 	found := make(map[string]struct{})
 	targets := make(map[string]struct{}, len(effects))
 	for _, effect := range effects {
 		targets[effect.Node] = struct{}{}
 	}
-	var visit func(*paperlang.Node, []string)
-	visit = func(node *paperlang.Node, ancestors []string) {
+	var visit func(*paperlang.Node, []string, bool)
+	visit = func(node *paperlang.Node, ancestors []string, insideTarget bool) {
 		if node == nil {
 			return
 		}
 		next := ancestors
-		if _, ok := protected[node.ID]; ok {
+		_, isProtected := protected[node.ID]
+		if isProtected {
 			next = append(append([]string(nil), ancestors...), node.ID)
 		}
-		if _, ok := targets[node.ID]; ok {
+		_, isTarget := targets[node.ID]
+		if isTarget {
 			for _, value := range next {
 				found[value] = struct{}{}
 			}
 		}
+		if isProtected && insideTarget {
+			found[node.ID] = struct{}{}
+		}
+		insideTarget = insideTarget || subtreeRoot != "" && node.ID == subtreeRoot
 		for _, member := range node.Members {
-			visit(member.Node, next)
+			visit(member.Node, next, insideTarget)
 		}
 	}
-	visit(root, nil)
+	visit(root, nil, false)
 	result := make([]string, 0, len(found))
 	for value := range found {
 		result = append(result, value)

@@ -56,8 +56,8 @@ func TestWorkspaceApplyRejectsUnguardedTargetAtomically(t *testing.T) {
 		Candidate: candidate.Handle, ExpectedHead: base.Handle, ExpectedRevision: base.Revision,
 		IdempotencyKey: "no-fuzzy-raw", Operations: []paperedit.Operation{paperedit.ReplaceText{Target: "@copy", Text: "must not apply"}},
 	}
-	first, firstErr := workspace.Apply(request)
-	second, secondErr := workspace.Apply(request)
+	first, firstErr := workspace.applyUnauthorized(request)
+	second, secondErr := workspace.applyUnauthorized(request)
 	if !errors.Is(firstErr, paperedit.ErrInvalidOperation) || errorCode(firstErr) != "EDIT_REJECTED" ||
 		!errors.Is(secondErr, paperedit.ErrInvalidOperation) || !reflect.DeepEqual(first.Edit, second.Edit) {
 		t.Fatalf("unguarded replay = %+v/%v then %+v/%v", first, firstErr, second, secondErr)

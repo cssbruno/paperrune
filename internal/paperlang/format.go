@@ -380,7 +380,7 @@ func formatScalar(value Scalar, path string) (string, error) {
 		if value.ExpressionValue == nil || value.StringValue != nil || value.BoolValue != nil || value.NumberValue != nil || value.UnitValue != nil {
 			return nonmatching("expression scalar has inconsistent typed fields")
 		}
-		expression := strings.TrimSpace(*value.ExpressionValue)
+		expression := strings.Trim(*value.ExpressionValue, " \t")
 		if expression == "" || !utf8.ValidString(expression) || strings.ContainsAny(expression, "\r\n") {
 			return nonmatching("expression scalar must be non-empty single-line UTF-8")
 		}

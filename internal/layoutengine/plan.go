@@ -6,7 +6,6 @@ package layoutengine
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"unicode/utf8"
@@ -1299,9 +1298,10 @@ func (p LayoutPlan) ReadOnlyProjection() LayoutPlanProjection {
 	return projection
 }
 
-// CanonicalJSON serializes the map-free versioned projection.
+// CanonicalJSON serializes the map-free versioned projection with the same
+// encoder that Hash digests.
 func (p LayoutPlan) CanonicalJSON() ([]byte, error) {
-	return json.Marshal(p.ReadOnlyProjection())
+	return layoutPlanProjectionJSON(p.ReadOnlyProjection()), nil
 }
 
 // Hash returns the deterministic digest of CanonicalJSON.

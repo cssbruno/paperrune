@@ -276,22 +276,40 @@ func evaluateExpressionNode(ctx context.Context, node *expressionNode, bindings 
 			return Value{}, err
 		}
 		if node.kind == nodeNot {
+			if value.Kind != Bool {
+				return Value{}, fmt.Errorf("%w: not requires bool", ErrType)
+			}
 			return Value{Kind: Bool, Bool: !value.Bool}, nil
 		}
 		return negateNumber(value)
 	case nodeAnd, nodeOr:
+		// The lazy evaluator skips the right operand on short-circuit but keeps
+		// the same runtime kind checks as OpAnd/OpOr for every operand it reads.
 		left, err := evaluateExpressionNode(ctx, node.left, bindings, optionalPaths, limits, work)
 		if err != nil {
 			return Value{}, err
 		}
+		if left.Kind != Bool {
+			return Value{}, fmt.Errorf("%w: boolean operator requires bool", ErrType)
+		}
 		if node.kind == nodeAnd && !left.Bool || node.kind == nodeOr && left.Bool {
 			return left, nil
 		}
-		return evaluateExpressionNode(ctx, node.right, bindings, optionalPaths, limits, work)
+		right, err := evaluateExpressionNode(ctx, node.right, bindings, optionalPaths, limits, work)
+		if err != nil {
+			return Value{}, err
+		}
+		if right.Kind != Bool {
+			return Value{}, fmt.Errorf("%w: boolean operator requires bool", ErrType)
+		}
+		return right, nil
 	case nodeSelect:
 		condition, err := evaluateExpressionNode(ctx, node.left, bindings, optionalPaths, limits, work)
 		if err != nil {
 			return Value{}, err
+		}
+		if condition.Kind != Bool {
+			return Value{}, fmt.Errorf("%w: select condition requires bool", ErrType)
 		}
 		if condition.Bool {
 			return evaluateExpressionNode(ctx, node.right, bindings, optionalPaths, limits, work)
@@ -324,11 +342,19 @@ func evaluateExpressionNode(ctx context.Context, node *expressionNode, bindings 
 			result, err := compareValues(op, left, right)
 			return Value{Kind: Bool, Bool: result}, err
 		case nodeMatches:
+			if left.Kind != String || right.Kind != String {
+				return Value{}, fmt.Errorf("%w: matches requires strings", ErrType)
+			}
 			matched, err := wildcardMatch(ctx, left.String, right.String, limits, work)
 			return Value{Kind: Bool, Bool: matched}, err
 		case nodePlus:
-			if left.Kind == Integer || left.Kind == Unit {
+			// Mirror the compiler's OpConcat/OpAddInteger selection so a binding
+			// of the wrong runtime kind fails instead of coercing.
+			if node.inferred != String {
 				return numericArithmetic(OpAddInteger, left, right)
+			}
+			if left.Kind != String || right.Kind != String {
+				return Value{}, fmt.Errorf("%w: concat requires strings", ErrType)
 			}
 			if uint64(len(left.String))+uint64(len(right.String)) > uint64(limits.MaxStringBytes) {
 				return Value{}, ErrLimit
@@ -364,12 +390,11 @@ func compareValues(op Op, left, right Value) (bool, error) {
 	}
 	if op == OpEqual || op == OpNotEqual {
 		if left.Kind == Unit && left.Unit != right.Unit {
-			converted, err := convertUnit(right, left.Unit)
+			comparison, err := compareUnitValues(left, right)
 			if err != nil {
 				return false, err
 			}
-			result := compareNumber(left, converted) == 0
-			return result != (op == OpNotEqual), nil
+			return (comparison == 0) != (op == OpNotEqual), nil
 		}
 		result := equal(left, right)
 		return result != (op == OpNotEqual), nil
@@ -379,14 +404,11 @@ func compareValues(op Op, left, right Value) (bool, error) {
 	case Integer:
 		comparison = compareNumber(left, right)
 	case Unit:
-		if left.Unit != right.Unit {
-			var err error
-			right, err = convertUnit(right, left.Unit)
-			if err != nil {
-				return false, err
-			}
+		var err error
+		comparison, err = compareUnitValues(left, right)
+		if err != nil {
+			return false, err
 		}
-		comparison = compareNumber(left, right)
 	case String:
 		comparison = strings.Compare(left.String, right.String)
 	default:

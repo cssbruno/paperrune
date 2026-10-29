@@ -54,8 +54,18 @@ scenario @overdue:
 | `parent` | optional quoted scenario name; cycles are invalid |
 | `locale` | optional quoted formatting locale |
 
-Keys are unique within an object or list. The resolved fixture must satisfy the
-selected schema. Use `paper scenario` to list or inspect fixtures.
+Keys are unique within an object or list. A child scenario inherits its
+`parent`: objects merge field by field, so the example above overrides only
+`billingAddress.city`; every other value, keyed lists included, replaces the
+parent's value whole.
+
+The resolved fixture must satisfy the schema, with the same rules as JSON data:
+no coercion between kinds, required values present and non-null, lists within
+`max-items`, and no undeclared fields. Violations are reported as
+`PAPER_SCENARIO_SCHEMA` on the scenario. With several schemas, each top-level
+value must be declared by at least one schema and match every schema that
+declares it; required top-level fields are not enforced because a scenario
+does not select a schema. Use `paper scenario` to list or inspect fixtures.
 
 ## Expansion
 
